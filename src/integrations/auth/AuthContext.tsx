@@ -27,20 +27,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted && session) {
-        validateUserAccess(session);
-      } else if (mounted) {
-        setAuthLoading(false);
-      }
+      if (mounted && session) validateUserAccess(session);
+      else if (mounted) setAuthLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (mounted) {
-        if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-          validateUserAccess(session);
-        } else if (!session) {
+        if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) validateUserAccess(session);
+        else if (!session) {
           setSession(null);
           setBackofficeUser(null);
           setIsBackofficeAllowed(false);
@@ -49,26 +44,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     });
-
-    return () => { 
-      mounted = false; 
-      subscription.unsubscribe(); 
-    };
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
   const validateUserAccess = async (session: Session) => {
     const email = session.user.email?.toLowerCase();
-    
-    // Verifica se já validamos nesta aba do navegador (persiste ao F5 e HMR)
     const alreadyValidated = sessionStorage.getItem('auth_validated_once') === 'true';
     
-    // Trava para evitar processamento se usuário já está definido E já validamos
-    if (backofficeUser && backofficeUser.email === email && alreadyValidated) {
-      return;
-    }
+    if (backofficeUser && backofficeUser.email === email && alreadyValidated) return;
 
-    console.log(`DEBUG: Processando ${alreadyValidated ? 'refresh' : 'login'} para:`, email);
-    
     setAuthorizationLoading(true);
     setDomainError(null);
 
@@ -82,32 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (userError || !userData) failureReason = "userDoesNotExist";
     else if (userData.is_active !== true) failureReason = "userInactive";
 
-<<<<<<< Updated upstream
-    // Log via API route (uses service-role client server-side, hits the correct Supabase project)
-    try {
-      const accessToken = session.access_token;
-      await fetch("/api/loginhistory", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          email,
-          event: failureReason ? "blocked" : "login",
-          success: !failureReason,
-          failureReason: failureReason ?? null,
-          occurredAt: new Date().toISOString(),
-        }),
-      });
-    } catch (err) {
-      console.warn("login history log failed", err);
-    }
-=======
-    // Grava 'login' apenas se não tivermos a marcação de validação prévia no sessionStorage
     const eventType = failureReason ? 'blocked' : (alreadyValidated ? 'refresh' : 'login');
 
-    // Registro com contexto de origem
     await supabase.functions.invoke('log-access', {
       body: { 
         email, 
@@ -118,7 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         origin_function: 'validateUserAccess'
       }
     });
->>>>>>> Stashed changes
 
     if (failureReason) {
       setDomainError(failureReason === "userDoesNotExist" ? `Usuário ${email} não cadastrado.` : `Usuário ${email} inativo.`);
@@ -128,10 +87,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setBackofficeUser({ ...userData, email }); 
       setIsBackofficeAllowed(true); 
       setSession(session);
-      // Marca como validado
       sessionStorage.setItem('auth_validated_once', 'true');
     }
-    
     setAuthorizationLoading(false);
     setAuthLoading(false);
   };

@@ -8,6 +8,7 @@ export const Route = createFileRoute('/sandbox')({
 function TesteSimulacao() {
   const [form, setForm] = useState({
     // Entidade
+    id_entity: 9999,
     nome: "Cesar Ismael Pereira da Costa",
     cpf: "03817035764",
     celular: "(21) 988550999",
@@ -27,7 +28,7 @@ function TesteSimulacao() {
     // Oferta
     idOferta: "4624272",
     descOferta: "CAMINHÃO VOLKSWAGEN EXPRESS DRF 4X2, 2022/2023",
-    categoria: "Caminhoes",
+    categoria: "Caminhões",
     valorOferta: "259000.00",
     anoFab: "2022",
     anoMod: "2023",
@@ -38,13 +39,13 @@ function TesteSimulacao() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const executarFluxo = () => {
+const executarFluxo = async () => {
     const valorNumerico = parseFloat(form.valorOferta.replace(/[^0-9.]/g, ''));
     
-    // Estrutura do payload seguindo nosso contrato
+    // Contrato completo do payload
     const payload = {
       entity: {
-        id_entity: 999,
+        id_entity: form.id_entity,
         document_proponent: form.cpf,
         name_proponent: form.nome,
         phone_proponent: form.celular,
@@ -75,9 +76,52 @@ function TesteSimulacao() {
       }
     };
     
-    // Codifica os dados para a URL e abre em uma nova aba
-    const encodedData = encodeURIComponent(JSON.stringify(payload));
-    window.open(`/financiamentos/veiculos?data=${encodedData}`, "_blank");
+    // Composição da URL profissional usando variável de ambiente
+    const GATEWAY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-gateway`;
+
+console.log("VALIDAÇÃO DE AMBIENTE:");
+console.log("URL Completa:", import.meta.env.VITE_SUPABASE_URL);
+console.log("Tipo da variável:", typeof import.meta.env.VITE_SUPABASE_URL);
+
+// Validação visual simples
+if (import.meta.env.VITE_SUPABASE_URL?.includes('qadgbfhjtgufioxtyamq')) {
+  console.log("✅ URL Correta!");
+} else {
+  console.warn("❌ URL Incorreta ou não encontrada no .env!");
+}
+    console.log("Payload enviado:", JSON.stringify(payload, null, 2));
+    
+    try {
+      const response = await fetch(GATEWAY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      // 1. Extrai o texto da resposta primeiro (para caso de erro 400/500)
+      const responseText = await response.text();
+      
+      // 2. Tenta converter para JSON
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Resposta não é JSON: ${responseText}`);
+      }
+
+      // 3. Validação: O servidor respondeu com erro?
+      if (!response.ok) {
+        throw new Error(`Erro ${response.status}: ${JSON.stringify(result)}`);
+      }
+
+      // 4. Se chegou aqui, deu sucesso!
+      console.log("Sucesso! Resposta do servidor:", result);
+      window.open(`${result.target_url}?sim_id=${result.simulation_id}`, "_blank");
+      
+    } catch (err) {
+      console.error("DEBUG - Detalhes do erro:", err);
+      alert(`Erro: ${err.message}`); // Isso mostrará o erro na tela para você
+    }
   };
 
   return (

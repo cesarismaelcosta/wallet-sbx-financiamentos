@@ -1,30 +1,15 @@
-// Edge function to manage backoffice users (admin only).
-// Actions: list, invite, set_active, set_role
-//
-// IMPORTANT: This edge function still lives on the OLD Lovable Cloud project.
-// It writes to the OLD database (jxtrwsuddhadsiwcrmia), NOT to the user's new
-// Supabase (qadgbfhjtgufioxtyamq). To make it write to the new Supabase,
-// set the env vars MY_SUPABASE_URL / MY_SUPABASE_SERVICE_ROLE_KEY / MY_SUPABASE_ANON_KEY
-// as Supabase function secrets in the OLD project — falls back to the old project's
-// own SUPABASE_* vars if those are not set.
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const SUPABASE_URL =
-  Deno.env.get("MY_SUPABASE_URL") ?? Deno.env.get("SUPABASE_URL") ?? "";
-const SERVICE_ROLE_KEY =
-  Deno.env.get("MY_SUPABASE_SERVICE_ROLE_KEY") ??
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
-  "";
-const ANON_KEY =
-  Deno.env.get("MY_SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+// Agora usamos diretamente as variáveis do ambiente onde a função está rodando
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
 type Role = "admin" | "manager" | "viewer";
 
