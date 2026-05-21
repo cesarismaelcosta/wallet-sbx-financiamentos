@@ -112,7 +112,7 @@ export type Database = {
           failure_reason: string | null
           id: string
           ipaddress: string | null
-          metadata: Json | null
+          origin_details: Json | null
           operatingsystem: string | null
           state: string | null
           success: boolean
@@ -128,7 +128,7 @@ export type Database = {
           failure_reason?: string | null
           id?: string
           ipaddress?: string | null
-          metadata?: Json | null
+          origin_details?: Json | null
           operatingsystem?: string | null
           state?: string | null
           success: boolean
@@ -144,7 +144,7 @@ export type Database = {
           failure_reason?: string | null
           id?: string
           ipaddress?: string | null
-          metadata?: Json | null
+          origin_details?: Json | null
           operatingsystem?: string | null
           state?: string | null
           success?: boolean

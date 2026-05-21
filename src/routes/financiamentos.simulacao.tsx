@@ -141,7 +141,7 @@ const SliderCustomizado = ({ value, onValueChange, min, max, step, isCurrency = 
   );
 };
 
-export const Route = createFileRoute("/financiamentos/veiculos")({
+export const Route = createFileRoute("/financiamentos/simulacao")({
   component: SimulacaoPage,
 });
 
@@ -154,7 +154,7 @@ function SimulacaoPage() {
   const [simData, setSimData] = useState<SimulationData | null>(null);
 
   // 3. Estados da UI (Unificados)
-  const [valorVeiculo, setValorVeiculo] = useState(0);
+  const [valorLote, setvalorLote] = useState(0);
   const [valorEntrada, setValorEntrada] = useState(0);
   const [parcelas, setParcelas] = useState(0);
   const [taxa, setTaxa] = useState(0.0);
@@ -236,10 +236,10 @@ function SimulacaoPage() {
 
   const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const valorTotalDigitado = Number(e.target.value.replace(/\D/g, "")) / 100;
-    const teto = simData?.rules?.max_financed_amount || 150000;
+    const teto = simData?.rules?.max_financed_amount;
 
     // 1. Atualiza o valor do veículo
-    setValorVeiculo(valorTotalDigitado);
+    setvalorLote(valorTotalDigitado);
 
     // 2. Calcula o financiamento com o VALOR de entrada nominal
     const valorFinanciadoComEntradaAtual = valorTotalDigitado - valorEntrada;
@@ -261,16 +261,16 @@ function SimulacaoPage() {
 
   // 2. O percentual é calculado SÓ para o Slider saber onde se posicionar
   const percEntradaParaSlider = useMemo(() => {
-    if (!valorVeiculo || valorVeiculo === 0) return 0;
-    return (valorEntrada / valorVeiculo) * 100;
-  }, [valorEntrada, valorVeiculo]);
+    if (!valorLote || valorLote === 0) return 0;
+    return (valorEntrada / valorLote) * 100;
+  }, [valorEntrada, valorLote]);
 
   // 3. O financiado continua dependendo da entrada (que agora é exata)
   const financiado = useMemo(() => {
-    const base = valorVeiculo - entrada;
+    const base = valorLote - entrada;
     const teto = simData?.rules?.max_financed_amount;
     return teto && base > teto ? teto : base;
-  }, [valorVeiculo, entrada, simData]);
+  }, [valorLote, entrada, simData]);
 
   const valorParcela = useMemo(
     () => (mounted ? calcParcela(financiado, taxa, parcelas) : 0),
@@ -315,7 +315,7 @@ function SimulacaoPage() {
           const valorInicial = payload.offer?.offer_value || 0;
           const percInicial = payload.rules?.min_down_payment_percentage || 0;
 
-          setValorVeiculo(valorInicial);
+          setvalorLote(valorInicial);
           setValorEntrada((valorInicial * percInicial) / 100); // Converte para valor nominal no boot
 
           // Captura direta sem conversão arriscada primeiro
@@ -347,14 +347,14 @@ function SimulacaoPage() {
     if (!tetoProduto) return;
 
     // USE O NOVO NOME AQUI:
-    const valorFinanciadoAtual = valorVeiculo - valorEntrada;
+    const valorFinanciadoAtual = valorLote - valorEntrada;
 
     if (valorFinanciadoAtual > tetoProduto) {
-      const entradaNecessaria = valorVeiculo - tetoProduto;
+      const entradaNecessaria = valorLote - tetoProduto;
       // Atualiza o valor nominal
       setValorEntrada(entradaNecessaria);
     }
-  }, [valorVeiculo, valorEntrada, simData]); // Dependência atualizada
+  }, [valorLote, valorEntrada, simData]); // Dependência atualizada
 
   /**
    * HANDLER DE SIMULAÇÃO - INTEGRAÇÃO COM GATEWAY FINANCEIRO
@@ -409,7 +409,7 @@ function SimulacaoPage() {
           integration_details: simData.integration_details,
           // Simulação na página
           simulation_details: {
-            requested_value: valorVeiculo,
+            requested_value: valorLote,
             installments: parcelas, // PADRÃO DE MERCADO
             down_payment_amount: entrada, // 60k no seu exemplo
             down_payment_percentage: percEntradaParaSlider,
@@ -565,14 +565,6 @@ function SimulacaoPage() {
           {simData && (
             <div className="mb-6 p-4 rounded-2xl bg-white border border-slate-100 flex items-center text-sm font-semibold text-black shadow-sm gap-4">
               <span className="text-left">{simData.offer.offer_description}</span>
-              <div className="ml-auto flex gap-6 items-center whitespace-nowrap">
-                <span>
-                  Ano: {simData.offer.vehicle_details?.manufacture_year}/{simData.offer.vehicle_details?.model_year}
-                </span>
-                {simData.offer.vehicle_details?.fipe_value && simData.offer.vehicle_details.fipe_value > 0 ? (
-                  <span>FIPE: {BRL(simData.offer.vehicle_details.fipe_value)}</span>
-                ) : null}
-              </div>
             </div>
           )}
 
@@ -590,7 +582,7 @@ function SimulacaoPage() {
 
                   <Input
                     type="text"
-                    value={BRL(valorVeiculo)}
+                    value={BRL(valorLote)}
                     disabled={rules.allow_custom_value === false}
                     onChange={handleValorChange}
                     className={`
@@ -604,11 +596,11 @@ function SimulacaoPage() {
                   {rules.allow_custom_value !== false && (
                     <div className="mt-2 px-[10%]">
                       <SliderCustomizado
-                        value={valorVeiculo}
+                        value={valorLote}
                         onValueChange={(v: number) => {
                           // Garante que o valor vindo do slider seja um número inteiro redondo
                           const valorLimpo = Math.round(v / 100) * 100;
-                          setValorVeiculo(valorLimpo);
+                          setvalorLote(valorLimpo);
                           handleModificacaoFormulario();
                         }}
                         min={simData?.offer.offer_value || 0}
@@ -642,7 +634,7 @@ function SimulacaoPage() {
                       value={percEntradaParaSlider}
                       onValueChange={(v: number) => {
                         // 1. Descobre o valor em dinheiro puro que a posição do slider representa (sem capar os decimais da porcentagem)
-                        const novoValorEntrada = (valorVeiculo * v) / 100;
+                        const novoValorEntrada = (valorLote * v) / 100;
 
                         // 2. Passa o rolo compressor na moeda: força o valor nominal a encaixar em notas de R$ 100 cravadas
                         const entradaLimpaNotaCem = Math.round(novoValorEntrada / 100) * 100;
@@ -818,19 +810,22 @@ function SimulacaoPage() {
               </div>
             </div>
 
-            {/* ========================================================================= */}
-            {/* BOX 3: Card da Direita - 3 Estados Simétricos                             */}
-            {/* ========================================================================= */}
-            <div className="lg:col-span-2 w-full rounded-3xl pt-5 px-0 pb-0 flex flex-col justify-between font-sans antialiased select-none overflow-hidden h-full shadow-md relative">
-              {/* CAMADA DE FUNDO: Apenas aplica var(--primary) transparente */}
+            {/* =========================================================================
+                BOX 3: SIMULADOR DE CONDIÇÕES COMERCIAIS (MANTENDO O PADRÃO DE VEICULOS)
+               ========================================================================= */}
+            <div
+              style={{ background: "var(--gradient-primary)" }}
+              className="lg:col-span-2 flex flex-col justify-between p-0 rounded-[var(--radius-config)] shadow-2xl overflow-hidden relative border border-white/10"
+            >
               <div
-                className="absolute inset-0 z-0 opacity-70 pointer-events-none"
-                style={{ backgroundColor: "var(--primary)" }}
+                className="absolute inset-0 bg-cover bg-center opacity-10 mix-blend-overlay pointer-events-none"
+                style={{ backgroundImage: "var(--dynamic-bg-image)" }}
               />
 
+              {/* CONTROLE DE ESTADOS DE RENDERIZAÇÃO */}
               {valorParcelaFinal === null ? (
                 /* ======================================================================= */
-                /* ESTADO 0: AGUARDANDO SIMULAÇÃO                                          */
+                /* ESTADO 0: AGUARDANDO SIMULAÇÃO DE CONDIÇÕES                             */
                 /* ======================================================================= */
                 <div className="flex flex-col items-start justify-between pl-0 pr-0 flex-grow h-full pt-8 pb-8 w-full text-left relative z-10">
                   {/* Mola superior externa: Mantém o topo roxo simétrico */}
@@ -849,10 +844,10 @@ function SimulacaoPage() {
                       />
                       <div className="space-y-1">
                         <h3 className="text-xl font-bold text-slate-900 tracking-tight leading-tight">
-                          Simule seu financiamento
+                          Consulte agora
                         </h3>
                         <p className="text-base font-semibold tracking-wide" style={{ color: "var(--primary)" }}>
-                          sem compromisso.
+                          nossas condições comerciais.
                         </p>
                       </div>
                     </div>
@@ -861,13 +856,13 @@ function SimulacaoPage() {
                     <div className="w-full flex flex-col items-start pl-10 pr-6">
                       <div className="text-left space-y-1">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                          Valor financiado
+                          Valor de Referência
                         </span>
                         <div className="text-3xl font-black text-slate-900 tracking-tight flex items-baseline gap-1">
                           <span className="text-base font-bold text-slate-400">R$</span>
                           <span>
-                            {typeof valorVeiculo !== "undefined" && typeof entrada !== "undefined"
-                              ? (Number(valorVeiculo) - Number(entrada)).toLocaleString("pt-BR", {
+                            {typeof valorLote !== "undefined" && typeof entrada !== "undefined"
+                              ? (Number(valorLote) - Number(entrada)).toLocaleString("pt-BR", {
                                   minimumFractionDigits: 2,
                                   maximumFractionDigits: 2,
                                 })
@@ -887,9 +882,6 @@ function SimulacaoPage() {
                   {/* Mola inferior externa: Garante o respiro roxo perfeito antes do status */}
                   <div className="flex-grow" />
 
-                  {/* =========================================================================
-                      BLOCO INFERIOR PROTEGIDO: DUAS LINHAS SEM ALTERAR A ALTURA DO FLEXBOX
-                     ========================================================================= */}
                   <div className="w-full text-left pt-4 flex-shrink-0 pl-10 pr-6 select-none relative h-[20px]">
                     {brandStyles.partnerName && (
                       <div className="absolute bottom-0 left-10 right-6 text-left">
@@ -905,65 +897,53 @@ function SimulacaoPage() {
                 </div>
               ) : valorParcelaFinal === 0 ? (
                 /* ======================================================================= */
-                /* ESTADO 1: NEGATIVA / SEM OPÇÕES (Ajustado com Centralização Simétrica)  */
+                /* ESTADO 1: FALHA TÉCNICA / PRAZO INDISPONÍVEL                            */
                 /* ======================================================================= */
                 <div className="flex flex-col items-center justify-between pl-0 pr-0 flex-grow h-full pt-8 pb-8 w-full text-center relative z-10">
-                  {/* Mola superior externa: Mantém o topo roxo simétrico idêntico ao Estado 0 */}
                   <div className="flex-grow" />
-
-                  {/* CONTAINER BRANCO DE CONTEÚDO INTEGRADO CENTRALIZADO */}
                   <div className="w-full bg-white flex flex-col items-center justify-center pt-8 pb-8 border-y border-slate-100 flex-shrink-0 space-y-4 pl-10 pr-10">
-                    {/* Escudo centralizado acima do título */}
-                    <div className="bg-red-50 p-2.5 rounded-full flex-shrink-0 mx-auto">
-                      <ShieldCheck className="h-6 w-6 text-red-600" />
+                    <div className="bg-amber-50 p-2.5 rounded-full flex-shrink-0 mx-auto">
+                      <Hourglass className="h-6 w-6 text-amber-600" />
                     </div>
-
                     <div className="space-y-2">
                       <h3 className="text-xl font-bold text-slate-900 tracking-tight leading-tight">
-                        Análise Concluída
+                        Condição Indisponível
                       </h3>
                       <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
-                        No momento não encontramos condições para os dados informados. Você pode ajustar a entrada e a
-                        quantidade de parcelas e tentar novamente.
+                        O prazo ou os fatores selecionados não puderam ser calculados para esta tabela. Por favor,
+                        selecione outra quantidade de parcelas ou fale com o suporte técnico.
                       </p>
                     </div>
                   </div>
-
-                  {/* Mola inferior externa: Garante o respiro roxo perfeito antes do status */}
                   <div className="flex-grow" />
-
-                  {/* Bloco Inferior: Sugestão centralizada na base roxa externa */}
                   <div className="w-full text-center pt-4 flex-shrink-0 pl-10 pr-10">
                     <p className="text-[10px] uppercase tracking-wider font-bold text-white">
-                      Sugestão: Aumente a entrada!
+                      Erro de processamento técnico
                     </p>
                   </div>
                 </div>
               ) : (
                 /* ======================================================================= */
-                /* ESTADO 2: PROPOSTA ENCONTRADA (Fundo Branco Chapado Aplicado)           */
+                /* ESTADO 2: PROPOSTA ENCONTRADA - IDENTIDADE VISUAL EXATA DE VEICULOS.TSX */
                 /* ======================================================================= */
-                <div className="absolute inset-0 bg-white z-20 rounded-3xl flex flex-col items-start justify-between pl-10 pr-6 pt-8 pb-8 w-full text-left">
-                  {/* Topo: Título limpo alinhado à esquerda */}
+                <div className="absolute inset-0 bg-white z-20 rounded-3xl flex flex-col items-start justify-between pl-10 pr-6 pt-8 pb-8 w-full text-left animate-in fade-in duration-200">
                   <div className="flex flex-row items-start gap-3 w-full flex-shrink-0">
                     <div className="mt-1 flex-shrink-0">
                       <ThumbsUp className="h-5 w-5" style={{ color: "var(--primary)" }} />
                     </div>
                     <div className="space-y-1">
                       <h3 className="text-lg font-bold text-slate-900 tracking-tight leading-tight uppercase">
-                        CONDIÇÃO ENCONTRADA!
+                        SIMULAÇÃO DE PARCELA!
                       </h3>
-                      <p className="text-xs font-medium text-slate-500">Temos uma proposta pré-aprovada para você.</p>
+                      <p className="text-xs font-medium text-slate-500">Esses são nossos valores de referência.</p>
                     </div>
                   </div>
 
-                  {/* Bloco Central: Oferta direta na carcaça branca */}
                   <div className="w-full flex flex-col items-start justify-center flex-grow py-6">
                     <div className="text-left space-y-1">
                       <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest block mb-1">
                         SUA OFERTA*
                       </span>
-
                       <div className="text-slate-900 tracking-tight flex items-baseline gap-1.5 flex-wrap">
                         <span className="text-xl font-black" style={{ color: "var(--primary)" }}>
                           {parcelas}x
@@ -974,8 +954,6 @@ function SimulacaoPage() {
                         </span>
                         <span className="text-slate-400 text-[11px] font-medium">/mês</span>
                       </div>
-
-                      {/* Taxa de juros */}
                       <div className="pt-3 text-xs text-slate-500 font-medium font-sans w-full">
                         Taxa de juros de{" "}
                         <span className="font-bold text-slate-900">
@@ -986,15 +964,11 @@ function SimulacaoPage() {
                     </div>
                   </div>
 
-                  {/* Bloco de Ações Inferior: Alinhamento e mt-auto fixados para simetria */}
                   <div className="w-full space-y-4 pt-4 border-t border-slate-100 flex-shrink-0 mt-auto">
                     <p className="text-[10px] text-slate-600 font-medium leading-relaxed">
-                      *As condições apresentadas não são garantia de aprovação. Fale com nossos especialistas para
-                      prosseguir.
+                      *As condições apresentadas são uma referência de taxas praticadas e não garantem aprovação do
+                      crédito. Fale com nossos especialistas para prosseguir.
                     </p>
-
-                    {/* Botão Negativo Calibrado */}
-                    {/* Botão com a Nova Mensagem de Aprovação Dinâmica */}
                     <button
                       type="button"
                       className="w-full h-12 font-bold text-xs bg-white border-2 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm hover:bg-black/[0.02] active:scale-[0.99]"
@@ -1003,19 +977,18 @@ function SimulacaoPage() {
                         color: "var(--primary)",
                       }}
                       onClick={() => {
-                        const nomeCliente = simData?.entity?.name || "Cesar Ismael Pereira da Costa";
+                        const nomeCliente = simData?.entity?.name || "";
                         const entradaFormatada = BRL(entrada);
                         const financiadoFormatado = BRL(financiado);
                         const descricaoLote = simData?.offer?.offer_description || "";
                         const idLote = simData?.offer?.offer_id || "";
                         const valorLote = BRL(simData?.offer?.offer_value || 0);
                         const nomeEvento = simData?.event?.event_description || "";
-
                         const encerramento = simData?.event?.event_end_date
                           ? new Date(simData.event.event_end_date).toLocaleString("pt-BR")
                           : "";
 
-                        const msg = `Meu nome é ${nomeCliente}. Fiz uma simulação com entrada de ${entradaFormatada} e valor financiado de ${financiadoFormatado} do lote "${descricaoLote}" (Lote ${idLote}/ Valor Atual ${valorLote}) do evento "${nomeEvento}" (Encerramento ${encerramento}). Gostaria de seguir com minha aprovação. Pode me ajudar?`;
+                        const msg = `Olá! Meu nome é ${nomeCliente}. Realizei a simulação de condições comerciais para PJ com entrada de ${entradaFormatada} e valor financiado de ${financiadoFormatado} para o lote "${descricaoLote}" (Lote ${idLote} / Valor: ${valorLote}) do evento "${nomeEvento}". Gostaria de enviar a documentação para a análise da mesa técnica. Como procedemos?`;
 
                         window.open(`https://wa.me/551131644402?text=${encodeURIComponent(msg)}`, "_blank");
                       }}
@@ -1050,18 +1023,18 @@ function SimulacaoPage() {
           <div className="grid gap-6 md:grid-cols-3">
             {[
               {
-                t: "Simule suas condições",
-                d: "Escolha a entrada e o prazo ideais para o seu momento no nosso simulador inteligente.",
+                t: "Conheça suas condições",
+                d: "Escolha a entrada e o prazo ideais para o seu momento no nosso simulador e tenha uma referência de nossas condições comerciais.",
                 i: <Sparkles className="h-7 w-7" />,
               },
               {
-                t: "Negocie e garanta seu crédito",
-                d: "Fale com um especialista no WhatsApp para validar sua análise de crédito sem custos.",
+                t: "Negocie e aprove seu financiamento",
+                d: "Você pode falar com um especialista no WhatsApp ou aguardar nosso contato para seguir com a análise do financiamento e negociar as condições comerciais.",
                 i: <MessageCircle className="h-7 w-7" />,
               },
               {
-                t: "Pague com seu financiamento",
-                d: "Após a confirmação da sua proposta, nossa equipe apoia você em toda a formalização.",
+                t: "Pague com seu crédito aprovado",
+                d: "Após a confirmação da sua compra, nossa equipe apoia você em toda a formalização.",
                 i: <ShieldCheck className="h-7 w-7" />,
               },
             ].map((s, i) => {

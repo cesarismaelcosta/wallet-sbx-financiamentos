@@ -58,7 +58,7 @@ function PropostasPage() {
 
   async function load() {
     const [{ data: simData }, { data: statusData }] = await Promise.all([
-      supabase.from("simulation").select(`
+      supabase.from("simulations").select(`
         *, 
         financial_institutions(name, logo_url),
         product_types(name),
@@ -88,7 +88,7 @@ function PropostasPage() {
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       const statusName = r.status_types?.name ?? "—";
-      const matchSearch = search.toLowerCase() === "" || (r.name_proponent ?? "").toLowerCase().includes(search.toLowerCase());
+      const matchSearch = search.toLowerCase() === "" || (r.name ?? "").toLowerCase().includes(search.toLowerCase());
       const matchStatus = selectedStatus === "Todos" || statusName === selectedStatus;
       
       let matchDate = true;
@@ -208,16 +208,16 @@ function PropostasPage() {
               const statusName = r.status_types?.name ?? "—";
               const stageName = r.stage_types?.name ?? "—";
               const productName = r.product_types?.name ?? "—";
-              const parcela = r.installments_count && r.installment_value ? `${r.installments_count}x ${BRL(r.installment_value)}` : "—";
+              const parcela = r.installments && r.installment_value ? `${r.installments}x ${BRL(r.installment_value)}` : "—";
               
-              const rawDoc = r.document_proponent?.replace(/\D/g, "") || "";
+              const rawDoc = r.document?.replace(/\D/g, "") || "";
               const doc = rawDoc.length === 14 
                 ? rawDoc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
                 : rawDoc.length === 11 
                 ? rawDoc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")
-                : r.document_proponent || "—";
+                : r.document || "—";
               
-              const phone = r.phone_proponent?.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3") ?? "";
+              const phone = r.phone?.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3") ?? "";
               
               const endEvent = r.event_end_date ? new Date(r.event_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
               
@@ -228,7 +228,7 @@ function PropostasPage() {
                   {/* COLUNA CLIENTE */}
                   <td className="px-3 py-3">
                     <div className="font-semibold text-[#d946ef] truncate">
-                      {(r.name_proponent?.length > 45 ? r.name_proponent.slice(0, 45) + "..." : r.name_proponent) || "—"}
+                      {(r.name?.length > 45 ? r.name.slice(0, 45) + "..." : r.name) || "—"}
                     </div>
                     <div className="text-sm text-muted-foreground">{doc}</div>
                     <div className="text-sm text-muted-foreground mt-0.5">{phone || "—"}</div>
@@ -243,7 +243,7 @@ function PropostasPage() {
                   {/* COLUNA OFERTA */}
                   <td className="px-3 py-3">
                     <div className="font-semibold truncate">{r.offer_description || "—"}</div>
-                    <div className="text-xs text-muted-foreground truncate">{r.id_event || "—"} - {r.event_description || "—"}</div>
+                    <div className="text-xs text-muted-foreground truncate">{r.event_id || "—"} - {r.event_description || "—"}</div>
                     <div className="text-[11px] text-muted-foreground font-medium mt-0.5">
                       {BRL(r.offer_value)} {endEvent ? `(Fim: ${endEvent})` : ""}
                     </div>
@@ -260,7 +260,7 @@ function PropostasPage() {
                         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusClass(statusName)}`}>{statusName}</span>
                         <span className="text-[11px] text-muted-foreground">{updated.d} {updated.h}</span>
                       </div>
-                      {r.financial_institutions?.logo_url && (<img src={r.financial_institutions.logo_url} className="h-8 w-8 object-contain" alt="Logo" />)}
+                      {r.financial_institutions?.logo_url && (<img src={r.financial_institutions.logo_url} className="h-12 w-12 object-contain" alt="Logo" />)}
                     </div>
                   </td>
                 </tr>

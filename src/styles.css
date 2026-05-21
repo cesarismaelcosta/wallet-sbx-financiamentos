@@ -78,14 +78,14 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.16 0.04 300);
 
-  /* Brand magenta — Wallet SBX vibe (#C800E6 ish) */
-  --primary: oklch(0.62 0.32 330);
-  --primary-foreground: oklch(0.99 0 0);
-  --primary-glow: oklch(0.74 0.28 332);
+  /* Brand magenta — Wallet SBX Oficial */
+  --primary: #BE00FF;
+  --primary-foreground: #FFFFFF;
+  --primary-glow: #E299FF;
 
   /* Deep ink — for dark surfaces / CTAs alt */
   --ink: oklch(0.16 0.04 300);
-  --ink-foreground: oklch(0.99 0 0);
+  --ink-foreground: #FFFFFF;
 
   --secondary: oklch(0.96 0.015 320);
   --secondary-foreground: oklch(0.2 0.05 305);
@@ -97,36 +97,37 @@
   --accent-foreground: oklch(0.25 0.12 325);
 
   --destructive: oklch(0.6 0.24 27);
-  --destructive-foreground: oklch(0.99 0 0);
+  --destructive-foreground: #FFFFFF;
 
   --success: oklch(0.68 0.17 155);
   --success-foreground: oklch(0.12 0.05 155);
 
   --border: oklch(0.955 0.006 320);
   --input: oklch(0.95 0.008 320);
-  --ring: oklch(0.62 0.32 330);
+  --ring: #BE00FF;
 
-  --chart-1: oklch(0.62 0.32 330);
-  --chart-2: oklch(0.74 0.28 332);
+  --chart-1: #BE00FF;
+  --chart-2: #E300DD;
   --chart-3: oklch(0.55 0.22 295);
   --chart-4: oklch(0.45 0.18 310);
   --chart-5: oklch(0.8 0.15 330);
 
   /* Signature gradients & shadows */
-  --gradient-primary: linear-gradient(135deg, oklch(0.62 0.32 330), oklch(0.74 0.28 332));
-  --gradient-hero: linear-gradient(135deg, oklch(0.62 0.32 330) 0%, oklch(0.45 0.28 315) 60%, oklch(0.18 0.08 305) 100%);
+  --gradient-primary: linear-gradient(135deg, #BE00FF, #E300DD);
+  --gradient-hero: linear-gradient(135deg, #BE00FF 0%, #E300DD 60%, oklch(0.18 0.08 305) 100%);
   --gradient-soft: linear-gradient(180deg, oklch(0.985 0.005 320) 0%, oklch(0.95 0.04 325) 100%);
-  --shadow-glow: 0 20px 60px -20px color-mix(in oklab, oklch(0.62 0.32 330) 55%, transparent);
+  --shadow-glow: 0 20px 60px -20px color-mix(in oklab, #BE00FF 55%, transparent);
   --shadow-card: 0 10px 40px -15px color-mix(in oklab, oklch(0.16 0.04 300) 25%, transparent);
 
+  /* Sidebar */
   --sidebar: oklch(0.985 0.005 320);
   --sidebar-foreground: oklch(0.16 0.04 300);
-  --sidebar-primary: oklch(0.62 0.32 330);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-primary: #E300DD;
+  --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: oklch(0.95 0.04 325);
   --sidebar-accent-foreground: oklch(0.25 0.12 325);
   --sidebar-border: oklch(0.92 0.01 320);
-  --sidebar-ring: oklch(0.62 0.32 330);
+  --sidebar-ring: #E300DD;
 }
 
 .dark {
@@ -139,11 +140,12 @@
   --popover: oklch(0.18 0.05 305);
   --popover-foreground: oklch(0.98 0.005 320);
 
-  --primary: oklch(0.7 0.3 332);
+  /* Brand magenta — Wallet SBX Oficial (Ajustado para Dark Mode) */
+  --primary: #E299FF; /* Usando o tom mais claro para destacar no fundo escuro */
   --primary-foreground: oklch(0.13 0.04 300);
-  --primary-glow: oklch(0.78 0.26 332);
+  --primary-glow: #BE00FF;
 
-  --ink: oklch(0.99 0 0);
+  --ink: #FFFFFF;
   --ink-foreground: oklch(0.13 0.04 300);
 
   --secondary: oklch(0.24 0.06 305);
@@ -156,29 +158,29 @@
   --accent-foreground: oklch(0.98 0.005 320);
 
   --destructive: oklch(0.7 0.2 22);
-  --destructive-foreground: oklch(0.99 0 0);
+  --destructive-foreground: #FFFFFF;
 
   --success: oklch(0.72 0.17 155);
   --success-foreground: oklch(0.12 0.05 155);
 
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.7 0.3 332);
+  --ring: #E299FF;
 
-  --chart-1: oklch(0.7 0.3 332);
-  --chart-2: oklch(0.78 0.26 332);
+  --chart-1: #E299FF;
+  --chart-2: #FF9EFF;
   --chart-3: oklch(0.6 0.24 295);
   --chart-4: oklch(0.5 0.2 310);
   --chart-5: oklch(0.85 0.13 330);
 
   --sidebar: oklch(0.18 0.05 305);
   --sidebar-foreground: oklch(0.98 0.005 320);
-  --sidebar-primary: oklch(0.7 0.3 332);
+  --sidebar-primary: #FF9EFF;
   --sidebar-primary-foreground: oklch(0.13 0.04 300);
   --sidebar-accent: oklch(0.3 0.12 325);
   --sidebar-accent-foreground: oklch(0.98 0.005 320);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.7 0.3 332);
+  --sidebar-ring: #FF9EFF;
 }
 
 @layer base {

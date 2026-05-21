@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createFileRoute("/backoffice/seguranca")({ component: SegurancaPage });
+export const Route = createFileRoute("/backoffice/auditoria")({ component: AuditoriaPage });
 
 type LoginRow = {
   id: string;
@@ -23,7 +23,7 @@ type LoginRow = {
   operating_system: string | null;
   origin_page: string | null;
   origin_function: string | null;
-  metadata: { occurred_at?: string | null; source?: string | null; } | null;
+  origin_details: { occurred_at?: string | null; source?: string | null; } | null;
   created_at: string;
 };
 
@@ -51,12 +51,12 @@ function formatDateTime(iso: string) {
 }
 
 function getEventDateTime(row: LoginRow) {
-  const raw = row.metadata?.occurred_at ?? row.created_at;
+  const raw = row.origin_details?.occurred_at ?? row.created_at;
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? row.created_at : parsed.toISOString();
 }
 
-function SegurancaPage() {
+function AuditoriaPage() {
   const [rows, setRows] = useState<LoginRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +71,7 @@ function SegurancaPage() {
 
     let q = supabase
       .from("login_history")
-      .select("id,email,event,success,failure_reason,ip_address,country,state,city,user_agent,device_type,operating_system,metadata,created_at,origin_page,origin_function")
+      .select("id,email,event,success,failure_reason,ip_address,country,state,city,user_agent,device_type,operating_system,origin_details,created_at,origin_page,origin_function")
       .order("created_at", { ascending: false })
       .limit(500);
 
@@ -113,7 +113,7 @@ function SegurancaPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Segurança e auditoria</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Auditoria</h1>
         </div>
         <Button onClick={load} className="rounded-lg" disabled={loading}>
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
@@ -174,8 +174,19 @@ function SegurancaPage() {
   );
 }
 
-function StatCard({ label, value, tone = "default", highlight = false }: any) {
-  const toneClass = { default: "text-foreground", success: "text-success", danger: "text-destructive", warn: "text-amber-600" }[tone];
+function StatCard({ label, value, tone = "default", highlight = false }: { 
+  label: string; 
+  value: number | string; 
+  tone?: "default" | "success" | "danger" | "warn"; 
+  highlight?: boolean; 
+}) {
+  const toneClass = { 
+    default: "text-foreground", 
+    success: "text-success", 
+    danger: "text-destructive", 
+    warn: "text-amber-600" 
+  }[tone as "default" | "success" | "danger" | "warn"]; // Adicionamos a conversão
+  
   return (
     <div className={`rounded-3xl border p-5 shadow-sm ${highlight ? "bg-primary text-primary-foreground" : "bg-card"}`}>
       <div className="text-xs font-semibold uppercase">{label}</div>

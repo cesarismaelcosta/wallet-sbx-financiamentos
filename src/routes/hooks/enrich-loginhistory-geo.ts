@@ -58,7 +58,7 @@ async function lookupGeo(ip: string): Promise<GeoResult> {
 type Row = {
   id: string;
   ip_address: string | null;
-  metadata: Record<string, unknown> | null;
+  origin_details: Record<string, unknown> | null;
 };
 
 function nextDueIso(): string {
@@ -89,7 +89,7 @@ export const Route = createFileRoute("/hooks/enrich-loginhistory-geo")({
 
         const { data: rows, error: selectError } = await supabaseAdmin
           .from("login_history")
-          .select("id, ip_address, metadata")
+          .select("id, ip_address, origin_details")
           .is("city", null)
           .order("created_at", { ascending: false })
           .limit(BATCH_SIZE);
@@ -100,7 +100,7 @@ export const Route = createFileRoute("/hooks/enrich-loginhistory-geo")({
 
         const candidates = (rows ?? []) as Row[];
         const due = candidates.filter((row) => {
-          const meta = row.metadata ?? {};
+          const meta = row.origin_details ?? {};
           const status = meta["geo_status"];
           if (status === "ok" || status === "skipped") return false;
           const attempts =
@@ -118,7 +118,7 @@ export const Route = createFileRoute("/hooks/enrich-loginhistory-geo")({
         let skipped = 0;
 
         for (const row of due) {
-          const meta = (row.metadata ?? {}) as Record<string, unknown>;
+          const meta = (row.origin_details ?? {}) as Record<string, unknown>;
           const attempts =
             typeof meta["geo_attempts"] === "number"
               ? (meta["geo_attempts"] as number)
@@ -128,7 +128,7 @@ export const Route = createFileRoute("/hooks/enrich-loginhistory-geo")({
             await supabaseAdmin
               .from("login_history")
               .update({
-                metadata: {
+                origin_details: {
                   ...meta,
                   geo_status: "skipped",
                   geo_reason: "private_or_missing_ip",
@@ -149,7 +149,7 @@ export const Route = createFileRoute("/hooks/enrich-loginhistory-geo")({
                 country: result.country,
                 state: result.state,
                 city: result.city,
-                metadata: {
+                origin_details: {
                   ...meta,
                   geo_status: result.city ? "ok" : "skipped",
                   geo_attempts: newAttempts,
@@ -163,7 +163,7 @@ export const Route = createFileRoute("/hooks/enrich-loginhistory-geo")({
             await supabaseAdmin
               .from("login_history")
               .update({
-                metadata: {
+                origin_details: {
                   ...meta,
                   geo_status: finalAttempt ? "failed" : "pending",
                   geo_attempts: newAttempts,

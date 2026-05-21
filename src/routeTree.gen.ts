@@ -9,27 +9,25 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SandboxRouteImport } from './routes/sandbox'
 import { Route as BackofficeRouteImport } from './routes/backoffice'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SandboxIndexRouteImport } from './routes/sandbox.index'
 import { Route as BackofficeIndexRouteImport } from './routes/backoffice.index'
+import { Route as SandboxVeiculosRouteImport } from './routes/sandbox.veiculos'
+import { Route as SandboxCartaoRouteImport } from './routes/sandbox.cartao'
 import { Route as HooksEnrichLoginhistoryGeoRouteImport } from './routes/hooks/enrich-loginhistory-geo'
 import { Route as FinanciamentosVeiculosRouteImport } from './routes/financiamentos.veiculos'
-import { Route as FinanciamentosSimulacaoparceiroRouteImport } from './routes/financiamentos.simulacaoparceiro'
+import { Route as FinanciamentosSimulacaoRouteImport } from './routes/financiamentos.simulacao'
+import { Route as FinanciamentoAutoEquityRouteImport } from './routes/financiamento.auto-equity'
 import { Route as BackofficeLoginRouteImport } from './routes/backoffice_.login'
 import { Route as BackofficeUsuariosRouteImport } from './routes/backoffice.usuarios'
-import { Route as BackofficeSegurancaRouteImport } from './routes/backoffice.seguranca'
 import { Route as BackofficeRelatoriosRouteImport } from './routes/backoffice.relatorios'
 import { Route as BackofficePropostasRouteImport } from './routes/backoffice.propostas'
 import { Route as BackofficeDominiosRouteImport } from './routes/backoffice.dominios'
 import { Route as BackofficeConfiguracoesRouteImport } from './routes/backoffice.configuracoes'
+import { Route as BackofficeAuditoriaRouteImport } from './routes/backoffice.auditoria'
 import { Route as ApiLoginhistoryRouteImport } from './routes/api.loginhistory'
 
-const SandboxRoute = SandboxRouteImport.update({
-  id: '/sandbox',
-  path: '/sandbox',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const BackofficeRoute = BackofficeRouteImport.update({
   id: '/backoffice',
   path: '/backoffice',
@@ -40,10 +38,25 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SandboxIndexRoute = SandboxIndexRouteImport.update({
+  id: '/sandbox/',
+  path: '/sandbox/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BackofficeIndexRoute = BackofficeIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => BackofficeRoute,
+} as any)
+const SandboxVeiculosRoute = SandboxVeiculosRouteImport.update({
+  id: '/sandbox/veiculos',
+  path: '/sandbox/veiculos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SandboxCartaoRoute = SandboxCartaoRouteImport.update({
+  id: '/sandbox/cartao',
+  path: '/sandbox/cartao',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const HooksEnrichLoginhistoryGeoRoute =
   HooksEnrichLoginhistoryGeoRouteImport.update({
@@ -56,12 +69,16 @@ const FinanciamentosVeiculosRoute = FinanciamentosVeiculosRouteImport.update({
   path: '/financiamentos/veiculos',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FinanciamentosSimulacaoparceiroRoute =
-  FinanciamentosSimulacaoparceiroRouteImport.update({
-    id: '/financiamentos/simulacaoparceiro',
-    path: '/financiamentos/simulacaoparceiro',
-    getParentRoute: () => rootRouteImport,
-  } as any)
+const FinanciamentosSimulacaoRoute = FinanciamentosSimulacaoRouteImport.update({
+  id: '/financiamentos/simulacao',
+  path: '/financiamentos/simulacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanciamentoAutoEquityRoute = FinanciamentoAutoEquityRouteImport.update({
+  id: '/financiamento/auto-equity',
+  path: '/financiamento/auto-equity',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BackofficeLoginRoute = BackofficeLoginRouteImport.update({
   id: '/backoffice_/login',
   path: '/backoffice/login',
@@ -70,11 +87,6 @@ const BackofficeLoginRoute = BackofficeLoginRouteImport.update({
 const BackofficeUsuariosRoute = BackofficeUsuariosRouteImport.update({
   id: '/usuarios',
   path: '/usuarios',
-  getParentRoute: () => BackofficeRoute,
-} as any)
-const BackofficeSegurancaRoute = BackofficeSegurancaRouteImport.update({
-  id: '/seguranca',
-  path: '/seguranca',
   getParentRoute: () => BackofficeRoute,
 } as any)
 const BackofficeRelatoriosRoute = BackofficeRelatoriosRouteImport.update({
@@ -97,6 +109,11 @@ const BackofficeConfiguracoesRoute = BackofficeConfiguracoesRouteImport.update({
   path: '/configuracoes',
   getParentRoute: () => BackofficeRoute,
 } as any)
+const BackofficeAuditoriaRoute = BackofficeAuditoriaRouteImport.update({
+  id: '/auditoria',
+  path: '/auditoria',
+  getParentRoute: () => BackofficeRoute,
+} as any)
 const ApiLoginhistoryRoute = ApiLoginhistoryRouteImport.update({
   id: '/api/loginhistory',
   path: '/api/loginhistory',
@@ -106,127 +123,141 @@ const ApiLoginhistoryRoute = ApiLoginhistoryRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/backoffice': typeof BackofficeRouteWithChildren
-  '/sandbox': typeof SandboxRoute
   '/api/loginhistory': typeof ApiLoginhistoryRoute
+  '/backoffice/auditoria': typeof BackofficeAuditoriaRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesRoute
   '/backoffice/dominios': typeof BackofficeDominiosRoute
   '/backoffice/propostas': typeof BackofficePropostasRoute
   '/backoffice/relatorios': typeof BackofficeRelatoriosRoute
-  '/backoffice/seguranca': typeof BackofficeSegurancaRoute
   '/backoffice/usuarios': typeof BackofficeUsuariosRoute
   '/backoffice/login': typeof BackofficeLoginRoute
-  '/financiamentos/simulacaoparceiro': typeof FinanciamentosSimulacaoparceiroRoute
+  '/financiamento/auto-equity': typeof FinanciamentoAutoEquityRoute
+  '/financiamentos/simulacao': typeof FinanciamentosSimulacaoRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosRoute
   '/hooks/enrich-loginhistory-geo': typeof HooksEnrichLoginhistoryGeoRoute
+  '/sandbox/cartao': typeof SandboxCartaoRoute
+  '/sandbox/veiculos': typeof SandboxVeiculosRoute
   '/backoffice/': typeof BackofficeIndexRoute
+  '/sandbox/': typeof SandboxIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/sandbox': typeof SandboxRoute
   '/api/loginhistory': typeof ApiLoginhistoryRoute
+  '/backoffice/auditoria': typeof BackofficeAuditoriaRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesRoute
   '/backoffice/dominios': typeof BackofficeDominiosRoute
   '/backoffice/propostas': typeof BackofficePropostasRoute
   '/backoffice/relatorios': typeof BackofficeRelatoriosRoute
-  '/backoffice/seguranca': typeof BackofficeSegurancaRoute
   '/backoffice/usuarios': typeof BackofficeUsuariosRoute
   '/backoffice/login': typeof BackofficeLoginRoute
-  '/financiamentos/simulacaoparceiro': typeof FinanciamentosSimulacaoparceiroRoute
+  '/financiamento/auto-equity': typeof FinanciamentoAutoEquityRoute
+  '/financiamentos/simulacao': typeof FinanciamentosSimulacaoRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosRoute
   '/hooks/enrich-loginhistory-geo': typeof HooksEnrichLoginhistoryGeoRoute
+  '/sandbox/cartao': typeof SandboxCartaoRoute
+  '/sandbox/veiculos': typeof SandboxVeiculosRoute
   '/backoffice': typeof BackofficeIndexRoute
+  '/sandbox': typeof SandboxIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/backoffice': typeof BackofficeRouteWithChildren
-  '/sandbox': typeof SandboxRoute
   '/api/loginhistory': typeof ApiLoginhistoryRoute
+  '/backoffice/auditoria': typeof BackofficeAuditoriaRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesRoute
   '/backoffice/dominios': typeof BackofficeDominiosRoute
   '/backoffice/propostas': typeof BackofficePropostasRoute
   '/backoffice/relatorios': typeof BackofficeRelatoriosRoute
-  '/backoffice/seguranca': typeof BackofficeSegurancaRoute
   '/backoffice/usuarios': typeof BackofficeUsuariosRoute
   '/backoffice_/login': typeof BackofficeLoginRoute
-  '/financiamentos/simulacaoparceiro': typeof FinanciamentosSimulacaoparceiroRoute
+  '/financiamento/auto-equity': typeof FinanciamentoAutoEquityRoute
+  '/financiamentos/simulacao': typeof FinanciamentosSimulacaoRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosRoute
   '/hooks/enrich-loginhistory-geo': typeof HooksEnrichLoginhistoryGeoRoute
+  '/sandbox/cartao': typeof SandboxCartaoRoute
+  '/sandbox/veiculos': typeof SandboxVeiculosRoute
   '/backoffice/': typeof BackofficeIndexRoute
+  '/sandbox/': typeof SandboxIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/backoffice'
-    | '/sandbox'
     | '/api/loginhistory'
+    | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
     | '/backoffice/dominios'
     | '/backoffice/propostas'
     | '/backoffice/relatorios'
-    | '/backoffice/seguranca'
     | '/backoffice/usuarios'
     | '/backoffice/login'
-    | '/financiamentos/simulacaoparceiro'
+    | '/financiamento/auto-equity'
+    | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/hooks/enrich-loginhistory-geo'
+    | '/sandbox/cartao'
+    | '/sandbox/veiculos'
     | '/backoffice/'
+    | '/sandbox/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/sandbox'
     | '/api/loginhistory'
+    | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
     | '/backoffice/dominios'
     | '/backoffice/propostas'
     | '/backoffice/relatorios'
-    | '/backoffice/seguranca'
     | '/backoffice/usuarios'
     | '/backoffice/login'
-    | '/financiamentos/simulacaoparceiro'
+    | '/financiamento/auto-equity'
+    | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/hooks/enrich-loginhistory-geo'
+    | '/sandbox/cartao'
+    | '/sandbox/veiculos'
     | '/backoffice'
+    | '/sandbox'
   id:
     | '__root__'
     | '/'
     | '/backoffice'
-    | '/sandbox'
     | '/api/loginhistory'
+    | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
     | '/backoffice/dominios'
     | '/backoffice/propostas'
     | '/backoffice/relatorios'
-    | '/backoffice/seguranca'
     | '/backoffice/usuarios'
     | '/backoffice_/login'
-    | '/financiamentos/simulacaoparceiro'
+    | '/financiamento/auto-equity'
+    | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/hooks/enrich-loginhistory-geo'
+    | '/sandbox/cartao'
+    | '/sandbox/veiculos'
     | '/backoffice/'
+    | '/sandbox/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BackofficeRoute: typeof BackofficeRouteWithChildren
-  SandboxRoute: typeof SandboxRoute
   ApiLoginhistoryRoute: typeof ApiLoginhistoryRoute
   BackofficeLoginRoute: typeof BackofficeLoginRoute
-  FinanciamentosSimulacaoparceiroRoute: typeof FinanciamentosSimulacaoparceiroRoute
+  FinanciamentoAutoEquityRoute: typeof FinanciamentoAutoEquityRoute
+  FinanciamentosSimulacaoRoute: typeof FinanciamentosSimulacaoRoute
   FinanciamentosVeiculosRoute: typeof FinanciamentosVeiculosRoute
   HooksEnrichLoginhistoryGeoRoute: typeof HooksEnrichLoginhistoryGeoRoute
+  SandboxCartaoRoute: typeof SandboxCartaoRoute
+  SandboxVeiculosRoute: typeof SandboxVeiculosRoute
+  SandboxIndexRoute: typeof SandboxIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sandbox': {
-      id: '/sandbox'
-      path: '/sandbox'
-      fullPath: '/sandbox'
-      preLoaderRoute: typeof SandboxRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/backoffice': {
       id: '/backoffice'
       path: '/backoffice'
@@ -241,12 +272,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sandbox/': {
+      id: '/sandbox/'
+      path: '/sandbox'
+      fullPath: '/sandbox/'
+      preLoaderRoute: typeof SandboxIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/backoffice/': {
       id: '/backoffice/'
       path: '/'
       fullPath: '/backoffice/'
       preLoaderRoute: typeof BackofficeIndexRouteImport
       parentRoute: typeof BackofficeRoute
+    }
+    '/sandbox/veiculos': {
+      id: '/sandbox/veiculos'
+      path: '/sandbox/veiculos'
+      fullPath: '/sandbox/veiculos'
+      preLoaderRoute: typeof SandboxVeiculosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sandbox/cartao': {
+      id: '/sandbox/cartao'
+      path: '/sandbox/cartao'
+      fullPath: '/sandbox/cartao'
+      preLoaderRoute: typeof SandboxCartaoRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/hooks/enrich-loginhistory-geo': {
       id: '/hooks/enrich-loginhistory-geo'
@@ -262,11 +314,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanciamentosVeiculosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/financiamentos/simulacaoparceiro': {
-      id: '/financiamentos/simulacaoparceiro'
-      path: '/financiamentos/simulacaoparceiro'
-      fullPath: '/financiamentos/simulacaoparceiro'
-      preLoaderRoute: typeof FinanciamentosSimulacaoparceiroRouteImport
+    '/financiamentos/simulacao': {
+      id: '/financiamentos/simulacao'
+      path: '/financiamentos/simulacao'
+      fullPath: '/financiamentos/simulacao'
+      preLoaderRoute: typeof FinanciamentosSimulacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/financiamento/auto-equity': {
+      id: '/financiamento/auto-equity'
+      path: '/financiamento/auto-equity'
+      fullPath: '/financiamento/auto-equity'
+      preLoaderRoute: typeof FinanciamentoAutoEquityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/backoffice_/login': {
@@ -281,13 +340,6 @@ declare module '@tanstack/react-router' {
       path: '/usuarios'
       fullPath: '/backoffice/usuarios'
       preLoaderRoute: typeof BackofficeUsuariosRouteImport
-      parentRoute: typeof BackofficeRoute
-    }
-    '/backoffice/seguranca': {
-      id: '/backoffice/seguranca'
-      path: '/seguranca'
-      fullPath: '/backoffice/seguranca'
-      preLoaderRoute: typeof BackofficeSegurancaRouteImport
       parentRoute: typeof BackofficeRoute
     }
     '/backoffice/relatorios': {
@@ -318,6 +370,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackofficeConfiguracoesRouteImport
       parentRoute: typeof BackofficeRoute
     }
+    '/backoffice/auditoria': {
+      id: '/backoffice/auditoria'
+      path: '/auditoria'
+      fullPath: '/backoffice/auditoria'
+      preLoaderRoute: typeof BackofficeAuditoriaRouteImport
+      parentRoute: typeof BackofficeRoute
+    }
     '/api/loginhistory': {
       id: '/api/loginhistory'
       path: '/api/loginhistory'
@@ -329,21 +388,21 @@ declare module '@tanstack/react-router' {
 }
 
 interface BackofficeRouteChildren {
+  BackofficeAuditoriaRoute: typeof BackofficeAuditoriaRoute
   BackofficeConfiguracoesRoute: typeof BackofficeConfiguracoesRoute
   BackofficeDominiosRoute: typeof BackofficeDominiosRoute
   BackofficePropostasRoute: typeof BackofficePropostasRoute
   BackofficeRelatoriosRoute: typeof BackofficeRelatoriosRoute
-  BackofficeSegurancaRoute: typeof BackofficeSegurancaRoute
   BackofficeUsuariosRoute: typeof BackofficeUsuariosRoute
   BackofficeIndexRoute: typeof BackofficeIndexRoute
 }
 
 const BackofficeRouteChildren: BackofficeRouteChildren = {
+  BackofficeAuditoriaRoute: BackofficeAuditoriaRoute,
   BackofficeConfiguracoesRoute: BackofficeConfiguracoesRoute,
   BackofficeDominiosRoute: BackofficeDominiosRoute,
   BackofficePropostasRoute: BackofficePropostasRoute,
   BackofficeRelatoriosRoute: BackofficeRelatoriosRoute,
-  BackofficeSegurancaRoute: BackofficeSegurancaRoute,
   BackofficeUsuariosRoute: BackofficeUsuariosRoute,
   BackofficeIndexRoute: BackofficeIndexRoute,
 }
@@ -355,12 +414,15 @@ const BackofficeRouteWithChildren = BackofficeRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BackofficeRoute: BackofficeRouteWithChildren,
-  SandboxRoute: SandboxRoute,
   ApiLoginhistoryRoute: ApiLoginhistoryRoute,
   BackofficeLoginRoute: BackofficeLoginRoute,
-  FinanciamentosSimulacaoparceiroRoute: FinanciamentosSimulacaoparceiroRoute,
+  FinanciamentoAutoEquityRoute: FinanciamentoAutoEquityRoute,
+  FinanciamentosSimulacaoRoute: FinanciamentosSimulacaoRoute,
   FinanciamentosVeiculosRoute: FinanciamentosVeiculosRoute,
   HooksEnrichLoginhistoryGeoRoute: HooksEnrichLoginhistoryGeoRoute,
+  SandboxCartaoRoute: SandboxCartaoRoute,
+  SandboxVeiculosRoute: SandboxVeiculosRoute,
+  SandboxIndexRoute: SandboxIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

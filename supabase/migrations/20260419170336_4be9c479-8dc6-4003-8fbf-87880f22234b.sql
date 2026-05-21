@@ -18,7 +18,7 @@ create table public.loginhistory (
   useragent text,
   devicetype text,
   operatingsystem text,
-  metadata jsonb,
+  origin_details jsonb,
   createdat timestamptz not null default now()
 );
 

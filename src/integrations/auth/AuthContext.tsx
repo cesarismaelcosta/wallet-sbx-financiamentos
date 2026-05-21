@@ -58,8 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: userData, error: userError } = await supabase
       .from('backoffice_users')
-      .select('is_active, role, name, email') 
-      .eq('email', email)
+      .select('is_active, role, name, email')
+      .ilike('email', email!) // .ilike ignora maiúsculas e minúsculas
       .maybeSingle();
 
     let failureReason: string | null = null;
