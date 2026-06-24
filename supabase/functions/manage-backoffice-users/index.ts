@@ -1,7 +1,7 @@
 /**
  * @file manage-backoffice-users.ts
  * @description Edge Function de gestão de usuários.
- * Agora utiliza consulta direta à tabela 'backoffice_users' para validação de privilégios.
+ * Versão com DEBUG LOGS para diagnóstico de acesso.
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -39,31 +39,51 @@ function json(status: number, body: unknown) {
 
 /**
  * Valida o usuário diretamente na tabela 'backoffice_users'.
- * Esta abordagem é mais robusta e não depende de RPCs legadas.
+ * INJETADO COM LOGS DE DEBUG
  */
 async function ensureAdmin(authHeader: string | null) {
-  if (!authHeader) return { ok: false as const, error: "missing_authorization" };
+  console.log("DEBUG [ensureAdmin]: Iniciando verificação...");
+
+  if (!authHeader) {
+    console.log("DEBUG [ensureAdmin]: Erro -> missing_authorization");
+    return { ok: false as const, error: "missing_authorization" };
+  }
   
   const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
   
-  const { data: { user } } = await userClient.auth.getUser();
-  if (!user) return { ok: false as const, error: "unauthenticated" };
+  const { data: { user }, error: authError } = await userClient.auth.getUser();
+  
+  if (authError || !user) {
+    console.log("DEBUG [ensureAdmin]: Erro Auth ->", authError);
+    return { ok: false as const, error: "unauthenticated" };
+  }
+
+  console.log("DEBUG [ensureAdmin]: Usuário logado ->", user.email);
 
   // Consulta direta na tabela de confiança
+  // Alterado para .ilike para ignorar case sensitive
   const { data: profile, error } = await adminClient
     .from("backoffice_users")
     .select("role")
-    .eq("email", user.email)
+    .ilike("email", user.email)
     .eq("is_active", true)
     .single();
 
+  if (error) {
+    console.log("DEBUG [ensureAdmin]: Erro DB ->", error);
+  } else {
+    console.log("DEBUG [ensureAdmin]: Perfil encontrado ->", profile);
+  }
+
   if (error || !profile || profile.role !== 'admin') {
+    console.log("DEBUG [ensureAdmin]: Forbidden. Perfil ou Role inválido.");
     return { ok: false as const, error: "forbidden" };
   }
   
+  console.log("DEBUG [ensureAdmin]: Admin validado com sucesso.");
   return { ok: true as const };
 }
 
@@ -109,7 +129,6 @@ Deno.serve(async (req) => {
     }
 
     case "set_active": {
-      // 1. Primeiro, buscamos o e-mail do usuário que está sendo desativado
       const { data: userRecord, error: fetchErr } = await adminClient
         .from("backoffice_users")
         .select("email")
@@ -118,7 +137,6 @@ Deno.serve(async (req) => {
 
       if (fetchErr) return json(500, { error: fetchErr.message });
 
-      // 2. Executamos o update no banco
       const { data, error } = await adminClient
         .from("backoffice_users")
         .update({ is_active: payload.is_active })
@@ -127,20 +145,16 @@ Deno.serve(async (req) => {
         
       if (error) return json(500, { error: error.message });
 
-      // 3. Se for desativação (is_active = false), forçamos o logout
       if (payload.is_active === false) {
         try {
-          // Buscamos o usuário na tabela auth.users pelo e-mail
           const { data: usersData } = await adminClient.auth.admin.listUsers();
           const targetUser = usersData.users.find(u => u.email === userRecord.email);
           
           if (targetUser) {
-            // Expulsa o usuário invalidando todos os seus tokens de refresh
             await adminClient.auth.admin.signOut(targetUser.id);
           }
         } catch (e) {
           console.error("Erro ao forçar logout:", e);
-          // Não paramos a execução aqui, pois o usuário já foi desativado no banco
         }
       }
 

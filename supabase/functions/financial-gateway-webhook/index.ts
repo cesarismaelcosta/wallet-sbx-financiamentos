@@ -26,7 +26,7 @@ const DEBUG_MODE = true;
  */
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
-    console.log(`[WEBHOOK-GATEWAY] ${message}`, data ? JSON.stringify(data, null, 2) : "");
+    debugLog(`[WEBHOOK-GATEWAY] ${message}`, data ? JSON.stringify(data, null, 2) : "");
   }
 };
 

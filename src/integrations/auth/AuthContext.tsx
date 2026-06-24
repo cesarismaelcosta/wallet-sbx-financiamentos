@@ -56,11 +56,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthorizationLoading(true);
     setDomainError(null);
 
-    const { data: userData, error: userError } = await supabase
+const { data: userData, error: userError } = await supabase
       .from('backoffice_users')
       .select('is_active, role, name, email')
-      .ilike('email', email!) // .ilike ignora maiúsculas e minúsculas
+      .ilike('email', email!)
       .maybeSingle();
+
+    // VERIFICAÇÃO DE SEGURANÇA
+    if (userError) {
+      console.error("Erro ao buscar usuário:", userError);
+      setDomainError("Erro interno ao validar acesso.");
+      await supabase.auth.signOut();
+      return; // Interrompe a execução antes de processar dados nulos
+    }
 
     let failureReason: string | null = null;
     if (userError || !userData) failureReason = "userDoesNotExist";

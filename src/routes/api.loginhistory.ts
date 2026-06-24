@@ -196,7 +196,7 @@ export const Route = createFileRoute("/api/loginhistory")({
             country: geo.country,
             state: geo.state,
             city: geo.city,
-            origin_details: {
+            metadata: {
               source,
               occurred_at: occurredAt,
               geo_status: geo.status,

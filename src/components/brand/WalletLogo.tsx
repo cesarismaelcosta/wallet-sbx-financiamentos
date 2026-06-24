@@ -1,3 +1,27 @@
+/**
+ * @fileoverview Componente: WalletLogo
+ * @path src/components/common/WalletLogo.tsx
+ * * ESTRUTURA DO PROJETO:
+ * --------------------------------------------------------------------------------
+ * src/
+ * ├── assets/
+ * │   └── wallet-sbx-logo.png   # [ASSET] Logo da marca
+ * ├── components/
+ * │   ├── auto-equity/          # Domínio de negócio
+ * │   └── common/
+ * │       └── WalletLogo.tsx    # [AQUI] Componente de Branding Global
+ * └── ...
+ * --------------------------------------------------------------------------------
+ * * PROPÓSITO:
+ * Renderizar o logo da marca "Wallet sbX" com suporte a tamanhos variáveis, 
+ * tagline opcional e comportamento de navegação (Link).
+ * * INTEGRAÇÃO:
+ * - Utiliza `@tanstack/react-router` para navegação baseada em rotas.
+ * - Utiliza `cn` (Tailwind Merge) para composição de estilos dinâmicos.
+ * * INTERDEPENDÊNCIAS:
+ * - UI: Shadcn.
+ */
+
 import { Link } from "@tanstack/react-router";
 import logoSrc from "@/assets/wallet-sbx-logo.png";
 import { cn } from "@/lib/utils";

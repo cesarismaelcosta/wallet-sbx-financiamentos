@@ -15,8 +15,6 @@ type LogLoginHistoryInput = {
   occurredAt?: string;
 };
 
-// ... (resto das funções auxiliares: readQueue, writeQueue, enqueue, postEvent)
-
 export async function logLoginHistoryEvent(
   input: LogLoginHistoryInput,
 ): Promise<{ success: boolean }> {

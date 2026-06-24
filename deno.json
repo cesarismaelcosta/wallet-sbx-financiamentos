@@ -1,0 +1,13 @@
+{
+  "tasks": {
+    "deploy": "supabase functions deploy"
+  },
+  "imports": {
+    "postgres": "https://deno.land/x/postgresjs/mod.js"
+  },
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.window", "deno.ns"], 
+    "strict": true
+  }
+}

@@ -30,14 +30,15 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "SBX Crédito — Simule seu financiamento" },
-      { name: "description", content: "Simule sem compromisso seu financiamento de veículo e fale com um especialista. Condições exclusivas, parcelas que cabem no seu bolso." },
-      { property: "og:title", content: "SBX Crédito — Simule seu financiamento" },
+      { title: "Wallet sbX — Financiamentos e Seguros" },
+      { name: "description", content: "Simule 100% online, sem compromisso, financiamentos, linhas de crédito com garantia e seguros. Condições exclusivas para clientes da Superbid." },
+      { property: "og:title", content: "SWallet sbX — Financiamentos e Seguros" },
       { property: "og:description", content: "Simule sem compromisso e negocie as melhores condições com um especialista." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
+      { rel: "icon", href: "data:," },
       { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },

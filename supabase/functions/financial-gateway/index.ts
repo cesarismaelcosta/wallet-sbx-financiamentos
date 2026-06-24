@@ -14,7 +14,7 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { processSimulation } from "./simulation_handler.ts";
+import { processSimulation } from "./simulation-handler.ts";
 
 // Chave de controle para logs de depuração
 const DEBUG_MODE = true;

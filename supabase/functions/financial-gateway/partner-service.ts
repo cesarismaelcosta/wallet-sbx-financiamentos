@@ -2,44 +2,25 @@
  * =========================================================================
  * MOTOR DE CÁLCULO: SIMULAÇÃO DE CONDIÇÕES COMERCIAIS
  * =========================================================================
- * @module processarFluxoParceiro
+ * @module processSimulationPartner
  * @description Centraliza o pipeline de validação de fatores e simulação de parcelamento
  * para parceiros comerciais, encapsulando o resultado no formato esperado pelo simulation-handler.
  */
 
-/**
- * @interface Consultation
- * @description Representa cada registro individual de simulação financeira gerado.
- * Mapeia diretamente as colunas e regras relacionais da tabela 'simulation_consults'.
- */
-interface Consultation {
-  status_id: number;                    // Status de processamento (1: Aprovado, 2: Negado, 8: Falha)
-  is_selected: boolean;                 // Flag de controle se esta foi a opção escolhida pelo usuário
-  external_operation_id: string | null; // Identificador exclusivo gerado para a simulação atual
-  message: string;                      // Descritivo textual sobre o resultado da análise/cálculo
-  
-  // Barramento Financeiro Específico desta Consulta
-  financial_institution_id: number | null;
-  financial_institution_name: string | null;
-  requested_value: number | null;
-  down_payment_amount: number | null;
-  down_payment_percentage: number | null;
-  financed_amount: number | null;
-  installments: number | null;
-  cet_rate: number | null;
-  installment_value: number | null;
-}
+import { 
+  SimulationResponse,
+  Consultation, 
+  SimulationFinancials, 
+  VehicleCollateral, 
+  HomeCollateral, 
+  SimulationPayload, 
+  SimulationConsent, 
+  SimulationUpdate 
+} from "../_shared/types.ts";
 
-/**
- * @interface PartnerResponse
- * @description Envelope padronizado de transporte de dados consumido pelo simulation-handler.
- */
-interface PartnerResponse {
-  success: boolean;            // Indica se a execução e o handshake do serviço ocorreram sem exceções
-  message: string;             // Resumo executivo da operação para fins de logs do barramento
-  consults: Consultation[];    // Array contendo a lista de consultas e simulações processadas
-  raw: any;                    // Payload bruto, snapshots de regras e trilha de auditoria (Audit Trail)
-}
+import { 
+  Offer
+} from "../_shared/types.ts";
 
 /**
  * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
@@ -58,18 +39,72 @@ const debugLog = (message: string, data?: any) => {
 };
 
 /**
+ * Calcula a taxa de juros mensal usando o Método da Secante.
+ * @param pv - Valor presente (Principal)
+ * @param pmt - Valor da parcela
+ * @param n - Número de parcelas
+ * @returns A taxa de juros decimal (ex: 0.0178 para 1.78%)
+ */
+function calculateRate(pv: number, pmt: number, n: number): number {
+
+  // 1. Ajuste de sinal (Segurança contra erro de fluxo)
+  // Se o usuário passar os dois positivos, força a parcela a ser negativa
+  let pmt_calc = (Math.sign(pv) === Math.sign(pmt)) ? -pmt : pmt;
+
+  // Se o principal for igual à soma das parcelas, taxa é zero
+  if (Math.abs(pv) === Math.abs(pmt_calc * n)) return 0;
+
+  // 2. Parâmetros do Algoritmo (Método da Secante)
+  let r0 = 0.01; // Chute inicial 1%
+  let r1 = 0.02; // Chute inicial 2%
+  const maxIterations = 100;
+  const tolerance = 0.0000001;
+
+  debugLog("pv", pv)
+  debugLog("pmt", pmt)
+  debugLog("number", n)
+
+  for (let i = 0; i < maxIterations; i++) {
+    // Calcula o erro (VPL) para r0 e r1
+    const f0 = pv + pmt_calc * ((1 - Math.pow(1 + r0, -n)) / r0);
+    const f1 = pv + pmt_calc * ((1 - Math.pow(1 + r1, -n)) / r1);
+
+    // Evita divisão por zero
+    if (Math.abs(f1 - f0) < 1e-15) break;
+
+    // Projeta o próximo chute (r2)
+    const r2 = r1 - f1 * (r1 - r0) / (f1 - f0);
+
+    // Verifica precisão
+    if (Math.abs(r2 - r1) < tolerance) {
+      return Number((r2 * 100).toFixed(2)); // Retorna em formato decimal (0.0178)
+    }
+
+    // Atualiza para a próxima iteração
+    r0 = r1;
+    r1 = r2;
+  }
+
+  return Number((r1 * 100).toFixed(2));
+}
+
+/**
  * PROCESSAR FLUXO PARCEIRO
  * @async
- * @function processarFluxoParceiro
+ * @function processSimulationPartner
  * @param {any} payload Dados dinâmicos enviados pelo front-end contendo regras, prazos e valores.
- * @returns {Promise<PartnerResponse>} Retorno envelopado estritamente aderente ao contrato técnico do core.
+ * @returns {Promise<SimulationResponse>} Retorno envelopado estritamente aderente ao contrato técnico do core.
  */
-export async function processarFluxoParceiro(payload: any): Promise<PartnerResponse> {
-  // Extração e higienização das variáveis de entrada do payload
+export async function processSimulationPartner(payload: any): Promise<SimulationResponse> {
+  // EXTRAÇÃO PADRONIZADA (Mesma estrutura do CreditCard)
+  const simulation = (payload.simulation_details as SimulationFinancials) || {};
+  const offer = (payload.offer as Offer) || {};
   const rules = payload.rules;
-  const installments = payload.installments || rules?.default_installments || 48;
-  const requestedValue = payload.requested_value || payload.offer?.offer_value || 0;
-  const downPayment = payload.down_payment_amount || 0;
+  const installments = simulation.installments || null; 
+
+  // Buscando valores
+  const requestedValue = simulation.requested_value || 0;
+  const downPayment = simulation.down_payment_amount || 0;
 
   debugLog("Payload de entrada capturado para processamento:", {
     requested_value: requestedValue,
@@ -81,7 +116,6 @@ export async function processarFluxoParceiro(payload: any): Promise<PartnerRespo
   const amountToFinance = requestedValue - downPayment;
   const downPaymentPercent = requestedValue > 0 ? (downPayment / requestedValue) * 100 : 0;
 
-  // 1. VALIDAÇÃO DE ENTRADA (O "Disjuntor" de Segurança)
   // Recupera o fator multiplicador mapeado na tabela dinamicamente por chave string
   const factor = rules?.payment_factors?.[String(installments)];
 
@@ -122,14 +156,13 @@ export async function processarFluxoParceiro(payload: any): Promise<PartnerRespo
         requested: installments, 
         available_factors: rules?.payment_factors ? Object.keys(rules.payment_factors) : [] 
       }
-    };
+    } as SimulationResponse;
   }
 
   // 2. MOTOR DE CÁLCULO DE CONDIÇÃO COMERCIAL (Fluxo Autorizado)
   // Aplicação direta do fator sobre o montante financiado
   const installmentValue = amountToFinance * factor;
-
-  debugLog(`Cálculo de parcela efetuado com sucesso. Valor resultante: R$ ${installmentValue}`);
+  const cetRate = calculateRate(-amountToFinance, Number(installmentValue.toFixed(2)), Number(installments))
 
   // 3. RETORNO PADRONIZADO E ENVELOPADO (Contrato Satisfeito)
   return {
@@ -150,10 +183,11 @@ export async function processarFluxoParceiro(payload: any): Promise<PartnerRespo
         down_payment_percentage: Number(downPaymentPercent.toFixed(2)),
         financed_amount: amountToFinance,
         installments: Number(installments),
-        cet_rate: null, // Pode ser expandido futuramente se adicionado ao JSON do banco
+        cet_rate: cetRate,
         installment_value: Number(installmentValue.toFixed(2)) // Arredondamento básico preventivo
       }
     ],
+
     // Snapshot para auditoria técnica posterior se necessário
     raw: {
       applied_factor: factor,
@@ -161,5 +195,5 @@ export async function processarFluxoParceiro(payload: any): Promise<PartnerRespo
       rules_snapshot_id: rules?.id || "not-provided",
       executed_at: new Date().toISOString()
     }
-  };
+  } as SimulationResponse;
 }

@@ -1,6 +1,6 @@
 /**
  * FANDI SERVICE - MOTOR DE INTEGRAÇÃO BANCÁRIA
- * @author Engenharia Wallet sbX / Cesar Ismael
+ * @author Cesar Ismael
  * @description Módulo responsável pela orquestração do pipeline de crédito com o parceiro Fandi.
  * Implementa o ciclo de vida completo: Identificação (GUID) -> Autorização (Token) -> Proposta (Simulação) -> Registro (Inclusão).
  * * * --- WORKFLOW DE INTEGRAÇÃO ---
@@ -17,112 +17,14 @@
  * https://checkout.fandi.com.br/test-drive
  */
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { 
+  SimulationResponse,
+  Consultation, 
+  SimulationPayload,
+  SimulationFinancials 
+} from "../_shared/types.ts";
 
-/**
- * Helper para extrair OS e Device básico do User Agent
- */
-function parseUserAgent(ua: string) {
-  const os = ua.includes('Windows') ? 'Windows' : 
-             ua.includes('Mac') ? 'MacOS' : 
-             ua.includes('Android') ? 'Android' : 
-             ua.includes('iPhone') ? 'iOS' : 'Linux/Other';
-             
-  const device = ua.includes('Mobi') ? 'Mobile' : 'Desktop';
-  return { os, device };
-}
-
-/**
- * Captura dados detalhados de infraestrutura e geolocalização.
- * 
- * Lógica de Geo:
- * 1. Tenta recuperar via headers da Cloudflare (produção Supabase).
- * 2. Se falhar (localhost/dev), utiliza o IP-API como fallback.
- * 
- * @param {Request} req - O objeto da requisição HTTP.
- * @returns {Promise<object>} Objeto contendo IP, Geo, OS e Device Type.
- */
-async function captureInfrastructure(req: Request) {
-  const ua = req.headers.get('user-agent') || '';
-  // Melhora a captura do IP
-  const ip = req.headers.get('x-real-ip') || 
-             req.headers.get('cf-connecting-ip') || 
-             req.headers.get('x-forwarded-for')?.split(',')[0] || 
-             '0.0.0.0';
-  
-  const { os, device } = parseUserAgent(ua);
-
-  // Tenta capturar dos headers da Vercel/Supabase (mais comuns no Edge)
-  let geo = {
-    country: req.headers.get('x-vercel-ip-country') || req.headers.get('cf-ipcountry'),
-    state: req.headers.get('x-vercel-ip-country-region') || req.headers.get('cf-region'),
-    city: req.headers.get('x-vercel-ip-city') || req.headers.get('cf-ipcity')
-  };
-
-  // 3. SE ALGUM CAMPO ESTIVER FALTANDO, DISPARA O FALLBACK
-  // Mudamos a condição para ser mais agressiva: se não tem cidade ou estado, busca no IP-API
-  if (!geo.country || geo.country === 'XX' || !geo.city) {
-    try {
-      // Importante: se o IP for 0.0.0.0 ou 127.0.0.1, o ip-api não retorna nada útil localmente
-      const queryIp = (ip === '0.0.0.0' || ip === '127.0.0.1') ? '' : ip;
-      const res = await fetch(`http://ip-api.com/json/${queryIp}?fields=countryCode,regionName,city`);
-      const fallback = await res.json();
-      
-      geo = {
-        country: fallback?.countryCode || geo.country || 'N/A',
-        state: fallback?.regionName || geo.state || 'N/A',
-        city: fallback?.city || geo.city || 'N/A'
-      };
-    } catch (e) {
-      console.warn("[sbX Infrastructure] Falha no fallback de Geo:", e.message);
-    }
-  }
-
-  return {
-    ip_address: ip,
-    user_agent: ua,
-    country: geo.country,
-    state: geo.state,
-    city: geo.city,
-    operating_system: os,
-    device_type: device
-  };
-}
-
-/**
- * @interface Consultation
- * @description Representa cada linha de consulta individual (Marketplace).
- * Cada item aqui será uma linha na tabela 'simulation_consults'.
- */
-interface Consultation {
-  status_id: number;                    // ID sbX (1: Aprovado, 2: Negado, 8: Falha)
-  is_selected: boolean;                 // Indica se esta consulta foi a escolhida pelo usuário (relevante para múltiplas opções) 
-  external_operation_id: string | null; // ID no parceiro (proposta)
-  message: string;                      // Mensagem do banco/parceiro
-  
-  // Barramento Financeiro Específico desta Consulta
-  financial_institution_id: number | null;
-  financial_institution_name: string | null;
-  requested_value: number | null;
-  down_payment_amount: number | null;
-  down_payment_percentage: number | null;
-  financed_amount: number | null;
-  installments: number | null;
-  cet_rate: number | null;
-  installment_value: number | null;
-}
-
-/**
- * @interface PartnerResponse
- * @description O Envelope que o fandi-service ou credit-card-service retorna.
- */
-interface PartnerResponse {
-  success: boolean;            // A integração (handshake) funcionou?
-  message: string;             // Resumo da operação do serviço
-  consults: Consultation[];    // Lista de todas as consultas realizadas
-  // Audit Trail individual para esta linha
-  raw: any; 
-}
+import { Entity, Offer } from "../_shared/types.ts";
 
 /**
  * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
@@ -143,18 +45,27 @@ const debugLog = (message: string, data?: any) => {
 
 /**
  * FLUXO PRINCIPAL DE SIMULAÇÃO E INCLUSÃO
- * @param payload Dados sanitizados vindos do simulation_handler.
+ * @param payload Dados sanitizados vindos do simulation_handler
+ * * @returns {Promise<SimulationResponse>} Retorno envelopado estritamente aderente ao contrato técnico do core..
  */
-export async function processarFluxoFandi(payload: any) {
+export async function processSimulationFandi(payload: any): Promise<SimulationResponse> {
 
-  // Chave de intefação
-  const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
+  // EXTRAÇÃO PADRONIZADA
+  const simulation = (payload.simulation_details as SimulationFinancials) || {};
+  const entity = (payload.entity as Entity) || {};
+  const offer = (payload.offer as Offer) || {};
 
   // Configurações do parceiro (com fallback para segurança)
   const integrationDetails = payload?.integration_details || {};
+  
+  // Chave de intefação
+  const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
 
   // Registra log no Supabase se ligado
   debugLog("DEBUG integration_details:", integrationDetails);
+  debugLog("DEBUG payload:", payload);
+  debugLog("DEBUG offer:", offer);
+  debugLog("DEBUG entity:", entity);
 
   // CNPJ DE ACORDO COM O PRODUTO (LEVES E PESADOS)
   const CNPJ_LOJA = integrationDetails.cnpjLoja; 
@@ -187,11 +98,11 @@ export async function processarFluxoFandi(payload: any) {
     },
     cliente: {
       // Agora acessamos via payload.entity
-      nome: payload.name,
-      cpf: payload.document,
-      dataNascimento: payload.birth_date, 
-      celular: (payload.phone || "").replace(/\D/g, ""),
-      sexo: payload.gender || "M",
+      nome: entity.name,
+      cpf: entity.document,
+      dataNascimento: entity.birth_date, 
+      celular: (entity.phone || "").replace(/\D/g, ""),
+      sexo: entity.gender || "M",
       possuiCnh: true,
       usoComercial: false,
       pcd: false,
@@ -199,18 +110,18 @@ export async function processarFluxoFandi(payload: any) {
     },
     simulacao: { 
       // Agora acessamos via payload.simulation_params
-      valorEntrada: payload.down_payment_amount, 
-      quantidadeParcelas: payload.installments 
+      valorEntrada: simulation.down_payment_amount, 
+      quantidadeParcelas: simulation.installments 
     },
     veiculo: {
       modeloId: null, 
       // Agora acessamos via payload.offer
-      valorVeiculo: payload.requested_value || payload.offer?.offer_value || 0,
+      valorVeiculo: simulation.requested_value || offer?.offer_value || 0,
       zeroKm: false,
       // Pegando os anos reais que vieram no vehicle_details
-      anoFabricacao: payload.offer_details?.vehicle_details?.manufacture_year,
-      anoModelo: payload.offer_details?.vehicle_details?.model_year,
-      fipe: payload.offer_details?.vehicle_details?.fipe_code
+      anoFabricacao: offer.vehicle_details?.manufacture_year,
+      anoModelo: offer.vehicle_details?.model_year,
+      fipe: offer.vehicle_details?.fipe_code
     }
   };
 
@@ -248,7 +159,7 @@ export async function processarFluxoFandi(payload: any) {
           installment_value: null
         }],
         raw: { error: error.message }
-    } as PartnerResponse;
+    } as SimulationResponse;
   }
 
   if (!guidResult.retorno) {
@@ -273,7 +184,7 @@ export async function processarFluxoFandi(payload: any) {
           installment_value: null
         }],
         raw: bodyGuid
-    } as PartnerResponse;
+    } as SimulationResponse;
   }
 
   const guid = guidResult.retorno;
@@ -306,16 +217,16 @@ export async function processarFluxoFandi(payload: any) {
           message: "Erro de conexão ao recuperar contexto Fandi.",
           financial_institution_id: null,
           financial_institution_name: null,
-          requested_value: null,
-          down_payment_amount: null,
-          down_payment_percentage: null,
-          financed_amount: null,
-          installments: null,
+          requested_value: simulation.requested_value,
+          down_payment_amount: simulation.down_payment_amount,
+          down_payment_percentage: simulation.down_payment_percentage,
+          financed_amount: simulation.requested_value ? (simulation.requested_value - (simulation.down_payment_amount ?? 0)) : null,
+          installments: simulation.installments,
           cet_rate: null,
           installment_value: null
         }],
         raw: { error: error.message }
-    } as PartnerResponse;
+    } as SimulationResponse;
   }
   
   if (!contextData || !contextData.retorno) {
@@ -331,16 +242,16 @@ export async function processarFluxoFandi(payload: any) {
           message: "Falha na estrutura de contexto da Fandi.",
           financial_institution_id: null,
           financial_institution_name: null,
-          requested_value: null,
-          down_payment_amount: null,
-          down_payment_percentage: null,
-          financed_amount: null,
-          installments: null,
+          requested_value: simulation.requested_value,
+          down_payment_amount: simulation.down_payment_amount,
+          down_payment_percentage: simulation.down_payment_percentage,
+          financed_amount: simulation.requested_value ? (simulation.requested_value - (simulation.down_payment_amount ?? 0)) : null,
+          installments: simulation.installments,
           cet_rate: null,
           installment_value: null
         }],
         raw: bodyGuid
-    } as PartnerResponse;
+    } as SimulationResponse;
   }
 
   const dr = contextData.retorno;
@@ -356,12 +267,12 @@ export async function processarFluxoFandi(payload: any) {
    */
   const bodySimulacao = {
     cliente: {
-      nome: payload.name || "",
-      celular: (payload.phone || "").replace(/\D/g, ""), 
-      cpf: (payload.document || "").replace(/\D/g, ""),
-      email: payload.email || "",
-      sexo: payload.gender || "M",
-      dataNascimento: payload.birth_date, 
+      nome: entity.name || "",
+      celular: (entity.phone || "").replace(/\D/g, ""), 
+      cpf: (entity.document || "").replace(/\D/g, ""),
+      email: entity.email || "",
+      sexo: entity.gender || "M",
+      dataNascimento: entity.birth_date, 
       possuiCnh: true,
       usoComercial: false,
       pcd: false,
@@ -373,21 +284,21 @@ export async function processarFluxoFandi(payload: any) {
       ...(dr.vendedorId && Number(dr.vendedorId) > 0 && { vendedorId: Number(dr.vendedorId) })
     },
     simulacao: { 
-      valorEntrada: payload.down_payment_amount, 
-      quantidadeParcelas: payload.installments 
+      valorEntrada: simulation.down_payment_amount, 
+      quantidadeParcelas: simulation.installments 
     },
     veiculo: {
-      anoFabricacao: payload.offer_details?.vehicle_details?.manufacture_year,
-      anoModelo: payload.offer_details?.vehicle_details?.model_year,
+      anoFabricacao: offer.vehicle_details?.manufacture_year,
+      anoModelo: offer.vehicle_details?.model_year,
       chassi: "",
       cor: "",
       modeloId: dr.veiculo?.modelo?.modeloId,
       placa: "",
       quilometragem: 0,
       renavam: "",       
-      valor: payload.requested_value,
+      valor: simulation.requested_value,
       zeroKm: false,
-      fipe: payload.offer_details?.vehicle_details?.fipe_code, 
+      fipe: offer.vehicle_details?.fipe_code, 
       fabricante: dr.veiculo?.fabricante?.fabricanteId || 0,
       codigoParceiro: dr.veiculo?.codigoParceiro || ""
     }
@@ -420,16 +331,16 @@ export async function processarFluxoFandi(payload: any) {
             message: "Erro de rede na simulação",
             financial_institution_id: null,
             financial_institution_name: null,
-            requested_value: null,
-            down_payment_amount: null,
-            down_payment_percentage: null,
-            financed_amount: null,
-            installments: null,
+            requested_value: simulation.requested_value,
+            down_payment_amount: simulation.down_payment_amount,
+            down_payment_percentage: simulation.down_payment_percentage,
+            financed_amount: simulation.requested_value ? (simulation.requested_value - (simulation.down_payment_amount ?? 0)) : null,
+            installments: simulation.installments,
             cet_rate: null,
             installment_value: null
           }],
           raw: { error: error.message }
-      } as PartnerResponse;
+      } as SimulationResponse;
   }
 
   // Se não retornou objeto, considera erro
@@ -444,16 +355,16 @@ export async function processarFluxoFandi(payload: any) {
           message: "Resposta da Fandi vazia.",
           financial_institution_id: null,
           financial_institution_name: null,
-          requested_value: null,
-          down_payment_amount: null,
-          down_payment_percentage: null,
-          financed_amount: null,
-          installments: null,
+          requested_value: simulation.requested_value,
+          down_payment_amount: simulation.down_payment_amount,
+          down_payment_percentage: simulation.down_payment_percentage,
+          financed_amount: simulation.requested_value ? (simulation.requested_value - (simulation.down_payment_amount ?? 0)) : null,
+          installments: simulation.installments,
           cet_rate: null,
           installment_value: null
         }],
         raw: bodySimulacao
-    } as PartnerResponse;
+    } as SimulationResponse;
   }
 
   // Registra log no Supabase se ligado
@@ -472,10 +383,10 @@ export async function processarFluxoFandi(payload: any) {
     mensagem: simResult.message || (isAprovada ? "Aprovada" : "Negada"),
     financial_institution_id: retSimulacao?.institucional?.instituicaoFinanceiraId ?? null,
     financial_institution_name: retSimulacao?.institucional?.nomeInstituicao ?? null,
-    requested_value: (Number(retSimulacao?.valorEntrada) || 0) + (Number(retSimulacao?.valorFinanciado) || 0) || null,
-    down_payment_amount: retSimulacao?.valorEntrada ?? null,
-    financed_amount: retSimulacao?.valorFinanciado ?? null,
-    installments: retSimulacao?.quantidadeParcelas ?? null,
+    requested_value: simulation.requested_value || null,
+    down_payment_amount: retSimulacao?.valorEntrada ?? simulation.down_payment_amount,
+    financed_amount: retSimulacao?.valorFinanciado ?? ((simulation.requested_value ?? 0) - (simulation.down_payment_amount ?? 0)),
+    installments: retSimulacao?.quantidadeParcelas ?? simulation.installments,
     cet_rate: retSimulacao?.simulacao?.taxa?.taxaCetMes ?? null,
     installment_value: retSimulacao?.valorParcela ?? null,
     veiculo_modelo: retSimulacao?.veiculo?.modelo ?? null,
@@ -508,7 +419,7 @@ export async function processarFluxoFandi(payload: any) {
             message: dadosSimulacao.mensagem,
             consults: [consultaNegadaOuFalha],
             raw: { simulacao: simResult }
-      } as PartnerResponse;
+      } as SimulationResponse;
   }
 
   // =========================================================================
@@ -530,10 +441,10 @@ export async function processarFluxoFandi(payload: any) {
           veiculo: {
               modeloId: dr.veiculo?.modelo?.modeloId || null,
               estadoLicenciamento: retSimulacao?.estadoLicenciamento,
-              valor: payload.requested_value,
+              valor: simulation.requested_value,
               zeroKm: false,
-              anoFabricacao: payload.offer_details?.vehicle_details?.manufacture_year,
-              anoModelo: payload.offer_details?.vehicle_details?.model_year,
+              anoFabricacao: offer.vehicle_details?.manufacture_year,
+              anoModelo: offer.vehicle_details?.model_year,
               quilometragem: 0,
               cor: null,
               chassi: null,
@@ -631,6 +542,6 @@ export async function processarFluxoFandi(payload: any) {
       simulacao: simResult,
       inclusao: incResult
     }
-  } as PartnerResponse;
+  } as SimulationResponse;
 
 }

@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "@supabase/functions-js": "jsr:@supabase/functions-js@^2",
+    "std/http": "https://deno.land/std@0.168.0/http/server.ts",
+    "nodemailer": "npm:nodemailer@6.9.13"
+  }
+}
