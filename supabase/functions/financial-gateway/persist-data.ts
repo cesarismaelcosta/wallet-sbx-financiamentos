@@ -202,7 +202,10 @@ export async function insertSimulationData(
           ${infra.ip_address}, ${infra.country}, ${infra.state}, ${infra.city}, ${infra.user_agent},
           ${infra.device_type}, ${infra.operating_system}, ${infra}::jsonb, ${bestConsult}::jsonb, ${payload}::jsonb
         )
+        RETURNING id
       `;
+
+      const simulationUpdateId = update.id;
 
       // 4. PERSISTE CONSULTAS (Loop Blindado e Completo)
       for (const consult of (gatewayResult.consults || [])) {
@@ -269,7 +272,7 @@ export async function insertSimulationData(
 
       return { 
         simulationId, 
-        simulationUpdateId: update.id
+        simulationUpdateId
       };
     });
 
