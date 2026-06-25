@@ -13,7 +13,7 @@ import {
 import { Entity, Offer } from "../_shared/types.ts";
 
 // Função de geração do template de e-mail
-import { generateUserEmailNotificationHtml } from "../notification-gateway/credit-cart-templates.ts";
+import { generateUserEmailNotificationHtml } from "../notification-gateway/credit-card-templates.ts";
 
 // Chave de controle para logs de depuração
 const DEBUG_MODE = true;
