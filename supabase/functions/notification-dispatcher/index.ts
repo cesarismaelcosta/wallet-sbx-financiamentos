@@ -59,16 +59,11 @@
  * 
  */
 
-/**
- * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
- */
-
 // Chave de controle para logs de depuração
 const DEBUG_MODE = true;
 
 /**
  * FUNÇÃO DE LOG PADRONIZADA
- * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
@@ -76,19 +71,10 @@ const debugLog = (message: string, data?: any) => {
   }
 };
 
-/**
- * ============================================================================
- * DISPATCHER DE NOTIFICAÇÕES (Versão Final)
- * ============================================================================
- * Objetivo: Identificar notificações pendentes, atualizar seu estado para 
- * 'processing' (prevenindo duplicidade) e disparar o Gateway de envio.
- */
-
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 Deno.serve(async (req) => {
   // 1. REGISTRO DE ACESSO:
-  // Valida que a função foi acionada corretamente.
   debugLog("1. --- DISPATCHER INICIADO ---");
 
   const supabase = createClient(
@@ -105,23 +91,23 @@ Deno.serve(async (req) => {
       .eq('status', 'pending')
       .order('created_at', { ascending: true });
 
-    if (queryError) throw queryError;
-    if (!pendentes || pendentes.length === 0) {
+    if (fetchError) throw fetchError;
+    
+    // 🚨 CORREÇÃO: Usando a variável 'tasks' corretamente
+    if (!tasks || tasks.length === 0) {
       debugLog("3. Nenhuma pendência encontrada.");
       return new Response("Sem pendências");
     }
 
-    debugLog(`4. Encontrei ${pendentes.length} itens. Iniciando loop de disparo.`);
+    debugLog(`4. Encontrei ${tasks.length} itens. Iniciando loop de disparo.`);
 
     // 3. LOOP DE PROCESSAMENTO:
-    // Iteramos sobre cada item para processar individualmente.
-    for (const notif of pendentes) {
-      debugLog(`5. Processando ID: ${notif.id}`);
+    // 🚨 CORREÇÃO: Padronizado para 'task'
+    for (const task of tasks) {
+      debugLog(`5. Processando ID: ${task.id}`);
 
       // 3.1. LOCK DE SEGURANÇA:
-      // Atualizamos para 'processing' para evitar que o próximo pulso do 
-      // Cron processe a mesma notificação simultaneamente.
-      await supabase
+      const { error: updateError } = await supabase
         .from('notification_outbox')
         .update({ 
           status: 'processing', 
@@ -130,34 +116,68 @@ Deno.serve(async (req) => {
         .eq('id', task.id);
 
       if (updateError) {
-        console.error(`6. Falha ao travar o ID ${notif.id}:`, updateError);
-        continue;
+        console.error(`6. Falha ao travar o ID ${task.id}:`, updateError);
+        continue; 
       }
 
       // 3.2. ACIONAMENTO DO GATEWAY:
-      // Chamamos o gateway enviando o segredo de segurança (x-gateway-secret).
-      const gatewayUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/notification-gateway`;
-      const response = await fetch(gatewayUrl, {
-        method: 'POST',
-        headers: { 
-          'x-gateway-secret': Deno.env.get('NOTIFICATION_GATEWAY_SECRET')!,
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify({ notification_id: notif.id })
-      });
+      try {
+        const response = await fetch(
+          `${Deno.env.get("SUPABASE_URL")}/functions/v1/notification-gateway`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+              "x-gateway-secret": Deno.env.get("GATEWAY_SECRET") || ""
+            },
+            body: JSON.stringify(task), 
+          }
+        );
 
-      if (!response.ok) {
-        console.error(`7. Gateway retornou erro para o ID ${notif.id}: ${response.statusText}`);
-      } else {
-        debugLog(`7. Gateway acionado com sucesso para o ID ${notif.id}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`7. Falha no Gateway para ID ${task.id}:`, errorText);
+          
+          // 🚨 CONTROLE DE RETENTATIVAS CORRIGIDO
+          const nextRetry = (task.retry_count || 0) + 1;
+          const isDead = nextRetry >= (task.max_retries || 3);
+
+          await supabase
+            .from('notification_outbox')
+            .update({ 
+              status: isDead ? 'dead_letter' : 'pending',
+              retry_count: nextRetry,
+              error_message: `Dispatcher HTTP Error: ${response.status} - ${errorText}`,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', task.id);
+        } else {
+            debugLog(`8. Gateway confirmou o envio do ID: ${task.id}`);
+        }
+
+      } catch (networkError: any) {
+        console.error(`7. Erro de rede ao chamar Gateway para ID ${task.id}:`, networkError);
+
+        // 🚨 CONTROLE DE RETENTATIVAS PARA FALHA DE REDE CORRIGIDO
+        const nextRetry = (task.retry_count || 0) + 1;
+        const isDead = nextRetry >= (task.max_retries || 3);
+
+        await supabase
+          .from('notification_outbox')
+          .update({ 
+            status: isDead ? 'dead_letter' : 'pending',
+            retry_count: nextRetry,
+            error_message: `Dispatcher Network Error: ${networkError.message}`,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', task.id);
       }
     }
 
     return new Response("Processamento finalizado");
 
   } catch (e) {
-    // 4. TRATAMENTO DE ERROS GLOBAIS:
-    // Captura exceções críticas durante o loop ou acesso ao banco.
     console.error("8. ERRO CRÍTICO NO DISPATCHER:", e);
     return new Response("Erro no processamento", { status: 500 });
   }
