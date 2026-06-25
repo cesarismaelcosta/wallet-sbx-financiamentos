@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
             headers: {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-              "x-gateway-secret": Deno.env.get("GATEWAY_SECRET") || ""
+              "x-gateway-secret": Deno.env.get("NOTIFICATION_GATEWAY_SECRET") || ""
             },
             body: JSON.stringify(task), 
           }
