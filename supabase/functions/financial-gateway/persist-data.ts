@@ -270,6 +270,23 @@ export async function insertSimulationData(
         }
       }
 
+      // 6. PERSISTE NOTIFICAÇÕES NA OUTBOX (Fila Quente, se existirem)
+      const notifications = (gatewayResult as any).raw?.notifications;
+      if (Array.isArray(notifications)) {
+        for (const n of notifications) {
+          await t`
+            INSERT INTO public.notification_outbox (
+              context_type, visit_id, visit_update_id, simulation_id, simulation_update_id, 
+              channel, template_slug, recipient_type, recipient, subject, rendered_content, raw_payload
+            ) VALUES (
+              'SIMULATION', ${payload.visit_id || null}, ${payload.visit_update_id || null}, ${simulationId}, ${simulationUpdateId || null},
+              ${n.channel}, ${n.template_slug}, ${n.recipient_type}, ${payload.entity.email}, 
+              ${n.subject || null}, ${n.email_body}, ${n.raw_payload || payload}::jsonb
+            )
+          `;
+        }
+      }
+
       return { 
         simulationId, 
         simulationUpdateId
@@ -328,6 +345,22 @@ export async function updateSimulationData(
         `;
       }
 
+      // INSERT UPDATES: Grava o rastro de auditoria da inserção.
+      const [update] = await t`
+        INSERT INTO simulation_updates (
+          simulation_id, operation, stage_id, status_id, result_partner_id,
+          ip_address, country, state, city, user_agent, device_type, operating_system,
+          origin_details, simulation_details, raw_payload
+        ) VALUES (
+          ${simulationId}, 'UPDATE', ${stageId}, ${bestConsult.status_id}, ${mainResultPartnerId},
+          ${infra.ip_address}, ${infra.country}, ${infra.state}, ${infra.city}, ${infra.user_agent},
+          ${infra.device_type}, ${infra.operating_system}, ${infra}::jsonb, ${bestConsult}::jsonb, ${payload}::jsonb
+        )
+        RETURNING id
+      `;
+
+      const simulationUpdateId = update.id;
+
       // UPDATE MESTRE: Atualiza os dados financeiros da proposta selecionada.
       await t`
         UPDATE simulations SET
@@ -340,7 +373,24 @@ export async function updateSimulationData(
         WHERE id = ${simulationId}
       `;
 
-      return simulationId;
+      // PERSISTE NOTIFICAÇÕES NA OUTBOX (Fila Quente, se existirem)
+      const notifications = (gatewayResult as any).raw?.notifications;
+      if (Array.isArray(notifications)) {
+        for (const n of notifications) {
+          await t`
+            INSERT INTO public.notification_outbox (
+              context_type, visit_id, visit_update_id, simulation_id, simulation_update_id, 
+              channel, template_slug, recipient_type, recipient, subject, rendered_content, raw_payload
+            ) VALUES (
+              'SIMULATION', ${payload.visit_id || null}, ${payload.visit_update_id || null}, ${simulationId}, ${simulationUpdateId || null},
+              ${n.channel}, ${n.template_slug}, ${n.recipient_type}, ${payload.entity.email}, 
+              ${n.subject || null}, ${n.email_body}, ${n.raw_payload || payload}::jsonb
+            )
+          `;
+        }
+      }
+
+      return simulationUpdateId;
     });
   } catch (error) {
     console.error("[FATAL] Erro na atualização de dados da simulação:", error);

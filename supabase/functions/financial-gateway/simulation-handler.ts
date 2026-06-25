@@ -337,62 +337,6 @@ export async function processSimulation(req: Request, payload: SimulationPayload
       payload.simulation_id = String(SimulationId);
   }
 
-  // Gateway de Notificações é disparado apenas se a simulação deu certo
-  if (gatewayResult?.success && payload.entity?.email) {
-      debugLog("[DEBUG-EMAIL] 1. Iniciando montagem de notificação...", gatewayResult.raw?.notifications);
-
-      try {
-          // Proteção contra objeto vazio do parceiro
-          const emailSubject = gatewayResult.raw?.notifications?.subject || "Resultado da sua Simulação";
-          const emailHtml = gatewayResult.raw?.notifications?.email_body || "<h1>Sua simulação foi processada</h1>";
-
-          // Antes de fazer o fetch/post para o Gateway:
-          const notificationPayload = {
-            context_type: 'SIMULATION',
-            visit_id: payload.visit_id || null,
-            visit_update_id: payload.visit_update_id || null,
-            simulation_id: payload.simulation_id || null, 
-            simulation_update_id: payload.simulation_update_id || null,
-            channel: 'email',
-            template_slug: 'simulation-result',
-            recipient_type: gatewayResult.raw?.notifications?.recipient_type,
-            recipient: payload.entity.email,
-            subject: emailSubject,
-            email_body: emailHtml,
-            raw_payload: payload 
-          };
-
-          debugLog("[DEBUG-EMAIL] 2. Payload montado com sucesso para:", notificationPayload);
-
-          // URL chumbada diretamente (Hardcode para teste)
-          const gatewayUrlTeste = "https://ldzutiojmcawhwdhojlo.supabase.co/functions/v1/notification-gateway";
-          
-          console.log("[DEBUG-EMAIL] 3. Disparando POST para:", gatewayUrlTeste);
-
-          // Agora sim o fetch usa a URL chumbada e a autenticação dupla
-          const res = await fetch(gatewayUrlTeste, {
-              method: 'POST',
-              headers: {
-                  // O crachá oficial do Supabase (obrigatório para acessar a Edge Function)
-                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-                  // A nossa senha interna do Gateway
-                  'x-gateway-secret': Deno.env.get('NOTIFICATION_GATEWAY_SECRET') || '',
-                  'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(notificationPayload)
-          });
-          
-          console.log("[DEBUG-EMAIL] 4. Status HTTP do Gateway:", res.status);
-          const textResp = await res.text();
-          console.log("[DEBUG-EMAIL] 5. Resposta do Gateway:", textResp);
-
-      } catch (err) {
-          // Captura o erro em texto real e limpo
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          console.error("[DEBUG-EMAIL] 6. ERRO REAL REVELADO:", errorMessage);
-      }
-  }
-
   // Logo antes de montar o JSON de resposta
   // Isso garante que não dependemos de variáveis de escopo instáveis
   const finalConsult = gatewayResult?.consults?.find(c => c.is_selected === true) || gatewayResult?.consults?.[0];

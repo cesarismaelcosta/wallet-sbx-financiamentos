@@ -60,6 +60,23 @@
  */
 
 /**
+ * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
+ */
+
+// Chave de controle para logs de depuração
+const DEBUG_MODE = true;
+
+/**
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+const debugLog = (message: string, data?: any) => {
+  if (DEBUG_MODE) {
+    console.log(`[NOTIFICATION-DISPATCHER] ${message}`, data ? JSON.stringify(data, null, 2) : "");
+  }
+};
+
+/**
  * ============================================================================
  * DISPATCHER DE NOTIFICAÇÕES (Versão Final)
  * ============================================================================
@@ -72,7 +89,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 Deno.serve(async (req) => {
   // 1. REGISTRO DE ACESSO:
   // Valida que a função foi acionada corretamente.
-  console.log("1. --- DISPATCHER INICIADO ---");
+  debugLog("1. --- DISPATCHER INICIADO ---");
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -80,36 +97,37 @@ Deno.serve(async (req) => {
   );
 
   try {
-    // 2. BUSCA DE PENDÊNCIAS:
-    // Filtramos apenas status 'pending'. Limitamos para garantir que a 
-    // função não exceda o tempo de execução (timeout).
-    console.log("2. Buscando notificações pendentes...");
-    const { data: pendentes, error: queryError } = await supabase
-      .from('notifications')
+    // 2. BUSCA DE REGISTROS PENDENTES NA FILA QUENTE:
+    debugLog("2. Buscando notificações pendentes...");
+    const { data: tasks, error: fetchError } = await supabase
+      .from('notification_outbox')
       .select('*')
       .eq('status', 'pending')
-      .limit(10);
+      .order('created_at', { ascending: true });
 
     if (queryError) throw queryError;
     if (!pendentes || pendentes.length === 0) {
-      console.log("3. Nenhuma pendência encontrada.");
+      debugLog("3. Nenhuma pendência encontrada.");
       return new Response("Sem pendências");
     }
 
-    console.log(`4. Encontrei ${pendentes.length} itens. Iniciando loop de disparo.`);
+    debugLog(`4. Encontrei ${pendentes.length} itens. Iniciando loop de disparo.`);
 
     // 3. LOOP DE PROCESSAMENTO:
     // Iteramos sobre cada item para processar individualmente.
     for (const notif of pendentes) {
-      console.log(`5. Processando ID: ${notif.id}`);
+      debugLog(`5. Processando ID: ${notif.id}`);
 
       // 3.1. LOCK DE SEGURANÇA:
       // Atualizamos para 'processing' para evitar que o próximo pulso do 
       // Cron processe a mesma notificação simultaneamente.
-      const { error: updateError } = await supabase
-        .from('notifications')
-        .update({ status: 'processing' })
-        .eq('id', notif.id);
+      await supabase
+        .from('notification_outbox')
+        .update({ 
+          status: 'processing', 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', task.id);
 
       if (updateError) {
         console.error(`6. Falha ao travar o ID ${notif.id}:`, updateError);
@@ -131,7 +149,7 @@ Deno.serve(async (req) => {
       if (!response.ok) {
         console.error(`7. Gateway retornou erro para o ID ${notif.id}: ${response.statusText}`);
       } else {
-        console.log(`7. Gateway acionado com sucesso para o ID ${notif.id}`);
+        debugLog(`7. Gateway acionado com sucesso para o ID ${notif.id}`);
       }
     }
 
