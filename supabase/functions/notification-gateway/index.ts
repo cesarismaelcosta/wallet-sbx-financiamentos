@@ -36,12 +36,12 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    targetId = body.notification_id;
+    targetId = body.id;
 
     if (!targetId) throw new Error("ID da notificação não fornecido");
 
     const { data: notif, error: fetchError } = await supabase
-      .from('notifications')
+      .from('notification_outbox')
       .select('*')
       .eq('id', targetId)
       .single();
