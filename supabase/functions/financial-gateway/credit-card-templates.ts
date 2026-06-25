@@ -3,7 +3,7 @@ import {
   SimulationPayload,
 } from "../_shared/types.ts";
 
-import { WALLET_LOGO_BASE64 } from "./assets.ts";
+import { WALLET_LOGO_BASE64 } from "../_shared/assets.ts";
 
 /**
  * Gera o HTML completo de notificação de e-mail para simulações de parcelamento.
