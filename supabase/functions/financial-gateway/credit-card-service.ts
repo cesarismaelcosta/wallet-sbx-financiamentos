@@ -151,7 +151,8 @@ export async function processSimulationCreditCard(payload: SimulationPayload): P
   });
 
   // Gera o HTML do e-mail do Usuário
-  const userEmailHTMLBody = generateUserEmailNotificationHtml(consults, payload);
+  // Captura o objeto completo (HTML e Anexos) gerado pelo template
+  const emailTemplateData = generateUserEmailNotificationHtml(consults, payload);
 
   // 5. Retorno Padronizado
   return {
@@ -167,7 +168,8 @@ export async function processSimulationCreditCard(payload: SimulationPayload): P
           template_slug: 'simulation-result',
           recipient_type: "ENTITY",
           subject: "Sua simulação de parcelamento do cartão na Superbid 🚀",
-          email_body: userEmailHTMLBody
+          email_body: emailTemplateData.html,
+          attachments: emailTemplateData.attachments 
         }
       ]
     }

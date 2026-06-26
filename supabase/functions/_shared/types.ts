@@ -383,3 +383,19 @@ export interface SimulationUpdate {
   origin_details: any;
   raw_payload: any;
 }
+
+/**
+ * @interface EmailTemplateResult
+ * @description Estrutura de retorno padronizada para as funções geradoras de template de e-mail.
+ * Encapsula o HTML processado e os metadados dos anexos embutidos (CID), garantindo que o 
+ * serviço de disparo permaneça agnóstico em relação ao conteúdo visual e regras de negócio.
+ */
+export interface EmailTemplateResult {
+  html: string;
+  attachments: Array<{
+    filename: string;
+    content: string;
+    content_id: string;
+    disposition: string;
+  }>;
+}

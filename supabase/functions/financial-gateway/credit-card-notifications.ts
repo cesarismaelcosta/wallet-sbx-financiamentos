@@ -1,6 +1,7 @@
 import { 
   Consultation,  
   SimulationPayload,
+  EmailTemplateResult 
 } from "../_shared/types.ts";
 
 import { WALLET_LOGO_BASE64 } from "../_shared/assets.ts";
@@ -9,16 +10,17 @@ import { WALLET_LOGO_BASE64 } from "../_shared/assets.ts";
  * Gera o HTML completo de notificação de e-mail para simulações de parcelamento.
  * Integra o cabeçalho, o miolo (dados e grid de parcelas), seção de segurança 
  * e o rodapé dinâmico em uma estrutura única e autocontida.
- * @param consults - Lista de opções de parcelamento.
+ * * @param consults - Lista de opções de parcelamento.
  * @param payload - Objeto contendo os dados do evento, oferta, cliente e footer_config.
- * @returns String contendo o HTML processado e pronto para envio.
+ * @returns Um objeto EmailTemplateResult contendo o HTML processado e a lista de anexos embutidos (CID) necessários, mantendo o enviador agnóstico.
  */
 export function generateUserEmailNotificationHtml(
   consults: Consultation[],
   payload: SimulationPayload
-): string {
+): EmailTemplateResult {
   // 1. Configurações de Ambiente e Tokens de Design
-  const logoSrc = `data:image/png;base64,${WALLET_LOGO_BASE64}`;
+  // O logoSrc aponta para o ID do anexo embutido (CID) referenciado no array de attachments
+  const logoSrc = "cid:logo-wallet";
 
   const brandColor = payload.page_configs?.theme?.primary_color || "#B300FF";
   const nomeCliente = payload.entity?.name?.trim() || "Cliente";
@@ -108,8 +110,8 @@ export function generateUserEmailNotificationHtml(
     </table>
   `;
 
-  // 4. Montagem Final e Retorno do Documento HTML
-  return `
+  // 4. Montagem Final do Documento HTML
+  const html = `
   <!DOCTYPE html>
   <html>
   <head>
@@ -164,4 +166,18 @@ export function generateUserEmailNotificationHtml(
   </body>
   </html>
   `;
+
+  // 5. Retorno Padronizado
+  return {
+    html: html,
+    attachments: [
+      {
+        filename: "wallet-logo.png",
+        // Limpeza dinâmica para garantir que apenas o binário em Base64 puro seja anexado
+        content: WALLET_LOGO_BASE64.replace(/^data:image\/(png|jpeg|jpg);base64,/, ""),
+        content_id: "logo-wallet",
+        disposition: "inline"
+      }
+    ]
+  };
 }

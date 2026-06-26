@@ -277,11 +277,11 @@ export async function insertSimulationData(
           await t`
             INSERT INTO public.notification_outbox (
               context_type, visit_id, visit_update_id, simulation_id, simulation_update_id, 
-              channel, template_slug, recipient_type, recipient, subject, rendered_content, raw_payload
+              channel, template_slug, recipient_type, recipient, subject, rendered_content, attachments, raw_payload
             ) VALUES (
               'SIMULATION', ${payload.visit_id || null}, ${payload.visit_update_id || null}, ${simulationId}, ${simulationUpdateId || null},
               ${n.channel}, ${n.template_slug}, ${n.recipient_type}, ${payload.entity.email}, 
-              ${n.subject || null}, ${n.email_body}, ${n.raw_payload || payload}::jsonb
+              ${n.subject || null}, ${n.email_body}, ${n.attachments ?? null}::jsonb, ${n.raw_payload || payload}::jsonb
             )
           `;
         }
@@ -380,11 +380,11 @@ export async function updateSimulationData(
           await t`
             INSERT INTO public.notification_outbox (
               context_type, visit_id, visit_update_id, simulation_id, simulation_update_id, 
-              channel, template_slug, recipient_type, recipient, subject, rendered_content, raw_payload
+              channel, template_slug, recipient_type, recipient, subject, rendered_content, attachments, raw_payload
             ) VALUES (
               'SIMULATION', ${payload.visit_id || null}, ${payload.visit_update_id || null}, ${simulationId}, ${simulationUpdateId || null},
               ${n.channel}, ${n.template_slug}, ${n.recipient_type}, ${payload.entity.email}, 
-              ${n.subject || null}, ${n.email_body}, ${n.raw_payload || payload}::jsonb
+              ${n.subject || null}, ${n.email_body}, ${n.attachments ?? null}::jsonb, ${n.raw_payload || payload}::jsonb
             )
           `;
         }
