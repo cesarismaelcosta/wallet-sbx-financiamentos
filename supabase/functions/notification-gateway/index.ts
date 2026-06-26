@@ -71,15 +71,25 @@ Deno.serve(async (req) => {
       }
     });
 
-    // 5. MAPEAMENTO DE ANEXOS E INJEÇÃO CID (Padrão Nodemailer)
-    // Transforma o array agnóstico vindo do banco no formato específico exigido pelo Nodemailer.
-    let mailAttachments = undefined;
+    // 5. MAPEAMENTO DE ANEXOS E INJEÇÃO CID
+    // Gateway busca o binário no bucket e converte para base64 em tempo real.
+    let mailAttachments = [];
     if (notif.attachments && Array.isArray(notif.attachments)) {
-      mailAttachments = notif.attachments.map((att: any) => ({
-        filename: att.filename,
-        content: att.content,
-        encoding: 'base64',     // Força a decodificação binária da string
-        cid: att.content_id     // Converte a chave genérica para o formato CID nativo da lib
+      mailAttachments = await Promise.all(notif.attachments.map(async (att: any) => {
+        // Busca o binário no storage
+        const { data, error } = await supabase.storage.from('logos').download(att.bucket_path);
+        if (error) throw error;
+
+        // Converte para buffer e depois para base64
+        const arrayBuffer = await data.arrayBuffer();
+        const base64 = Buffer.from(arrayBuffer).toString('base64');
+
+        return {
+          filename: att.bucket_path.split('/').pop(), // Extrai o nome do arquivo do path
+          content: base64,
+          encoding: 'base64',
+          cid: att.content_id
+        };
       }));
     }
 

@@ -393,9 +393,7 @@ export interface SimulationUpdate {
 export interface EmailTemplateResult {
   html: string;
   attachments: Array<{
-    filename: string;
-    content: string;
-    content_id: string;
-    disposition: string;
+    content_id: string;   // O CID para embutir no HTML
+    bucket_path: string;  // O caminho da imagem no Bucket
   }>;
 }

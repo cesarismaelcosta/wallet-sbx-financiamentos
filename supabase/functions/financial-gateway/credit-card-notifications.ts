@@ -4,8 +4,6 @@ import {
   EmailTemplateResult 
 } from "../_shared/types.ts";
 
-import { WALLET_LOGO_BASE64 } from "../_shared/assets.ts";
-
 /**
  * Gera o HTML completo de notificação de e-mail para simulações de parcelamento.
  * Integra o cabeçalho, o miolo (dados e grid de parcelas), seção de segurança 
@@ -172,11 +170,8 @@ export function generateUserEmailNotificationHtml(
     html: html,
     attachments: [
       {
-        filename: "wallet-logo.png",
-        // Limpeza dinâmica para garantir que apenas o binário em Base64 puro seja anexado
-        content: WALLET_LOGO_BASE64.replace(/^data:image\/(png|jpeg|jpg);base64,/, ""),
         content_id: "logo-wallet",
-        disposition: "inline"
+        bucket_path: "logos/wallet-sbx-200_60.png"
       }
     ]
   };
