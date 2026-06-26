@@ -171,7 +171,7 @@ export function generateUserEmailNotificationHtml(
     attachments: [
       {
         content_id: "logo-wallet",
-        bucket_path: "logos/wallet-sbx-200_60.png"
+        storage_path: "logos/wallet-sbx-200_60.png"
       }
     ]
   };

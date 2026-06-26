@@ -76,8 +76,13 @@ Deno.serve(async (req) => {
     let mailAttachments = [];
     if (notif.attachments && Array.isArray(notif.attachments)) {
       mailAttachments = await Promise.all(notif.attachments.map(async (att: any) => {
-        // Busca o binário no storage
-        const { data, error } = await supabase.storage.from('logos').download(att.bucket_path);
+        // Divide a string storage_path na primeira barra
+        const [bucket, ...pathParts] = att.storage_path.split('/');
+        const path = pathParts.join('/'); // Reconstrói o caminho caso tenha subpastas
+
+        // Usa o bucket dinâmico e o path
+        const { data, error } = await supabase.storage.from(bucket).download(path);
+
         if (error) throw error;
 
         // Converte para buffer e depois para base64
@@ -85,7 +90,7 @@ Deno.serve(async (req) => {
         const base64 = Buffer.from(arrayBuffer).toString('base64');
 
         return {
-          filename: att.bucket_path.split('/').pop(), // Extrai o nome do arquivo do path
+          filename: att.storage_path.split('/').pop(), // Extrai o nome do arquivo do path
           content: base64,
           encoding: 'base64',
           cid: att.content_id

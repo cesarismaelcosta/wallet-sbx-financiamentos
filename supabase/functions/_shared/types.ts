@@ -394,6 +394,6 @@ export interface EmailTemplateResult {
   html: string;
   attachments: Array<{
     content_id: string;   // O CID para embutir no HTML
-    bucket_path: string;  // O caminho da imagem no Bucket
+    storage_path: string;  // O caminho da imagem no Bucket
   }>;
 }
