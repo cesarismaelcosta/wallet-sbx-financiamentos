@@ -332,7 +332,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       origin_url: window.location.href,
     };
     payload.interaction_context = interactionContext;
-
+    payload.origin_url = window.location.href;
+    
     // 3. Regra de Negócio: Se tem oferta, carrega TUDO que a oferta exige (Offer, Seller, Event, Manager)
     if (currentFlow.info.includes("Offer")) {
       payload.offer = activeOffer.offer;

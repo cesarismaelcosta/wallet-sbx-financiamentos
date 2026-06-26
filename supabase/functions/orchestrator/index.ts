@@ -170,13 +170,32 @@ async function validatePayload(
   let found_category_id: number | undefined;
   let found_product_id: number | undefined = payload.product_id;
 
-  // 1. Definição da Ação (Normalização)
+  // 1. Definição da Ação e Contexto (Normalização)
   const action = payload.action?.toUpperCase();
   payload.action = action as 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT';
 
-  // 2. Identificação e Contexto (Sempre Obrigatório)
+  // Identificação e Contexto (Sempre Obrigatório)
   if (!payload.interaction_context?.utm_source) errors.push("interaction_context.utm_source ausente.");
   const source = payload.interaction_context?.utm_source;
+
+  // Valida origin_url no contexto
+  if (!payload.interaction_context?.origin_url) {
+    errors.push("interaction_context.origin_url ausente.");
+  }
+
+  // 2. Validação de origin_url e target_url na raiz (usado pelo persistVisitData)
+  if (!payload.origin_url) {
+    errors.push("origin_url ausente na raiz do payload. É obrigatório para o roteamento.");
+  }
+
+  // target_url para ações de tráfego direto
+  // Se for VISIT, REDIRECT ou CONTACT, é o frontend quem está pilotando a navegação. Ele sabe a página que carregou, então ele é obrigado a informar o target_url.
+  // Se for SIMULATE, é o backend quem pilota o destino. Então, a validação não exige o target_url de quem fez a chamada.
+  if (['VISIT', 'REDIRECT', 'CONTACT'].includes(action)) {
+    if (!payload.target_url) {
+      errors.push(`target_url ausente. Obrigatório enviar o destino da página para ações do tipo ${action}.`);
+    }
+  }
 
   // =========================================================================
   // 3. VALIDAÇÃO DO NÓ: ENTITY (DINÂMICO PF VS PJ)
