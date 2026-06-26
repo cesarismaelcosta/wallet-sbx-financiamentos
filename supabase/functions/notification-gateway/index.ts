@@ -1,3 +1,11 @@
+/**
+ * NOTIFICATION GATEWAY (WORKER)
+ * @description Endpoint serverless responsável por escutar a fila quente (notification_outbox),
+ * processar o payload (incluindo mapeamento de anexos inline/CID) e realizar o disparo via SMTP.
+ * Possui controle transacional em três fases: Disparo, Arquivamento (Histórico) e Faxina, 
+ * além de roteamento para Dead Letter Queue (DLQ) em caso de falhas excessivas.
+ */
+
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import nodemailer from "npm:nodemailer@6.9.13";
 
@@ -5,8 +13,8 @@ import nodemailer from "npm:nodemailer@6.9.13";
 const DEBUG_MODE = true;
 
 /**
- * FUNÇÃO DE LOG PADRONIZADA
- * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ * @function debugLog
+ * @description Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
@@ -15,6 +23,8 @@ const debugLog = (message: string, data?: any) => {
 };
 
 Deno.serve(async (req) => {
+  // 1. AUTENTICAÇÃO E SEGURANÇA
+  // Valida o header da requisição contra o secret de ambiente para evitar disparos indevidos
   const receivedSecret = req.headers.get('x-gateway-secret');
   const expectedSecret = Deno.env.get('NOTIFICATION_GATEWAY_SECRET');
 
@@ -22,23 +32,26 @@ Deno.serve(async (req) => {
   debugLog("DEBUG: Secret esperado (configurado no env):", expectedSecret ? "EXISTE" : "NÃO CONFIGURADO");
 
   if (!receivedSecret || receivedSecret !== expectedSecret) {
-    console.error("4. ERRO: Acesso negado. Secret inválido ou ausente.");
+    console.error("ERRO [AUTH]: Acesso negado. Secret inválido ou ausente.");
     return new Response("Unauthorized", { status: 401 });
   }
 
+  // 2. INICIALIZAÇÃO DO SUPABASE
+  // Utiliza a Service Role Key para ignorar RLS durante as operações de sistema (Outbox/Histórico)
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
 
-  // Variável extraída para o escopo superior para poder ser usada no bloco catch
+  // Variável extraída para o escopo superior para garantir rastreabilidade no bloco catch
   let targetId: string | null = null;
 
   try {
+    // 3. CAPTURA E VALIDAÇÃO DA FILA QUENTE
     const body = await req.json();
     targetId = body.id;
 
-    if (!targetId) throw new Error("ID da notificação não fornecido");
+    if (!targetId) throw new Error("ID da notificação não fornecido no payload.");
 
     const { data: notif, error: fetchError } = await supabase
       .from('notification_outbox')
@@ -46,11 +59,10 @@ Deno.serve(async (req) => {
       .eq('id', targetId)
       .single();
 
-    if (fetchError || !notif) throw new Error("Notificação não encontrada no banco");
+    if (fetchError || !notif) throw new Error("Notificação não encontrada no banco de dados.");
 
-    // Usa a variável de e-mail padronizada que você configurou no painel
+    // 4. CONFIGURAÇÃO DO TRANSPORTER (SMTP)
     const senderEmail = Deno.env.get('GOOGLE_WORKSPACE_SMTP_USER');
-
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -59,20 +71,34 @@ Deno.serve(async (req) => {
       }
     });
 
-    // 5. Envia o E-mail
+    // 5. MAPEAMENTO DE ANEXOS E INJEÇÃO CID (Padrão Nodemailer)
+    // Transforma o array agnóstico vindo do banco no formato específico exigido pelo Nodemailer.
+    let mailAttachments = undefined;
+    if (notif.attachments && Array.isArray(notif.attachments)) {
+      mailAttachments = notif.attachments.map((att: any) => ({
+        filename: att.filename,
+        content: att.content,
+        encoding: 'base64',     // Força a decodificação binária da string
+        cid: att.content_id     // Converte a chave genérica para o formato CID nativo da lib
+      }));
+    }
+
+    // 6. DISPARO DA NOTIFICAÇÃO
     await transporter.sendMail({
       from: senderEmail,
       to: notif.recipient,
       subject: notif.subject || "Notificação Superbid",
       html: notif.channel === 'email' ? notif.rendered_content : undefined,
-      text: notif.channel !== 'email' ? notif.rendered_content : undefined
+      text: notif.channel !== 'email' ? notif.rendered_content : undefined,
+      attachments: mailAttachments
     });
 
-    // 🚨 NOVO: 6. MIGRAÇÃO PARA O HISTÓRICO EM CASO DE SUCESSO
+    // 7. MIGRAÇÃO PARA O HISTÓRICO (Auditoria)
+    // Garante um snapshot exato de tudo que foi disparado, preservando os metadados.
     await supabase
       .from('notifications')
       .insert({ 
-        id: notif.id, // Herda o mesmo ID para rastreabilidade
+        id: notif.id,
         context_type: notif.context_type,
         visit_id: notif.visit_id,
         visit_update_id: notif.visit_update_id,
@@ -84,12 +110,14 @@ Deno.serve(async (req) => {
         recipient: notif.recipient,
         subject: notif.subject,
         rendered_content: notif.rendered_content,
+        attachments: notif.attachments, 
         raw_payload: notif.raw_payload,
         status: 'sent',
-        created_at: notif.created_at // Mantém a data de criação original
+        created_at: notif.created_at
       });
 
-    // 🚨 NOVO: 7. FAXINA (Deleta da fila quente)
+    // 8. FAXINA DA FILA QUENTE
+    // Remove o registro processado da Outbox para manter a fila enxuta.
     await supabase
       .from('notification_outbox')
       .delete()
@@ -101,9 +129,9 @@ Deno.serve(async (req) => {
   } catch (err: any) {
     console.error("[GATEWAY FATAL]:", err.message);
     
-    // 🚨 NOVO: CONTROLE DE RETRY E DEAD LETTER QUEUE (Fica presa se estourar as tentativas)
+    // 9. CONTROLE DE RETRY E DEAD LETTER QUEUE (DLQ)
+    // Evita loop infinito incrementando o contador e definindo morte térmica (dead_letter) se necessário.
     if (targetId) {
-      // Busca o contador atual da outbox para calcular o próximo passo
       const { data: current } = await supabase
         .from('notification_outbox')
         .select('retry_count, max_retries')
@@ -117,7 +145,7 @@ Deno.serve(async (req) => {
         await supabase
           .from('notification_outbox')
           .update({ 
-            status: isDead ? 'dead_letter' : 'pending', // Volta para pending para reenvio ou vira DLQ
+            status: isDead ? 'dead_letter' : 'pending',
             retry_count: nextRetry,
             error_message: err.message,
             updated_at: new Date().toISOString()
