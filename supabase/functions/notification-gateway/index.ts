@@ -8,6 +8,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import nodemailer from "npm:nodemailer@6.9.13";
+import { encodeBase64 } from "jsr:@std/encoding/base64";
 
 // Chave de controle para logs de depuração
 const DEBUG_MODE = true;
@@ -85,9 +86,9 @@ Deno.serve(async (req) => {
 
         if (error) throw error;
 
-        // Converte para buffer e depois para base64
+        // Converte para buffer e depois usamos o utilitário nativo encodeBase64
         const arrayBuffer = await data.arrayBuffer();
-        const base64 = Buffer.from(arrayBuffer).toString('base64');
+        const base64 = encodeBase64(new Uint8Array(arrayBuffer));
 
         return {
           filename: att.storage_path.split('/').pop(), // Extrai o nome do arquivo do path
