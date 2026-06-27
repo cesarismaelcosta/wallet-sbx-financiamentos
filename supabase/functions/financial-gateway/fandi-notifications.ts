@@ -107,7 +107,25 @@ export function generateUserEmailNotificationHtml(
     `;
   }
 
-  // 4. Lógica do Botão WhatsApp
+  // 4. Bloco de Parceria (Novo)
+  const partnerConfig = payload.page_configs?.offer_panel?.partner;
+  let htmlParceria = "";
+
+  if (partnerConfig?.name) {
+    htmlParceria = `
+      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 12px;">
+        <tr>
+          <td align="center">
+            <div style="max-width: 400px; margin: 0 auto; padding: 12px 20px; border: 1px solid ${line}; border-radius: 8px; font-size: 12px; color: ${muted}; background: #ffffff; text-align: center;">
+              ${partnerConfig.label || "Parceria com:"} <span style="font-weight: 700; color: ${ink};">${partnerConfig.name}</span>
+            </div>
+          </td>
+        </tr>
+      </table>
+    `;
+  }
+
+  // 5. Lógica do Botão WhatsApp
   const integrationConfig = payload.page_configs?.integration_details || (payload as any).integration_details || {};
   const contact = integrationConfig?.urlWhatsApp || integrationConfig?.whatsapp_number;
   let htmlWhatsApp = "";
@@ -144,7 +162,7 @@ export function generateUserEmailNotificationHtml(
     `;
   }
 
-  // 5. Montagem Final do Documento HTML
+  // 6. Montagem Final do Documento HTML
   const html = `
     <!DOCTYPE html>
     <html>
@@ -182,6 +200,7 @@ export function generateUserEmailNotificationHtml(
                 </table>
 
                 ${htmlFinanciamento}
+                ${htmlParceria}
                 ${htmlWhatsApp}
 
                 <p style="margin-top: 24px; font-size: 11px; color: ${muted}; line-height: 1.5; font-style: italic; text-align: center;">
