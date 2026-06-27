@@ -76,7 +76,8 @@ export function Step1Simulation() {
         data: { 
           ...state.data, 
           simulationResult: result, 
-          simulation_id: result.simulation_id 
+          simulation_id: result.simulation_id,
+          simulation_update_id: result.simulation_update_id 
         } 
       });
       

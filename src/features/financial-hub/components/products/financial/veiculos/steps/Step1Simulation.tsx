@@ -95,7 +95,7 @@ export function Step1Simulation() {
       // 4. Atualização de estado
       update({
         meta: { ...state.meta, step: 2 }, // Isso move o ponteiro de navegação
-        data: { ...state.data, simulationResult: result, simulation_id: result.simulation_id } // Isso salva o resultado
+        data: { ...state.data, simulationResult: result, simulation_id: result.simulation_id, simulation_update_id: result.simulation_update_id } // Isso salva o resultado
       });
       
     } catch (error) {

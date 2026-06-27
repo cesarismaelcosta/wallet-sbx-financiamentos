@@ -77,7 +77,7 @@ export function Step1Simulation() {
       
       update({
         meta: { ...state.meta, step: 2 },
-        data: { ...state.data, simulationResult: result, simulation_id: result.simulation_id }
+        data: { ...state.data, simulationResult: result, simulation_id: result.simulation_id, simulation_update_id: result.simulation_update_id  }
       });
       
     } catch (error) {
