@@ -397,7 +397,7 @@ export async function updateSimulationData(
         }
       }
 
-      return simulation_update_id: simulationUpdateId;
+      return simulationUpdateId;
     });
   } catch (error) {
     console.error("[FATAL] Erro na atualização de dados da simulação:", error);
