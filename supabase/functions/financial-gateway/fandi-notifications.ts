@@ -61,7 +61,25 @@ export function generateUserEmailNotificationHtml(
     }).join('');
   };
 
-  // 3. Montagem do Bloco de Financiamento (Destaque Veículos)
+  // 3. Bloco de Parceria (Novo)
+  const partnerConfig = payload.page_configs?.offer_panel?.partner;
+  let htmlParceria = "";
+
+  if (partnerConfig?.name) {
+    htmlParceria = `
+      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
+        <tr>
+          <td align="center">
+            <div style="max-width: 400px; margin: 0 auto; padding: 12px 20px; border: 1px solid ${line}; border-radius: 8px; font-size: 12px; color: ${muted}; background: ${surface}; text-align: center;">
+              ${partnerConfig.label || "Parceria com:"} <span style="font-weight: 700; color: ${ink};">${partnerConfig.name}</span>
+            </div>
+          </td>
+        </tr>
+      </table>
+    `;
+  }
+
+  // 4. Montagem do Bloco de Financiamento (Destaque Veículos)
   const mainConsult = consults && consults.length > 0 ? consults[0] : null;
   let htmlFinanciamento = "";
 
@@ -100,24 +118,6 @@ export function generateUserEmailNotificationHtml(
                   </td>
                 </tr>
               </table>
-            </div>
-          </td>
-        </tr>
-      </table>
-    `;
-  }
-
-  // 4. Bloco de Parceria (Novo)
-  const partnerConfig = payload.page_configs?.offer_panel?.partner;
-  let htmlParceria = "";
-
-  if (partnerConfig?.name) {
-    htmlParceria = `
-      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 12px;">
-        <tr>
-          <td align="center">
-            <div style="max-width: 400px; margin: 0 auto; padding: 12px 20px; border: 1px solid ${line}; border-radius: 8px; font-size: 12px; color: ${muted}; background: #ffffff; text-align: center;">
-              ${partnerConfig.label || "Parceria com:"} <span style="font-weight: 700; color: ${ink};">${partnerConfig.name}</span>
             </div>
           </td>
         </tr>
@@ -199,8 +199,8 @@ export function generateUserEmailNotificationHtml(
                     </tr>
                 </table>
 
-                ${htmlFinanciamento}
                 ${htmlParceria}
+                ${htmlFinanciamento}
                 ${htmlWhatsApp}
 
                 <p style="margin-top: 24px; font-size: 11px; color: ${muted}; line-height: 1.5; font-style: italic; text-align: center;">
