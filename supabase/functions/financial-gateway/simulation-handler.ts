@@ -310,7 +310,7 @@ export async function processSimulation(req: Request, payload: SimulationPayload
           payload.action_description = action_description;
           debugLog("antes de atualizar em creditas", payload.simulation_id)
           // Atualiza simulação
-          simulationUpdateId = await updateSimulationData(sql, payload.simulation_id, payload, infra, gatewayResult, action, action_description)
+          const simulationUpdateId = await updateSimulationData(sql, payload.simulation_id, payload, infra, gatewayResult, action, action_description)
           // Atualiza o payload com os IDs reais do banco
           payload.simulation_update_id = simulationUpdateId;
         }
