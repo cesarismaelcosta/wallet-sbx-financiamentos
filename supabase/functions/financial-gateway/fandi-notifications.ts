@@ -125,7 +125,6 @@ export function generateUserEmailNotificationHtml(
       ? `${contact}?text=${encodeURIComponent(msg)}`
       : `https://wa.me/${numericContact}?text=${encodeURIComponent(msg)}`;
 
-    // Renderiza o botão no formato "Solid" (Fundo Roxo, Texto Branco)
     htmlWhatsApp = `
       <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 24px;">
         <tr>
@@ -134,11 +133,15 @@ export function generateUserEmailNotificationHtml(
               <tr>
                 <td align="center" style="border-radius: 12px; border: 2px solid ${brandColor}; background-color: transparent;">
                   <a href="${whatsappUrl}" target="_blank" style="font-size: 14px; font-family: ${fontStack}; font-weight: bold; color: ${brandColor}; text-decoration: none; padding: 14px 24px; display: inline-block; border-radius: 12px;">
-                    <!-- Ícone estilizado -->
-                    <span style="display: inline-block; background-color: ${brandColor}; color: #ffffff; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; margin-right: 8px; font-size: 12px;">
-                      •••
+                    💬 Continuar pelo WhatsApp
+                  </a>
+                  <a href="${whatsappUrl}" target="_blank" style="font-size: 14px; font-family: ${fontStack}; font-weight: bold; color: ${brandColor}; text-decoration: none; padding: 14px 24px; display: inline-block; border-radius: 12px; border: 2px solid ${brandColor};">
+                    <span style="display: inline-block; background-color: ${brandColor}; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; margin-right: 8px; vertical-align: middle;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="white" style="display: block; margin: 4px auto;">
+                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm0 4h9v2H6v-2z"/>
+                      </svg>
                     </span>
-                    Continuar pelo WhatsApp
+                      Continuar pelo WhatsApp
                   </a>
                 </td>
               </tr>
