@@ -83,7 +83,7 @@ export function Step1Eligibility() {
       const statusId = result.consults?.[0]?.status_id;
 
       console.log("result", result)
-      
+
       // Validação do retorno do backend
       if (!result.success) {
         setErrorMsg("Erro técnico na consulta. Tente novamente.");
@@ -91,7 +91,7 @@ export function Step1Eligibility() {
         // SUCCESSO: 1 é aprovado
         update({ 
           meta: { ...state.meta, blocked: undefined },
-          data: { ...state.data, eligibility: data, simulationResult: result, simulation_id: result.simulation_id } 
+          data: { ...state.data, eligibility: data, simulationResult: result, simulation_id: result.simulation_id, simulation_update_id: result.simulation__update_id } 
         });
         next();
       } else if (statusId === 2) {

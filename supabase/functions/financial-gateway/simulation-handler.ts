@@ -332,13 +332,6 @@ export async function processSimulation(req: Request, payload: SimulationPayload
       throw new Error(`Parceiro ${payload.partner_id} não suportado.`);
   }
 
-  // ATUALIZAÇÃO CENTRALIZADA: 
-  // Isso garante que qualquer lugar do código que ler o 'payload' daqui para baixo 
-  // terá o ID correto, não importa qual fluxo passou.
-  if (SimulationId) {
-      payload.simulation_id = String(SimulationId);
-  }
-
   // Logo antes de montar o JSON de resposta
   // Isso garante que não dependemos de variáveis de escopo instáveis
   const finalConsult = gatewayResult?.consults?.find(c => c.is_selected === true) || gatewayResult?.consults?.[0];
