@@ -97,7 +97,7 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
               Usamos Tailwind para escondê-lo visualmente até a hidratação terminar.
               --------------------------------------------------------------------------- */}
               <main 
-                className={`flex-1 w-full flex flex-col transition-opacity duration-500 ${
+                className={`flex-none w-full flex flex-col transition-opacity duration-500 ${
                   isOrchestratorHydrating 
                     ? "opacity-0 pointer-events-none h-0 overflow-hidden" 
                     : "opacity-100"
