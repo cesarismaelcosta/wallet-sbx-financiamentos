@@ -196,7 +196,7 @@ export async function processSimulationPartner(payload: any): Promise<Simulation
     template_slug: 'partner-simulation-user',
     recipient_type: "ENTITY", // Vai para o e-mail do cliente
     recipient: payload.entity?.email,
-    subject: "Sua simulação de financiamento na Superbid",
+    subject: "Sua simulação de financiamento na Superbid 🚀",
     email_body: userEmailData.html,
     attachments: userEmailData.attachments 
   });
@@ -208,7 +208,7 @@ export async function processSimulationPartner(payload: any): Promise<Simulation
     template_slug: 'partner-simulation-admin',
     recipient_type: "PARTNER", // O Outbox-processor vai rotear para o e-mail do parceiro
     recipient: payload.integration_details?.email,
-    subject: `Novo Lead de Financiamento - ${payload.entity?.name || "Cliente"}`,
+    subject: `Novo Lead de Financiamento - ${payload.entity?.name || "Cliente"}  🚀`,
     email_body: adminEmailData.html,
     attachments: adminEmailData.attachments 
   });
