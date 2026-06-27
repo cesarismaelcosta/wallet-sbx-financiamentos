@@ -161,6 +161,7 @@ export async function processSimulationCreditCard(payload: SimulationPayload): P
       channel: 'email',
       template_slug: 'simulation-result',
       recipient_type: "ENTITY",
+      recipient: payload.entity?.email,
       subject: "Sua simulação de parcelamento do cartão na Superbid 🚀",
       email_body: emailTemplateData.html,
       attachments: emailTemplateData.attachments 

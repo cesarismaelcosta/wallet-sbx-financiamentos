@@ -546,6 +546,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
       channel: 'email',
       template_slug: 'fandi-simulation-result',
       recipient_type: "ENTITY",
+      recipient: payload.entity?.email,
       subject: "Sua simulação de financiamento na Superbid 🚗",
       email_body: emailTemplateData.html,
       attachments: emailTemplateData.attachments 

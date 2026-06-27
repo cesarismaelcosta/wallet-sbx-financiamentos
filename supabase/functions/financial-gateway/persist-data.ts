@@ -281,7 +281,7 @@ export async function insertSimulationData(
               channel, template_slug, recipient_type, recipient, subject, rendered_content, attachments, raw_payload
             ) VALUES (
               'SIMULATION', ${payload.visit_id || null}, ${payload.visit_update_id || null}, ${simulationId}, ${simulationUpdateId || null},
-              ${n.channel}, ${n.template_slug}, ${n.recipient_type}, ${payload.entity.email}, 
+              ${n.channel}, ${n.template_slug}, ${n.recipient_type}, ${n.recipient}, 
               ${n.subject || null}, ${n.email_body}, ${n.attachments ?? null}::jsonb, ${n.raw_payload || payload}::jsonb
             )
           `;
@@ -390,7 +390,7 @@ export async function updateSimulationData(
               channel, template_slug, recipient_type, recipient, subject, rendered_content, attachments, raw_payload
             ) VALUES (
               'SIMULATION', ${payload.visit_id || null}, ${payload.visit_update_id || null}, ${simulationId}, ${simulationUpdateId || null},
-              ${n.channel}, ${n.template_slug}, ${n.recipient_type}, ${payload.entity.email}, 
+              ${n.channel}, ${n.template_slug}, ${n.recipient_type}, ${n.recipient}, 
               ${n.subject || null}, ${n.email_body}, ${n.attachments ?? null}::jsonb, ${n.raw_payload || payload}::jsonb
             )
           `;

@@ -164,47 +164,55 @@ export async function processSimulationPartner(payload: any): Promise<Simulation
   const installmentValue = amountToFinance * factor;
   const cetRate = calculateRate(-amountToFinance, Number(installmentValue.toFixed(2)), Number(installments))
 
-  // Gera o HTML do e-mail APENAS SE a simulação for Aprovada (status_id === 1)
-  // Não enviaremos e-mails para erros ou clientes negados, conforme sua regra.
+  // 3. OBJETO COM O RESULTADO DA CONSULTA
+  const consult: Consultation = {
+    status_id: 1, 
+    is_selected: true,
+    external_operation_id: `SIM-PRC-${Date.now()}`,
+    message: "Referência de taxa e parcela gerada com sucesso.",
+    financial_institution_id: null,
+    financial_institution_name: payload.page_configs?.partner?.name || "Parceiro Comercial",
+    requested_value: requestedValue,
+    down_payment_amount: downPayment,
+    down_payment_percentage: Number(downPaymentPercent.toFixed(2)),
+    financed_amount: amountToFinance,
+    installments: Number(installments),
+    cet_rate: cetRate,
+    installment_value: Number(installmentValue.toFixed(2)) 
+  };
+
+  // 4. GERAÇÃO DOS E-MAILS (Se chegou aqui, é porque aprovou)
   let notificationsConfig = [];
-  if (dadosSimulacao.status_id === 1) {
-    const emailTemplateData = generateUserEmailNotificationHtml([consultaIndividual], payload);
-    
-    notificationsConfig.push({
-      channel: 'email',
-      template_slug: 'partner-simulation-result',
-      recipient_type: "ENTITY",
-      subject: "Sua simulação de financiamento na Superbid 🚗",
-      email_body: emailTemplateData.html,
-      attachments: emailTemplateData.attachments 
-    });
-  }
+
+  // 4.1 Email para o Cliente (User)
+  const userEmailData = generateUserEmailNotificationHtml([consult], payload);
+  notificationsConfig.push({
+    channel: 'email',
+    template_slug: 'partner-simulation-user',
+    recipient_type: "ENTITY", // Vai para o e-mail do cliente
+    recipient: payload.entity?.email,
+    subject: "Sua simulação de financiamento na Superbid",
+    email_body: userEmailData.html,
+    attachments: userEmailData.attachments 
+  });
   
-  // 3. RETORNO PADRONIZADO E ENVELOPADO (Contrato Satisfeito)
+  // 4.2 Email para a Mesa de Crédito / Parceiro (Admin)
+  const adminEmailData = generatePartnerEmailNotificationHtml([consult], payload);
+  notificationsConfig.push({
+    channel: 'email',
+    template_slug: 'partner-simulation-admin',
+    recipient_type: "PARTNER", // O Outbox-processor vai rotear para o e-mail do parceiro
+    recipient: payload.entity?.email,
+    subject: `Novo Lead de Financiamento - ${payload.entity?.name || "Cliente"}`,
+    email_body: adminEmailData.html,
+    attachments: adminEmailData.attachments 
+  });
+
+  // 5. RETORNO PADRONIZADO
   return {
     success: true,
     message: "Simulação de condições comerciais concluída com sucesso",
-    consults: [
-      {
-        status_id: 1, // Sucesso / Condições Comerciais Geradas
-        is_selected: true,
-        external_operation_id: `SIM-PRC-${Date.now()}`, // Identificador único temporal da consulta
-        message: "Referência de taxa e parcela gerada com sucesso.",
-        
-        // Barramento preenchido integralmente para consumo da listagem/tabela do front
-        financial_institution_id: null,
-        financial_institution_name: payload.page_configs?.partner?.name || "Parceiro Comercial",
-        requested_value: requestedValue,
-        down_payment_amount: downPayment,
-        down_payment_percentage: Number(downPaymentPercent.toFixed(2)),
-        financed_amount: amountToFinance,
-        installments: Number(installments),
-        cet_rate: cetRate,
-        installment_value: Number(installmentValue.toFixed(2)) // Arredondamento básico preventivo
-      }
-    ],
-
-    // Snapshot para auditoria técnica posterior se necessário
+    consults: [consult],
     raw: {
       applied_factor: factor,
       calculation_base: amountToFinance,
