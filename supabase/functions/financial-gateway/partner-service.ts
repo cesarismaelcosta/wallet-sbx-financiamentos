@@ -22,6 +22,11 @@ import {
   Offer
 } from "../_shared/types.ts";
 
+import { 
+  generateUserEmailNotificationHtml,
+  generatePartnerEmailNotificationHtml
+} from "./partner-notifications.ts";
+
 /**
  * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
  */
