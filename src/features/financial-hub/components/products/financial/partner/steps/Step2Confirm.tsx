@@ -19,7 +19,7 @@ export function Step2Confirm() {
   const result = state.data.simulationResult;
   const isApproved = result?.status_id === 1;
   const mainConsult = result?.consults?.[0];
-  const financiado = (mainConsult.financed_amount || 0) - (mainConsult.down_payment_amount || 0);
+  const financiado = (mainConsult.financed_amount || 0);
 
   console.log("Resultado da simulação:", mainConsult);
   console.log("Dados do estado:", isApproved, financiado, mainConsult.cet_rate);
