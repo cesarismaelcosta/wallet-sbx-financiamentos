@@ -130,6 +130,7 @@ export async function insertSimulationData(
       const simulation = (payload.simulation_details as SimulationFinancials) ?? {};
       const consents = payload.consents ?? [];
       
+      // Define estágio da simulação
       const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
       const stageId = stageMap[step];
 
@@ -319,7 +320,8 @@ export async function updateSimulationData(
   infra: OriginDetails,
   gatewayResult: SimulationResponse,
   action: string,
-  action_description: string
+  action_description: string,
+  step: 'CHECK_ELIGIBILITY' | 'EXECUTE_SIMULATION' = 'EXECUTE_SIMULATION'
 ): Promise<string | number> {
   try {
     return await sql.begin(async (t: any) => {
@@ -329,6 +331,10 @@ export async function updateSimulationData(
 
       // Resolve a referência do parceiro dentro da transação atual
       const mainResultPartnerId = await resolvePartnerResult(t, payload.partner_id, bestConsult.status_id, bestConsult.message);
+
+      // Define estágio da simulação
+      const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
+      const stageId = stageMap[step];
 
       // INSERT CONSULTAS: Loop para registrar todas as propostas retornadas pelo gateway.
       for (const consult of gatewayResult.consults) {
@@ -365,6 +371,7 @@ export async function updateSimulationData(
       await t`
         UPDATE simulations SET
           status_id = ${bestConsult.status_id},
+          stage_id = ${stageId},
           result_partner_id = ${mainResultPartnerId},
           external_operation_id = ${bestConsult.external_operation_id},
           simulation_details = ${gatewayResult}::jsonb,
