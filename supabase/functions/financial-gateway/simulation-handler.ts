@@ -258,8 +258,8 @@ export async function processSimulation(req: Request, payload: SimulationPayload
       // Insere simulação
       const result = await insertSimulationData(sql, payload, infra, gatewayResult, action, action_description)
       // Atualiza o payload com os IDs reais do banco
-      payload.simulation_id = String(result.simulationId);
-      payload.simulation_update_id = String(result.simulationUpdateId);
+      payload.simulation_id = String(result.simulation_id);
+      payload.simulation_update_id = String(result.simulation_update_id);
       break;
 
     case 2: { // Fandi (Integrado ou não)
@@ -273,8 +273,8 @@ export async function processSimulation(req: Request, payload: SimulationPayload
         // Insere simulação
         const result = await insertSimulationData(sql, payload, infra, gatewayResult, action, action_description)
         // Atualiza o payload com os IDs reais do banco
-        payload.simulation_id = String(result.simulationId);
-        payload.simulation_update_id = String(result.simulationUpdateId);
+        payload.simulation_id = String(result.simulation_id);
+        payload.simulation_update_id = String(result.simulation_update_id);
       } else {
         debugLog("REQUISITANDO MOTOR LOCAL (SIMULAÇÃO FLUXO PARCEIRO): ", payload);
         gatewayResult = await processSimulationPartner(payload);
@@ -283,8 +283,8 @@ export async function processSimulation(req: Request, payload: SimulationPayload
         // Insere simulação
         const result = await insertSimulationData(sql, payload, infra, gatewayResult, action, action_description)
         // Atualiza o payload com os IDs reais do banco
-        payload.simulation_id = String(result.simulationId);
-        payload.simulation_update_id = String(result.simulationUpdateId);
+        payload.simulation_id = String(result.simulation_id);
+        payload.simulation_update_id = String(result.simulation_update_id);
       }
       break; 
     }
@@ -300,8 +300,8 @@ export async function processSimulation(req: Request, payload: SimulationPayload
           // Insere simulação
           const result = await insertSimulationData(sql, payload, infra, gatewayResult, action, action_description, payload.step)
           // Atualiza o payload com os IDs reais do banco
-          payload.simulation_id = String(result.simulationId);
-          payload.simulation_update_id = String(result.simulationUpdateId);
+          payload.simulation_id = String(result.simulation_id);
+          payload.simulation_update_id = String(result.simulation_update_idd);
           debugLog("após inserir em creditas", payload.simulation_id)
         } else {
           // EXECUTE_SIMULATION
