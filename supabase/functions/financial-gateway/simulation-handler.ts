@@ -302,11 +302,13 @@ export async function processSimulation(req: Request, payload: SimulationPayload
           // Atualiza o payload com os IDs reais do banco
           payload.simulation_id = String(result.simulationId);
           payload.simulation_update_id = String(result.simulationUpdateId);
+          debugLog("após inserir em creditas", payload.simulation_id)
         } else {
           // EXECUTE_SIMULATION
           gatewayResult = await processSimulationCreditasAutoEquity(payload, payload.step);
           const action_description = 'SIMULATE_CONDITIONS';
           payload.action_description = action_description;
+          debugLog("antes de atualizar em creditas", payload.simulation_id)
           // Atualiza simulação
           simulationUpdateId = await updateSimulationData(sql, payload.simulation_id, payload, infra, gatewayResult, action, action_description)
           // Atualiza o payload com os IDs reais do banco
@@ -344,7 +346,8 @@ export async function processSimulation(req: Request, payload: SimulationPayload
   const payloadFinal = {
     success: gatewayResult?.success || false,
     status_id: finalConsult?.status_id,
-    simulation_id: String(SimulationId),
+    simulation_id: payload.simulation_id,
+    simulation_update_id: payload.simulation_update_id,
     mensagem: gatewayResult?.message,
     consults: gatewayResult?.consults || []
   };
