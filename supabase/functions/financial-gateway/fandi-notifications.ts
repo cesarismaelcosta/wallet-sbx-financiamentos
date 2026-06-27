@@ -145,7 +145,65 @@ export function generateUserEmailNotificationHtml(
   }
 
   // 5. Montagem Final do Documento HTML
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: ${fontStack};"><table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 20px 10px;"><tr><td align="center"><table width="100%" style="max-width: 95%; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);"><tr><td align="left" style="padding: 24px 32px; background-color: #f8f9fa; border-bottom: 1px solid ${line};"><img src="${logoSrc}" alt="Logo" width="140" style="display: block; border: 0;" /></td></tr><tr><td style="padding: 40px 32px;"><p style="font-size: 16px; line-height: 1.6; margin: 0 0 24px 0; color: ${slate};">Olá <b>${nomeCliente}</b>,<br>Temos uma proposta pré-aprovada para você.</p><table width="100%" border="0" cellspacing="0" cellpadding="0" style="background: ${surface}; border-radius: 12px; margin-bottom: 24px;"><tr><td style="padding: 16px 20px;"><div style="font-size: 13px; color: ${slate}; margin-bottom: 4px;"><b>Evento:</b> ${eventoTexto}</div><div style="font-size: 13px; color: ${slate}; margin-bottom: 4px;"><b>Lote:</b> ${loteTexto}</div><div style="font-size: 13px; color: ${slate};"><b>Valor:</b> ${valorSimulado}</div></td></tr></table>${htmlFinanciamento}${htmlWhatsApp}<p style="margin-top: 24px; font-size: 11px; color: ${muted}; line-height: 1.5; font-style: italic; text-align: center;">*As condições apresentadas não são garantia de aprovação. Fale com nossos especialistas para seguirmos com a análise da sua linha de crédito.</p></td></tr><tr><td style="background-color: ${surface}; padding: 24px 32px; border-top: 1px solid ${line}; text-align: center;"><p style="margin: 0; font-size: 11px; color: ${muted}; line-height: 1.5;">${renderFooter()}</p></td></tr></table></td></tr></table></body></html>`;
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: ${fontStack};">
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 20px 10px;">
+        <tr>
+        <td align="center">
+            <table width="100%" style="max-width: 95%; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+            
+            <tr>
+                <td align="left" style="padding: 24px 32px; background-color: #f8f9fa; border-bottom: 1px solid ${line};">
+                <img src="${logoSrc}" alt="Logo" width="140" style="display: block; border: 0;" />
+                </td>
+            </tr>
+
+            <tr>
+                <td style="padding: 40px 32px;">
+                <p style="font-size: 16px; line-height: 1.6; margin: 0 0 24px 0; color: ${slate};">
+                    Olá <b>${nomeCliente}</b>,<br>
+                    A simulação que você fez na Superbid tem grandes chances de ser aprovada. 
+                    <span style="color: ${brandColor}; font-weight: 800;">Vamos continuar?</span>
+                </p>
+
+                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background: ${surface}; border-radius: 12px; margin-bottom: 24px;">
+                    <tr>
+                    <td style="padding: 16px 20px;">
+                        <div style="font-size: 13px; color: ${slate}; margin-bottom: 4px;"><b>Evento:</b> ${eventoTexto}</div>
+                        <div style="font-size: 13px; color: ${slate}; margin-bottom: 4px;"><b>Lote:</b> ${loteTexto}</div>
+                        <div style="font-size: 13px; color: ${slate};"><b>Valor:</b> ${valorSimulado}</div>
+                    </td>
+                    </tr>
+                </table>
+
+                ${htmlFinanciamento}
+                ${htmlWhatsApp}
+
+                <p style="margin-top: 24px; font-size: 11px; color: ${muted}; line-height: 1.5; font-style: italic; text-align: center;">
+                    *As condições apresentadas não são garantia de aprovação. Fale com nossos especialistas para seguirmos com a análise da sua linha de crédito.
+                </p>
+                </td>
+            </tr>
+
+            <tr>
+                <td style="background-color: ${surface}; padding: 24px 32px; border-top: 1px solid ${line}; text-align: center;">
+                <p style="margin: 0; font-size: 11px; color: ${muted}; line-height: 1.5;">
+                    ${renderFooter()}
+                </p>
+                </td>
+            </tr>
+            </table>
+        </td>
+        </tr>
+    </table>
+    </body>
+    </html>
+    `.trim();
 
   return { 
     html, 
