@@ -150,11 +150,24 @@ export async function processSimulationCreditCard(payload: SimulationPayload): P
     };
   });
 
-  // Gera o HTML do e-mail do Usuário
-  // Captura o objeto completo (HTML e Anexos) gerado pelo template
-  const emailTemplateData = generateUserEmailNotificationHtml(consults, payload);
+  // 5. Preparação das Notificações (Padrão Isolado)
+  let notificationsConfig = [];
+  
+  // Só gera o e-mail se realmente houver parcelas geradas
+  if (consults.length > 0) {
+    const emailTemplateData = generateUserEmailNotificationHtml(consults, payload);
+    
+    notificationsConfig.push({
+      channel: 'email',
+      template_slug: 'simulation-result',
+      recipient_type: "ENTITY",
+      subject: "Sua simulação de parcelamento do cartão na Superbid 🚀",
+      email_body: emailTemplateData.html,
+      attachments: emailTemplateData.attachments 
+    });
+  }
 
-  // 5. Retorno Padronizado
+  // 6. Retorno Padronizado
   return {
     success: true,
     message: "Grid de simulação gerado com sucesso.",
@@ -162,16 +175,7 @@ export async function processSimulationCreditCard(payload: SimulationPayload): P
     raw: {
       rules_snapshot_id: rules?.id || "not-provided",
       executed_at: new Date().toISOString(),
-      notifications: [
-        {
-          channel: 'email',
-          template_slug: 'simulation-result',
-          recipient_type: "ENTITY",
-          subject: "Sua simulação de parcelamento do cartão na Superbid 🚀",
-          email_body: emailTemplateData.html,
-          attachments: emailTemplateData.attachments 
-        }
-      ]
+      notifications: notificationsConfig 
     }
   } as SimulationResponse;
 }

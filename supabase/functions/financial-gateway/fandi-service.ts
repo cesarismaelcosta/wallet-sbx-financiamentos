@@ -26,6 +26,9 @@ import {
 
 import { Entity, Offer } from "../_shared/types.ts";
 
+// Importa a função geradora de e-mail de usuários (Template de Veículos Fandi)
+import { generateUserEmailNotificationHtml } from "./fandi-notifications.ts";
+
 /**
  * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
  */
@@ -533,6 +536,22 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     installment_value: dadosSimulacao.installment_value,
   };
 
+  // Gera o HTML do e-mail APENAS SE a simulação for Aprovada (status_id === 1)
+  // Não enviaremos e-mails para erros ou clientes negados, conforme sua regra.
+  let notificationsConfig = [];
+  if (dadosSimulacao.status_id === 1) {
+    const emailTemplateData = generateUserEmailNotificationHtml([consultaIndividual], payload);
+    
+    notificationsConfig.push({
+      channel: 'email',
+      template_slug: 'fandi-simulation-result',
+      recipient_type: "ENTITY",
+      subject: "Sua pré-aprovação de financiamento na Superbid 🚗",
+      email_body: emailTemplateData.html,
+      attachments: emailTemplateData.attachments 
+    });
+  }
+
   // Retornamos o Envelope PartnerResponse embora Fandi só tenha uma consulta, para manter a consistência com o contrato do serviço de cartão que pode ter múltiplas linhas.
   return {
     success: dadosSimulacao.status_id === 1 || dadosSimulacao.status_id === 2,  // success é true apenas se for Aprovada (1) ou Negada (2). Se for Falha (8), o success será false.
@@ -540,7 +559,8 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     consults: [consultaIndividual], // Array com a consulta realizada
     raw: {
       simulacao: simResult,
-      inclusao: incResult
+      inclusao: incResult,
+      notifications: notificationsConfig
     }
   } as SimulationResponse;
 

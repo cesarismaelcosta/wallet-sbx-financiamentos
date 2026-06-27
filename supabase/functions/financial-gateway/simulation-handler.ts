@@ -341,8 +341,6 @@ export async function processSimulation(req: Request, payload: SimulationPayload
   // Isso garante que não dependemos de variáveis de escopo instáveis
   const finalConsult = gatewayResult?.consults?.find(c => c.is_selected === true) || gatewayResult?.consults?.[0];
 
-  debugLog("Simulation Id:", String(SimulationId))
-
   const payloadFinal = {
     success: gatewayResult?.success || false,
     status_id: finalConsult?.status_id,
