@@ -164,6 +164,22 @@ export async function processSimulationPartner(payload: any): Promise<Simulation
   const installmentValue = amountToFinance * factor;
   const cetRate = calculateRate(-amountToFinance, Number(installmentValue.toFixed(2)), Number(installments))
 
+  // Gera o HTML do e-mail APENAS SE a simulação for Aprovada (status_id === 1)
+  // Não enviaremos e-mails para erros ou clientes negados, conforme sua regra.
+  let notificationsConfig = [];
+  if (dadosSimulacao.status_id === 1) {
+    const emailTemplateData = generateUserEmailNotificationHtml([consultaIndividual], payload);
+    
+    notificationsConfig.push({
+      channel: 'email',
+      template_slug: 'partner-simulation-result',
+      recipient_type: "ENTITY",
+      subject: "Sua simulação de financiamento na Superbid 🚗",
+      email_body: emailTemplateData.html,
+      attachments: emailTemplateData.attachments 
+    });
+  }
+  
   // 3. RETORNO PADRONIZADO E ENVELOPADO (Contrato Satisfeito)
   return {
     success: true,
@@ -193,7 +209,8 @@ export async function processSimulationPartner(payload: any): Promise<Simulation
       applied_factor: factor,
       calculation_base: amountToFinance,
       rules_snapshot_id: rules?.id || "not-provided",
-      executed_at: new Date().toISOString()
+      executed_at: new Date().toISOString(),
+      notifications: notificationsConfig
     }
   } as SimulationResponse;
 }
