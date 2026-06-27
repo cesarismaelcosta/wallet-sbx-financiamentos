@@ -232,53 +232,42 @@ export function generateUserEmailNotificationHtml(
 /**
  * Gera o HTML completo de notificação de e-mail para Parceiros (Mesa de Crédito).
  * VERSÃO: PARTNER (Parceiro Comercial)
- * Exibe uma tabela completa com Dados do Cliente, Evento (com Seller e Data), Oferta e Simulação.
  */
 export function generatePartnerEmailNotificationHtml(
   consults: Consultation[],
   payload: SimulationPayload
 ): EmailTemplateResult {
   
-  // 1. Configurações de Ambiente e Tokens de Design
   const logoSrc = "cid:logo-wallet";
-  // Fallback para a cor da marca ou um tom sóbrio escuro se não houver
   const brandColor = payload.page_configs?.theme?.primary_color || "#0f172a"; 
   
   const formatCurrency = (value: number) => 
     value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-  // 2. Extração de Dados: Entity (Cliente)
   const clienteNome = payload.entity?.name?.trim() || "Não informado";
   const clienteDoc = payload.entity?.document || "Não informado";
   const clienteEmail = payload.entity?.email || "Não informado";
   const clientePhone = payload.entity?.phone || "Não informado";
 
-  // 3. Extração de Dados: Seller & Event
   const sellerName = payload.seller?.trade_name || payload.seller?.legal_name || "Não informado";
-  
   const eventoTexto = payload.event?.event_id 
     ? `${payload.event.event_id} - ${payload.event.event_description || ""}` 
     : (payload.event?.event_description || "N/A");
-    
   const encerramentoData = payload.event?.event_end_date
     ? new Date(payload.event.event_end_date).toLocaleString("pt-BR", { 
         day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
       })
     : "Não informada";
 
-  // 4. Extração de Dados: Offer (Lote)
   const loteTexto = payload.offer?.offer_id 
     ? `${payload.offer.offer_id} - ${payload.offer.offer_description || ""}` 
     : (payload.offer?.offer_description || "N/A");
-
   const valorOferta = payload.offer?.offer_value || 0;
 
-  // 5. Extração de Dados: Financeiro e Simulação
   const valorEntrada = payload.simulation_details?.down_payment_amount || 0;
   const mainConsult = consults && consults.length > 0 ? consults[0] : null;
   const valorFinanciado = mainConsult?.financed_amount || (valorOferta - valorEntrada);
 
-  // 6. Estilos Base
   const fontStack = "'Inter', Arial, sans-serif";
   const ink = "#0f172a";
   const slate = "#334155";
@@ -286,42 +275,38 @@ export function generatePartnerEmailNotificationHtml(
   const line = "#e2e8f0";
   const surface = "#f8fafc";
 
-  // Estilos reutilizáveis da tabela
-  const headerStyle = `background: ${surface}; padding: 14px 16px; font-size: 13px; font-weight: 700; color: ${slate}; text-transform: uppercase; border-bottom: 2px solid ${line}; letter-spacing: 0.5px;`;
+  // AJUSTE 1: font-weight alterado para 600 aqui no headerStyle
+  const headerStyle = `background: ${surface}; padding: 14px 16px; font-size: 13px; font-weight: 600; color: ${slate}; text-transform: uppercase; border-bottom: 2px solid ${line}; letter-spacing: 0.5px;`;
   const cellStyle = `padding: 12px 16px; border-bottom: 1px solid ${line}; font-size: 13px; color: ${ink};`;
   const labelStyle = `font-weight: 600; color: ${slate}; width: 35%; background-color: #fafafa;`;
 
-  // 7. Montagem da Tabela do Dossiê Completo (Borda externa usando brandColor)
+  // AJUSTE 2: Inclusão do bullet "▪" em todas as sessões
   const htmlTabelaDados = `
     <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background: #ffffff; border: 1px solid ${brandColor}; border-radius: 8px; overflow: hidden; margin-bottom: 24px;">
       
-      <!-- SESSÃO 1: DADOS DO CLIENTE (ENTITY) -->
       <tr>
-        <td colspan="2" style="${headerStyle}">👤 Dados do Proponente</td>
+        <td colspan="2" style="${headerStyle}">▪ Dados do Proponente</td>
       </tr>
       <tr><td style="${cellStyle} ${labelStyle}">Nome/Razão Social</td><td style="${cellStyle}">${clienteNome}</td></tr>
       <tr><td style="${cellStyle} ${labelStyle}">CPF/CNPJ</td><td style="${cellStyle}">${clienteDoc}</td></tr>
       <tr><td style="${cellStyle} ${labelStyle}">E-mail</td><td style="${cellStyle}">${clienteEmail}</td></tr>
       <tr><td style="${cellStyle} ${labelStyle}">Telefone/WhatsApp</td><td style="${cellStyle}">${clientePhone}</td></tr>
 
-      <!-- SESSÃO 2: DADOS DO EVENTO -->
       <tr>
-        <td colspan="2" style="${headerStyle} border-top: 1px solid ${brandColor};">📅 Dados do Evento</td>
+        <td colspan="2" style="${headerStyle} border-top: 1px solid ${brandColor};">▪ Dados do Evento</td>
       </tr>
       <tr><td style="${cellStyle} ${labelStyle}">Evento</td><td style="${cellStyle}">${eventoTexto}</td></tr>
       <tr><td style="${cellStyle} ${labelStyle}">Vendedor (Seller)</td><td style="${cellStyle}">${sellerName}</td></tr>
       <tr><td style="${cellStyle} ${labelStyle}">Encerramento</td><td style="${cellStyle}">${encerramentoData}</td></tr>
 
-      <!-- SESSÃO 3: DADOS DO LOTE (OFFER) -->
       <tr>
-        <td colspan="2" style="${headerStyle} border-top: 1px solid ${brandColor};">🏷️ Dados do Lote (Bem)</td>
+        <td colspan="2" style="${headerStyle} border-top: 1px solid ${brandColor};">▪ Dados do Lote (Bem)</td>
       </tr>
       <tr><td style="${cellStyle} ${labelStyle}">Lote</td><td style="${cellStyle}">${loteTexto}</td></tr>
       <tr><td style="${cellStyle} ${labelStyle}">Valor do Bem (Base)</td><td style="${cellStyle} font-weight: 600;">${formatCurrency(valorOferta)}</td></tr>
 
-      <!-- SESSÃO 4: DADOS DA SIMULAÇÃO (FINANCEIRO) -->
       <tr>
-        <td colspan="2" style="${headerStyle} border-top: 1px solid ${brandColor};">📊 Condição Simulada</td>
+        <td colspan="2" style="${headerStyle} border-top: 1px solid ${brandColor};">▪ Condição Simulada</td>
       </tr>
       <tr><td style="${cellStyle} ${labelStyle}">Valor de Entrada</td><td style="${cellStyle}">${formatCurrency(valorEntrada)}</td></tr>
       <tr><td style="${cellStyle} ${labelStyle}">Valor a Financiar</td><td style="${cellStyle}">${formatCurrency(valorFinanciado)}</td></tr>
@@ -347,7 +332,6 @@ export function generatePartnerEmailNotificationHtml(
     </table>
   `;
 
-  // 8. Montagem Final do Documento HTML
   const html = `
     <!DOCTYPE html>
     <html>
@@ -368,7 +352,8 @@ export function generatePartnerEmailNotificationHtml(
 
             <tr>
                 <td style="padding: 32px;">
-                    <div style="font-size: 20px; font-weight: 800; color: ${ink}; margin-bottom: 8px; letter-spacing: -0.5px;">
+                    <!-- AJUSTE 3: Título principal também alterado para font-weight: 600 -->
+                    <div style="font-size: 20px; font-weight: 600; color: ${ink}; margin-bottom: 8px; letter-spacing: -0.5px;">
                       Novo Lead de Financiamento
                     </div>
                     <p style="font-size: 14px; line-height: 1.6; margin: 0 0 24px 0; color: ${slate};">
@@ -377,7 +362,6 @@ export function generatePartnerEmailNotificationHtml(
 
                     ${htmlTabelaDados}
 
-                    <!-- BOX DE AÇÃO COMERCIAL ESTILIZADO -->
                     <div style="background-color: ${surface}; border: 1px solid ${line}; border-left: 4px solid ${brandColor}; padding: 16px; border-radius: 4px;">
                         <p style="font-size: 13px; color: ${slate}; line-height: 1.5; margin: 0;">
                             <strong style="color: ${brandColor};">Ação Comercial Requerida:</strong> Recomendamos o contato imediato com o proponente utilizando os dados acima (telefone/e-mail) para confirmar o interesse, coletar dados complementares e seguir com a formalização da análise de crédito no seu sistema.
