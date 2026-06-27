@@ -132,9 +132,13 @@ export function generateUserEmailNotificationHtml(
           <td align="center">
             <table border="0" cellspacing="0" cellpadding="0">
               <tr>
-                <td align="center" style="border-radius: 12px; background-color: ${brandColor};">
-                  <a href="${whatsappUrl}" target="_blank" style="font-size: 14px; font-family: ${fontStack}; font-weight: bold; color: #ffffff; text-decoration: none; padding: 14px 24px; display: inline-block; border-radius: 12px;">
-                    💬 Continuar pelo WhatsApp
+                <td align="center" style="border-radius: 12px; border: 2px solid ${brandColor}; background-color: transparent;">
+                  <a href="${whatsappUrl}" target="_blank" style="font-size: 14px; font-family: ${fontStack}; font-weight: bold; color: ${brandColor}; text-decoration: none; padding: 14px 24px; display: inline-block; border-radius: 12px;">
+                    <!-- Ícone estilizado -->
+                    <span style="display: inline-block; background-color: ${brandColor}; color: #ffffff; border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center; margin-right: 8px; font-size: 12px;">
+                      •••
+                    </span>
+                    Continuar pelo WhatsApp
                   </a>
                 </td>
               </tr>
