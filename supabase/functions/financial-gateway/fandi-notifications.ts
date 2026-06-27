@@ -125,14 +125,15 @@ export function generateUserEmailNotificationHtml(
       ? `${contact}?text=${encodeURIComponent(msg)}`
       : `https://wa.me/${numericContact}?text=${encodeURIComponent(msg)}`;
 
+    // Renderiza o botão no formato "Solid" (Fundo Roxo, Texto Branco)
     htmlWhatsApp = `
       <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 24px;">
         <tr>
           <td align="center">
             <table border="0" cellspacing="0" cellpadding="0">
               <tr>
-                <td align="center" style="border-radius: 12px; border: 2px solid ${brandColor}; background-color: transparent;">
-                  <a href="${whatsappUrl}" target="_blank" style="font-size: 14px; font-family: ${fontStack}; font-weight: bold; color: ${brandColor}; text-decoration: none; padding: 14px 24px; display: inline-block; border-radius: 12px;">
+                <td align="center" style="border-radius: 12px; background-color: ${brandColor};">
+                  <a href="${whatsappUrl}" target="_blank" style="font-size: 14px; font-family: ${fontStack}; font-weight: bold; color: #ffffff; text-decoration: none; padding: 14px 24px; display: inline-block; border-radius: 12px;">
                     💬 Continuar pelo WhatsApp
                   </a>
                 </td>
@@ -142,7 +143,6 @@ export function generateUserEmailNotificationHtml(
         </tr>
       </table>
     `;
-  }
 
   // 5. Montagem Final do Documento HTML
   const html = `
@@ -165,11 +165,11 @@ export function generateUserEmailNotificationHtml(
 
             <tr>
                 <td style="padding: 40px 32px;">
-                <p style="font-size: 16px; line-height: 1.6; margin: 0 0 24px 0; color: ${slate};">
-                    Olá <b>${nomeCliente}</b>,<br>
-                    A simulação que você fez na Superbid tem grandes chances de ser aprovada. 
-                    <span style="color: ${brandColor}; font-weight: 800;">Vamos continuar?</span>
-                </p>
+                    <p style="font-size: 16px; line-height: 1.6; margin: 0 0 24px 0; color: ${slate};">
+                        Olá <b>${nomeCliente}</b>,<br>
+                        A simulação que você fez na Superbid tem grandes chances de ser aprovada. <br>
+                        <span style="color: ${brandColor}; font-weight: 600;">Vamos continuar?</span>
+                    </p>
 
                 <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background: ${surface}; border-radius: 12px; margin-bottom: 24px;">
                     <tr>
