@@ -314,7 +314,7 @@ export function generatePartnerEmailNotificationHtml(
       ${mainConsult ? `
         <tr>
           <td style="${cellStyle} ${labelStyle}">Plano Simulado</td>
-          <td style="${cellStyle} font-weight: 900; color: ${brandColor}; font-size: 15px;">
+          <td style="${cellStyle} font-weight: 600; color: ${brandColor}; font-size: 15px;">
             ${mainConsult.installments}x de ${formatCurrency(mainConsult.installment_value || 0)}
           </td>
         </tr>
