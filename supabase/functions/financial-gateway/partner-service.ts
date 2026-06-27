@@ -207,7 +207,7 @@ export async function processSimulationPartner(payload: any): Promise<Simulation
     channel: 'email',
     template_slug: 'partner-simulation-admin',
     recipient_type: "PARTNER", // O Outbox-processor vai rotear para o e-mail do parceiro
-    recipient: payload.entity?.email,
+    recipient: payload.integration_details?.email,
     subject: `Novo Lead de Financiamento - ${payload.entity?.name || "Cliente"}`,
     email_body: adminEmailData.html,
     attachments: adminEmailData.attachments 
