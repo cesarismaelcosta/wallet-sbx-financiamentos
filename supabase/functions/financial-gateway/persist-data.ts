@@ -289,8 +289,8 @@ export async function insertSimulationData(
       }
 
       return { 
-        simulation_id, 
-        simulation_update_id
+        simulation_id: simulationId,
+        simulation_update_id: simulationUpdateId 
       };
     });
 
@@ -397,7 +397,7 @@ export async function updateSimulationData(
         }
       }
 
-      return simulation_update_id;
+      return simulation_update_id: simulationUpdateId;
     });
   } catch (error) {
     console.error("[FATAL] Erro na atualização de dados da simulação:", error);
