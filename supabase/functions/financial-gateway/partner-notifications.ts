@@ -232,11 +232,7 @@ export function generateUserEmailNotificationHtml(
 /**
  * Gera o HTML completo de notificação de e-mail para Parceiros (Mesa de Crédito).
  * VERSÃO: PARTNER (Parceiro Comercial)
- * Exibe uma tabela completa com Dados do Cliente (Entity), Evento, Lote (Offer) e Simulação.
- * 
- * @param consults - Lista de opções de parcelamento (A principal fica na posição [0]).
- * @param payload - Objeto completo com dados da entidade, evento, oferta e financeiro.
- * @returns Um objeto EmailTemplateResult contendo o HTML processado e anexos.
+ * Exibe uma tabela completa com Dados do Cliente, Evento (com Seller e Data), Oferta e Simulação.
  */
 export function generatePartnerEmailNotificationHtml(
   consults: Consultation[],
@@ -245,7 +241,7 @@ export function generatePartnerEmailNotificationHtml(
   
   // 1. Configurações de Ambiente e Tokens de Design
   const logoSrc = "cid:logo-wallet";
-  // Usamos uma cor mais sóbria (slate/dark) para o e-mail administrativo, mas respeitamos a brand se houver
+  // Fallback para a cor da marca ou um tom sóbrio escuro se não houver
   const brandColor = payload.page_configs?.theme?.primary_color || "#0f172a"; 
   
   const formatCurrency = (value: number) => 
@@ -257,23 +253,32 @@ export function generatePartnerEmailNotificationHtml(
   const clienteEmail = payload.entity?.email || "Não informado";
   const clientePhone = payload.entity?.phone || "Não informado";
 
-  // 3. Extração de Dados: Event & Offer
+  // 3. Extração de Dados: Seller & Event
+  const sellerName = payload.seller?.trade_name || payload.seller?.legal_name || "Não informado";
+  
   const eventoTexto = payload.event?.event_id 
     ? `${payload.event.event_id} - ${payload.event.event_description || ""}` 
     : (payload.event?.event_description || "N/A");
     
+  const encerramentoData = payload.event?.event_end_date
+    ? new Date(payload.event.event_end_date).toLocaleString("pt-BR", { 
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+      })
+    : "Não informada";
+
+  // 4. Extração de Dados: Offer (Lote)
   const loteTexto = payload.offer?.offer_id 
     ? `${payload.offer.offer_id} - ${payload.offer.offer_description || ""}` 
     : (payload.offer?.offer_description || "N/A");
 
   const valorOferta = payload.offer?.offer_value || 0;
 
-  // 4. Extração de Dados: Financeiro e Simulação
+  // 5. Extração de Dados: Financeiro e Simulação
   const valorEntrada = payload.simulation_details?.down_payment_amount || 0;
   const mainConsult = consults && consults.length > 0 ? consults[0] : null;
   const valorFinanciado = mainConsult?.financed_amount || (valorOferta - valorEntrada);
 
-  // 5. Estilos Base
+  // 6. Estilos Base
   const fontStack = "'Inter', Arial, sans-serif";
   const ink = "#0f172a";
   const slate = "#334155";
@@ -286,9 +291,9 @@ export function generatePartnerEmailNotificationHtml(
   const cellStyle = `padding: 12px 16px; border-bottom: 1px solid ${line}; font-size: 13px; color: ${ink};`;
   const labelStyle = `font-weight: 600; color: ${slate}; width: 35%; background-color: #fafafa;`;
 
-  // 6. Montagem da Tabela do Dossiê Completo
+  // 7. Montagem da Tabela do Dossiê Completo (Borda externa usando brandColor)
   const htmlTabelaDados = `
-    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background: #ffffff; border: 1px solid ${line}; border-radius: 8px; overflow: hidden; margin-bottom: 24px;">
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background: #ffffff; border: 1px solid ${brandColor}; border-radius: 8px; overflow: hidden; margin-bottom: 24px;">
       
       <!-- SESSÃO 1: DADOS DO CLIENTE (ENTITY) -->
       <tr>
@@ -299,17 +304,24 @@ export function generatePartnerEmailNotificationHtml(
       <tr><td style="${cellStyle} ${labelStyle}">E-mail</td><td style="${cellStyle}">${clienteEmail}</td></tr>
       <tr><td style="${cellStyle} ${labelStyle}">Telefone/WhatsApp</td><td style="${cellStyle}">${clientePhone}</td></tr>
 
-      <!-- SESSÃO 2: DADOS DA ORIGEM (EVENT & OFFER) -->
+      <!-- SESSÃO 2: DADOS DO EVENTO -->
       <tr>
-        <td colspan="2" style="${headerStyle} border-top: 1px solid ${line};">🏷️ Evento e Lote</td>
+        <td colspan="2" style="${headerStyle} border-top: 1px solid ${brandColor};">📅 Dados do Evento</td>
       </tr>
       <tr><td style="${cellStyle} ${labelStyle}">Evento</td><td style="${cellStyle}">${eventoTexto}</td></tr>
-      <tr><td style="${cellStyle} ${labelStyle}">Lote</td><td style="${cellStyle}">${loteTexto}</td></tr>
-      <tr><td style="${cellStyle} ${labelStyle}">Valor do Bem (Lote)</td><td style="${cellStyle} font-weight: 600;">${formatCurrency(valorOferta)}</td></tr>
+      <tr><td style="${cellStyle} ${labelStyle}">Vendedor (Seller)</td><td style="${cellStyle}">${sellerName}</td></tr>
+      <tr><td style="${cellStyle} ${labelStyle}">Encerramento</td><td style="${cellStyle}">${encerramentoData}</td></tr>
 
-      <!-- SESSÃO 3: DADOS DA SIMULAÇÃO (FINANCEIRO) -->
+      <!-- SESSÃO 3: DADOS DO LOTE (OFFER) -->
       <tr>
-        <td colspan="2" style="${headerStyle} border-top: 1px solid ${line};">📊 Condição Simulada</td>
+        <td colspan="2" style="${headerStyle} border-top: 1px solid ${brandColor};">🏷️ Dados do Lote (Bem)</td>
+      </tr>
+      <tr><td style="${cellStyle} ${labelStyle}">Lote</td><td style="${cellStyle}">${loteTexto}</td></tr>
+      <tr><td style="${cellStyle} ${labelStyle}">Valor do Bem (Base)</td><td style="${cellStyle} font-weight: 600;">${formatCurrency(valorOferta)}</td></tr>
+
+      <!-- SESSÃO 4: DADOS DA SIMULAÇÃO (FINANCEIRO) -->
+      <tr>
+        <td colspan="2" style="${headerStyle} border-top: 1px solid ${brandColor};">📊 Condição Simulada</td>
       </tr>
       <tr><td style="${cellStyle} ${labelStyle}">Valor de Entrada</td><td style="${cellStyle}">${formatCurrency(valorEntrada)}</td></tr>
       <tr><td style="${cellStyle} ${labelStyle}">Valor a Financiar</td><td style="${cellStyle}">${formatCurrency(valorFinanciado)}</td></tr>
@@ -335,7 +347,7 @@ export function generatePartnerEmailNotificationHtml(
     </table>
   `;
 
-  // 7. Montagem Final do Documento HTML
+  // 8. Montagem Final do Documento HTML
   const html = `
     <!DOCTYPE html>
     <html>
@@ -348,35 +360,32 @@ export function generatePartnerEmailNotificationHtml(
         <td align="center">
             <table width="100%" style="max-width: 650px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
             
-            <!-- HEADER LOGO -->
             <tr>
                 <td align="left" style="padding: 24px 32px; background-color: #f8f9fa; border-bottom: 1px solid ${line};">
                   <img src="${logoSrc}" alt="Logo" width="140" style="display: block; border: 0;" />
                 </td>
             </tr>
 
-            <!-- CORPO DO E-MAIL -->
             <tr>
                 <td style="padding: 32px;">
                     <div style="font-size: 20px; font-weight: 800; color: ${ink}; margin-bottom: 8px; letter-spacing: -0.5px;">
                       Novo Lead de Financiamento
                     </div>
                     <p style="font-size: 14px; line-height: 1.6; margin: 0 0 24px 0; color: ${slate};">
-                        Um cliente realizou uma simulação de crédito com base na sua tabela de fatores. Abaixo estão todos os detalhes da operação para que sua equipe comercial possa dar andamento.
+                        Um cliente realizou uma simulação de crédito com base na sua tabela de fatores. Abaixo estão todos os detalhes da operação para acionamento comercial.
                     </p>
 
-                    <!-- TABELA INJETADA AQUI -->
                     ${htmlTabelaDados}
 
-                    <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px;">
-                        <p style="font-size: 12px; color: #92400e; line-height: 1.5; margin: 0;">
-                            <strong>Ação Comercial Requerida:</strong> Recomendamos o contato imediato com o proponente utilizando os dados acima (telefone/e-mail) para confirmar o interesse, coletar dados complementares e seguir com a formalização da análise de crédito no seu sistema.
+                    <!-- BOX DE AÇÃO COMERCIAL ESTILIZADO -->
+                    <div style="background-color: ${surface}; border: 1px solid ${line}; border-left: 4px solid ${brandColor}; padding: 16px; border-radius: 4px;">
+                        <p style="font-size: 13px; color: ${slate}; line-height: 1.5; margin: 0;">
+                            <strong style="color: ${brandColor};">Ação Comercial Requerida:</strong> Recomendamos o contato imediato com o proponente utilizando os dados acima (telefone/e-mail) para confirmar o interesse, coletar dados complementares e seguir com a formalização da análise de crédito no seu sistema.
                         </p>
                     </div>
                 </td>
             </tr>
 
-            <!-- RODAPÉ TÉCNICO -->
             <tr>
                 <td style="background-color: ${surface}; padding: 20px 32px; border-top: 1px solid ${line}; text-align: center;">
                 <p style="margin: 0; font-size: 11px; color: ${muted};">
