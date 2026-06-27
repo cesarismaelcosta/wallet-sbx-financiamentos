@@ -49,7 +49,7 @@ const Entity = {
     name: "Sandbox Comercio LTDA",
     document: "15.898.094/0001-35",
     phone: "(21) 98855-0999",
-    email: "contato@cesarcosta.com.br",
+    email: "cesar.costa@superbid.net",
     birth_date: "2010-06-01",
     gender: "",
   } as EntityType,
