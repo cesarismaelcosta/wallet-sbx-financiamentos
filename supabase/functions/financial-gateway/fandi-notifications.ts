@@ -143,6 +143,7 @@ export function generateUserEmailNotificationHtml(
         </tr>
       </table>
     `;
+  }
 
   // 5. Montagem Final do Documento HTML
   const html = `
