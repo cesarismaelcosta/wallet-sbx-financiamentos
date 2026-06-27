@@ -70,29 +70,37 @@ export function generateUserEmailNotificationHtml(
     const valorParcela = formatCurrency(mainConsult.installment_value || 0);
     const cetRate = Number(mainConsult.cet_rate || 0).toFixed(2);
 
+    // Largura máxima para ficar elegante na web e centralizado
+    // Fonte: peso 900 (black) e tamanhos proporcionais
     htmlFinanciamento = `
-      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 12px; border-radius: 12px; overflow: hidden; border: 2px solid ${brandColor}; background: #ffffff;">
+      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 12px;">
         <tr>
-          <td align="center" style="padding: 24px;">
-            <div style="font-size: 12px; color: ${brandColor}; font-weight: 800; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
-              Oferta Encontrada
+          <td align="center">
+            <div style="background: #ffffff; border: 2px solid ${brandColor}; border-radius: 12px; padding: 24px; max-width: 400px; margin: 0 auto;">
+              
+              <div style="font-size: 11px; color: ${brandColor}; font-weight: 900; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
+                Oferta Encontrada
+              </div>
+              
+              <div style="color: ${ink}; font-weight: 900; margin-bottom: 20px;">
+                <span style="color: ${brandColor}; font-size: 24px;">${parcelas}x</span> 
+                <span style="font-size: 32px; letter-spacing: -0.5px;">${valorParcela}</span>
+                <span style="font-size: 14px; color: ${muted}; font-weight: 500;">/mês*</span>
+              </div>
+              
+              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="border-top: 1px solid ${line}; padding-top: 16px;">
+                <tr>
+                  <td align="center" width="50%" style="border-right: 1px solid ${line};">
+                    <div style="color: ${muted}; font-size: 11px; margin-bottom: 4px;">Valor Financiado</div>
+                    <div style="font-weight: 700; font-size: 14px; color: ${ink};">${formatCurrency(valorFinanciado)}</div>
+                  </td>
+                  <td align="center" width="50%">
+                    <div style="color: ${muted}; font-size: 11px; margin-bottom: 4px;">Taxa de Juros</div>
+                    <div style="font-weight: 700; font-size: 14px; color: ${ink};">${cetRate}% a.m.</div>
+                  </td>
+                </tr>
+              </table>
             </div>
-            <div style="font-size: 28px; color: ${ink}; font-weight: 900; margin-bottom: 20px;">
-              <span style="color: ${brandColor};">${parcelas}x</span> ${valorParcela}<span style="font-size: 14px; color: ${muted}; font-weight: 500;">/mês*</span>
-            </div>
-            
-            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="border-top: 1px solid ${line}; padding-top: 16px;">
-              <tr>
-                <td align="center" width="50%" style="border-right: 1px solid ${line};">
-                  <div style="color: ${muted}; font-size: 11px; margin-bottom: 4px;">Valor Financiado</div>
-                  <div style="font-weight: 700; font-size: 14px; color: ${ink};">${formatCurrency(valorFinanciado)}</div>
-                </td>
-                <td align="center" width="50%">
-                  <div style="color: ${muted}; font-size: 11px; margin-bottom: 4px;">Taxa de Juros</div>
-                  <div style="font-weight: 700; font-size: 14px; color: ${ink};">${cetRate}% a.m.</div>
-                </td>
-              </tr>
-            </table>
           </td>
         </tr>
       </table>
