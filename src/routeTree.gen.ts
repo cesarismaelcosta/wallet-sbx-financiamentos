@@ -21,6 +21,7 @@ const SandboxIndexLazyRouteImport = createFileRoute('/sandbox/')()
 const BackofficeIndexLazyRouteImport = createFileRoute('/backoffice/')()
 const SegurosAutoLazyRouteImport = createFileRoute('/seguros/auto')()
 const SandboxOfferLazyRouteImport = createFileRoute('/sandbox/offer')()
+const SandboxLoginLazyRouteImport = createFileRoute('/sandbox/login')()
 const FinanciamentosVeiculosLazyRouteImport = createFileRoute(
   '/financiamentos/veiculos',
 )()
@@ -97,6 +98,11 @@ const SandboxOfferLazyRoute = SandboxOfferLazyRouteImport.update({
   path: '/sandbox/offer',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/sandbox.offer.lazy').then((d) => d.Route))
+const SandboxLoginLazyRoute = SandboxLoginLazyRouteImport.update({
+  id: '/sandbox/login',
+  path: '/sandbox/login',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/sandbox.login.lazy').then((d) => d.Route))
 const FinanciamentosVeiculosLazyRoute =
   FinanciamentosVeiculosLazyRouteImport.update({
     id: '/veiculos',
@@ -203,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
+  '/sandbox/login': typeof SandboxLoginLazyRoute
   '/sandbox/offer': typeof SandboxOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
@@ -224,6 +231,7 @@ export interface FileRoutesByTo {
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
+  '/sandbox/login': typeof SandboxLoginLazyRoute
   '/sandbox/offer': typeof SandboxOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice': typeof BackofficeIndexLazyRoute
@@ -247,6 +255,7 @@ export interface FileRoutesById {
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
+  '/sandbox/login': typeof SandboxLoginLazyRoute
   '/sandbox/offer': typeof SandboxOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
@@ -271,6 +280,7 @@ export interface FileRouteTypes {
     | '/financiamentos/cartao'
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
+    | '/sandbox/login'
     | '/sandbox/offer'
     | '/seguros/auto'
     | '/backoffice/'
@@ -292,6 +302,7 @@ export interface FileRouteTypes {
     | '/financiamentos/cartao'
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
+    | '/sandbox/login'
     | '/sandbox/offer'
     | '/seguros/auto'
     | '/backoffice'
@@ -314,6 +325,7 @@ export interface FileRouteTypes {
     | '/financiamentos/cartao'
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
+    | '/sandbox/login'
     | '/sandbox/offer'
     | '/seguros/auto'
     | '/backoffice/'
@@ -327,6 +339,7 @@ export interface RootRouteChildren {
   SegurosLazyRoute: typeof SegurosLazyRouteWithChildren
   ApiLoginhistoryRoute: typeof ApiLoginhistoryRoute
   BackofficeLoginLazyRoute: typeof BackofficeLoginLazyRoute
+  SandboxLoginLazyRoute: typeof SandboxLoginLazyRoute
   SandboxOfferLazyRoute: typeof SandboxOfferLazyRoute
   SandboxIndexLazyRoute: typeof SandboxIndexLazyRoute
 }
@@ -387,6 +400,13 @@ declare module '@tanstack/react-router' {
       path: '/sandbox/offer'
       fullPath: '/sandbox/offer'
       preLoaderRoute: typeof SandboxOfferLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sandbox/login': {
+      id: '/sandbox/login'
+      path: '/sandbox/login'
+      fullPath: '/sandbox/login'
+      preLoaderRoute: typeof SandboxLoginLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/financiamentos/veiculos': {
@@ -536,6 +556,7 @@ const rootRouteChildren: RootRouteChildren = {
   SegurosLazyRoute: SegurosLazyRouteWithChildren,
   ApiLoginhistoryRoute: ApiLoginhistoryRoute,
   BackofficeLoginLazyRoute: BackofficeLoginLazyRoute,
+  SandboxLoginLazyRoute: SandboxLoginLazyRoute,
   SandboxOfferLazyRoute: SandboxOfferLazyRoute,
   SandboxIndexLazyRoute: SandboxIndexLazyRoute,
 }
