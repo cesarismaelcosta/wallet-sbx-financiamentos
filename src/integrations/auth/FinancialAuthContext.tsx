@@ -66,12 +66,21 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     }
   };
 
-  // Função para deslogar (limpa state e storage)
+  // Função para deslogar (limpa state e storage corretamente)
   const logout = () => {
+    // 1. Remove TUDO do storage
     localStorage.removeItem("session_token");
+    localStorage.removeItem("sbx_access_token");
     localStorage.removeItem("user_id");
+    localStorage.removeItem("sandbox_env"); // Limpa o ambiente também
+
+    // 2. Reseta o estado para null
     setToken(null);
+    setSbxToken(null);
     setUserId(null);
+
+    // 3. Força o refresh da aplicação para limpar o contexto em memória
+    window.location.href = '/accounts/signin';
   };
 
   return (

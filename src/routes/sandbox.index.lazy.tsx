@@ -1,19 +1,13 @@
 /**
- * @page SandboxHome
+ * @fileoverview Componente: SandboxHome (Rota: /sandbox/)
  * @description Ponto de entrada do ambiente de homologação.
- * Implementa o "Active Tracking": registros ocorrem apenas via interação (cliques).
  */
 
-import React, { useState, useEffect, JSX } from "react";
+import React, { useState, JSX } from "react";
 import { createLazyFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { WalletLogo } from "@/components/brand/WalletLogo";
-import { CreditCard, Car, Home, UserSquare2, TrendingUp, ShieldCheck, ChevronRight, Loader2 } from "lucide-react";
-import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator"; // Importação crucial
-
-// 1. Defina a estrutura do seu estado
-interface DebugInfo {
-  updateId: string | null;
-}
+import { CreditCard, Car, Home, UserSquare2, TrendingUp, ShieldCheck, ChevronRight, Loader2, LogOut } from "lucide-react";
+import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 
 // 1. Interface para tipar as opções do menu
 interface MenuOption {
@@ -28,13 +22,9 @@ interface MenuOption {
 
 const SandboxHome = () => {
   const navigate = useNavigate();
+  const { logout } = useFinancialAuth();
   const [loading, setLoading] = useState(false);
 
-  /**
-   * Navegação simplificada com Loading:
-   * Apenas redireciona. A criação da visita (persistVisitData)
-   * agora ocorre exclusivamente dentro de cada página de produto.
-   */
   const handleProductClick = async (route: string, flowKey?: string) => {
     setLoading(true);
     try {
@@ -45,7 +35,6 @@ const SandboxHome = () => {
     }
   };
 
-  // 2. Definição das opções com a flag 'disabled'
   const menuOptions: MenuOption[] = [
     {
       title: "Cartão de Crédito",
@@ -62,8 +51,7 @@ const SandboxHome = () => {
       icon: <Car className="w-8 h-8 text-primary" />,
       route: "/sandbox/offer",
       flowKey: "Veículos",
-      description:
-        "Simulação de financiamentos de carros e caminhões da MeResolve integradas para PF e e-mail para PJ.",
+      description: "Simulação de financiamentos de carros e caminhões da MeResolve integradas para PF e e-mail para PJ.",
       disabled: false,
     },
     {
@@ -118,12 +106,22 @@ const SandboxHome = () => {
               </span>
             </div>
           </div>
-          <Link
-            to="/backoffice"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm"
-          >
-            Backoffice
-          </Link>
+          
+          <div className="flex items-center gap-2">
+            <Link
+              to="/backoffice"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm"
+            >
+              Backoffice
+            </Link>
+            <button
+              onClick={logout}
+              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold transition-all"
+            >
+              <LogOut className="w-3 h-3" />
+              Sair
+            </button>
+          </div>
         </div>
       </header>
 
@@ -147,7 +145,6 @@ const SandboxHome = () => {
                     : "border-primary/20 hover:border-primary hover:shadow-lg hover:translate-y-[-2px]"
                 }`}
             >
-              {/* LINHA 1: Ícone + Título */}
               <div className="flex items-center gap-3 w-full">
                 <div
                   className={`p-2 rounded-lg transition-colors ${option.disabled ? "text-slate-400 bg-slate-100" : "text-primary bg-primary/5 group-hover:bg-primary/10"}`}
@@ -162,7 +159,6 @@ const SandboxHome = () => {
                 </h3>
               </div>
 
-              {/* LINHA 2: Subtítulo e Descrição */}
               <div className="mt-4 w-full">
                 <p className="text-[10px] font-bold text-primary/80 uppercase tracking-widest mb-1.5">
                   {option.subtitle}
@@ -179,7 +175,7 @@ const SandboxHome = () => {
         Wallet sbX | Jornadas de Financiamentos & Seguros
       </footer>
 
-      {/* OVERLAY DE LOADING BLINDADO */}
+      {/* OVERLAY DE LOADING */}
       {loading && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm">
           <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
@@ -189,6 +185,7 @@ const SandboxHome = () => {
     </div>
   );
 };
+
 export const Route = createLazyFileRoute("/sandbox/")({
   component: () => <SandboxHome />,
 });
