@@ -30,6 +30,30 @@ import {
 } from "@/features/financial-hub/shared/types";
 
 // =========================================================================
+// FUNÇÃO DE HIDRATAÇÃO (MAPPER)
+// =========================================================================
+const hydrateUserEntity = (data: any): EntityType | null => {
+  const account = data.userAccounts?.[0];
+  if (!account) return null;
+
+  // Encontra o CPF nos documentos
+  const cpfDoc = account.documents.find((d: any) => d.typeName === "cpf")?.number || "";
+  
+  // Encontra o celular nos telefones (type 3 é geralmente o celular)
+  const phoneObj = account.phones.find((p: any) => p.type === 3) || account.phones[0];
+
+  return {
+    entity_id: String(account.id),
+    name: account.basicInfo.fullName,
+    document: cpfDoc,
+    phone: phoneObj?.fullPhoneNumber || "",
+    email: account.basicInfo.email.address,
+    birth_date: account.birthDate?.split('T')[0] || "",
+    gender: account.gender === "M" ? "M" : "F",
+  };
+};
+
+// =========================================================================
 // CONFIGURAÇÃO DA ROTA
 // =========================================================================
 export const Route = createLazyFileRoute("/sandbox/offer")({
@@ -244,6 +268,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   const [categoria, setCategoria] = useState(currentFlow?.category?.split("|")[0].trim() || "Carros");
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [loading, setLoading] = useState(false);
+
+  // Estado para dado real da entity a partir do usuário logado
   const [apiEntity, setApiEntity] = useState<EntityType | null>(null);
 
   // -----------------------------------------------------------------------
@@ -330,7 +356,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   // VARIÁVEIS DE RENDENRIZAÇÃO
   // -----------------------------------------------------------------------
   const activeOffer = Offers[categoria as keyof typeof Offers];
-  const entity = Entity[pessoa];
+  // Se apiEntity existir, usa ele. Se não, usa o Mock (Entity[pessoa])
+  const entity = apiEntity || Entity[pessoa];
 
   // -----------------------------------------------------------------------
   // HANDLERS
