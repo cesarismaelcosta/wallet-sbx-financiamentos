@@ -85,7 +85,7 @@ const SandboxHome = () => {
       disabled: true,
     },
     {
-      title: "Home/Auto Equity",
+      title: "Home/Auto Equit",
       subtitle: "Crédito para investir na Superbid",
       icon: <TrendingUp className="w-8 h-8 text-primary" />,
       route: "/sandbox/offer",

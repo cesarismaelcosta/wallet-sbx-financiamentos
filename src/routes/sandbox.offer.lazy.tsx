@@ -212,33 +212,7 @@ const formatarCaminho = (str: string) =>
 
 export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
   
-  const [isStorageReady, setIsStorageReady] = useState(false);
   const navigate = useNavigate();
-
-  // =========================================================================
-  // LIMPEZA DE SESSÃO E PORTEIRO (Gatekeeper Seguro)
-  // =========================================================================
-  useEffect(() => {
-    const savedToken = localStorage.getItem('session_token');
-    const savedUserId = localStorage.getItem('user_id');
-
-    // Se não tem token, redireciona AGORA, sem quebrar o ciclo de hooks
-    if (!savedToken) {
-      window.location.href = '/accounts/signin';
-      return;
-    }
-
-    sessionStorage.clear();
-    localStorage.clear();
-
-    if (savedToken) localStorage.setItem('session_token', savedToken);
-    if (savedUserId) localStorage.setItem('user_id', savedUserId);
-    
-    setIsStorageReady(true);
-  }, []);
-  
-  const sessionToken = typeof window !== 'undefined' ? localStorage.getItem("session_token") : null;
-
   const currentFlow = FLOW_MAP[flowKey as any];
 
   // 1. TODOS OS HOOKS (Sempre no topo, sem interrupção)
@@ -263,7 +237,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     if (!sessionToken) return;
 
     try {
-      // Toda aquela lógica de URL e Headers sumiu. O Proxy resolve.
+      // Busca dados do usuário.
       const data = await fetchMyProfile(sessionToken);
       
       const mappedData = {
@@ -278,9 +252,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
 
       setApiEntity(mappedData);
     } catch (error: any) {
-      console.error("Erro na requisição via proxy:", error);
-      
-      // Se o token venceu no banco, ejeta o usuário
       if (error.message === "SESSION_EXPIRED") {
         navigate({ to: "/accounts/signin" });
       }
@@ -289,10 +260,10 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
 
   // Dispara a busca assim que o token estiver validado na memória
   useEffect(() => {
-    if (sessionToken && isStorageReady) {
+    if (sessionToken) {
       fetchEntity();
     }
-  }, [sessionToken, isStorageReady]);
+  }, [sessionToken]);
 
   // LOGICA DE BUSCA DE IMAGENS NOS DIRETÓRIOS DAS CATEGORIAS
   const imagens = useMemo(() => {

@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiLoginhistoryRouteImport } from './routes/api.loginhistory'
 
 const SegurosLazyRouteImport = createFileRoute('/seguros')()
+const SandboxLazyRouteImport = createFileRoute('/sandbox')()
 const FinanciamentosLazyRouteImport = createFileRoute('/financiamentos')()
 const BackofficeLazyRouteImport = createFileRoute('/backoffice')()
 const SandboxIndexLazyRouteImport = createFileRoute('/sandbox/')()
@@ -59,6 +60,11 @@ const SegurosLazyRoute = SegurosLazyRouteImport.update({
   path: '/seguros',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/seguros.lazy').then((d) => d.Route))
+const SandboxLazyRoute = SandboxLazyRouteImport.update({
+  id: '/sandbox',
+  path: '/sandbox',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/sandbox.lazy').then((d) => d.Route))
 const FinanciamentosLazyRoute = FinanciamentosLazyRouteImport.update({
   id: '/financiamentos',
   path: '/financiamentos',
@@ -77,9 +83,9 @@ const IndexRoute = IndexRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const SandboxIndexLazyRoute = SandboxIndexLazyRouteImport.update({
-  id: '/sandbox/',
-  path: '/sandbox/',
-  getParentRoute: () => rootRouteImport,
+  id: '/',
+  path: '/',
+  getParentRoute: () => SandboxLazyRoute,
 } as any).lazy(() => import('./routes/sandbox.index.lazy').then((d) => d.Route))
 const BackofficeIndexLazyRoute = BackofficeIndexLazyRouteImport.update({
   id: '/',
@@ -94,9 +100,9 @@ const SegurosAutoLazyRoute = SegurosAutoLazyRouteImport.update({
   getParentRoute: () => SegurosLazyRoute,
 } as any).lazy(() => import('./routes/seguros.auto.lazy').then((d) => d.Route))
 const SandboxOfferLazyRoute = SandboxOfferLazyRouteImport.update({
-  id: '/sandbox/offer',
-  path: '/sandbox/offer',
-  getParentRoute: () => rootRouteImport,
+  id: '/offer',
+  path: '/offer',
+  getParentRoute: () => SandboxLazyRoute,
 } as any).lazy(() => import('./routes/sandbox.offer.lazy').then((d) => d.Route))
 const FinanciamentosVeiculosLazyRoute =
   FinanciamentosVeiculosLazyRouteImport.update({
@@ -198,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/backoffice': typeof BackofficeLazyRouteWithChildren
   '/financiamentos': typeof FinanciamentosLazyRouteWithChildren
+  '/sandbox': typeof SandboxLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
@@ -244,6 +251,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/backoffice': typeof BackofficeLazyRouteWithChildren
   '/financiamentos': typeof FinanciamentosLazyRouteWithChildren
+  '/sandbox': typeof SandboxLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
@@ -269,6 +277,7 @@ export interface FileRouteTypes {
     | '/'
     | '/backoffice'
     | '/financiamentos'
+    | '/sandbox'
     | '/seguros'
     | '/api/loginhistory'
     | '/accounts/signin'
@@ -314,6 +323,7 @@ export interface FileRouteTypes {
     | '/'
     | '/backoffice'
     | '/financiamentos'
+    | '/sandbox'
     | '/seguros'
     | '/api/loginhistory'
     | '/accounts/signin'
@@ -338,12 +348,11 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BackofficeLazyRoute: typeof BackofficeLazyRouteWithChildren
   FinanciamentosLazyRoute: typeof FinanciamentosLazyRouteWithChildren
+  SandboxLazyRoute: typeof SandboxLazyRouteWithChildren
   SegurosLazyRoute: typeof SegurosLazyRouteWithChildren
   ApiLoginhistoryRoute: typeof ApiLoginhistoryRoute
   AccountsSigninLazyRoute: typeof AccountsSigninLazyRoute
   BackofficeLoginLazyRoute: typeof BackofficeLoginLazyRoute
-  SandboxOfferLazyRoute: typeof SandboxOfferLazyRoute
-  SandboxIndexLazyRoute: typeof SandboxIndexLazyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -353,6 +362,13 @@ declare module '@tanstack/react-router' {
       path: '/seguros'
       fullPath: '/seguros'
       preLoaderRoute: typeof SegurosLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sandbox': {
+      id: '/sandbox'
+      path: '/sandbox'
+      fullPath: '/sandbox'
+      preLoaderRoute: typeof SandboxLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/financiamentos': {
@@ -378,10 +394,10 @@ declare module '@tanstack/react-router' {
     }
     '/sandbox/': {
       id: '/sandbox/'
-      path: '/sandbox'
+      path: '/'
       fullPath: '/sandbox/'
       preLoaderRoute: typeof SandboxIndexLazyRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof SandboxLazyRoute
     }
     '/backoffice/': {
       id: '/backoffice/'
@@ -399,10 +415,10 @@ declare module '@tanstack/react-router' {
     }
     '/sandbox/offer': {
       id: '/sandbox/offer'
-      path: '/sandbox/offer'
+      path: '/offer'
       fullPath: '/sandbox/offer'
       preLoaderRoute: typeof SandboxOfferLazyRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof SandboxLazyRoute
     }
     '/financiamentos/veiculos': {
       id: '/financiamentos/veiculos'
@@ -539,6 +555,20 @@ const FinanciamentosLazyRouteChildren: FinanciamentosLazyRouteChildren = {
 const FinanciamentosLazyRouteWithChildren =
   FinanciamentosLazyRoute._addFileChildren(FinanciamentosLazyRouteChildren)
 
+interface SandboxLazyRouteChildren {
+  SandboxOfferLazyRoute: typeof SandboxOfferLazyRoute
+  SandboxIndexLazyRoute: typeof SandboxIndexLazyRoute
+}
+
+const SandboxLazyRouteChildren: SandboxLazyRouteChildren = {
+  SandboxOfferLazyRoute: SandboxOfferLazyRoute,
+  SandboxIndexLazyRoute: SandboxIndexLazyRoute,
+}
+
+const SandboxLazyRouteWithChildren = SandboxLazyRoute._addFileChildren(
+  SandboxLazyRouteChildren,
+)
+
 interface SegurosLazyRouteChildren {
   SegurosAutoLazyRoute: typeof SegurosAutoLazyRoute
 }
@@ -555,12 +585,11 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BackofficeLazyRoute: BackofficeLazyRouteWithChildren,
   FinanciamentosLazyRoute: FinanciamentosLazyRouteWithChildren,
+  SandboxLazyRoute: SandboxLazyRouteWithChildren,
   SegurosLazyRoute: SegurosLazyRouteWithChildren,
   ApiLoginhistoryRoute: ApiLoginhistoryRoute,
   AccountsSigninLazyRoute: AccountsSigninLazyRoute,
   BackofficeLoginLazyRoute: BackofficeLoginLazyRoute,
-  SandboxOfferLazyRoute: SandboxOfferLazyRoute,
-  SandboxIndexLazyRoute: SandboxIndexLazyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
