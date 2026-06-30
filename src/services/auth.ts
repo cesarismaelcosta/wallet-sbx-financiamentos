@@ -46,8 +46,9 @@ export const autenticateWalletsbX = async (
       if (data.session_token) {
         return { 
           success: true, 
-          token: data.session_token, // Este é o nosso UUID (Cofre)
-          userId: data.user_id       // ID real do usuário retornado pela SBX
+          token: data.session_token,      // Este é o nosso UUID (Cofre)
+          userId: data.user_id,           // ID real do usuário retornado pela SBX
+          sbxToken: data.sbx_access_token // Token da sbX
         };
       } else {
         console.error("Proxy validado (200), mas sem token na resposta:", data);
