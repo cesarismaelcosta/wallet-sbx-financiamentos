@@ -82,33 +82,23 @@ function CustomLogin() {
     console.log("🔍 [Login] Resposta da Edge Function:", response);
 
     if (response?.success && response.token) {
-      
-      // 1. SALVAMOS O AMBIENTE ESCOLHIDO PARA O user.ts LER DEPOIS
       localStorage.setItem('sandbox_env', ambiente); 
-
-      // 2. EXTRAÇÃO E PERSISTÊNCIA DAS CHAVES
-      // Capturamos o sbxToken da resposta (ajuste o nome da chave se necessário)
       const sbxToken = response.sbxToken || response.sbx_access_token;
 
-      // Exatamente antes do setSession:
-      console.log("Valores enviados para o setSession:", {
-        token: response.token,
-        sbxToken: response.sbxToken,
-        userId: response.userId
-      });
+      // 1. O setSession já salva no localStorage.
+      setSession(response.token, sbxToken || "", response.userId);
 
-      // 3. PASSAMOS AS 3 INFORMAÇÕES PARA O CONTEXTO
-      setSession(response.token, response.sbxToken || "", response.userId);
+      // 2. FORÇAR UMA MICRO-PAUSA DE 50ms para o contexto propagar no React
+      await new Promise(resolve => setTimeout(resolve, 50));
 
-      // 4. REDIRECIONAMENTO BLINDADO
+      // 3. AGORA NAVEGA
       const redirectUri = searchParams.redirect_uri || "/sandbox"; 
-      
       if (redirectUri.startsWith('http')) {
         window.location.href = redirectUri;
       } else {
         navigate({ to: redirectUri as any });
       }
-    } 
+    }
     else {
       // Exibe o erro tratado que veio da Edge Function
       setGeneralError(response?.message || "Login ou senha inválidos.");

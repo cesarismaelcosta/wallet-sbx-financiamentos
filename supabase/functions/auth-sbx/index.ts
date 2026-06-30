@@ -40,6 +40,9 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  //  IP do usuárioi do cabeçalho da requisição recebida
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || '0.0.0.0';
+
   try {
     // ---------------------------------------------------------------------------
     // EXTRAÇÃO E VALIDAÇÃO DE PAYLOAD
@@ -66,7 +69,10 @@ serve(async (req) => {
 
     const sbxLoginResponse = await fetch(`${sbxBaseUrl}/account/oauth/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 
+        'Content-Type': 'application/x-www-form-urlencoded', 
+        'X-Forwarded-For': clientIp
+      },
       body: details.toString()
     })
 
@@ -124,8 +130,7 @@ serve(async (req) => {
       status: 200, 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     })
-
-  } catch (err) {
+} catch (err) {
     // ---------------------------------------------------------------------------
     // FALLBACK DE ERROS CRÍTICOS
     // ---------------------------------------------------------------------------
