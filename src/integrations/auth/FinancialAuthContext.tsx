@@ -35,11 +35,20 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
       hasSbxToken: !!storedSbxToken, 
       userId: storedUserId 
     });
-    
-    if (storedToken) {
+
+    // Só valida a sessão se os DOIS tokens existirem.
+    // Se faltar o token da Superbid, a sessão é inválida e limpamos o estado.
+    if (storedToken && storedSbxToken) {
       setToken(storedToken);
-      setSbxToken(storedSbxToken); // Salva no estado
+      setSbxToken(storedSbxToken);
       setUserId(storedUserId);
+    } else {
+      localStorage.removeItem("session_token");
+      localStorage.removeItem("sbx_access_token");
+      localStorage.removeItem("user_id");
+      setToken(null);
+      setSbxToken(null);
+      setUserId(null);
     }
     setIsLoading(false);
   }, []);

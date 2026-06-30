@@ -118,7 +118,8 @@ serve(async (req) => {
     // ---------------------------------------------------------------------------
     return new Response(JSON.stringify({
       session_token: data.session_token,
-      user_id: sbxData.userId
+      user_id: sbxData.userId,
+      sbx_access_token: sbxData.access_token
     }), { 
       status: 200, 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

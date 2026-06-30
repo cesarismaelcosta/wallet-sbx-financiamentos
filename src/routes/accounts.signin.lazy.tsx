@@ -62,8 +62,8 @@ function CustomLogin() {
   // HANDLER: SUBMISSÃO DE LOGIN
   // =========================================================================
   const handleRealLogin = async (e: React.FormEvent) => {
-    console.log("Clicou no botão Entrar");
-    
+    console.log("Teste: Iniciando handleRealLogin");
+
     e.preventDefault();
     setLoginError(""); setPasswordError(""); setGeneralError("");
 
