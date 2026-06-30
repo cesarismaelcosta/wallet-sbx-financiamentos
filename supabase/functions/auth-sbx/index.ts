@@ -50,7 +50,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 // CONFIGURAÇÕES GERAIS E CORS
 // =========================================================================
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'http://localhost:8080', // Ou '*' para testar
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
