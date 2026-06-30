@@ -7,10 +7,11 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 interface FinancialAuthContextType {
-  token: string | null;
+  token: string | null; // Nosso session_token (UUID)
+  sbxToken: string | null; // Novo: o token da Superbid
   userId: string | null;
   isLoading: boolean;
-  setSession: (token: string, userId?: string) => void;
+  setSession: (token: string, sbxToken: string, userId?: string) => void; 
   logout: () => void;
 }
 
@@ -18,6 +19,7 @@ const FinancialAuthContext = createContext<FinancialAuthContextType | undefined>
 
 export function FinancialAuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
+  const [sbxToken, setSbxToken] = useState<string | null>(null); // Novo estado
   const [userId, setUserId] = useState<string | null>(null);
   
   // Começa como true para evitar renderizar rotas protegidas antes de ler o storage

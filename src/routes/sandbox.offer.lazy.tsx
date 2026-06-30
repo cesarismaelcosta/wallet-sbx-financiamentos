@@ -1,43 +1,54 @@
+/**
+ * @fileoverview Componente: OfferDetailsSandbox (Rota: /sandbox/offer)
+ * 
+ * @description
+ * Mock de visualização de detalhes de uma oferta (ativo) no ambiente da Sandbox.
+ * Atua como ponte visual para disparar o orquestrador do Financial Hub.
+ * 
+ * @responsabilidades
+ * 1. Exibir os detalhes de um ativo simulado com base no fluxo da query (?flow=).
+ * 2. Consumir o token seguro pelo FinancialAuthContext.
+ * 3. Buscar os dados do usuário autenticado (fetchMyProfile).
+ * 4. Disparar a simulação via orquestrador (orchestrateNavigation).
+ * 
+ * --------------------------------------------------------------------------------
+ */
+
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
 import { Loader2, CreditCard, DollarSign, ArrowLeft } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
-import { Label } from "@/components/ui/label";
-import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator";
-
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import {
-  OrchestratorPayload,
-  Entity as EntityType,
-  InteractionContext,
-  Seller,
-  Event,
-  Offer,
-  Manager,
-} from "@/features/financial-hub/shared/types";
-
-// -------------------------------------------------------------------------
-// IMPORT NOVO: Nosso serviço de consulta dos dados do usuário autenticado
-// -------------------------------------------------------------------------
+import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator";
+import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile } from "@/services/user";
 
-// --- CONFIGURAÇÃO DA ROTA ---
+import {
+  Entity as EntityType,
+  InteractionContext,
+} from "@/features/financial-hub/shared/types";
+
+// =========================================================================
+// CONFIGURAÇÃO DA ROTA
+// =========================================================================
 export const Route = createLazyFileRoute("/sandbox/offer")({
   component: () => {
     const search = Route.useSearch();
     const flow = (search as any).flow;
 
-    // Se não tiver fluxo, não renderiza o componente com lixo
     if (!flow) return <div>Aguardando carregamento...</div>;
 
-    // A KEY força a limpeza total ao mudar de fluxo
+    // A KEY força a remontagem total do componente ao mudar de fluxo
     return <OfferDetailsSandbox key={flow} flowKey={flow} />;
   },
 });
 
-// Layout dos campos
 const commonInputClass = "h-10 text-sm transition-all duration-300 focus-visible:ring-2 focus-visible:ring-offset-0";
+
+// =========================================================================
+// MOCKS DE DADOS
+// =========================================================================
 // 1. DADOS DE ENTIDADE (Chamado de Entity)
 const Entity = {
   PF: {
@@ -147,7 +158,9 @@ const Offers = {
   },
 };
 
-// Mapeamento dos fluxos
+// =========================================================================
+// MAPEAMENTO DE FLUXOS (FLOW_MAP)
+// =========================================================================
 const FLOW_MAP: Record<
   string,
   {
@@ -199,46 +212,55 @@ const FLOW_MAP: Record<
   },
 };
 
-// Arquivos com imagens dos lotes e banners (Lê tanto os originais locais quanto os pointers do Lovable)
+// =========================================================================
+// FUNÇÕES UTILITÁRIAS
+// =========================================================================
+// Arquivos com imagens dos lotes e banners (Lê originais locais e pointers do Lovable)
 const allFiles = import.meta.glob("/src/assets/sandbox/**/*.{jpg,jpeg,png,gif,asset.json}", { eager: true });
 
 // Função unificada: remove acentos, arranca espaços e força tudo para minúsculo
 const formatarCaminho = (str: string) =>
   str
-    .normalize("NFD") // Separa letra base (a) do acento flutuante (´). Ex: A string original entra "Máquinas" e normalize desmonta para "M a ´ q u i n a s"
-    .replace(/[\u0300-\u036f]/g, "") // Remove acentros, tremas e cedilhas
-    .replace(/\s+/g, "") // Remove todos os espaços
+    .normalize("NFD") 
+    .replace(/[\u0300-\u036f]/g, "") 
+    .replace(/\s+/g, "") 
     .toLowerCase();
 
+// =========================================================================
+// COMPONENTE PRINCIPAL
+// =========================================================================
 export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
-  
+  // -----------------------------------------------------------------------
+  // CONTEXTOS E NAVEGAÇÃO
+  // -----------------------------------------------------------------------
+  const { sbxToken } = useFinancialAuth();
   const navigate = useNavigate();
   const currentFlow = FLOW_MAP[flowKey as any];
 
-  // 1. TODOS OS HOOKS (Sempre no topo, sem interrupção)
+  // -----------------------------------------------------------------------
+  // ESTADOS GLOBAIS DO COMPONENTE
+  // -----------------------------------------------------------------------
   const [pessoa, setPessoa] = useState<"PF" | "PJ">("PF");
   const [categoria, setCategoria] = useState(currentFlow?.category?.split("|")[0].trim() || "Carros");
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [apiEntity, setApiEntity] = useState<EntityType | null>(null);
 
+  // -----------------------------------------------------------------------
+  // EFEITOS: ATUALIZAÇÃO DE FLUXO
+  // -----------------------------------------------------------------------
   useEffect(() => {
     if (currentFlow) setCategoria(currentFlow.category.split("|")[0].trim());
   }, [flowKey, currentFlow]);
 
-  // =========================================================================
-  // ESTADOS DE INTEGRAÇÃO (API PARA BUSCAR DADOS DO USUÁRIO)
-  // =========================================================================
-  const [apiEntity, setApiEntity] = useState<EntityType | null>(null);
-
-  // =========================================================================
-  // EFEITO: BUSCA DE DADOS DO USUÁRIO LOGADO
-  // =========================================================================
+  // -----------------------------------------------------------------------
+  // EFEITOS: BUSCA DE DADOS DO USUÁRIO LOGADO
+  // -----------------------------------------------------------------------
   const fetchEntity = async () => {
-    if (!sessionToken) return;
+    if (!sbxToken) return;
 
     try {
-      // Busca dados do usuário.
-      const data = await fetchMyProfile(sessionToken);
+      const data = await fetchMyProfile(sbxToken);
       
       const mappedData = {
         entity_id: data.id,
@@ -258,16 +280,14 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     }
   };
 
-  // Dispara a busca assim que o token estiver validado na memória
   useEffect(() => {
-    if (sessionToken) {
-      fetchEntity();
-    }
+    if (sessionToken) fetchEntity();
   }, [sessionToken]);
 
-  // LOGICA DE BUSCA DE IMAGENS NOS DIRETÓRIOS DAS CATEGORIAS
+  // -----------------------------------------------------------------------
+  // MEMOIZAÇÃO: IMAGENS E LOGOS
+  // -----------------------------------------------------------------------
   const imagens = useMemo(() => {
-    // Seus nomes completos e exatos
     const fotosPrincipais: any = {
       Carros: "7c131a08-471e-4547-bc58-2ca185380f81",
       Caminhões: "b14801d4-bace-46d9-ac5a-c9b08595a913",
@@ -282,10 +302,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       return caminhoLimpo.includes(categoriaBusca) && !caminhoLimpo.includes("/seller/");
     });
 
-    // Pegamos a foto principal da categoria
     const idPrincipal = fotosPrincipais[categoria];
 
-    // Blindamos a busca forçando os dois lados para minúsculo
     const index = chaves.findIndex((p: any) => {
       return idPrincipal ? formatarCaminho(p).includes(formatarCaminho(idPrincipal)) : false;
     });
@@ -297,7 +315,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     return chaves.map((chave) => (allFiles[chave] as any)?.default || "");
   }, [categoria]);
 
-  // LOGO DO VENDEDOR
   const logoPath = useMemo(() => {
     const categoriaBusca = formatarCaminho(categoria);
 
@@ -309,59 +326,34 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     return chave ? (allFiles[chave] as any)?.default || "" : "";
   }, [categoria]);
 
+  // -----------------------------------------------------------------------
+  // VARIÁVEIS DE RENDENRIZAÇÃO
+  // -----------------------------------------------------------------------
   const activeOffer = Offers[categoria as keyof typeof Offers];
   const entity = Entity[pessoa];
 
+  // -----------------------------------------------------------------------
+  // HANDLERS
+  // -----------------------------------------------------------------------
   const avancar = () => setFotoAtiva((prev) => (prev + 1) % (imagens.length || 1));
   const retroceder = () => setFotoAtiva((prev) => (prev - 1 + (imagens.length || 1)) % (imagens.length || 1));
 
-  // 2. PROTEÇÃO (Somente aqui permitimos o retorno antecipado)
-  if (!activeOffer || !activeOffer.offer) {
-    return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
-  }
-
-  const data = {
-    titulo: activeOffer.offer.offer_description,
-    marca: activeOffer.offer.category,
-    ano: `${activeOffer.offer.vehicle_details?.manufacture_year || ""}/${activeOffer.offer.vehicle_details?.model_year || ""}`,
-    lance: activeOffer.offer.offer_value,
-    abertura: activeOffer.event.event_start_date,
-    vendedor: activeOffer.seller.trade_name,
-  };
-
-  if (loading) {
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm">
-        {/* Usando estilo inline para garantir que a cor seja aplicada */}
-        <Loader2 className="h-10 w-10 animate-spin mb-4" style={{ color: "#B300FF" }} />
-
-        {/* Texto usando a classe text-slate-500 */}
-        <p className="text-sm text-slate-500 font-medium animate-pulse">Processando solicitação...</p>
-      </div>
-    );
-  }
-
-  // Função centralizada de disparo
   const handleSimulacao = async () => {
     setLoading(true);
 
-    // 1. Payload base sempre com action e entity
     const payload: any = {
       action: "SIMULATE",
       timestamp: new Date().toISOString(),
       entity: Entity[pessoa],
     };
 
-    // 2. Se o fluxo tem o produto definido, injeta
     if (currentFlow.product_id) {
       payload.product_id = currentFlow.product_id;
     }
 
-    // 3. Contexto de interação tipado
-    // Mapeamento de 'link' para 'utm_source' conforme a interface permitida
     const getUtmSource = (linkType: string): InteractionContext["utm_source"] => {
       if (linkType === "Banner") return "banner";
-      return "offer"; // Mapeia 'Box Financiamento' e 'Box Parcelamento' para 'offer'
+      return "offer"; 
     };
 
     const interactionContext: InteractionContext = {
@@ -370,10 +362,10 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       utm_campaign: `flow_${flowKey.toLowerCase()}`,
       origin_url: window.location.href,
     };
+    
     payload.interaction_context = interactionContext;
     payload.origin_url = window.location.href;
     
-    // 3. Regra de Negócio: Se tem oferta, carrega TUDO que a oferta exige (Offer, Seller, Event, Manager)
     if (currentFlow.info.includes("Offer")) {
       payload.offer = activeOffer.offer;
       payload.seller = activeOffer.seller;
@@ -385,20 +377,44 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       await orchestrateNavigation("SIMULATE", payload);
     } catch (err) {
       console.error("Erro na orquestração:", err);
-      // Só tiramos a tela de loading se a orquestração falhar,
-      // para o usuário não ficar preso e poder tentar clicar de novo.
       setLoading(false);
     }
   };
 
+  // -----------------------------------------------------------------------
+  // RENDERIZAÇÃO: PROTEÇÕES DE ESTADO
+  // -----------------------------------------------------------------------
+  if (!activeOffer || !activeOffer.offer) {
+    return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  }
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm">
+        <Loader2 className="h-10 w-10 animate-spin mb-4" style={{ color: "#B300FF" }} />
+        <p className="text-sm text-slate-500 font-medium animate-pulse">Processando solicitação...</p>
+      </div>
+    );
+  }
+
+  const data = {
+    titulo: activeOffer.offer.offer_description,
+    marca: activeOffer.offer.category,
+    ano: `${activeOffer.offer.vehicle_details?.manufacture_year || ""}/${activeOffer.offer.vehicle_details?.model_year || ""}`,
+    lance: activeOffer.offer.offer_value,
+    abertura: activeOffer.event.event_start_date,
+    vendedor: activeOffer.seller.trade_name,
+  };
+
+  // -----------------------------------------------------------------------
+  // RENDERIZAÇÃO: UI
+  // -----------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-white">
-      {/* Definição local da variável CSS */}
       <style>{`:root { --brand-primary: #B300FF; }`}</style>
 
       <header className="sticky top-0 z-40 border-b border-border/60 bg-white shadow-sm">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-          {/* Lado Esquerdo: Botão Voltar + Divisor + Logo */}
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate({ to: "/sandbox" })}
@@ -410,7 +426,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
 
             <div className="h-6 w-px bg-slate-200 hidden sm:block" />
 
-            {/* Esconde a Tagline no mobile para poupar espaço */}
             <div className="hidden sm:block">
               <WalletLogo size="md" withTagline />
             </div>
@@ -419,20 +434,14 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
             </div>
           </div>
 
-          {/* Lado Direito: Identificador do Ambiente */}
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">
             Sandbox: Simulação de Oferta Superbid
           </div>
         </div>
       </header>
 
-      {/* Se a categoria tiver o pipe '|' OU se o fluxo de entidade tiver '|', 
-        então renderizamos a linha inteira dos seletores.
-        Se não tiver nenhum dos dois, o React simplesmente não renderiza essa div.
-      */}
       {(currentFlow.category.includes("|") || currentFlow.entity.includes("|")) && (
         <div className="p-4 bg-white border-b border-border flex flex-row items-center justify-center gap-6">
-          {/* Seletor de Categoria (Aparece SÓ se tiver '|') */}
           {currentFlow.category.includes("|") && (
             <div className="relative w-48">
               <Select value={categoria} onValueChange={(v) => setCategoria(v as any)}>
@@ -452,7 +461,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
             </div>
           )}
 
-          {/* Seletor PF/PJ (Aparece SÓ se tiver '|') */}
           {currentFlow.entity.includes("|") && (
             <div className="flex gap-2">
               <button
@@ -480,8 +488,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
         </div>
       )}
 
-      {/* Banner com link, se flow exigir */}
-      {/* Posição nobre: Logo após seletores, antes dos detalhes do ativo */}
       {currentFlow.link === "Banner" && (
         <div style={{ maxWidth: "1160px", margin: "20px auto", padding: "0 20px" }}>
           <button
@@ -491,12 +497,10 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
           >
             <img
               src={(() => {
-                // Limpa o acento e joga para minúsculo (ex: "SeguroAuto" -> "seguroauto")
                 const flowBusca = formatarCaminho(String(flowKey));
 
                 const chave = Object.keys(allFiles).find((p) => {
                   const caminhoLimpo = formatarCaminho(p);
-                  // Procura pela string 100% minúscula e sem acento
                   return caminhoLimpo.includes(`/banner/${flowBusca}/banner`);
                 });
 
@@ -513,9 +517,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
         </div>
       )}
 
-      {/* Conteúdo principal */}
       <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "40px 20px", fontFamily: "'Inter', sans-serif" }}>
-        {/* Logo e Nome do Lote */}
         <div style={{ marginBottom: "24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
             {logoPath && (
@@ -534,11 +536,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
           </h1>
         </div>
 
-        {/* Galeria e Detalhes */}
         <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
-          {/* Coluna Principal (Esquerda no PC, Topo no Mobile) */}
           <div className="w-full lg:w-2/3 flex flex-col gap-8">
-            {/* CONTAINER DA GALERIA BLINDADO PARA NÃO SUMIR */}
             <div className="relative w-full aspect-[825/502] bg-black border border-gray-400 flex items-center justify-center overflow-hidden rounded-md">
               {currentFlow.link.trim() !== "Banner" && (
                 <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-2 bg-white rounded shadow-md z-10">
@@ -577,7 +576,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
               </button>
             </div>
 
-            {/* Ações (Box Financiamento ou Parcelamento) */}
             <div className="w-full">
               {currentFlow.link === "Box Financiamento" && (
                 <div className="p-5 border border-gray-200 bg-white rounded-md shadow-sm">
@@ -629,7 +627,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
               )}
             </div>
 
-            {/* Informações do Lote */}
             <div className="w-full">
               <h2 className="text-lg font-bold uppercase border-b border-black pb-2">Informações do lote</h2>
               <table className="w-full mt-4 border-collapse text-sm">
@@ -661,10 +658,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
             </div>
           </div>
 
-          {/* Coluna Lateral (Direita no PC, Fica embaixo no Mobile) */}
           <aside className="w-full lg:w-1/3">
             <div className="border border-slate-200 rounded-lg bg-white shadow-sm overflow-hidden sticky top-24">
-              {/* Seção 1: Lance */}
               <div className="p-5 border-b border-slate-100">
                 <h2 className="text-[11px] font-bold uppercase text-gray-500 tracking-wider mb-2">ÚLTIMO LANCE</h2>
                 <div className="text-3xl font-black text-gray-900 mb-4">
@@ -674,7 +669,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
                 <p className="text-xs text-gray-400 m-0">{entity.document}</p>
               </div>
 
-              {/* Seção 2: Info */}
               <div className="p-5 bg-slate-50">
                 <div className="text-[11px] text-gray-600 leading-relaxed">
                   <p className="m-0 mb-1">

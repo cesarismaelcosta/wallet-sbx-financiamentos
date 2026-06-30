@@ -1,38 +1,35 @@
 /**
  * @fileoverview Serviço: User Profile
  * Busca os dados do usuário autenticado no endpoint /me.
- * 
- * Este serviço é agnóstico ao ambiente e deve receber a URL base ou ser 
- * chamado com o contexto do ambiente atual.
- * 
- * --------------------------------------------------------------------------------
  */
 
-// Se precisar manter a configuração centralizada, você pode importar de um arquivo de config
-// ou manter a lógica de seleção aqui.
 const ENDPOINTS = {
   PROD: "https://api.s4bdigital.net",
   STAGING: "https://stgapi.s4bdigital.net"
 };
 
-export const fetchMyProfile = async (
-  token: string, 
-  ambiente: "stage" | "production" = "stage"
-) => {
-  const BASE_URL = ambiente === "stage" ? ENDPOINTS.STAGING : ENDPOINTS.PROD;
+export const fetchMyProfile = async (sbxToken: string) => {
+  // Lê o ambiente salvo no login para não misturar Staging com Prod
+  const storedAmbiente = localStorage.getItem("sandbox_env") || "stage";
+  const BASE_URL = storedAmbiente === "production" ? ENDPOINTS.PROD : ENDPOINTS.STAGING;
+  
   const URL = `${BASE_URL}/account/v2/user/me`;
 
   const response = await fetch(URL, {
     method: "GET",
     headers: {
-      "Authorization": `Bearer ${token}`,
+      "Authorization": `Bearer ${sbxToken}`,
       "Content-Type": "application/json",
+      "Accept": "application/json"
     },
   });
 
   if (!response.ok) {
-    // Tratamento de erro mais específico para debug
-    console.error(`Erro ao buscar perfil (${response.status}):`, await response.text());
+    console.error(`Erro ao buscar perfil no ambiente ${storedAmbiente} (${response.status}):`, await response.text());
+    
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("SESSION_EXPIRED");
+    }
     throw new Error("Falha ao buscar dados do usuário");
   }
 
