@@ -20,7 +20,7 @@ export const fetchMyProfile = async (
   ambiente: "stage" | "production" = "stage"
 ) => {
   const BASE_URL = ambiente === "stage" ? ENDPOINTS.STAGING : ENDPOINTS.PROD;
-  const URL = `${BASE_URL}/account/me`;
+  const URL = `${BASE_URL}/account/v2/user/me`;
 
   const response = await fetch(URL, {
     method: "GET",
