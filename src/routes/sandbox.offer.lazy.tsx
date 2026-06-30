@@ -16,7 +16,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
-import { Loader2, CreditCard, DollarSign, ArrowLeft } from "lucide-react";
+import { Loader2, CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -28,6 +28,17 @@ import {
   Entity as EntityType,
   InteractionContext,
 } from "@/features/financial-hub/shared/types";
+
+const formatCPF = (cpf: string) => {
+  return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+};
+
+const formatPhone = (phone: string) => {
+  // Assume que o formato vindo da API é 55 (DDI) + 21 (DDD) + 9 dígitos
+  // Remove o DDI 55 se estiver no início
+  const cleaned = phone.replace(/^55/, "");
+  return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+};
 
 // =========================================================================
 // FUNÇÃO DE HIDRATAÇÃO (MAPPER)
@@ -257,7 +268,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   // -----------------------------------------------------------------------
   // CONTEXTOS E NAVEGAÇÃO
   // -----------------------------------------------------------------------
-  const { sbxToken } = useFinancialAuth();
+  const { sbxToken, logout, userId } = useFinancialAuth();
   const navigate = useNavigate();
   const currentFlow = FLOW_MAP[flowKey as any];
 
@@ -456,8 +467,23 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
             </div>
           </div>
 
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">
-            Sandbox: Simulação de Oferta Superbid
+          {/* ÁREA DO USUÁRIO NO HEADER */}
+          <div className="flex flex-col items-end gap-1">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">
+              Sandbox: Simulação de Oferta Superbid
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-[9px] font-mono text-slate-500">
+                ID DO USUÁRIO LOGADO: {userId || "---"}
+              </span>
+              <button
+                onClick={logout}
+                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-bold transition-all"
+              >
+                <LogOut className="w-3 h-3" />
+                SAIR
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -687,8 +713,14 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
                 <div className="text-3xl font-black text-gray-900 mb-4">
                   R$ {data.lance.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <p className="text-xs text-gray-600 m-0 mb-1">Cliente: {entity.name}</p>
-                <p className="text-xs text-gray-400 m-0">{entity.document}</p>
+                
+                {/* Detalhes do Cliente Hidratados */}
+                <div className="text-xs text-gray-600 space-y-1">
+                  <p className="font-bold text-gray-900 mb-2">{entity.name}</p>
+                  <p><span className="font-semibold text-gray-500">CPF:</span> {formatCPF(entity.document)}</p>
+                  <p><span className="font-semibold text-gray-500">E-mail:</span> {entity.email}</p>
+                  <p><span className="font-semibold text-gray-500">Celular:</span> {formatPhone(entity.phone)}</p>
+                </div>
               </div>
 
               <div className="p-5 bg-slate-50">

@@ -1,7 +1,7 @@
 /**
  * @fileoverview Serviço: Autenticação da Wallet sbX
  * 
- * Este serviço agora atua como cliente da nossa Edge Function (auth-sbx).
+ * Este serviço agora atua como cliente da nossa Edge Function (sbx-auth).
  * Toda a complexidade de OAuth2, client_id, portalid e CORS foi isolada no servidor.
  * 
  * Ele gerencia:
@@ -12,7 +12,7 @@
  */
 
 // Substitua pela URL real do seu projeto Supabase
-const AUTH_PROXY_URL = "https://ldzutiojmcawhwdhojlo.supabase.co/functions/v1/auth-sbx";
+const AUTH_PROXY_URL = "https://ldzutiojmcawhwdhojlo.supabase.co/functions/v1/sbx-auth";
 
 // =========================================================================
 // FUNÇÃO: autenticateWalletsbX
