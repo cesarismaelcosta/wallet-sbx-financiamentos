@@ -12,7 +12,7 @@
  */
 
 // Substitua pela URL real do seu projeto Supabase
-const AUTH_PROXY_URL = "https://[SEU_PROJETO].supabase.co/functions/v1/auth-sbx";
+const AUTH_PROXY_URL = "https://ldzutiojmcawhwdhojlo.supabase.co/functions/v1/auth-sbx";
 
 // =========================================================================
 // FUNÇÃO: autenticateWalletsbX
