@@ -281,8 +281,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   };
 
   useEffect(() => {
-    if (sessionToken) fetchEntity();
-  }, [sessionToken]);
+    if (sbxToken) fetchEntity();
+  }, [sbxToken]);
 
   // -----------------------------------------------------------------------
   // MEMOIZAÇÃO: IMAGENS E LOGOS
