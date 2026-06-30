@@ -9,7 +9,7 @@ import { WalletLogo } from "@/components/brand/WalletLogo";
 import { CreditCard, Car, Home, UserSquare2, TrendingUp, ShieldCheck, ChevronRight, Loader2, LogOut } from "lucide-react";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 
-// 1. Interface para tipar as opções do menu
+// Interface para tipar as opções do menu
 interface MenuOption {
   title: string;
   subtitle: string;
@@ -22,7 +22,7 @@ interface MenuOption {
 
 const SandboxHome = () => {
   const navigate = useNavigate();
-  const { logout } = useFinancialAuth();
+  const { logout, userId } = useFinancialAuth(); // Acessando userId aqui
   const [loading, setLoading] = useState(false);
 
   const handleProductClick = async (route: string, flowKey?: string) => {
@@ -103,6 +103,10 @@ const SandboxHome = () => {
             <div className="flex flex-col hidden sm:flex text-left">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 Jornadas de Financiamentos & Seguros
+              </span>
+              {/* Exibição do UserId */}
+              <span className="text-[9px] font-mono text-slate-400 mt-0.5">
+                ID: {userId || "Não identificado"}
               </span>
             </div>
           </div>
