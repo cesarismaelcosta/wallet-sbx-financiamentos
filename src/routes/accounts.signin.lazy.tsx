@@ -1,17 +1,17 @@
 /**
  * @fileoverview Componente: CustomLogin (Rota: /accounts/signin)
  * 
- * Mock local do formulário de login oficial da Superbid. Ele é o responsável por:
- * 1. Mimetizar os parâmetros de URL (OAuth2 Implicit Flow) da Superbid (redirect_uri, response_type, client_id, etc).
- * 2. Interceptar as requisições de login e enviálas para a API local (Stage/Produção) da sbX através do seletor manual.
- * 3. Redirecionar o usuário de volta para a rota de origem com o access_token embutido na hash da URL.
- * 4. Garantir paridade exata de atributos de formulário (name, autocomplete) para suportar gerenciadores de senha.
+ * Mock local do formulário de login. Ele é o responsável por:
+ * 1. Coletar as credenciais e o ambiente alvo ('staging' ou 'production').
+ * 2. Enviar os dados para a nossa Edge Function (Proxy de Auth).
+ * 3. Salvar o session_token (UUID) no localStorage de forma segura.
+ * 4. Redirecionar o usuário de forma limpa (sem expor tokens na URL).
  * 
  * --------------------------------------------------------------------------------
  */
 
 import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { useState } from "react";
+import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react"; 
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
@@ -19,7 +19,6 @@ import { WalletLogo } from "@/components/brand/WalletLogo";
 // =========================================================================
 // TIPAGENS E INTERFACES
 // =========================================================================
-// Captura os parâmetros de URL exatos que a Superbid enviaria via GET
 type AccountsSearch = {
   redirect_uri?: string;
   response_type?: string;
@@ -34,26 +33,25 @@ export const Route = createLazyFileRoute('/accounts/signin')({
 
 function CustomLogin() {
   const navigate = useNavigate();
-  
-  // Lê as Query Strings da URL atual para entender a intenção de redirecionamento
   const searchParams = useSearch({ strict: false }) as AccountsSearch;
   
   // =========================================================================
   // ESTADOS GLOBAIS DO COMPONENTE
   // =========================================================================
   const [tipoPessoa, setTipoPessoa] = useState<"F" | "J">("F");
-  const [ambiente, setAmbiente] = useState<"stage" | "production">("stage"); // Controle manual do Mock
+  
+  // AJUSTE 1: Tipagem rigorosa alinhada com o Banco de Dados
+  const [ambiente, setAmbiente] = useState<"staging" | "production">("staging"); 
+  
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Estados de UI (Foco em inputs)
   const [isLoginFocused, setIsLoginFocused] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   
-  // Estados de Validação e Erro
   const [loginError, setLoginError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
@@ -73,36 +71,30 @@ function CustomLogin() {
 
     setIsLoading(true);
 
+    // O serviço agora fala com a nossa Edge Function
     const response = await autenticateWalletsbX(login, password, ambiente);
 
-    if (response?.success) {
-      // 1. SALVA SESSÃO (Layout consome isso - sem ambiente)
-      const session = { access_token: response.token };
-      localStorage.setItem('sbx_session', JSON.stringify(session));
+    if (response?.success && response.token) {
+      // AJUSTE 2: Salvamos o nosso UUID e o UserID limpos no cofre local
+      localStorage.setItem('session_token', response.token);
+      
+      if (response.userId) {
+        localStorage.setItem('user_id', response.userId);
+      }
 
-      // 2. SALVA AMBIENTE (Serviço consome isso - global)
-      localStorage.setItem('sbx_env', ambiente);
-
-      // 3. REDIRECIONAMENTO
-      const redirectUri = searchParams.redirect_uri || "/";
-      if (searchParams.response_type === "token") {
-        try {
-          const url = new URL(redirectUri, window.location.origin);
-          url.hash = `access_token=${response.token}`;
-          window.location.href = url.toString();
-        } catch { navigate({ to: redirectUri as any }); }
+      // AJUSTE 3: Redirecionamento blindado (sem injetar hash na URL)
+      // Se não vier um redirect_uri, joga pro Sandbox por padrão
+      const redirectUri = searchParams.redirect_uri || "/sandbox"; 
+      
+      if (redirectUri.startsWith('http')) {
+        window.location.href = redirectUri;
       } else {
-        redirectUri.startsWith('http') 
-          ? (window.location.href = redirectUri) 
-          : navigate({ to: redirectUri as any });
+        navigate({ to: redirectUri as any });
       }
     } 
     else {
-      const errorMsg = response.error === "invalid_grant" 
-        ? "Login ou senha inválidos." 
-        : `Erro na autenticação: ${response.error || "Tente novamente"}`;
-      
-      setGeneralError(errorMsg);
+      // Exibe o erro tratado que veio da Edge Function
+      setGeneralError(response?.message || "Login ou senha inválidos.");
     }
     
     setIsLoading(false);
@@ -122,14 +114,14 @@ function CustomLogin() {
         </div>
 
         {/* ---------------------------------------------------------------------------
-          SELETOR DE AMBIENTE (FERRAMENTA DE DESENVOLVIMENTO)
+          SELETOR DE AMBIENTE (Atualizado para 'staging')
           --------------------------------------------------------------------------- */}
         <div className="mb-6 p-1 bg-gray-100 rounded-full flex gap-1 border border-gray-200">
           <button
             type="button"
-            onClick={() => setAmbiente("stage")}
+            onClick={() => setAmbiente("staging")}
             className={`flex-1 py-2 text-xs font-bold rounded-full transition-all border ${
-              ambiente === "stage" 
+              ambiente === "staging" 
                 ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm"
                 : "text-gray-500 hover:text-gray-700 border-transparent"
             }`}
@@ -150,11 +142,10 @@ function CustomLogin() {
         </div>
 
         {/* ---------------------------------------------------------------------------
-          FORMULÁRIO DE LOGIN (Paridade exata com DOM oficial da Superbid)
+          FORMULÁRIO DE LOGIN
           --------------------------------------------------------------------------- */}
         <form onSubmit={handleRealLogin} className="flex flex-col gap-5">
           
-          {/* Input Oculto para integridade estrutural */}
           <input type="hidden" name="personType" value={tipoPessoa} />
 
           <div className="flex w-full border-b border-gray-200 mb-2">

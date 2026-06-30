@@ -1,19 +1,18 @@
 /**
  * @fileoverview Serviço: Autenticação da Wallet sbX
  * 
- * Este serviço é responsável pela comunicação com os endpoints de OAuth2 da Superbid.
+ * Este serviço agora atua como cliente da nossa Edge Function (auth-sbx).
+ * Toda a complexidade de OAuth2, client_id, portalid e CORS foi isolada no servidor.
+ * 
  * Ele gerencia:
- * 1. A seleção dinâmica de ambiente (Staging vs Produção) baseado na string recebida.
- * 2. A normalização da payload em x-www-form-urlencoded para conformidade com o padrão OAuth2.
- * 3. O parsing da resposta da API, garantindo a extração segura do access_token.
+ * 1. O envio seguro das credenciais e do ambiente selecionado.
+ * 2. O tratamento do retorno seguro (nosso session_token UUID e o user_id).
  * 
  * --------------------------------------------------------------------------------
  */
 
-const ENV_URLS = {
-  PROD: "https://api.s4bdigital.net/account/oauth/token",
-  STAGING: "https://stgapi.s4bdigital.net/account/oauth/token"
-};
+// Substitua pela URL real do seu projeto Supabase
+const AUTH_PROXY_URL = "https://[SEU_PROJETO].supabase.co/functions/v1/auth-sbx";
 
 // =========================================================================
 // FUNÇÃO: autenticateWalletsbX
@@ -21,47 +20,52 @@ const ENV_URLS = {
 export const autenticateWalletsbX = async (
   user: string, 
   pass: string, 
-  ambiente: "stage" | "production" = "stage"
+  environment: "staging" | "production" = "staging" // Ajustado para o padrão do banco
 ) => {
-  const API_URL = ambiente === "stage" ? ENV_URLS.STAGING : ENV_URLS.PROD;
-
   try {
-    const details = new URLSearchParams();
-    details.append("username", user);
-    details.append("password", pass);
-    details.append("grant_type", "password");
-    details.append("client_id", "dzqC3VodSoXukD45BQKg3NQU6-faststore");
-    details.append("portalid", "2");
-
-    const response = await fetch(API_URL, {
+    const response = await fetch(AUTH_PROXY_URL, {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Type": "application/json",
       },
-      body: details.toString(),
+      // Enviamos um JSON simples, a Edge Function cuida da conversão para a Superbid
+      body: JSON.stringify({
+        username: user,
+        password: pass,
+        environment: environment
+      }),
     });
 
     // ---------------------------------------------------------------------------
-    // TRATAMENTO DA RESPOSTA (Parsing de JSON e extração de token)
+    // TRATAMENTO DA RESPOSTA
     // ---------------------------------------------------------------------------
     if (response.ok) {
       const data = await response.json();
       
-      if (data.access_token) {
-        return { success: true, token: data.access_token };
+      if (data.session_token) {
+        return { 
+          success: true, 
+          token: data.session_token, // Este é o nosso UUID (Cofre)
+          userId: data.user_id       // ID real do usuário retornado pela SBX
+        };
       } else {
-        console.error("API validada (200), mas sem token na resposta:", data);
-        return { success: false, message: "Token ausente na resposta da API" };
+        console.error("Proxy validado (200), mas sem token na resposta:", data);
+        return { success: false, message: "Token ausente na resposta do servidor" };
       }
     } else {
-      return { success: false, message: "Login ou senha inválidos ou erro de autorização" };
+      // Tenta extrair a mensagem de erro amigável que definimos na Edge Function
+      const errorData = await response.json().catch(() => ({}));
+      return { 
+        success: false, 
+        message: errorData.error || "Login ou senha inválidos" 
+      };
     }
 
   } catch (error) {
     // ---------------------------------------------------------------------------
-    // FALLBACK DE ERROS (Falhas de rede ou CORS)
+    // FALLBACK DE ERROS (Falhas de rede)
     // ---------------------------------------------------------------------------
-    console.error("Erro crítico na comunicação com a API:", error);
-    return { success: false, message: "Erro de rede" };
+    console.error("Erro crítico na comunicação com o Proxy de Autenticação:", error);
+    return { success: false, message: "Erro de rede ao contatar o servidor interno" };
   }
 };
