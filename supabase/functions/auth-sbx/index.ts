@@ -1,35 +1,4 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
-
-// Setup type definitions for built-in Supabase Runtime APIs
-import "@supabase/functions-js/edge-runtime.d.ts"
-
-console.log("Hello from Functions!")
-
-Deno.serve(async (req) => {
-  const { name } = await req.json()
-  const data = {
-    message: `Hello ${name}!`,
-  }
-
-  return new Response(
-    JSON.stringify(data),
-    { headers: { "Content-Type": "application/json" } },
-  )
-})
-
-/* To invoke locally:
-
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
-
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/auth-sbx' \
-    --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' \
-    --header 'Content-Type: application/json' \
-    --data '{"name":"Functions"}'
-
-*//**
+/**
  * @fileoverview Edge Function: Auth SBX (Login Proxy)
  * 
  * Esta função atua como um proxy seguro para o login na API da Superbid (SBX).
@@ -77,9 +46,8 @@ serve(async (req) => {
     // ---------------------------------------------------------------------------
     const { username, password, environment = 'staging' } = await req.json()
 
-    // Proteção rigorosa do escopo de ambiente (Fail Fast)
     if (environment !== 'staging' && environment !== 'production') {
-      return new Response(JSON.stringify({ error: "Invalid environment. Use 'staging' or 'production'." }), { 
+      return new Response(JSON.stringify({ error: "Invalid environment." }), { 
         status: 400, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       })
@@ -89,8 +57,6 @@ serve(async (req) => {
     // COMUNICAÇÃO COM A SUPERBID (OAuth2)
     // ---------------------------------------------------------------------------
     const sbxBaseUrl = ENV_URLS[environment as keyof typeof ENV_URLS]
-    
-    // Normaliza a payload para x-www-form-urlencoded
     const details = new URLSearchParams()
     details.append("username", username)
     details.append("password", password)
@@ -117,16 +83,13 @@ serve(async (req) => {
     // CÁLCULO DE EXPIRAÇÃO DINÂMICA
     // ---------------------------------------------------------------------------
     const agora = new Date()
-    const expiraEmSegundos = sbxData.expires_in || 18000 // Fallback de 5 horas (18000s)
-    const margemSegurancaMs = 15 * 60 * 1000             // Margem de 15 minutos em ms
-    
-    // Matemática: (Agora) + (Vida útil do Token da SBX) - (Nossa margem de segurança)
+    const expiraEmSegundos = sbxData.expires_in || 18000
+    const margemSegurancaMs = 15 * 60 * 1000
     const nossaExpiracao = new Date(agora.getTime() + (expiraEmSegundos * 1000) - margemSegurancaMs)
 
     // ---------------------------------------------------------------------------
     // GRAVAÇÃO DA SESSÃO NO COFRE (Supabase)
     // ---------------------------------------------------------------------------
-    // Inicializa o admin client internamente para usar as variáveis de ambiente
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -144,7 +107,6 @@ serve(async (req) => {
       .single()
 
     if (error) {
-      console.error("Erro crítico na gravação do banco:", error)
       return new Response(JSON.stringify({ error: "Erro interno ao criar sessão" }), { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
