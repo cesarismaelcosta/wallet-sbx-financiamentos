@@ -216,11 +216,17 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   const navigate = useNavigate();
 
   // =========================================================================
-  // LIMPEZA DE SESSÃO: Protegemos os novos dados gerados pelo seu LoginScreen
+  // LIMPEZA DE SESSÃO E PORTEIRO (Gatekeeper Seguro)
   // =========================================================================
   useEffect(() => {
     const savedToken = localStorage.getItem('session_token');
     const savedUserId = localStorage.getItem('user_id');
+
+    // Se não tem token, redireciona AGORA, sem quebrar o ciclo de hooks
+    if (!savedToken) {
+      window.location.href = '/accounts/signin';
+      return;
+    }
 
     sessionStorage.clear();
     localStorage.clear();
@@ -231,32 +237,18 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     setIsStorageReady(true);
   }, []);
   
-  // =========================================================================
-  // PORTEIRO DA ROTA (Gatekeeper Atualizado)
-  // =========================================================================
   const sessionToken = typeof window !== 'undefined' ? localStorage.getItem("session_token") : null;
 
-  // Se não tivermos o NOSSO token no cofre, manda para a NOSSA tela de login
-  if (!sessionToken && isStorageReady) {
-    if (typeof window !== 'undefined') {
-      // Ajuste para a rota correta do seu LoginScreen (não mais pra Superbid)
-      window.location.href = '/login'; 
-    }
-    return null;
-  }
-  
-  // =========================================================================
-
-  const currentFlow = FLOW_MAP[flowKey];
+  const currentFlow = FLOW_MAP[flowKey as any];
 
   // 1. TODOS OS HOOKS (Sempre no topo, sem interrupção)
   const [pessoa, setPessoa] = useState<"PF" | "PJ">("PF");
-  const [categoria, setCategoria] = useState(currentFlow.category.split("|")[0].trim());
+  const [categoria, setCategoria] = useState(currentFlow?.category?.split("|")[0].trim() || "Carros");
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setCategoria(currentFlow.category.split("|")[0].trim());
+    if (currentFlow) setCategoria(currentFlow.category.split("|")[0].trim());
   }, [flowKey, currentFlow]);
 
   // =========================================================================
@@ -290,13 +282,17 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       
       // Se o token venceu no banco, ejeta o usuário
       if (error.message === "SESSION_EXPIRED") {
-        navigate({ to: "/login" });
+        navigate({ to: "/accounts/signin" });
       }
     }
   };
 
-  const activeOffer = Offers[categoria as keyof typeof Offers];
-  const entity = Entity[pessoa];
+  // Dispara a busca assim que o token estiver validado na memória
+  useEffect(() => {
+    if (sessionToken && isStorageReady) {
+      fetchEntity();
+    }
+  }, [sessionToken, isStorageReady]);
 
   // LOGICA DE BUSCA DE IMAGENS NOS DIRETÓRIOS DAS CATEGORIAS
   const imagens = useMemo(() => {
@@ -341,6 +337,9 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
 
     return chave ? (allFiles[chave] as any)?.default || "" : "";
   }, [categoria]);
+
+  const activeOffer = Offers[categoria as keyof typeof Offers];
+  const entity = Entity[pessoa];
 
   const avancar = () => setFotoAtiva((prev) => (prev + 1) % (imagens.length || 1));
   const retroceder = () => setFotoAtiva((prev) => (prev - 1 + (imagens.length || 1)) % (imagens.length || 1));
