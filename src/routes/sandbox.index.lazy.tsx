@@ -106,7 +106,7 @@ const SandboxHome = () => {
               </span>
               {/* Exibição do UserId */}
               <span className="text-[9px] font-mono text-slate-400 mt-0.5">
-                ID: {userId || "Não identificado"}
+                ID DO USUÁRIO LOGADO: {userId || "Não identificado"}
               </span>
             </div>
           </div>
