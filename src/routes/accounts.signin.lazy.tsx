@@ -15,6 +15,7 @@ import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react"; 
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
+import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 
 // =========================================================================
 // TIPAGENS E INTERFACES
@@ -32,6 +33,7 @@ export const Route = createLazyFileRoute('/accounts/signin')({
 });
 
 function CustomLogin() {
+  const { setSession } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = useSearch({ strict: false }) as AccountsSearch;
   
