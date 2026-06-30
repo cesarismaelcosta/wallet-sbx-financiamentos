@@ -26,21 +26,30 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Busca do storage na inicialização
     const storedToken = localStorage.getItem("session_token");
+    const storedSbxToken = localStorage.getItem("sbx_access_token"); // Lê o novo
     const storedUserId = localStorage.getItem("user_id");
 
+    console.log("🔍 [AuthContext] Carregando sessão:", { 
+      hasToken: !!storedToken, 
+      hasSbxToken: !!storedSbxToken, 
+      userId: storedUserId 
+    });
+    
     if (storedToken) {
       setToken(storedToken);
+      setSbxToken(storedSbxToken); // Salva no estado
       setUserId(storedUserId);
     }
     setIsLoading(false);
   }, []);
 
   // Função para logar (salva no state e no storage simultaneamente)
-  const setSession = (newToken: string, newUserId?: string) => {
+  const setSession = (newToken: string, newSbxToken: string, newUserId?: string) => {
     localStorage.setItem("session_token", newToken);
+    localStorage.setItem("sbx_access_token", newSbxToken); // Salva no storage
     setToken(newToken);
+    setSbxToken(newSbxToken);
     
     if (newUserId) {
       localStorage.setItem("user_id", newUserId);
@@ -57,7 +66,7 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   };
 
   return (
-    <FinancialAuthContext.Provider value={{ token, userId, isLoading, setSession, logout }}>
+    <FinancialAuthContext.Provider value={{ token, sbxToken, userId, isLoading, setSession, logout }}>
       {children}
     </FinancialAuthContext.Provider>
   );

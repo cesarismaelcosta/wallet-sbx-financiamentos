@@ -62,6 +62,8 @@ function CustomLogin() {
   // HANDLER: SUBMISSÃO DE LOGIN
   // =========================================================================
   const handleRealLogin = async (e: React.FormEvent) => {
+    console.log("Clicou no botão Entrar");
+    
     e.preventDefault();
     setLoginError(""); setPasswordError(""); setGeneralError("");
 
@@ -76,16 +78,29 @@ function CustomLogin() {
     // O serviço agora fala com a nossa Edge Function
     const response = await autenticateWalletsbX(login, password, ambiente);
 
-    if (response?.success && response.token) {
-      // AJUSTE 2: Salvamos o nosso UUID e o UserID limpos no cofre local
-      localStorage.setItem('session_token', response.token);
-      
-      if (response.userId) {
-        localStorage.setItem('user_id', response.userId);
-      }
+    // DEBUG: Verifique no console do navegador o que o servidor devolveu
+    console.log("🔍 [Login] Resposta da Edge Function:", response);
 
-      // AJUSTE 3: Redirecionamento blindado (sem injetar hash na URL)
-      // Se não vier um redirect_uri, joga pro Sandbox por padrão
+    if (response?.success && response.token) {
+      
+      // 1. SALVAMOS O AMBIENTE ESCOLHIDO PARA O user.ts LER DEPOIS
+      localStorage.setItem('sandbox_env', ambiente); 
+
+      // 2. EXTRAÇÃO E PERSISTÊNCIA DAS CHAVES
+      // Capturamos o sbxToken da resposta (ajuste o nome da chave se necessário)
+      const sbxToken = response.sbxToken || response.sbx_access_token;
+
+      // Exatamente antes do setSession:
+      console.log("Valores enviados para o setSession:", {
+        token: response.token,
+        sbxToken: response.sbxToken,
+        userId: response.userId
+      });
+
+      // 3. PASSAMOS AS 3 INFORMAÇÕES PARA O CONTEXTO
+      setSession(response.token, response.sbxToken || "", response.userId);
+
+      // 4. REDIRECIONAMENTO BLINDADO
       const redirectUri = searchParams.redirect_uri || "/sandbox"; 
       
       if (redirectUri.startsWith('http')) {

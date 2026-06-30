@@ -22,6 +22,7 @@ export const autenticateWalletsbX = async (
   pass: string, 
   environment: "staging" | "production" = "staging" // Ajustado para o padrão do banco
 ) => {
+  console.log("Resposta do serviço:", response);
   try {
     const response = await fetch(AUTH_PROXY_URL, {
       method: "POST",
