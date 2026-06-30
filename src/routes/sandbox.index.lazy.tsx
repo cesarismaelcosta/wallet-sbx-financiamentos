@@ -189,6 +189,6 @@ const SandboxHome = () => {
     </div>
   );
 };
-export const Route = createLazyFileRoute("/sandbox/")({
+export const Route = createLazyFileRoute("/sandbox")({
   component: () => <SandboxHome />,
 });
