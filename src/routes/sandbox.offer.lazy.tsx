@@ -206,11 +206,50 @@ const formatarCaminho = (str: string) =>
     .toLowerCase();
 
 export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
-  // Apaga TUDO que ficou preso na memória quando a tela carrega
+
+  // Trava de segurança
+  const [isStorageReady, setIsStorageReady] = useState(false);
+
+  // Apaga TUDO que ficou preso na memória, exceto o token
   useEffect(() => {
+    const savedToken = localStorage.getItem('sbx_token');
     sessionStorage.clear();
     localStorage.clear();
+    if (savedToken) {
+      localStorage.setItem('sbx_token', savedToken);
+    }
+    // 2. Libera o fluxo só DEPOIS de arrumar a casa
+    setIsStorageReady(true);
   }, []);
+  
+  // =========================================================================
+  // PORTEIRO DA ROTA (Gatekeeper)
+  // =========================================================================
+  
+  // 1. Captura o token da URL se existir
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const token = hashParams.get('access_token');
+      if (token) {
+        localStorage.setItem('sbx_token', token);
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
+  }, []);
+
+  const sbxToken = typeof window !== 'undefined' ? localStorage.getItem("sbx_token") : null;
+  const isProcessingToken = typeof window !== 'undefined' && window.location.hash.includes('access_token=');
+
+  // 2. Bloqueio preventivo
+  if (!sbxToken && !isProcessingToken) {
+    if (typeof window !== 'undefined') {
+      window.location.href = `/accounts/signin?redirect_uri=${window.location.pathname}`;
+    }
+    return null;
+  }
+  
+  // =========================================================================
 
   const currentFlow = FLOW_MAP[flowKey];
 
@@ -225,6 +264,83 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   useEffect(() => {
     setCategoria(currentFlow.category.split("|")[0].trim());
   }, [flowKey, currentFlow]);
+
+  // =========================================================================
+  // ESTADOS DE INTEGRAÇÃO (API PARA BUSCAR DADOS DO USUÁRIO)
+  // =========================================================================
+  const [apiEntity, setApiEntity] = useState<EntityType | null>(null);
+
+  // =========================================================================
+  // EFEITO: BUSCA DE DADOS (Endpoint Corrigido: /api/s4bdigital/account/v2/user/me)
+  // =========================================================================
+  const ENV_CONFIG = {
+    stage: 'https://api.stage.s4pay.com.br',
+    production: 'https://api.s4pay.com.br'
+  };
+
+  // Dentro do seu useEffect
+  const fetchEntity = async () => {
+    const sbxToken = localStorage.getItem('sbx_token');
+    if (!sbxToken) return;
+
+    // Mantendo a lógica de ambiente que você já tem
+    const ENV_CONFIG = {
+      stage: { baseUrl: 'https://stgapi.s4bdigital.net', path: '/account/v2/user/me', clientId: 'dzqC3VodSoXukD45BQKg3NQU6-faststore' },
+      production: { baseUrl: 'https://api.s4pay.com.br', path: '/user/me', clientId: null }
+    };
+
+    const envKey = (localStorage.getItem('sbx_env') || 'stage') as keyof typeof ENV_CONFIG;
+    const config = ENV_CONFIG[envKey];
+    const url = `${config.baseUrl}${config.path}`;
+
+    console.log("TOKEN QUE ESTÁ NO LOCALSTORAGE:", sbxToken);
+    // AQUI ESTÁ A CORREÇÃO:
+    // 1. Sem 'Content-Type'
+    // 2. 'Accept' como 'application/json'
+    // 3. 'client_id' obrigatório
+    const headers: Record<string, string> = { 
+      'Authorization': `Bearer ${sbxToken}`,
+      'Accept': 'application/json'
+    };
+
+    if (config.clientId) {
+      headers['client_id'] = config.clientId;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: headers
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        const mappedData = {
+          entity_id: data.id,
+          name: data.name,
+          document: data.taxIdentifier,
+          phone: data.cellphone,
+          email: data.email,
+          birth_date: data.birthDate?.split('T')[0],
+          gender: data.gender === 1 ? "M" : "F"
+        };
+
+        setApiEntity(mappedData);
+      } else {
+        console.error(`Erro na API (${envKey}):`, response.status, await response.text());
+      }
+    } catch (error) {
+      console.error("Erro na requisição:", error);
+    }
+  };
+
+  useEffect(() => {
+    // Só dispara se tiver token E a limpeza inicial tiver terminado
+    if (sbxToken && isStorageReady) {
+      fetchEntity();
+    }
+  }, [sbxToken, isStorageReady]);
 
   const activeOffer = Offers[categoria as keyof typeof Offers];
   const entity = Entity[pessoa];
