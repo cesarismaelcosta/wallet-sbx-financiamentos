@@ -287,18 +287,13 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
 
     try {
       const data = await fetchMyProfile(sbxToken);
-      
-      const mappedData = {
-        entity_id: data.id,
-        name: data.name,
-        document: data.taxIdentifier,
-        phone: data.cellphone,
-        email: data.email,
-        birth_date: data.birthDate?.split('T')[0],
-        gender: data.gender === 1 ? "M" : "F"
-      };
-
+      const mappedData = hydrateUserEntity(data);
+    
+      console.log("🔍 [Debug Entity Após Mapping]:", mappedData);
+    
+      // Atualiza o estado
       setApiEntity(mappedData);
+
     } catch (error: any) {
       if (error.message === "SESSION_EXPIRED") {
         navigate({ to: "/accounts/signin" });
