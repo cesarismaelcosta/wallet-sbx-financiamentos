@@ -60,21 +60,22 @@ function CustomLogin() {
   const [passwordError, setPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
 
-  // =========================================================================
+// =========================================================================
   // OBSERVADOR DE SESSÃO (AUTO-REDIRECIONAMENTO)
   // =========================================================================
-  // Usamos useState com JS Nativo. Isso garante que capturamos a URL real no 
-  // momento em que a tela abre, e o valor NUNCA se perde quando o estado atualiza.
+  // [BUSINESS LOGIC]: Inicializamos como null para garantir compatibilidade com SSR.
+  const [redirectUri, setRedirectUri] = useState<string | null>(null);
+
   useEffect(() => {
-    // [BUSINESS LOGIC]: Captura a URL real apenas no cliente (Browser)
+    // [BUSINESS LOGIC]: Captura a URL real apenas no cliente (Browser) após a montagem.
     const params = new URLSearchParams(window.location.search);
     const target = params.get("redirect") || params.get("redirect_uri") || "/sandbox";
     setRedirectUri(target);
-  }, []); // Executa apenas uma vez após a montagem
+  }, []);
 
   useEffect(() => {
-    // Se o token existe (acabou de ser setado), o React navega de forma segura
-    if (token) {
+    // [BUSINESS LOGIC]: Aguarda token E o redirectUri estar definido para navegar.
+    if (token && redirectUri) {
       console.log("🚀 [Login] Token detectado! Redirecionando para:", redirectUri);
       if (redirectUri.startsWith('http')) {
         window.location.href = redirectUri;
@@ -83,7 +84,7 @@ function CustomLogin() {
       }
     }
   }, [token, navigate, redirectUri]);
-
+  
   // =========================================================================
   // HANDLER: SUBMISSÃO DE LOGIN
   // =========================================================================
