@@ -73,6 +73,7 @@ serve(async (req) => {
     // [HIDRATAÇÃO]: Transformação de dados (Mapper).
     // Objetivo: Entregar ao front-end apenas o necessário. Reduz Payload e complexidade no cliente.
     const account = data.userAccounts?.[0];
+    const mainAddress = account?.addresses?.[0]; 
     
     const enrichedData = {
       entity_id: String(account?.id),
@@ -81,6 +82,22 @@ serve(async (req) => {
       email: account?.basicInfo?.email?.address || "",
       phone: account?.phones?.find((p: any) => p.type === 3)?.fullPhoneNumber || "",
       birth_date: account?.birthDate?.split('T')[0] || "",
+      gender: account?.gender === "M" ? "M" : "F",
+      
+      // Novos campos: Login e Nome da Mãe
+      login: account?.credentials?.login || "",
+      mothers_name: account?.mothersName || "",
+      
+      address: mainAddress ? {
+        street: mainAddress.addressLine1 || "",
+        number: mainAddress.number || "",
+        complement: mainAddress.addressLine2 || "",
+        neighborhood: mainAddress.district || "",
+        city: mainAddress.city || "",
+        state: mainAddress.state || "",
+        zip_code: mainAddress.zipCode || "",
+        country: mainAddress.countryIsoKey || "BR"
+      } : null,
       metadata: {
         processedAt: new Date().toISOString(),
         originIp: clientIp
