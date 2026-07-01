@@ -65,10 +65,12 @@ function CustomLogin() {
   // =========================================================================
   // Usamos useState com JS Nativo. Isso garante que capturamos a URL real no 
   // momento em que a tela abre, e o valor NUNCA se perde quando o estado atualiza.
-  const [redirectUri] = useState(() => {
+  useEffect(() => {
+    // [BUSINESS LOGIC]: Captura a URL real apenas no cliente (Browser)
     const params = new URLSearchParams(window.location.search);
-    return params.get("redirect") || params.get("redirect_uri") || "/sandbox";
-  });
+    const target = params.get("redirect") || params.get("redirect_uri") || "/sandbox";
+    setRedirectUri(target);
+  }, []); // Executa apenas uma vez após a montagem
 
   useEffect(() => {
     // Se o token existe (acabou de ser setado), o React navega de forma segura
