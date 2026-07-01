@@ -5,13 +5,11 @@
  * Mock de visualização de detalhes de uma oferta (ativo) no ambiente da Sandbox.
  * Atua como ponte visual para disparar o orquestrador do Financial Hub.
  * 
- * @responsabilidades
- * 1. Exibir os detalhes de um ativo simulado com base no fluxo da query (?flow=).
- * 2. Consumir o token seguro pelo FinancialAuthContext.
- * 3. Buscar os dados do usuário autenticado (fetchMyProfile).
- * 4. Disparar a simulação via orquestrador (orchestrateNavigation).
- * 
- * --------------------------------------------------------------------------------
+ * [RESPONSABILIDADES]:
+ * 1. Interface Mockada: Exibir detalhes de um ativo simulado via query param (?flow=).
+ * 2. Segurança: Consumir token do cofre e buscar dados reidratados (BFF).
+ * 3. Prevenção de Loop: Interromper ciclos de sessão expirada.
+ * 4. Orquestração: Disparar a simulação via orquestrador (orchestrateNavigation).
  */
 
 import { useState, useMemo, useEffect } from "react";
@@ -29,39 +27,16 @@ import {
   InteractionContext,
 } from "@/features/financial-hub/shared/types";
 
+// =========================================================================
+// [FORMATTERS]: Utilitários de Apresentação
+// =========================================================================
 const formatCPF = (cpf: string) => {
   return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 };
 
 const formatPhone = (phone: string) => {
-  // Assume que o formato vindo da API é 55 (DDI) + 21 (DDD) + 9 dígitos
-  // Remove o DDI 55 se estiver no início
   const cleaned = phone.replace(/^55/, "");
   return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-};
-
-// =========================================================================
-// FUNÇÃO DE HIDRATAÇÃO (MAPPER)
-// =========================================================================
-const hydrateUserEntity = (data: any): EntityType | null => {
-  const account = data.userAccounts?.[0];
-  if (!account) return null;
-
-  // Encontra o CPF nos documentos
-  const cpfDoc = account.documents.find((d: any) => d.typeName === "cpf")?.number || "";
-  
-  // Encontra o celular nos telefones (type 3 é geralmente o celular)
-  const phoneObj = account.phones.find((p: any) => p.type === 3) || account.phones[0];
-
-  return {
-    entity_id: String(account.id),
-    name: account.basicInfo.fullName,
-    document: cpfDoc,
-    phone: phoneObj?.fullPhoneNumber || "",
-    email: account.basicInfo.email.address,
-    birth_date: account.birthDate?.split('T')[0] || "",
-    gender: account.gender === "M" ? "M" : "F",
-  };
 };
 
 // =========================================================================
@@ -74,7 +49,7 @@ export const Route = createLazyFileRoute("/sandbox/offer")({
 
     if (!flow) return <div>Aguardando carregamento...</div>;
 
-    // A KEY força a remontagem total do componente ao mudar de fluxo
+    // [UI/UX]: A KEY força a remontagem total do componente ao mudar de fluxo
     return <OfferDetailsSandbox key={flow} flowKey={flow} />;
   },
 });
@@ -82,9 +57,8 @@ export const Route = createLazyFileRoute("/sandbox/offer")({
 const commonInputClass = "h-10 text-sm transition-all duration-300 focus-visible:ring-2 focus-visible:ring-offset-0";
 
 // =========================================================================
-// MOCKS DE DADOS
+// [MOCK DATA]: Massa de dados simulada para a Sandbox
 // =========================================================================
-// 1. DADOS DE ENTIDADE (Chamado de Entity)
 const Entity = {
   PF: {
     entity_id: "9999",
@@ -106,7 +80,6 @@ const Entity = {
   } as EntityType,
 };
 
-// 2. DADOS DE OFERTAS (Chamado de Offers)
 const Offers = {
   Caminhões: {
     offer: {
@@ -193,9 +166,6 @@ const Offers = {
   },
 };
 
-// =========================================================================
-// MAPEAMENTO DE FLUXOS (FLOW_MAP)
-// =========================================================================
 const FLOW_MAP: Record<
   string,
   {
@@ -248,12 +218,10 @@ const FLOW_MAP: Record<
 };
 
 // =========================================================================
-// FUNÇÕES UTILITÁRIAS
+// [ASSETS]: Utilitários de Arquivos
 // =========================================================================
-// Arquivos com imagens dos lotes e banners (Lê originais locais e pointers do Lovable)
 const allFiles = import.meta.glob("/src/assets/sandbox/**/*.{jpg,jpeg,png,gif,asset.json}", { eager: true });
 
-// Função unificada: remove acentos, arranca espaços e força tudo para minúsculo
 const formatarCaminho = (str: string) =>
   str
     .normalize("NFD") 
@@ -266,32 +234,32 @@ const formatarCaminho = (str: string) =>
 // =========================================================================
 export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
   // -----------------------------------------------------------------------
-  // CONTEXTOS E NAVEGAÇÃO
+  // [CONTEXT]: Integração com Autenticação e Roteamento
   // -----------------------------------------------------------------------
   const { sbxToken, logout, userId } = useFinancialAuth();
   const navigate = useNavigate();
   const currentFlow = FLOW_MAP[flowKey as any];
 
   // -----------------------------------------------------------------------
-  // ESTADOS GLOBAIS DO COMPONENTE
+  // [STATE]: Controles locais da interface
   // -----------------------------------------------------------------------
   const [pessoa, setPessoa] = useState<"PF" | "PJ">("PF");
   const [categoria, setCategoria] = useState(currentFlow?.category?.split("|")[0].trim() || "Carros");
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Estado para dado real da entity a partir do usuário logado
+  // [DATA]: Estado hidratado a partir do BFF
   const [apiEntity, setApiEntity] = useState<EntityType | null>(null);
 
   // -----------------------------------------------------------------------
-  // EFEITOS: ATUALIZAÇÃO DE FLUXO
+  // [EFFECTS]: Ciclo de vida e dependências
   // -----------------------------------------------------------------------
   useEffect(() => {
     if (currentFlow) setCategoria(currentFlow.category.split("|")[0].trim());
   }, [flowKey, currentFlow]);
 
   // =========================================================================
-  // FUNÇÃO DE HIDRATAÇÃO (MAPPER REVISADO)
+  // [TRANSFORM]: Mapper para normalização de dados do BFF
   // =========================================================================
   const hydrateUserEntity = (data: any): EntityType | null => {
     if (!data || !data.name) {
@@ -311,29 +279,25 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   };
 
   // =========================================================================
-  // FUNÇÃO DE FETCH (MANTIDA INTACTA COM TRY/CATCH)
+  // [NETWORK]: Fetch e Tratamento de Exceção
   // =========================================================================
   const fetchEntity = async () => {
     if (!sbxToken) return;
 
     try {
       const data = await fetchMyProfile(sbxToken);
-      
-      // Opcional: ver como o dado chega cru do BFF
-      // console.log("📦 [Debug] Dado bruto do BFF:", data);
-
       const mappedData = hydrateUserEntity(data);
     
       console.log("🔍 [Debug Entity Após Mapping]:", mappedData);
-    
-      // Atualiza o estado da tela
       setApiEntity(mappedData);
 
     } catch (error: any) {
-      // A nossa malha de segurança vital
       console.error("🚨 [Debug] Erro no fetchEntity:", error);
+      
       if (error.message === "SESSION_EXPIRED") {
-        navigate({ to: "/accounts/signin" });
+        // [CRITICAL FIX]: O Token é expurgado localmente antes de alterar a rota.
+        // Isso previne que a tela de SignIn leia lixo de memória e cause um loop infinito.
+        logout();
       }
     }
   };
@@ -343,7 +307,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   }, [sbxToken]);
 
   // -----------------------------------------------------------------------
-  // MEMOIZAÇÃO: IMAGENS E LOGOS
+  // [MEMOIZATION]: Imagens e Logos
   // -----------------------------------------------------------------------
   const imagens = useMemo(() => {
     const fotosPrincipais: any = {
@@ -385,14 +349,15 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   }, [categoria]);
 
   // -----------------------------------------------------------------------
-  // VARIÁVEIS DE RENDENRIZAÇÃO
+  // [BUSINESS LOGIC]: Definição da Oferta e Entidade Ativa
   // -----------------------------------------------------------------------
   const activeOffer = Offers[categoria as keyof typeof Offers];
-  // Se apiEntity existir, usa ele. Se não, usa o Mock (Entity[pessoa])
+  
+  // A entidade real tem prioridade sobre o Mock
   const entity = apiEntity || Entity[pessoa];
 
   // -----------------------------------------------------------------------
-  // HANDLERS
+  // [HANDLERS]: Eventos de Interação
   // -----------------------------------------------------------------------
   const avancar = () => setFotoAtiva((prev) => (prev + 1) % (imagens.length || 1));
   const retroceder = () => setFotoAtiva((prev) => (prev - 1 + (imagens.length || 1)) % (imagens.length || 1));
@@ -403,7 +368,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     const payload: any = {
       action: "SIMULATE",
       timestamp: new Date().toISOString(),
-      entity: Entity[pessoa],
+      entity: entity, // Passa a entidade hidratada para a orquestração
     };
 
     if (currentFlow.product_id) {
@@ -441,7 +406,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   };
 
   // -----------------------------------------------------------------------
-  // RENDERIZAÇÃO: PROTEÇÕES DE ESTADO
+  // [UI/UX]: Renderização e Proteções de Estado
   // -----------------------------------------------------------------------
   if (!activeOffer || !activeOffer.offer) {
     return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
@@ -465,13 +430,11 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     vendedor: activeOffer.seller.trade_name,
   };
 
-  // -----------------------------------------------------------------------
-  // RENDERIZAÇÃO: UI
-  // -----------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-white">
       <style>{`:root { --brand-primary: #B300FF; }`}</style>
 
+      {/* HEADER PRINCIPAL */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-white shadow-sm">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-4">
@@ -493,14 +456,12 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
             </div>
           </div>
 
-          {/* ÁREA DO USUÁRIO NO HEADER */}
           <div className="flex flex-col items-end gap-1">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">
               Sandbox: Simulação de Oferta Superbid
             </div>
             
             <div className="flex items-center gap-4">
-              {/* Container empilhado para ID e Ambiente */}
               <div className="flex flex-col items-end">
                 <span className="text-[9px] font-mono text-slate-500">
                   ID DO USUÁRIO LOGADO: {userId || "---"}
@@ -522,6 +483,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
         </div>
       </header>
 
+      {/* FILTROS E SELETORES (CASO O FLUXO PERMITA) */}
       {(currentFlow.category.includes("|") || currentFlow.entity.includes("|")) && (
         <div className="p-4 bg-white border-b border-border flex flex-row items-center justify-center gap-6">
           {currentFlow.category.includes("|") && (
@@ -570,6 +532,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
         </div>
       )}
 
+      {/* BANNER PROMOCIONAL */}
       {currentFlow.link === "Banner" && (
         <div style={{ maxWidth: "1160px", margin: "20px auto", padding: "0 20px" }}>
           <button
@@ -580,12 +543,10 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
             <img
               src={(() => {
                 const flowBusca = formatarCaminho(String(flowKey));
-
                 const chave = Object.keys(allFiles).find((p) => {
                   const caminhoLimpo = formatarCaminho(p);
                   return caminhoLimpo.includes(`/banner/${flowBusca}/banner`);
                 });
-
                 return chave ? (allFiles[chave] as any)?.default || "" : "";
               })()}
               alt="Banner Promocional"
@@ -599,6 +560,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
         </div>
       )}
 
+      {/* CONTEÚDO PRINCIPAL DA OFERTA */}
       <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "40px 20px", fontFamily: "'Inter', sans-serif" }}>
         <div style={{ marginBottom: "24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
@@ -748,7 +710,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
                   R$ {data.lance.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 
-                {/* Detalhes do Cliente Hidratados */}
                 <div className="text-xs text-gray-600 space-y-1">
                   <p className="font-bold text-gray-900 mb-2">{entity.name}</p>
                   <p><span className="font-semibold text-gray-500">CPF:</span> {formatCPF(entity.document)}</p>

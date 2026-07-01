@@ -1,13 +1,14 @@
 /**
  * @fileoverview Componente: CustomLogin (Rota: /accounts/signin)
  * 
- * Mock local do formulário de login. Ele é o responsável por:
- * 1. Coletar as credenciais e o ambiente alvo ('staging' ou 'production').
- * 2. Enviar os dados para a nossa Edge Function (Proxy de Auth).
- * 3. Salvar o session_token (UUID) no localStorage de forma segura.
- * 4. Redirecionar o usuário de forma limpa (sem expor tokens na URL).
+ * @description
+ * Interface de autenticação local.
  * 
- * --------------------------------------------------------------------------------
+ * [RESPONSABILIDADES]:
+ * 1. Coleta: Capturar credenciais e definir o ambiente alvo ('staging' ou 'production').
+ * 2. Segurança: Delegar a autenticação real para a Edge Function (Proxy de Auth).
+ * 3. Sessão: Persistir o session_token (UUID) via FinancialAuthContext.
+ * 4. Roteamento: Redirecionar o usuário de forma determinística, sem expor tokens na URL.
  */
 
 import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
@@ -18,11 +19,11 @@ import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 
 // =========================================================================
-// TIPAGENS E INTERFACES
+// [TYPES]: Tipagens e Interfaces
 // =========================================================================
 type AccountsSearch = {
   redirect_uri?: string;
-  redirect?: string; // Adicionado para suportar a nova chave
+  redirect?: string; // Suporte a múltiplas chaves de redirecionamento
   response_type?: string;
   client_id?: string;
   portal_id?: string;
@@ -34,17 +35,19 @@ export const Route = createLazyFileRoute('/accounts/signin')({
 });
 
 function CustomLogin() {
-  // AJUSTE: Trouxemos o 'token' para ser observado
+  // -----------------------------------------------------------------------
+  // [CONTEXT]: Integração com Autenticação e Roteamento
+  // -----------------------------------------------------------------------
   const { setSession, token } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = useSearch({ strict: false }) as AccountsSearch;
   
-  // =========================================================================
-  // ESTADOS GLOBAIS DO COMPONENTE
-  // =========================================================================
+  // -----------------------------------------------------------------------
+  // [STATE]: Controles locais do formulário e UI
+  // -----------------------------------------------------------------------
   const [tipoPessoa, setTipoPessoa] = useState<"F" | "J">("F");
   
-  // AJUSTE 1: Tipagem rigorosa alinhada com o Banco de Dados (Agora default é production)
+  // Tipagem rigorosa alinhada com o BD. Default seguro: production.
   const [ambiente, setAmbiente] = useState<"staging" | "production">("production"); 
   
   const [login, setLogin] = useState("");
@@ -60,41 +63,27 @@ function CustomLogin() {
   const [passwordError, setPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
 
-// =========================================================================
-  // OBSERVADOR DE SESSÃO (AUTO-REDIRECIONAMENTO)
-  // =========================================================================
-  // [BUSINESS LOGIC]: Inicializamos como null para garantir compatibilidade com SSR.
+  // -----------------------------------------------------------------------
+  // [BUSINESS LOGIC]: Definição de Rota de Destino
+  // -----------------------------------------------------------------------
   const [redirectUri, setRedirectUri] = useState<string | null>(null);
 
   useEffect(() => {
-    // [BUSINESS LOGIC]: Captura a URL real apenas no cliente (Browser) após a montagem.
+    // Captura a URL real apenas no cliente (Browser) após a montagem
+    // Evita mismatch de hidratação em casos de SSR.
     const params = new URLSearchParams(window.location.search);
     const target = params.get("redirect") || params.get("redirect_uri") || "/sandbox";
     setRedirectUri(target);
   }, []);
 
-  useEffect(() => {
-    // [BUSINESS LOGIC]: Aguarda token E o redirectUri estar definido para navegar.
-    if (token && redirectUri) {
-      console.log("🚀 [Login] Token detectado! Redirecionando para:", redirectUri);
-      if (redirectUri.startsWith('http')) {
-        window.location.href = redirectUri;
-      } else {
-        console.log("Storage atual:", localStorage.getItem("session_token"))
-        navigate({ to: redirectUri as any, replace: true });
-      }
-    }
-  }, [token, navigate, redirectUri]);
-
   // =========================================================================
-  // HANDLER: SUBMISSÃO DE LOGIN
+  // [ACTION]: Submissão de Autenticação
   // =========================================================================
   const handleRealLogin = async (e: React.FormEvent) => {
-    console.log("Teste: Iniciando handleRealLogin");
-
     e.preventDefault();
     setLoginError(""); setPasswordError(""); setGeneralError("");
 
+    // [VALIDATION]: Checagem primária de integridade
     if (!login.trim() || !password.trim()) {
       if (!login.trim()) setLoginError("Campo obrigatório");
       if (!password.trim()) setPasswordError("A senha deve ser informada");
@@ -103,18 +92,18 @@ function CustomLogin() {
 
     setIsLoading(true);
 
+    // [NETWORK]: Delegação da validação para a Edge Function
     const response = await autenticateWalletsbX(login, password, ambiente);
 
-    console.log("🔍 [Login] Resposta da Edge Function:", response);
-
     if (response?.success && response.token) {
+      // [STATE]: Persistência de ambiente de testes
       localStorage.setItem('sandbox_env', ambiente); 
       const sbxToken = response.sbxToken || response.sbx_access_token;
 
-      // 1. Atualiza o estado
+      // 1. Atualiza o estado global e salva no storage via Contexto
       setSession(response.token, sbxToken || "", response.userId);
 
-      // 2. Navega IMEDIATAMENTE (saiu do useEffect e veio pra cá)
+      // 2. [ROUTING]: Navegação imediata e imperativa (sem depender de useEffects extras)
       const params = new URLSearchParams(window.location.search);
       const target = params.get("redirect") || params.get("redirect_uri") || "/sandbox";
       
@@ -124,6 +113,7 @@ function CustomLogin() {
         navigate({ to: target as any, replace: true });
       }
     } else {
+      // [ERROR HANDLING]: Exibição de falhas controladas do servidor
       setGeneralError(response?.message || "Login ou senha inválidos.");
       setIsLoading(false);
     }
@@ -132,7 +122,7 @@ function CustomLogin() {
   const loginLabelText = tipoPessoa === "F" ? "E-mail, login ou CPF" : "CNPJ ou login";
 
   // =========================================================================
-  // RENDERIZAÇÃO
+  // [UI/UX]: Renderização da Interface
   // =========================================================================
   return (
     <div className="min-h-screen flex items-start justify-center pt-24 sm:pt-32 bg-gray-50 px-4 font-['Plus_Jakarta_Sans']">
@@ -143,7 +133,7 @@ function CustomLogin() {
         </div>
 
         {/* ---------------------------------------------------------------------------
-          SELETOR DE AMBIENTE 
+          [UI]: SELETOR DE AMBIENTE 
           --------------------------------------------------------------------------- */}
         <div className="mb-6 p-1 bg-gray-100 rounded-full flex gap-1 border border-gray-200">
           <button
@@ -171,7 +161,7 @@ function CustomLogin() {
         </div>
 
         {/* ---------------------------------------------------------------------------
-          FORMULÁRIO DE LOGIN
+          [UI]: FORMULÁRIO DE LOGIN
           --------------------------------------------------------------------------- */}
         <form onSubmit={handleRealLogin} className="flex flex-col gap-5">
           
@@ -200,7 +190,7 @@ function CustomLogin() {
             </div>
           )}
 
-          {/* CAMPO: LOGIN */}
+          {/* [UI]: CAMPO DE LOGIN */}
           <div className="flex flex-col gap-1.5">
             <div className="relative">
               <input
@@ -231,7 +221,7 @@ function CustomLogin() {
             {loginError && <span className="text-[#C13535] text-[11px] pl-5 font-medium">{loginError}</span>}
           </div>
 
-          {/* CAMPO: SENHA */}
+          {/* [UI]: CAMPO DE SENHA */}
           <div className="flex flex-col gap-1.5">
             <div className="relative">
               <input
@@ -270,6 +260,7 @@ function CustomLogin() {
             {passwordError && <span className="text-[#C13535] text-[11px] pl-5 font-medium">{passwordError}</span>}
           </div>
 
+          {/* [UI]: SUBMIT */}
           <button
             type="submit"
             disabled={isLoading}

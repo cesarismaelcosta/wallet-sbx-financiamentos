@@ -1,6 +1,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
+// Chave de controle para logs de depuração
+const DEBUG_MODE = true;
+
+/**
+ * @function debugLog
+ * @description Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+const debugLog = (message: string, data?: any) => {
+  if (DEBUG_MODE) {
+    console.log(`[NOTIFICATION-GATEWAY] ${message}`, data ? JSON.stringify(data, null, 2) : "");
+  }
+};
+
 /**
  * [SECURITY CONFIG]
  * Define os cabeçalhos de CORS necessários para permitir que o front-end (browser) 
@@ -32,7 +45,7 @@ serve(async (req) => {
   const env = req.headers.get("x-sbx-env") || "stage";
   const baseUrl = env === "production" ? "https://api.s4bdigital.net" : "https://stgapi.s4bdigital.net";
 
-  console.log(`[AUDIT] Requisição recebida. IP: ${clientIp} | Ambiente: ${env}`);
+  debugLog(`[AUDIT] Requisição recebida. IP: ${clientIp} | Ambiente: ${env}`);
 
   if (!sessionToken) {
     return new Response(JSON.stringify({ error: "Token ausente" }), { 
@@ -56,14 +69,22 @@ serve(async (req) => {
       .eq('session_token', cleanSessionToken)
       .single();
 
+    // [LOG 1]: Verificar o que veio do banco
+    debugLog(`[DEBUG] Buscando token: ${cleanSessionToken}. Resultado:`, { session, sessionError });
+
     if (sessionError || !session) {
-      console.error("[AUTH] Sessão não encontrada no cofre.");
+      debugLog(`[AUTH] Sessão não encontrada no cofre: ${cleanSessionToken}.`);
       return new Response(JSON.stringify({ error: "Sessão inválida" }), { status: 401, headers: corsHeaders });
     }
 
+    // [LOG 2]: Verificar o tempo
+    const agora = new Date();
+    const expiraEm = new Date(session.expires_at);
+    debugLog(`[DEBUG] Agora: ${agora.toISOString()} | Expira: ${expiraEm.toISOString()} | Expirado: ${agora > expiraEm}`);
+
     // Validação de TTL (Time To Live)
     if (new Date() > new Date(session.expires_at)) {
-      console.warn("[AUTH] Sessão expirada. Redirecionando...");
+      debugLog("[AUTH] Sessão expirada. Redirecionando...");
       return new Response(JSON.stringify({ error: "SESSION_EXPIRED" }), { status: 401, headers: corsHeaders });
     }
 
@@ -78,7 +99,7 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      console.error(`[ERROR] Falha na API upstream: ${response.status}`);
+      debugLog(`[ERROR] Falha na API upstream: ${response.status}`);
       return new Response(JSON.stringify({ error: "Erro ao consultar base" }), { 
         status: response.status,
         headers: corsHeaders 
@@ -123,7 +144,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("[CRITICAL] Erro inesperado na função sbx-data:", error);
+    debugLog("[CRITICAL] Erro inesperado na função sbx-data:", error);
     return new Response(JSON.stringify({ error: "Internal Server Error" }), { 
       status: 500,
       headers: corsHeaders 

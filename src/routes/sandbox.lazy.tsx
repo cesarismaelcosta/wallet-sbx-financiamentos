@@ -22,12 +22,21 @@ function SandboxLayout() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // [BUSINESS LOGIC]: Se o contexto ainda carrega do localStorage, aguardamos.
+    // [CRÍTICO]: A verificação de loading PRECISA ser a primeira coisa.
+    // Se o contexto ainda está lendo o storage, não podemos decidir nada.
     if (isLoading) return;
 
-    // [BUSINESS LOGIC]: Sem token absoluto, redirecionamento limpo para o login.
+    // [BUSINESS LOGIC]: Sem token absoluto, redirecionamento limpo para o login passando pagina atual.
     if (!token) {
-      navigate({ to: "/accounts/signin", replace: true });
+      // Captura onde o usuário está ANTES de mandar para o login
+      const currentPath = window.location.pathname + window.location.search;
+      
+      // Passa esse caminho como parâmetro para o login
+      navigate({ 
+        to: "/accounts/signin", 
+        search: { redirect: currentPath }, 
+        replace: true 
+      });
       return;
     }
 
@@ -41,11 +50,13 @@ function SandboxLayout() {
       } catch (err) {
         console.error("Sessão inválida ou expirada:", err);
         if (active) {
-          // [CRITICAL FIX]: O token existe no front, mas foi rejeitado pela API.
-          // Se apenas usarmos navigate(), a tela de login lerá o token fantasma 
-          // e devolverá o usuário para cá, causando o loop infinito.
-          // O logout() oblitera o token do estado e do storage antes de redirecionar.
-          logout(); 
+          // logout(); 
+          // O redirecionamento aqui é importante caso a validação falhe em uma rota protegida
+          navigate({ 
+            to: "/accounts/signin", 
+            search: { redirect: window.location.pathname + window.location.search },
+            replace: true 
+          });
         }
       }
     }

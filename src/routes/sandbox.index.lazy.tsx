@@ -22,7 +22,7 @@ interface MenuOption {
 
 const SandboxHome = () => {
   const navigate = useNavigate();
-  const { logout, userId } = useFinancialAuth(); // Acessando userId aqui
+  const { logout, userId, token } = useFinancialAuth();
   const [loading, setLoading] = useState(false);
 
   const handleProductClick = async (route: string, flowKey?: string) => {
@@ -110,9 +110,10 @@ const SandboxHome = () => {
                 ID DO USUÁRIO LOGADO: {userId || "Não identificado"}
               </span>
 
-              {/* Exibição do Ambiente */}
+              {/* Exibição do Ambiente e Token */}
               <span className="text-[9px] font-mono text-slate-400">
                 AMBIENTE: {localStorage.getItem("sandbox_env")?.toUpperCase() || "STAGE"}
+                <span className="text-purple-600"> (Sessão: {token ? token.slice(0, 8) : "N/A"})</span>
               </span>
             </div>
           </div>
