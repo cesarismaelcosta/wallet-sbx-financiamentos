@@ -36,6 +36,8 @@ export function SandboxLayout() {
     
     async function validate() {
       try {
+        console.log("🚨 O QUE O CONTEXTO ME ENTREGOU COMO TOKEN:", token);
+
         await fetchMyProfile(token!);
         if (isMounted) setIsVerifying(false);
       } catch (err: any) {
