@@ -26,6 +26,7 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // [BUSINESS LOGIC]: Hidratação segura dos dados persistidos no cliente
     const storedToken = localStorage.getItem("session_token");
     const storedUserId = localStorage.getItem("user_id");
 
@@ -34,17 +35,12 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
       userId: storedUserId 
     });
 
-    // Só valida a sessão se os DOIS tokens existirem.
-    // Se faltar o token da Superbid, a sessão é inválida e limpamos o estado.
     if (storedToken) {
       setToken(storedToken);
       setUserId(storedUserId);
-    } else {
-      localStorage.removeItem("session_token");
-      localStorage.removeItem("user_id");
-      setToken(null);
-      setUserId(null);
     }
+    
+    // [COMPLIANCE]: Desliga o carregador apenas após garantir que o state absorveu o storage
     setIsLoading(false);
   }, []);
 
