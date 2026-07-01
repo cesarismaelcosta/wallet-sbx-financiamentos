@@ -24,7 +24,7 @@
 import { createLazyFileRoute, Outlet, useNavigate } from '@tanstack/react-router';
 import { FinancialHubLayout } from "@/features/financial-hub/components/layout/FinancialHubLayout";
 import { useProductConsult } from "@/features/financial-hub/core/contexts/FinancialHubContext";
-import { useFinancialAuth } from "@/hooks/useFinancialAuth";
+import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
 
 /**
