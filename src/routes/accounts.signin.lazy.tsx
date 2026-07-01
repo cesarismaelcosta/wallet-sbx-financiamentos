@@ -11,7 +11,7 @@
  */
 
 import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react"; 
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
@@ -22,6 +22,7 @@ import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 // =========================================================================
 type AccountsSearch = {
   redirect_uri?: string;
+  redirect?: string; // Adicionado para suportar a nova chave
   response_type?: string;
   client_id?: string;
   portal_id?: string;
@@ -33,7 +34,8 @@ export const Route = createLazyFileRoute('/accounts/signin')({
 });
 
 function CustomLogin() {
-  const { setSession } = useFinancialAuth();
+  // AJUSTE: Trouxemos o 'token' para ser observado
+  const { setSession, token } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = useSearch({ strict: false }) as AccountsSearch;
   
@@ -57,6 +59,38 @@ function CustomLogin() {
   const [loginError, setLoginError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
+
+  // =========================================================================
+  // OBSERVADOR DE SESSÃO (AUTO-REDIRECIONAMENTO)
+  // =========================================================================
+  // Usamos useState com JS Nativo. Isso garante que capturamos a URL real no 
+  // momento em que a tela abre, e o valor NUNCA se perde quando o estado atualiza.
+  const [redirectUri] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("redirect") || params.get("redirect_uri") || "/sandbox";
+  });
+
+  useEffect(() => {
+    if (token) {
+      console.log("🚀 [Login] Token detectado! Redirecionando para:", redirectUri);
+      if (redirectUri.startsWith('http')) {
+        window.location.href = redirectUri;
+      } else {
+        navigate({ to: redirectUri as any, replace: true });
+      }
+    }
+  }, [token, navigate, redirectUri]);
+
+  useEffect(() => {
+    // Se o token existe (acabou de ser setado), o React navega de forma segura
+    if (token) {
+      if (redirectUri.startsWith('http')) {
+        window.location.href = redirectUri;
+      } else {
+        navigate({ to: redirectUri as any, replace: true });
+      }
+    }
+  }, [token, navigate, redirectUri]);
 
   // =========================================================================
   // HANDLER: SUBMISSÃO DE LOGIN
@@ -86,25 +120,14 @@ function CustomLogin() {
       const sbxToken = response.sbxToken || response.sbx_access_token;
 
       // 1. O setSession já salva no localStorage.
+      // O useEffect (Observador) vai detectar essa mudança e acionar o "Passo 3" (Navegar) automaticamente
       setSession(response.token, sbxToken || "", response.userId);
-
-      // 2. FORÇAR UMA MICRO-PAUSA DE 50ms para o contexto propagar no React
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      // 3. AGORA NAVEGA
-      const redirectUri = (searchParams.redirect as string) || (searchParams.redirect_uri as string) || "/sandbox";
-      if (redirectUri.startsWith('http')) {
-        window.location.href = redirectUri;
-      } else {
-        navigate({ to: redirectUri as any });
-      }
     }
     else {
       // Exibe o erro tratado que veio da Edge Function
       setGeneralError(response?.message || "Login ou senha inválidos.");
+      setIsLoading(false); // Retorna o botão ao estado normal apenas se der erro
     }
-    
-    setIsLoading(false);
   };
 
   const loginLabelText = tipoPessoa === "F" ? "E-mail, login ou CPF" : "CNPJ ou login";

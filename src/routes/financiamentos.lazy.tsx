@@ -35,17 +35,22 @@ const FinanciamentosGuard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const productConsult = useProductConsult();
+  
+  // Congelamos o caminho inicial assim que o componente nasce.
+  // Isso impede que o React sobrescreva o destino no meio do redirecionamento.
+  const [originalPath] = useState(location.pathname);
 
   useEffect(() => {
-    // [BUSINESS LOGIC]: Bloqueio de acesso não autenticado.
-    // Redireciona para o fluxo de autenticação mantendo o destino original (redirect)
+    // Evita loop caso o componente não desmonte a tempo
+    if (originalPath === '/accounts/signin') return;
+
     if (!isLoading && !token) {
       navigate({ 
         to: '/accounts/signin',
-        search: { redirect: location.pathname }
+        search: { redirect: originalPath } // Usa o caminho congelado
       });
     }
-  }, [token, isLoading, navigate, location.pathname]);
+  }, [token, isLoading, navigate, originalPath]);
 
   // [COMPLIANCE]: Fail-safe de segurança durante carregamento
   if (isLoading) {
