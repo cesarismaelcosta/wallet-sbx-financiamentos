@@ -43,13 +43,10 @@ function SandboxLayout() {
     );
   }
 
-  // [COMPLIANCE]: Fail-safe de segurança.
-  // Impede a renderização do conteúdo restrito no fundo enquanto ocorre o redirecionamento.
-  if (!token) return null;
-
+  // Isso impede o unmount da página de Sandbox durante a navegação.
   return (
     <div className="sandbox-shell">
-      <Outlet />
+      {token ? <Outlet /> : null}
     </div>
   );
 }

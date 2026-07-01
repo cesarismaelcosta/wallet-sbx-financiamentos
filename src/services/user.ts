@@ -57,18 +57,20 @@ export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfi
     },
   });
 
-  // [SEGURANÇA]: Tratamento de expiração e erros
-  if (!response.ok) {
-    console.error(`[ERROR] Falha ao buscar perfil via sbx-data (${response.status})`);
+  if (response.status === 401) {
+    // 1. Limpa o storage imediatamente
+    localStorage.removeItem("session_token");
+    localStorage.removeItem("sbx_access_token");
+    localStorage.removeItem("user_id");
     
-    // Se a Edge Function retornar 401, o TTL da tabela expirou ou a sessão é inválida.
-    // Isso dispara o mecanismo de segurança que manda o usuário para o login.
-    if (response.status === 401 || response.status === 403) {
-      throw new Error("SESSION_EXPIRED");
-    }
+    // 2. Redireciona via navegador (força o reload da app para limpar memória)
+    window.location.href = '/accounts/signin';
     
-    throw new Error("Falha ao buscar dados do usuário");
+    // 3. Retorna null ou um erro que não deve ser tratado pelo Guard
+    return null;
   }
+
+  if (!response.ok) throw new Error("API_ERROR");
   
   // Retorno dos dados hidratados e limpos pelo BFF
   return response.json();

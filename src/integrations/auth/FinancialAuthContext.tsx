@@ -27,27 +27,22 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const storedToken = localStorage.getItem("session_token");
-    const storedSbxToken = localStorage.getItem("sbx_access_token"); // Lê o novo
     const storedUserId = localStorage.getItem("user_id");
 
     console.log("🔍 [AuthContext] Carregando sessão:", { 
       hasToken: !!storedToken, 
-      hasSbxToken: !!storedSbxToken, 
       userId: storedUserId 
     });
 
     // Só valida a sessão se os DOIS tokens existirem.
     // Se faltar o token da Superbid, a sessão é inválida e limpamos o estado.
-    if (storedToken && storedSbxToken) {
+    if (storedToken) {
       setToken(storedToken);
-      setSbxToken(storedSbxToken);
       setUserId(storedUserId);
     } else {
       localStorage.removeItem("session_token");
-      localStorage.removeItem("sbx_access_token");
       localStorage.removeItem("user_id");
       setToken(null);
-      setSbxToken(null);
       setUserId(null);
     }
     setIsLoading(false);
@@ -68,18 +63,18 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
 
   // Função para deslogar (limpa state e storage corretamente)
   const logout = () => {
-    // 1. Remove TUDO do storage
+    // 1. Remove TUDO o que foi salvo, sem exceção
     localStorage.removeItem("session_token");
     localStorage.removeItem("sbx_access_token");
     localStorage.removeItem("user_id");
-    localStorage.removeItem("sandbox_env"); // Limpa o ambiente também
+    localStorage.removeItem("sandbox_env");
 
     // 2. Reseta o estado para null
     setToken(null);
-    setSbxToken(null);
+    setSbxToken(null); // <--- Garante que o estado do React também limpe
     setUserId(null);
 
-    // 3. Força o refresh da aplicação para limpar o contexto em memória
+    // 3. Força o refresh para limpar qualquer cache em memória
     window.location.href = '/accounts/signin';
   };
 
