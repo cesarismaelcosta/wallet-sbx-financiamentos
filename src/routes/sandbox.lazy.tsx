@@ -19,47 +19,44 @@ export const Route = createLazyFileRoute("/sandbox")({
 function SandboxLayout() {
   const { token, isLoading } = useFinancialAuth();
   const [isVerifying, setIsVerifying] = useState(true);
-  const navigate = useNavigate();
 
+  // 1. Lógica de validação (mantém igual, apenas removemos o navigate daqui)
   useEffect(() => {
-    // [BUSINESS LOGIC]: Se o contexto ainda carrega, não fazemos nada.
-    if (isLoading) return;
+    if (isLoading || !token) return;
 
-    // [BUSINESS LOGIC]: Se não tem token, redireciona de imediato (sem checagem de API).
-    if (!token) {
-      navigate({ to: "/accounts/signin", replace: true });
-      return;
-    }
-
-    // [BUSINESS LOGIC]: Se temos token, validamos a sessão APENAS UMA VEZ.
-    // Usamos um flag local no escopo do useEffect para garantir isso.
     let active = true;
-    
     async function validate() {
       try {
         await fetchMyProfile(token!);
         if (active) setIsVerifying(false);
       } catch (err) {
         console.error("Sessão inválida:", err);
-        if (active) navigate({ to: "/accounts/signin", replace: true });
+        // Não chamamos navigate aqui ainda
       }
     }
-
     validate();
     return () => { active = false; };
-  }, [isLoading, token, navigate]);
+  }, [isLoading, token]);
 
-  // [COMPLIANCE]: O estado de carregamento é o MESTRE aqui.
-  if (isLoading || isVerifying) {
+  // 2. Renderização (o "Gateway")
+  
+  // Se está carregando, mostra o loader.
+  if (isLoading) {
     return <div className="flex min-h-screen items-center justify-center">Verificando...</div>;
   }
 
-  // MUDANÇA: Em vez de return null, mantemos uma div de transição.
-  // Isso impede que o React desmonte o componente e dispare o erro de transição.
+  // Se não tem token, a ÚNICA coisa que o componente faz é redirecionar.
+  // Isso não causa erro de transição porque é um componente, não uma função de estado.
   if (!token) {
-    return <div className="flex min-h-screen items-center justify-center">Redirecionando...</div>;
+    return <Navigate to="/accounts/signin" replace />;
   }
 
+  // Se tem token, mas está verificando o perfil, mostra o loader.
+  if (isVerifying) {
+    return <div className="flex min-h-screen items-center justify-center">Verificando...</div>;
+  }
+
+  // Só chega aqui se o token é válido e a verificação passou.
   return (
     <div className="sandbox-shell">
       <Outlet />
