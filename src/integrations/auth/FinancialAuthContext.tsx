@@ -25,6 +25,8 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   // Começa como true para evitar renderizar rotas protegidas antes de ler o storage
   const [isLoading, setIsLoading] = useState(true);
 
+  console.log("Contexto leu:", localStorage.getItem("session_token"))
+  
   useEffect(() => {
     // [BUSINESS LOGIC]: Hidratação segura dos dados persistidos no cliente
     const storedToken = localStorage.getItem("session_token");

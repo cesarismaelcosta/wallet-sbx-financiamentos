@@ -80,11 +80,12 @@ function CustomLogin() {
       if (redirectUri.startsWith('http')) {
         window.location.href = redirectUri;
       } else {
+        console.log("Storage atual:", localStorage.getItem("session_token"))
         navigate({ to: redirectUri as any, replace: true });
       }
     }
   }, [token, navigate, redirectUri]);
-  
+
   // =========================================================================
   // HANDLER: SUBMISSÃO DE LOGIN
   // =========================================================================
