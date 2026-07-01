@@ -13,43 +13,51 @@
  * --------------------------------------------------------------------------------
  * * * PROPÓSITO:
  * Atuar como o "Wrapper" (Envoltório) global para todas as jornadas de crédito.
- * Define o `FinancialHubLayout` como a base visual comum e garante a proteção
- * de acesso (Auth Guard) antes da renderização da árvore de rotas financeiras.
- * 
- * * * COMPLIANCE & SEGURANÇA:
- * Garante que a sessão do usuário seja validada antes de expor qualquer layout
- * ou dado sensível do Financial Hub.
+ * Define o `FinancialHubLayout` como a base visual comum (Header, FAQ, Footer) e 
+ * garante que a estrutura base de todas as rotas financeiras seja consistente.
+ * * * ARQUITETURA E FLUXO:
+ * - O `FinancialHubLayout` é o componente pai que envelopa o `<Outlet />`.
+ * - Qualquer rota filha (ex: /cartao) será renderizada dentro da área de conteúdo 
+ * do Layout, garantindo que o cabeçalho e rodapé não precisem de ser re-renderizados 
+ * durante a navegação entre passos.
  */
 
-import { createLazyFileRoute, Outlet, useNavigate } from '@tanstack/react-router';
+import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
 import { FinancialHubLayout } from "@/features/financial-hub/components/layout/FinancialHubLayout";
 import { useProductConsult } from "@/features/financial-hub/core/contexts/FinancialHubContext";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
-/**
- * FinanciamentosGuard
- * Componente de proteção de rotas para o módulo de Financiamentos.
- * Interrompe a montagem do layout caso a sessão do usuário seja inválida.
- */
 const FinanciamentosGuard = () => {
-  const { sbxToken } = useFinancialAuth();
+  // Corrigido para usar as variáveis reais do contexto (token/isLoading)
+  const { token, isLoading } = useFinancialAuth();
   const navigate = useNavigate();
-  // Mantemos o acesso ao contexto do produto conforme arquitetura original
+  const location = useLocation();
   const productConsult = useProductConsult();
 
   useEffect(() => {
     // [BUSINESS LOGIC]: Bloqueio de acesso não autenticado.
-    // Redireciona para o fluxo de autenticação para evitar inconsistência de estado
-    // e exposição de dados financeiros.
-    if (!sbxToken) {
-      navigate({ to: '/accounts/signin' });
+    // Redireciona para o fluxo de autenticação mantendo o destino original (redirect)
+    if (!isLoading && !token) {
+      navigate({ 
+        to: '/accounts/signin',
+        search: { redirect: location.pathname }
+      });
     }
-  }, [sbxToken, navigate]);
+  }, [token, isLoading, navigate, location.pathname]);
 
-  // [COMPLIANCE]: Fail-safe de segurança.
-  // Evita o "flash" de conteúdo não autorizado retornando null precocemente.
-  if (!sbxToken) return null;
+  // [COMPLIANCE]: Fail-safe de segurança durante carregamento
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // [COMPLIANCE]: Fail-safe de segurança caso não haja token
+  if (!token) return null;
 
   return (
     <FinancialHubLayout>

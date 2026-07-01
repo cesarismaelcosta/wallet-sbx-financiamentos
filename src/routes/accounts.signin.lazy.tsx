@@ -92,7 +92,7 @@ function CustomLogin() {
       await new Promise(resolve => setTimeout(resolve, 50));
 
       // 3. AGORA NAVEGA
-      const redirectUri = searchParams.redirect_uri || "/sandbox"; 
+      const redirectUri = (searchParams.redirect as string) || (searchParams.redirect_uri as string) || "/sandbox";
       if (redirectUri.startsWith('http')) {
         window.location.href = redirectUri;
       } else {
