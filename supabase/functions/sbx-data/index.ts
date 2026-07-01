@@ -8,7 +8,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
  */
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sbx-env',
+  // [CRITICAL FIX]: 'x-session-token' adicionado à lista de permissões do CORS
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sbx-env, x-session-token',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 }
 
@@ -23,14 +24,17 @@ serve(async (req) => {
   }
 
   const clientIp = req.headers.get("x-forwarded-for") || "unknown-ip";
-  const authHeader = req.headers.get("Authorization");
+  
+  // [BUSINESS LOGIC]: Leitura do UUID de sessão pelo novo cabeçalho isolado.
+  // O header 'Authorization' original agora carrega a chave anônima do Supabase.
+  const sessionToken = req.headers.get("x-session-token");
   
   const env = req.headers.get("x-sbx-env") || "stage";
   const baseUrl = env === "production" ? "https://api.s4bdigital.net" : "https://stgapi.s4bdigital.net";
 
   console.log(`[AUDIT] Requisição recebida. IP: ${clientIp} | Ambiente: ${env}`);
 
-  if (!authHeader) {
+  if (!sessionToken) {
     return new Response(JSON.stringify({ error: "Token ausente" }), { 
       status: 401, 
       headers: corsHeaders 
@@ -43,12 +47,13 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const sessionToken = authHeader.replace("Bearer ", "").trim();
+    // Removemos o replace("Bearer ", "") porque o front-end agora manda o UUID puro neste header.
+    const cleanSessionToken = sessionToken.trim();
 
     const { data: session, error: sessionError } = await supabase
       .from('sbx_sessions')
       .select('sbx_access_token, expires_at')
-      .eq('session_token', sessionToken)
+      .eq('session_token', cleanSessionToken)
       .single();
 
     if (sessionError || !session) {

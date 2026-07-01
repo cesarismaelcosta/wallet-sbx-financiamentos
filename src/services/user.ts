@@ -5,16 +5,15 @@
  * 
  * [RESPONSABILIDADES]:
  * 1. Interface de comunicação: O front-end envia apenas o session_token (UUID),
- *    mantendo os tokens reais da API (sbx_access_token) protegidos no servidor.
- * 2. Segurança: O erro 401 é tratado como SESSION_EXPIRED, garantindo o ciclo
- *    de vida da sessão baseado na validade real (expires_at) do banco.
+ *    mantendo os tokens reais da API protegidos no servidor.
+ * 2. Gateway Bypass: Utiliza a Anon Key do Supabase para transpor o Kong Gateway.
+ * 3. Delegação de Rota: Erros 401 lançam exceções, delegando o roteamento ao SandboxLayout.
  */
 
-// 1. Tipagem Exata do retorno da nossa Edge Function (BFF)
 export interface BFFUserProfile {
   entity_id: string;
   name: string;
-  document: string; // Padrão unificado
+  document: string;
   email: string;
   phone: string;
   birth_date: string;
@@ -37,20 +36,29 @@ export interface BFFUserProfile {
   };
 }
 
-// 2. Função de requisição agora tipada com Promise<BFFUserProfile>
 /**
  * Busca o perfil do usuário no servidor.
  * @param sessionToken O UUID de sessão (Cofre) salvo no banco de dados.
  */
 export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfile> => {
+  // [STATE]: Resgate de variáveis de ambiente e preferências de armazenamento local
   const storedAmbiente = localStorage.getItem("sandbox_env") || "stage";
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  // Chamada segura via Proxy/BFF
+  // [NETWORK]: Chamada segura para a Edge Function via API REST
   const response = await fetch(`${supabaseUrl}/functions/v1/sbx-data`, {
     method: "GET",
     headers: {
-      "Authorization": `Bearer ${sessionToken}`, // O UUID é o nosso identificador de cofre
+      // [SECURITY]: Chaves públicas obrigatórias do Supabase. 
+      // Isso impede que o Gateway do Supabase bloqueie a requisição antes de chegar na Edge Function.
+      "Authorization": `Bearer ${supabaseAnonKey}`,
+      "apikey": supabaseAnonKey,
+      
+      // [BUSINESS LOGIC]: O UUID do cofre passa a trafegar via header customizado.
+      // IMPORTANTE: A sua Edge Function (sbx-data) PRECISA ser alterada para capturar 'x-session-token'.
+      "x-session-token": sessionToken,
+      
       "x-sbx-env": storedAmbiente,
       "Content-Type": "application/json",
       "Accept": "application/json"
@@ -58,20 +66,17 @@ export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfi
   });
 
   if (response.status === 401) {
-    // 1. Limpa o storage imediatamente
-    localStorage.removeItem("session_token");
-    localStorage.removeItem("sbx_access_token");
-    localStorage.removeItem("user_id");
-    
-    // 2. Redireciona via navegador (força o reload da app para limpar memória)
-    window.location.href = '/accounts/signin';
-    
-    // 3. Retorna null ou um erro que não deve ser tratado pelo Guard
-    return null;
+    // [CRITICAL FIX]: Interrompe a guerra de rotas.
+    // O window.location.href causava um hard reload e conflito com o TanStack Router.
+    // Agora disparamos um erro isolado, forçando o bloco try/catch do SandboxLayout a rodar o logout().
+    throw new Error("SESSION_EXPIRED");
   }
 
-  if (!response.ok) throw new Error("API_ERROR");
+  if (!response.ok) {
+    // [BUSINESS LOGIC]: Interceptação de falhas sistêmicas da API (500, 403, 404)
+    throw new Error("API_ERROR");
+  }
   
-  // Retorno dos dados hidratados e limpos pelo BFF
+  // [DATA]: Retorna os dados hidratados caso a resposta seja 200 OK
   return response.json();
 };
