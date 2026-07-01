@@ -21,8 +21,16 @@ function SandboxLayout() {
   const location = useLocation();
 
   useEffect(() => {
-    // [BUSINESS LOGIC]: Bloqueio de acesso não autenticado com trava anti-loop.
-    // O location.pathname é salvo para que o login saiba para onde devolver o usuário.
+    // 1. Validação ativa no carregamento
+    if (token && !isLoading) {
+      fetchMyProfile(token).catch((err) => {
+        // Se a validação falhar, o user.ts já cuidará do redirect 
+        // ou podemos garantir aqui:
+        console.error("Sessão inválida detectada:", err);
+      });
+    }
+
+    // 2. Proteção de rota (seu Guard original)
     if (!isLoading && !token && location.pathname !== '/accounts/signin') {
       navigate({ 
         to: "/accounts/signin",
