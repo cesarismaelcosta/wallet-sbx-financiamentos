@@ -20,49 +20,44 @@ function SandboxLayout() {
   const { token, isLoading } = useFinancialAuth();
   const [isVerifying, setIsVerifying] = useState(true);
   const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
-    async function checkSession() {
-      // [BUSINESS LOGIC]: Se não há token, encerra a verificação imediatamente.
-      if (!token) {
-        setIsVerifying(false);
-        return;
-      }
+    // [BUSINESS LOGIC]: Se o contexto ainda carrega, não fazemos nada.
+    if (isLoading) return;
 
+    // [BUSINESS LOGIC]: Se não tem token, redireciona de imediato (sem checagem de API).
+    if (!token) {
+      navigate({ to: "/accounts/signin", replace: true });
+      return;
+    }
+
+    // [BUSINESS LOGIC]: Se temos token, validamos a sessão APENAS UMA VEZ.
+    // Usamos um flag local no escopo do useEffect para garantir isso.
+    let active = true;
+    
+    async function validate() {
       try {
-        // [BUSINESS LOGIC]: Validação ativa: checa a validade real do token no cofre (sbx-data).
-        await fetchMyProfile(token);
-        setIsVerifying(false);
+        await fetchMyProfile(token!);
+        if (active) setIsVerifying(false);
       } catch (err) {
-        // [COMPLIANCE]: Registro de erro técnico para auditoria de falhas de autenticação.
-        console.error("Falha ao validar sessão na montagem:", err);
-        setIsVerifying(false);
+        console.error("Sessão inválida:", err);
+        if (active) navigate({ to: "/accounts/signin", replace: true });
       }
     }
-    
-    if (!isLoading) checkSession();
-  }, [token, isLoading]);
 
-  // [COMPLIANCE]: Bloqueio de renderização (Loader) enquanto a sessão é validada.
-  // Evita a "piscada" de tela e a exposição de dados antes da confirmação do servidor.
+    validate();
+    return () => { active = false; };
+  }, [isLoading, token, navigate]);
+
+  // [COMPLIANCE]: O estado de carregamento é o MESTRE aqui.
   if (isLoading || isVerifying) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Verificando acesso…
-        </div>
-      </div>
-    );
+    return <div className="flex min-h-screen items-center justify-center">Verificando...</div>;
   }
 
-  // [BUSINESS LOGIC]: Bloqueio final de rota não autenticada.
-  if (!token && location.pathname !== '/accounts/signin') {
-    navigate({ 
-      to: "/accounts/signin",
-      search: { redirect: location.pathname }
-    });
-    return null;
+  // MUDANÇA: Em vez de return null, mantemos uma div de transição.
+  // Isso impede que o React desmonte o componente e dispare o erro de transição.
+  if (!token) {
+    return <div className="flex min-h-screen items-center justify-center">Redirecionando...</div>;
   }
 
   return (
