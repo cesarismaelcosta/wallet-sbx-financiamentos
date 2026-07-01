@@ -10,7 +10,7 @@ const DEBUG_MODE = true;
  */
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
-    console.log(`[NOTIFICATION-GATEWAY] ${message}`, data ? JSON.stringify(data, null, 2) : "");
+    console.log(`[SBX-DATA] ${message}`, data ? JSON.stringify(data, null, 2) : "");
   }
 };
 

@@ -1,14 +1,12 @@
 /**
  * @fileoverview Componente: CustomLogin (Rota: /accounts/signin)
- * 
- * @description
+ * * @description
  * Interface de autenticação local.
- * 
- * [RESPONSABILIDADES]:
+ * * [RESPONSABILIDADES]:
  * 1. Coleta: Capturar credenciais e definir o ambiente alvo ('staging' ou 'production').
  * 2. Segurança: Delegar a autenticação real para a Edge Function (Proxy de Auth).
  * 3. Sessão: Persistir o session_token (UUID) via FinancialAuthContext.
- * 4. Roteamento: Redirecionar o usuário de forma determinística, sem expor tokens na URL.
+ * 4. Roteamento: Redirecionar o usuário de forma reativa e segura.
  */
 
 import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
@@ -23,7 +21,7 @@ import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 // =========================================================================
 type AccountsSearch = {
   redirect_uri?: string;
-  redirect?: string; // Suporte a múltiplas chaves de redirecionamento
+  redirect?: string;
   response_type?: string;
   client_id?: string;
   portal_id?: string;
@@ -34,7 +32,7 @@ export const Route = createLazyFileRoute('/accounts/signin')({
   component: CustomLogin,
 });
 
-function CustomLogin() {
+export function CustomLogin() {
   // -----------------------------------------------------------------------
   // [CONTEXT]: Integração com Autenticação e Roteamento
   // -----------------------------------------------------------------------
@@ -46,8 +44,6 @@ function CustomLogin() {
   // [STATE]: Controles locais do formulário e UI
   // -----------------------------------------------------------------------
   const [tipoPessoa, setTipoPessoa] = useState<"F" | "J">("F");
-  
-  // Tipagem rigorosa alinhada com o BD. Default seguro: production.
   const [ambiente, setAmbiente] = useState<"staging" | "production">("production"); 
   
   const [login, setLogin] = useState("");
@@ -69,12 +65,26 @@ function CustomLogin() {
   const [redirectUri, setRedirectUri] = useState<string | null>(null);
 
   useEffect(() => {
-    // Captura a URL real apenas no cliente (Browser) após a montagem
-    // Evita mismatch de hidratação em casos de SSR.
+    // Captura a URL real apenas no cliente após a montagem
     const params = new URLSearchParams(window.location.search);
     const target = params.get("redirect") || params.get("redirect_uri") || "/sandbox";
     setRedirectUri(target);
   }, []);
+
+  // -----------------------------------------------------------------------
+  // [ROUTING]: Navegação Reativa (Fim da Race Condition)
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    // Se o token já existe no contexto global e temos a rota de destino, navegamos.
+    // Isso garante que o redirecionamento SÓ ocorra quando o Contexto estiver 100% atualizado.
+    if (token && redirectUri) {
+      if (redirectUri.startsWith('http')) {
+        window.location.href = redirectUri;
+      } else {
+        navigate({ to: redirectUri as any, replace: true });
+      }
+    }
+  }, [token, redirectUri, navigate]);
 
   // =========================================================================
   // [ACTION]: Submissão de Autenticação
@@ -83,7 +93,6 @@ function CustomLogin() {
     e.preventDefault();
     setLoginError(""); setPasswordError(""); setGeneralError("");
 
-    // [VALIDATION]: Checagem primária de integridade
     if (!login.trim() || !password.trim()) {
       if (!login.trim()) setLoginError("Campo obrigatório");
       if (!password.trim()) setPasswordError("A senha deve ser informada");
@@ -95,23 +104,19 @@ function CustomLogin() {
     // [NETWORK]: Delegação da validação para a Edge Function
     const response = await autenticateWalletsbX(login, password, ambiente);
 
-    if (response?.success && response.token) {
+    if (response?.success) {
       // [STATE]: Persistência de ambiente de testes
       localStorage.setItem('sandbox_env', ambiente); 
-      const sbxToken = response.sbxToken || response.sbx_access_token;
-
-      // 1. Atualiza o estado global e salva no storage via Contexto
-      setSession(response.token, sbxToken || "", response.userId);
-
-      // 2. [ROUTING]: Navegação imediata e imperativa (sem depender de useEffects extras)
-      const params = new URLSearchParams(window.location.search);
-      const target = params.get("redirect") || params.get("redirect_uri") || "/sandbox";
       
-      if (target.startsWith('http')) {
-        window.location.href = target;
-      } else {
-        navigate({ to: target as any, replace: true });
-      }
+      // Mapeamento correto das chaves retornadas pela API.
+      console.log("DEBUG API Response:", response);
+      
+      const uuidSessao = response.token;       // O UUID com hifens
+      const tokenSuperbid = response.sbxToken; // O token curto da Superbid
+
+      // Atualiza o estado global na ordem certa (UUID primeiro)
+      setSession(uuidSessao, tokenSuperbid, response.userId);
+
     } else {
       // [ERROR HANDLING]: Exibição de falhas controladas do servidor
       setGeneralError(response?.message || "Login ou senha inválidos.");
