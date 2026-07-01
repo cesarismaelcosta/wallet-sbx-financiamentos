@@ -10,6 +10,7 @@ import { createLazyFileRoute, Outlet, useNavigate, useLocation } from "@tanstack
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
+import { fetchMyProfile } from "@/integrations/auth/user";
 
 export const Route = createLazyFileRoute("/sandbox")({
   component: SandboxLayout, 
