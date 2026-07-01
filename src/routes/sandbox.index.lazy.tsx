@@ -104,9 +104,15 @@ const SandboxHome = () => {
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 Jornadas de Financiamentos & Seguros
               </span>
+              
               {/* Exibição do UserId */}
               <span className="text-[9px] font-mono text-slate-400 mt-0.5">
                 ID DO USUÁRIO LOGADO: {userId || "Não identificado"}
+              </span>
+
+              {/* Exibição do Ambiente */}
+              <span className="text-[9px] font-mono text-slate-400">
+                AMBIENTE: {localStorage.getItem("sandbox_env")?.toUpperCase() || "STAGE"}
               </span>
             </div>
           </div>

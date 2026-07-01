@@ -472,10 +472,18 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">
               Sandbox: Simulação de Oferta Superbid
             </div>
+            
             <div className="flex items-center gap-4">
-              <span className="text-[9px] font-mono text-slate-500">
-                ID DO USUÁRIO LOGADO: {userId || "---"}
-              </span>
+              {/* Container empilhado para ID e Ambiente */}
+              <div className="flex flex-col items-end">
+                <span className="text-[9px] font-mono text-slate-500">
+                  ID DO USUÁRIO LOGADO: {userId || "---"}
+                </span>
+                <span className="text-[9px] font-mono text-slate-500 uppercase">
+                  AMBIENTE: {localStorage.getItem("sandbox_env")?.toUpperCase() || "STAGE"}
+                </span>
+              </div>
+
               <button
                 onClick={logout}
                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-bold transition-all"
