@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { createLazyFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
+import { createLazyFileRoute, Navigate, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile } from "@/services/user";
@@ -22,8 +22,16 @@ function SandboxLayout() {
 
   // 1. Lógica de validação (mantém igual, apenas removemos o navigate daqui)
   useEffect(() => {
-    if (isLoading || !token) return;
+    // Só faz algo se o carregamento do Provider terminou
+    if (isLoading) return;
 
+    // Se não tem token, manda pro login
+    if (!token) {
+      navigate({ to: "/accounts/signin", replace: true });
+      return;
+    }
+
+    // Se tem token, valida a sessão UMA VEZ
     let active = true;
     async function validate() {
       try {
@@ -31,12 +39,12 @@ function SandboxLayout() {
         if (active) setIsVerifying(false);
       } catch (err) {
         console.error("Sessão inválida:", err);
-        // Não chamamos navigate aqui ainda
+        if (active) navigate({ to: "/accounts/signin", replace: true });
       }
     }
     validate();
     return () => { active = false; };
-  }, [isLoading, token]);
+  }, [isLoading, token]); 
 
   // 2. Renderização (o "Gateway")
   

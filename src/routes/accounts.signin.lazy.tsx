@@ -103,24 +103,29 @@ function CustomLogin() {
 
     setIsLoading(true);
 
-    // O serviço agora fala com a nossa Edge Function
     const response = await autenticateWalletsbX(login, password, ambiente);
 
-    // DEBUG: Verifique no console do navegador o que o servidor devolveu
     console.log("🔍 [Login] Resposta da Edge Function:", response);
 
     if (response?.success && response.token) {
       localStorage.setItem('sandbox_env', ambiente); 
       const sbxToken = response.sbxToken || response.sbx_access_token;
 
-      // 1. O setSession já salva no localStorage.
-      // O useEffect (Observador) vai detectar essa mudança e acionar o "Passo 3" (Navegar) automaticamente
+      // 1. Atualiza o estado
       setSession(response.token, sbxToken || "", response.userId);
-    }
-    else {
-      // Exibe o erro tratado que veio da Edge Function
+
+      // 2. Navega IMEDIATAMENTE (saiu do useEffect e veio pra cá)
+      const params = new URLSearchParams(window.location.search);
+      const target = params.get("redirect") || params.get("redirect_uri") || "/sandbox";
+      
+      if (target.startsWith('http')) {
+        window.location.href = target;
+      } else {
+        navigate({ to: target as any, replace: true });
+      }
+    } else {
       setGeneralError(response?.message || "Login ou senha inválidos.");
-      setIsLoading(false); // Retorna o botão ao estado normal apenas se der erro
+      setIsLoading(false);
     }
   };
 
