@@ -8,8 +8,8 @@ export const fetchMyProfile = async (sbxToken: string) => {
   // Lê o ambiente salvo para informar à Edge Function onde buscar os dados
   const storedAmbiente = localStorage.getItem("sandbox_env") || "stage";
 
-  // A chamada agora aponta para a nossa infraestrutura centralizada (Supabase)
-  const response = await fetch("/functions/v1/sbx-data", {
+  // Chamada /me aponta para a nossa infraestrutura centralizada (Supabase)
+  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sbx-data`, {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${sbxToken}`,

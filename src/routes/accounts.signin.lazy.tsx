@@ -44,8 +44,8 @@ function CustomLogin() {
   // =========================================================================
   const [tipoPessoa, setTipoPessoa] = useState<"F" | "J">("F");
   
-  // AJUSTE 1: Tipagem rigorosa alinhada com o Banco de Dados
-  const [ambiente, setAmbiente] = useState<"staging" | "production">("staging"); 
+  // AJUSTE 1: Tipagem rigorosa alinhada com o Banco de Dados (Agora default é production)
+  const [ambiente, setAmbiente] = useState<"staging" | "production">("production"); 
   
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -71,19 +71,9 @@ function CustomLogin() {
   });
 
   useEffect(() => {
-    if (token) {
-      console.log("🚀 [Login] Token detectado! Redirecionando para:", redirectUri);
-      if (redirectUri.startsWith('http')) {
-        window.location.href = redirectUri;
-      } else {
-        navigate({ to: redirectUri as any, replace: true });
-      }
-    }
-  }, [token, navigate, redirectUri]);
-
-  useEffect(() => {
     // Se o token existe (acabou de ser setado), o React navega de forma segura
     if (token) {
+      console.log("🚀 [Login] Token detectado! Redirecionando para:", redirectUri);
       if (redirectUri.startsWith('http')) {
         window.location.href = redirectUri;
       } else {
@@ -144,7 +134,7 @@ function CustomLogin() {
         </div>
 
         {/* ---------------------------------------------------------------------------
-          SELETOR DE AMBIENTE (Atualizado para 'staging')
+          SELETOR DE AMBIENTE 
           --------------------------------------------------------------------------- */}
         <div className="mb-6 p-1 bg-gray-100 rounded-full flex gap-1 border border-gray-200">
           <button

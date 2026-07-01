@@ -305,6 +305,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       // Atualiza o estado
       setApiEntity(mappedData);
 
+      console.log("✅ [Debug] Dado mapeado:", mappedData);
+
     } catch (error: any) {
       if (error.message === "SESSION_EXPIRED") {
         navigate({ to: "/accounts/signin" });

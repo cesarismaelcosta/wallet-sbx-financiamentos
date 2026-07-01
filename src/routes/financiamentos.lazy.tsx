@@ -30,27 +30,22 @@ import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
 const FinanciamentosGuard = () => {
-  // Corrigido para usar as variáveis reais do contexto (token/isLoading)
   const { token, isLoading } = useFinancialAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const productConsult = useProductConsult();
-  
-  // Congelamos o caminho inicial assim que o componente nasce.
-  // Isso impede que o React sobrescreva o destino no meio do redirecionamento.
-  const [originalPath] = useState(location.pathname);
 
   useEffect(() => {
-    // Evita loop caso o componente não desmonte a tempo
-    if (originalPath === '/accounts/signin') return;
-
-    if (!isLoading && !token) {
+    // [BUSINESS LOGIC]: Bloqueio de acesso não autenticado.
+    // A condição '!== /accounts/signin' impede o loop infinito, garantindo
+    // que o redirect capture APENAS a URL original.
+    if (!isLoading && !token && location.pathname !== '/accounts/signin') {
       navigate({ 
         to: '/accounts/signin',
-        search: { redirect: originalPath } // Usa o caminho congelado
+        search: { redirect: location.pathname }
       });
     }
-  }, [token, isLoading, navigate, originalPath]);
+  }, [token, isLoading, navigate, location.pathname]);
 
   // [COMPLIANCE]: Fail-safe de segurança durante carregamento
   if (isLoading) {
