@@ -78,7 +78,7 @@ serve(async (req) => {
     const enrichedData = {
       entity_id: String(account?.id),
       name: account?.basicInfo?.fullName || "N/A",
-      cpf: account?.documents?.find((d: any) => d.typeName === "cpf")?.number || "",
+      document: account?.documents?.find((d: any) => d.typeName === "cpf")?.number || "",
       email: account?.basicInfo?.email?.address || "",
       phone: account?.phones?.find((p: any) => p.type === 3)?.fullPhoneNumber || "",
       birth_date: account?.birthDate?.split('T')[0] || "",

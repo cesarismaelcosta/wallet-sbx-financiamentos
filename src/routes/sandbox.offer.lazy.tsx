@@ -290,24 +290,48 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     if (currentFlow) setCategoria(currentFlow.category.split("|")[0].trim());
   }, [flowKey, currentFlow]);
 
-  // -----------------------------------------------------------------------
-  // EFEITOS: BUSCA DE DADOS DO USUÁRIO LOGADO
-  // -----------------------------------------------------------------------
+  // =========================================================================
+  // FUNÇÃO DE HIDRATAÇÃO (MAPPER REVISADO)
+  // =========================================================================
+  const hydrateUserEntity = (data: any): EntityType | null => {
+    if (!data || !data.name) {
+      console.warn("⚠️ [Mapper] Dados incompletos recebidos do BFF:", data);
+      return null;
+    }
+
+    return {
+      entity_id: String(data.entity_id),
+      name: data.name,
+      document: data.document,   
+      phone: data.phone,
+      email: data.email,
+      birth_date: data.birth_date,
+      gender: data.gender,
+    };
+  };
+
+  // =========================================================================
+  // FUNÇÃO DE FETCH (MANTIDA INTACTA COM TRY/CATCH)
+  // =========================================================================
   const fetchEntity = async () => {
     if (!sbxToken) return;
 
     try {
       const data = await fetchMyProfile(sbxToken);
+      
+      // Opcional: ver como o dado chega cru do BFF
+      // console.log("📦 [Debug] Dado bruto do BFF:", data);
+
       const mappedData = hydrateUserEntity(data);
     
       console.log("🔍 [Debug Entity Após Mapping]:", mappedData);
     
-      // Atualiza o estado
+      // Atualiza o estado da tela
       setApiEntity(mappedData);
 
-      console.log("✅ [Debug] Dado mapeado:", mappedData);
-
     } catch (error: any) {
+      // A nossa malha de segurança vital
+      console.error("🚨 [Debug] Erro no fetchEntity:", error);
       if (error.message === "SESSION_EXPIRED") {
         navigate({ to: "/accounts/signin" });
       }
