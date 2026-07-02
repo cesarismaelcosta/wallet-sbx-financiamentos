@@ -9,8 +9,6 @@
  * 3. Sincronia: Calcula e persiste o Clock Drift para validação local de sessão.
  */
 
-const AUTH_PROXY_URL = "https://ldzutiojmcawhwdhojlo.supabase.co/functions/v1/sbx-auth";
-
 // =========================================================================
 // FUNÇÃO: autenticateWalletsbX
 // =========================================================================
@@ -19,7 +17,7 @@ export const autenticateWalletsbX = async (
   pass: string, 
   environment: "staging" | "production" = "staging"
 ) => {
-  
+
   // [STATE]: Resgate de variáveis de ambiente
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
