@@ -2,10 +2,9 @@
  * @fileoverview Serviço: User Profile
  * Busca os dados do usuário autenticado através da Edge Function sbx-data.
  * Centraliza a chamada para garantir compliance e segurança.
- * 
- * [RESPONSABILIDADES]:
+ * * [RESPONSABILIDADES]:
  * 1. Interface de comunicação: O front-end envia apenas o session_token (UUID),
- *    mantendo os tokens reais da API protegidos no servidor.
+ * mantendo os tokens reais da API protegidos no servidor.
  * 2. Gateway Bypass: Utiliza a Anon Key do Supabase para transpor o Kong Gateway.
  * 3. Delegação de Rota: Erros 401 lançam exceções, delegando o roteamento ao SandboxLayout.
  */
@@ -66,9 +65,15 @@ export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfi
   });
 
   if (response.status === 401) {
-    // [CRITICAL FIX]: Interrompe a guerra de rotas.
-    // O window.location.href causava um hard reload e conflito com o TanStack Router.
-    // Agora disparamos um erro isolado, forçando o bloco try/catch do SandboxLayout a rodar o logout().
+    // -----------------------------------------------------------------------
+    // [SECURITY]: Gatilho do Protocolo de Amnésia
+    // -----------------------------------------------------------------------
+    // Ao invés de delegar a limpeza de estado apenas para o componente pai (que pode falhar ou vazar dados),
+    // gritamos para o FinancialAuthContext matar a sessão globalmente e forçar o redirecionamento limpo.
+    window.dispatchEvent(new CustomEvent('session_expired'));
+
+    // [CRITICAL FIX]: Interrompe a guerra de rotas e a execução do componente local.
+    // O throw garante que o `await fetchMyProfile` no componente pare aqui e não tente setar um estado com erro.
     throw new Error("SESSION_EXPIRED");
   }
 

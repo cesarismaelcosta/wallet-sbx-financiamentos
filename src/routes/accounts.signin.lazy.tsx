@@ -15,6 +15,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
+import { jwtDecode } from "jwt-decode";
 
 // =========================================================================
 // [TYPES]: Tipagens e Interfaces
@@ -108,13 +109,32 @@ export function CustomLogin() {
       // [STATE]: Persistência de ambiente de testes
       localStorage.setItem('sandbox_env', ambiente); 
       
-      // Mapeamento correto das chaves retornadas pela API.
       console.log("DEBUG API Response:", response);
       
       const uuidSessao = response.token;       // O UUID com hifens
-      const tokenSuperbid = response.sbxToken; // O token curto da Superbid
+      const tokenSuperbid = response.sbxToken; // O token curto da Superbid (JWT Real)
 
-      // Atualiza o estado global na ordem certa (UUID primeiro)
+      // -----------------------------------------------------------------------
+      // [SECURITY]: Cálculo de compensação do relógio (Clock Drift)
+      // Resolve a vulnerabilidade de desincronização entre o PC do usuário e o backend,
+      // garantindo que os Guards avaliem a expiração com precisão.
+      // -----------------------------------------------------------------------
+      try {
+        const decoded = jwtDecode<{ iat?: number }>(tokenSuperbid);
+
+        if (decoded.iat) {
+          const serverTimeMs = decoded.iat * 1000;
+          const localTimeMs = Date.now();
+          const timeDelta = serverTimeMs - localTimeMs;
+          
+          localStorage.setItem('time_delta', timeDelta.toString());
+          console.log(`⏱️ [AUTH] Clock Drift ajustado. Diferença: ${timeDelta}ms`);
+        }
+      } catch (err) {
+        console.warn("⚠️ [AUTH] Falha ao calcular relógio. O token da Superbid pode não ser um JWT válido.", err);
+      }
+
+      // [STATE]: Atualiza o estado global na ordem certa (UUID primeiro)
       setSession(uuidSessao, tokenSuperbid, response.userId);
 
     } else {

@@ -25,9 +25,42 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   // Começa como true para evitar renderizar rotas protegidas antes de ler o storage
   const [isLoading, setIsLoading] = useState(true);
 
+  // -----------------------------------------------------------------------
+  // [SECURITY]: Protocolo de Amnésia (Escuta Global)
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    const handleAmnesia = () => {
+      console.warn("🚨 [SECURITY] Sessão expirada. Protocolo de Amnésia ativado.");
+      
+      // 1. LIMPEZA TOTAL AGRESSIVA (Evita Cross-User Data Leak na esteira de crédito)
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // 2. RESETA O ESTADO GLOBAL
+      setToken(null);
+      setSbxToken(null);
+      setUserId(null);
+      
+      // 3. EXPULSÃO FÍSICA E DEFINITIVA
+      // Diferente do logout manual, não guardamos o "redirect" da URL. 
+      // Se a sessão expirou no meio da simulação, a esteira foi corrompida. 
+      // O usuário (ou o próximo) deve recomeçar do zero.
+      window.location.href = '/accounts/signin?reason=expired';
+    };
+
+    // Abre os ouvidos para escutar os disparos dos Guards (financiamentos.lazy) e API (user.ts)
+    window.addEventListener('session_expired', handleAmnesia);
+    
+    return () => window.removeEventListener('session_expired', handleAmnesia);
+  }, []);
+
+  // -----------------------------------------------------------------------
+  // [STATE]: Hidratação Inicial (Mount)
+  // -----------------------------------------------------------------------
   useEffect(() => {
     // [BUSINESS LOGIC]: Hidratação segura dos dados persistidos no cliente
     const storedToken = localStorage.getItem("session_token");
+    const storedSbxToken = localStorage.getItem("sbx_access_token"); // [FIX]: Agora o sbxToken sobrevive ao F5
     const storedUserId = localStorage.getItem("user_id");
 
     console.log("🔍 [AuthContext] Carregando sessão:", { 
@@ -37,6 +70,7 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
 
     if (storedToken) {
       setToken(storedToken);
+      setSbxToken(storedSbxToken);
       setUserId(storedUserId);
     }
     
@@ -44,6 +78,9 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     setIsLoading(false);
   }, []);
 
+  // -----------------------------------------------------------------------
+  // [ACTIONS]: Métodos de Mutação
+  // -----------------------------------------------------------------------
   // Função para logar (salva no state e no storage simultaneamente)
   const setSession = (newToken: string, newSbxToken: string, newUserId?: string) => {
     localStorage.setItem("session_token", newToken);
@@ -59,19 +96,18 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
 
   // Função para deslogar (limpa state e storage corretamente)
   const logout = () => {
-    // 1. Remove TUDO o que foi salvo, sem exceção
-    localStorage.removeItem("session_token");
-    localStorage.removeItem("sbx_access_token");
-    localStorage.removeItem("user_id");
-    localStorage.removeItem("sandbox_env");
+    // 1. Removemos tudo agressivamente para garantir segurança máxima em apps financeiros
+    localStorage.clear();
+    sessionStorage.clear();
 
     // 2. Reseta o estado para null
     setToken(null);
-    setSbxToken(null); // <--- Garante que o estado do React também limpe
+    setSbxToken(null);
     setUserId(null);
-
-    // 3. Força o refresh para limpar qualquer cache em memória
-    window.location.href = '/accounts/signin';
+    
+    // 3. Redireciona para a tela de login mantendo o redirect apenas se for intencional
+    const currentPath = window.location.pathname + window.location.search;
+    window.location.href = `/accounts/signin?redirect=${encodeURIComponent(currentPath)}`;
   };
 
   return (
