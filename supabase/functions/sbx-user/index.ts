@@ -1,7 +1,10 @@
 /**
- * @fileoverview Edge Function: sbx-data (Versão Integrada com Validação JWT)
- * * Objetivo: Orquestrar, hidratar e auditar dados do usuário (Profile).
- * * [SECURITY]: Valida assinatura do JWT Próprio antes da consulta no banco.
+ * @fileoverview Edge Function: sbx-user (Validador)
+ * * Valida o JWT Próprio enviado pelo front-end antes de acessar dados da Superbid.
+ * * [RESPONSABILIDADES]:
+ * 1. Segurança: Verifica a assinatura HMAC-SHA256 do token.
+ * 2. Mapeamento: Extrai o 'jti' do JWT para buscar o UUID no banco (sbx_sessions).
+ * 3. Integração: Hidrata dados da API upstream usando o token recuperado.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -20,7 +23,7 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sbx-env, x-session-token',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-}
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -46,35 +49,27 @@ serve(async (req) => {
       { name: "HMAC", hash: "SHA-256" }, false, ["verify"]
     );
     
-    // [VALIDATE]: Decodifica e verifica a assinatura. Se falhar, vai para o catch.
+    // Decodifica e verifica a assinatura
     const payload = await verify(sessionToken, key);
-    const sessionId = payload.jti as string; // O UUID original que gravamos no JWT
+    const sessionId = payload.jti as string; // O UUID original gravado no JWT
 
-    // 2. [DATA]: Consulta ao Banco usando o sessionId (JTI) validado
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const { data: session, error: sessionError } = await supabase
+    // 2. [DATA]: Consulta ao Banco usando o JTI validado
+    const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    
+    const { data: session, error: sessionError } = await supabaseAdmin
       .from('sbx_sessions')
       .select('sbx_access_token, expires_at')
-      .eq('session_token', sessionId) // Usamos o UUID extraído do JWT
+      .eq('session_token', sessionId)
       .single();
 
-    debugLog(`[DEBUG] Buscando sessão via JTI: ${sessionId}. Resultado:`, { session, sessionError });
-
-    if (sessionError || !session) {
-      debugLog(`[AUTH] Sessão não encontrada no cofre.`);
-      return new Response(JSON.stringify({ error: "Sessão inválida" }), { status: 401, headers: corsHeaders });
-    }
+    if (sessionError || !session) throw new Error("Sessão inválida");
 
     // 3. [VALIDATION]: Validação de TTL
     if (new Date() > new Date(session.expires_at)) {
-      debugLog("[AUTH] Sessão expirada.");
-      return new Response(JSON.stringify({ error: "SESSION_EXPIRED" }), { status: 401, headers: corsHeaders });
+      throw new Error("Sessão expirada");
     }
 
-    // 4. [INTEGRATION]: Chamada ao backend upstream da Superbid
+    // 4. [INTEGRATION]: Chamada upstream
     const response = await fetch(`${baseUrl}/account/v2/user/me`, {
       method: "GET",
       headers: {
@@ -84,19 +79,12 @@ serve(async (req) => {
       },
     });
 
-    if (!response.ok) {
-      debugLog(`[ERROR] Falha na API upstream: ${response.status}`);
-      return new Response(JSON.stringify({ error: "Erro ao consultar base" }), { 
-        status: response.status,
-        headers: corsHeaders 
-      });
-    }
-
+    if (!response.ok) throw new Error("Falha na API upstream");
     const data = await response.json();
 
-    // 5. [HIDRATAÇÃO]: Mapper (Mantido conforme original)
+    // 5. [HIDRATAÇÃO]: Mapper (Mantendo sua estrutura original)
     const account = data.userAccounts?.[0];
-    const mainAddress = account?.addresses?.[0]; 
+    const mainAddress = account?.addresses?.[0];
     
     const enrichedData = {
       entity_id: String(account?.id),
@@ -129,11 +117,10 @@ serve(async (req) => {
       status: 200,
     });
 
-  } catch (error) {
-    debugLog("[CRITICAL] Erro inesperado na função sbx-data:", error);
+  } catch (err) {
+    debugLog("[CRITICAL] Erro inesperado na função sbx-user:", err);
     return new Response(JSON.stringify({ error: "Unauthorized" }), { 
-      status: 401,
-      headers: corsHeaders 
+      status: 401, headers: corsHeaders 
     });
   }
 });

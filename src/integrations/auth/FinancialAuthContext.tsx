@@ -64,6 +64,9 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   // [STATE]: Hidratação Inicial (Mount)
   // -----------------------------------------------------------------------
   useEffect(() => {
+    // [SAFETY]: Verifica se estamos no navegador antes de tocar no storage
+    if (typeof window === 'undefined') return;
+    
     // [BUSINESS LOGIC]: Hidratação segura dos dados persistidos no cliente
     const storedToken = localStorage.getItem("session_token");
     const storedUserId = localStorage.getItem("user_id");
