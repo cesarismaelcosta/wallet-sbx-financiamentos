@@ -49,6 +49,12 @@ export function SandboxLayout() {
     // 2. [SECURITY]: Validação Local Passiva (Clock Drift)
     // Antes de bater na API, verificamos se o seu JWT ainda é válido localmente.
     if (token) {
+      // [DEBUGGING]: Imprima o que está chegando antes de decodificar
+      console.log("🔍 [DEBUG] Token sendo decodificado:", {
+          tokenValue: token,
+          type: typeof token,
+          length: token?.length
+      });
       try {
         const decoded = jwtDecode<{ exp?: number }>(token);
         const timeDelta = parseInt(localStorage.getItem('time_delta') || '0', 10);

@@ -1,85 +1,99 @@
 /**
- * @fileoverview Serviço: Autenticação da Wallet sbX
- * @description Atua como cliente da Edge Function (sbx-auth). 
- * Isola a complexidade do fluxo OAuth2 da Superbid e mantém o JWT original
- * inacessível ao frontend (Padrão Cofre/Gateway Bypass).
- * * * [RESPONSABILIDADES]:
- * 1. Proxy: Encapsula credenciais e ambiente, comunicando-se apenas com nosso servidor.
- * 2. Segurança: Recebe apenas o JWT Próprio e metadados temporais (expiração e desvio).
- * 3. Sincronia: Calcula e persiste o Clock Drift para validação local de sessão.
+ * @fileoverview Edge Function: Auth SBX (Login Proxy & JWT Signer)
+ * * Esta função atua como um proxy seguro para o login na API da Superbid (SBX).
+ * Ela gerencia:
+ * 1. A seleção dinâmica de ambiente ('staging' ou 'production').
+ * 2. A requisição OAuth2 usando client_id e portalid ocultos no servidor.
+ * 3. O cálculo dinâmico da expiração do token (com margem de segurança de 15 min).
+ * 4. A gravação segura da sessão no banco de dados.
+ * 5. [NEW] A assinatura do JWT Próprio para Segurança Passiva do Front-end.
  */
 
-const AUTH_PROXY_URL = "https://ldzutiojmcawhwdhojlo.supabase.co/functions/v1/sbx-auth";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts"
 
-// =========================================================================
-// FUNÇÃO: autenticateWalletsbX
-// =========================================================================
-export const autenticateWalletsbX = async (
-  user: string, 
-  pass: string, 
-  environment: "staging" | "production" = "staging"
-) => {
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*', 
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+const ENV_URLS = {
+  production: "https://api.s4bdigital.net",
+  staging: "https://stgapi.s4bdigital.net"
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || '0.0.0.0';
+
   try {
-    const response = await fetch(AUTH_PROXY_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    const { username, password, environment = 'staging' } = await req.json()
+
+    // ... (Lógica de autenticação OAuth2 com a SBX permanece inalterada)
+    const sbxBaseUrl = ENV_URLS[environment as keyof typeof ENV_URLS]
+    const details = new URLSearchParams()
+    details.append("username", username)
+    details.append("password", password)
+    details.append("grant_type", "password")
+    details.append("client_id", "dzqC3VodSoXukD45BQKg3NQU6-faststore")
+    details.append("portalid", "2")
+
+    const sbxLoginResponse = await fetch(`${sbxBaseUrl}/account/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Forwarded-For': clientIp },
+      body: details.toString()
+    })
+
+    if (!sbxLoginResponse.ok) throw new Error("Credenciais inválidas");
+    const sbxData = await sbxLoginResponse.json()
+
+    // Cálculo de expiração
+    const agora = new Date()
+    const expiraEmSegundos = sbxData.expires_in || 18000
+    const margemSegurancaMs = 15 * 60 * 1000
+    const nossaExpiracao = new Date(agora.getTime() + (expiraEmSegundos * 1000) - margemSegurancaMs)
+
+    // Gravação no Supabase
+    const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
+    const { data, error } = await supabaseAdmin
+      .from('sbx_sessions')
+      .insert({ user_id: sbxData.userId, sbx_access_token: sbxData.access_token, environment, expires_at: nossaExpiracao.toISOString() })
+      .select('session_token')
+      .single()
+
+    if (error) throw new Error("Erro ao criar sessão");
+
+    // -----------------------------------------------------------------------
+    // [SECURITY]: Assinatura do JWT Próprio
+    // -----------------------------------------------------------------------
+    const jwtSecret = Deno.env.get("JWT_SECRET"); // NECESSÁRIO CONFIGURAR NO SUPABASE
+    const key = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+    );
+
+    const jwt = await create(
+      { alg: "HS256", typ: "JWT" },
+      { 
+        sub: sbxData.userId, 
+        jti: data.session_token, // O UUID original como referência interna
+        exp: getNumericDate(nossaExpiracao.getTime() / 1000) 
       },
-      body: JSON.stringify({
-        username: user,
-        password: pass,
-        environment: environment
-      }),
-    });
+      key
+    );
 
-    // ---------------------------------------------------------------------------
-    // TRATAMENTO DA RESPOSTA E SEGURANÇA
-    // ---------------------------------------------------------------------------
-    if (response.ok) {
-      const data = await response.json();
-      
-      if (data.session_token) {
-        // -----------------------------------------------------------------------
-        // [SECURITY]: Cálculo e persistência de compensação de relógio (Clock Drift)
-        // O servidor fornece a hora dele e o limite da sessão. O front compara.
-        // -----------------------------------------------------------------------
-        try {
-          if (data.server_now_ms && data.expires_at) {
-            const serverTimeMs = data.server_now_ms;
-            const localTimeMs = Date.now();
-            const timeDelta = serverTimeMs - localTimeMs;
-            
-            // Persiste o Delta para uso dos Guards (financiamentos.lazy, etc)
-            localStorage.setItem('time_delta', timeDelta.toString());
-            // Persiste o limite de validade absoluta (já com margem T-15m)
-            localStorage.setItem('session_expires_at', data.expires_at.toString());
-            
-            console.log(`⏱️ [AUTH Service] Clock Drift sincronizado. Delta: ${timeDelta}ms`);
-          }
-        } catch (err) {
-          console.warn("⚠️ [AUTH Service] Falha ao processar metadados temporais da sessão.", err);
-        }
+    return new Response(JSON.stringify({
+      success: true,
+      session_token: jwt, // Agora entrega o JWT assinado, não o UUID cru
+      user_id: sbxData.userId,
+      expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
+      server_now_ms: agora.getTime()
+    }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-        return { 
-          success: true, 
-          token: data.session_token, // JWT Próprio (Cofre)
-          userId: data.user_id       // Identificador público do usuário
-        };
-      } else {
-        console.error("Proxy validado (200), mas sem token na resposta:", data);
-        return { success: false, message: "Token ausente na resposta do servidor" };
-      }
-    } else {
-      const errorData = await response.json().catch(() => ({}));
-      return { 
-        success: false, 
-        message: errorData.error || "Login ou senha inválidos" 
-      };
-    }
-
-  } catch (error) {
-    console.error("Erro crítico na comunicação com o Proxy de Autenticação:", error);
-    return { success: false, message: "Erro de rede ao contatar o servidor interno" };
+  } catch (err) {
+    console.error("Erro:", err)
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
-};
+})

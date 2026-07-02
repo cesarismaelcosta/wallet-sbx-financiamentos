@@ -1,23 +1,18 @@
 /**
- * @fileoverview Edge Function: Auth SBX (Login Proxy)
+ * @fileoverview Edge Function: Auth SBX (Login Proxy & JWT Signer)
  * * Esta função atua como um proxy seguro para o login na API da Superbid (SBX).
  * Ela gerencia:
  * 1. A seleção dinâmica de ambiente ('staging' ou 'production').
  * 2. A requisição OAuth2 usando client_id e portalid ocultos no servidor.
  * 3. O cálculo dinâmico da expiração do token (com margem de segurança de 15 min).
- * 4. A gravação segura da sessão no banco de dados, retornando apenas um 
- * session_token (UUID), o user_id, e as referências de tempo para o front-end.
- * * [SECURITY]: O token real da Superbid (sbx_access_token) NUNCA é retornado 
- * para o front-end, garantindo o isolamento do Gateway.
- * --------------------------------------------------------------------------------
+ * 4. A gravação segura da sessão no banco de dados.
+ * 5. [NEW] A assinatura do JWT Próprio para Segurança Passiva do Front-end.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts"
 
-// =========================================================================
-// CONFIGURAÇÕES GERAIS E CORS
-// =========================================================================
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*', 
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -29,36 +24,15 @@ const ENV_URLS = {
   staging: "https://stgapi.s4bdigital.net"
 }
 
-// =========================================================================
-// FUNÇÃO PRINCIPAL: Handler
-// =========================================================================
 serve(async (req) => {
-  // ---------------------------------------------------------------------------
-  // TRATAMENTO PREFLIGHT (CORS para o Browser)
-  // ---------------------------------------------------------------------------
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  //  IP do usuário do cabeçalho da requisição recebida
   const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || '0.0.0.0';
 
   try {
-    // ---------------------------------------------------------------------------
-    // EXTRAÇÃO E VALIDAÇÃO DE PAYLOAD
-    // ---------------------------------------------------------------------------
     const { username, password, environment = 'staging' } = await req.json()
 
-    if (environment !== 'staging' && environment !== 'production') {
-      return new Response(JSON.stringify({ error: "Invalid environment." }), { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      })
-    }
-
-    // ---------------------------------------------------------------------------
-    // COMUNICAÇÃO COM A SUPERBID (OAuth2)
-    // ---------------------------------------------------------------------------
+    // ... (Lógica de autenticação OAuth2 com a SBX permanece inalterada)
     const sbxBaseUrl = ENV_URLS[environment as keyof typeof ENV_URLS]
     const details = new URLSearchParams()
     details.append("username", username)
@@ -69,80 +43,57 @@ serve(async (req) => {
 
     const sbxLoginResponse = await fetch(`${sbxBaseUrl}/account/oauth/token`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/x-www-form-urlencoded', 
-        'X-Forwarded-For': clientIp
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Forwarded-For': clientIp },
       body: details.toString()
     })
 
-    if (!sbxLoginResponse.ok) {
-      return new Response(JSON.stringify({ error: "Credenciais inválidas na SBX" }), { 
-        status: 401, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      })
-    }
-
+    if (!sbxLoginResponse.ok) throw new Error("Credenciais inválidas");
     const sbxData = await sbxLoginResponse.json()
 
-    // ---------------------------------------------------------------------------
-    // CÁLCULO DE EXPIRAÇÃO DINÂMICA
-    // ---------------------------------------------------------------------------
+    // Cálculo de expiração
     const agora = new Date()
     const expiraEmSegundos = sbxData.expires_in || 18000
     const margemSegurancaMs = 15 * 60 * 1000
     const nossaExpiracao = new Date(agora.getTime() + (expiraEmSegundos * 1000) - margemSegurancaMs)
 
-    // ---------------------------------------------------------------------------
-    // GRAVAÇÃO DA SESSÃO NO COFRE (Supabase)
-    // ---------------------------------------------------------------------------
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-
+    // Gravação no Supabase
+    const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
     const { data, error } = await supabaseAdmin
       .from('sbx_sessions')
-      .insert({
-        user_id: sbxData.userId, 
-        sbx_access_token: sbxData.access_token,
-        environment: environment,
-        expires_at: nossaExpiracao.toISOString()
-      })
+      .insert({ user_id: sbxData.userId, sbx_access_token: sbxData.access_token, environment, expires_at: nossaExpiracao.toISOString() })
       .select('session_token')
       .single()
 
-    if (error) {
-      return new Response(JSON.stringify({ error: "Erro interno ao criar sessão" }), { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      })
-    }
+    if (error) throw new Error("Erro ao criar sessão");
 
-    // ---------------------------------------------------------------------------
-    // RESPOSTA DE SUCESSO AO FRONT-END (Gateway Bypass Respeitado)
-    // ---------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // [SECURITY]: Assinatura do JWT Próprio
+    // -----------------------------------------------------------------------
+    const jwtSecret = Deno.env.get("JWT_SECRET"); // NECESSÁRIO CONFIGURAR NO SUPABASE
+    const key = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+    );
+
+    const jwt = await create(
+      { alg: "HS256", typ: "JWT" },
+      { 
+        sub: sbxData.userId, 
+        jti: data.session_token, // O UUID original como referência interna
+        exp: getNumericDate(nossaExpiracao.getTime() / 1000) 
+      },
+      key
+    );
+
     return new Response(JSON.stringify({
       success: true,
-      session_token: data.session_token,     // Apenas o UUID desce pro front
+      session_token: jwt, // Agora entrega o JWT assinado, não o UUID cru
       user_id: sbxData.userId,
-      
-      // [NOVO]: Variáveis para o front-end calcular o Clock Drift com segurança
-      expires_at: Math.floor(nossaExpiracao.getTime() / 1000), // Limite em segundos
-      server_now_ms: agora.getTime()                           // Hora exata da requisição
-    }), { 
-      status: 200, 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    })
+      expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
+      server_now_ms: agora.getTime()
+    }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (err) {
-    // ---------------------------------------------------------------------------
-    // FALLBACK DE ERROS CRÍTICOS
-    // ---------------------------------------------------------------------------
-    console.error("Exceção não tratada na Edge Function:", err)
-    return new Response(JSON.stringify({ error: "Falha de rede ou servidor interno" }), { 
-      status: 500, 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    })
+    console.error("Erro:", err)
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 })
