@@ -1,89 +1,74 @@
 /**
- * @fileoverview Serviço: User Profile
- * Busca os dados do usuário autenticado através da Edge Function sbx-data.
- * Centraliza a chamada para garantir compliance e segurança.
+ * @fileoverview Edge Function: User Profile Validator
+ * * Valida a integridade da sessão do usuário via JWT Próprio.
  * * [RESPONSABILIDADES]:
- * 1. Interface de comunicação: O front-end envia apenas o session_token (JWT Próprio),
- * mantendo os tokens reais da API da Superbid protegidos no servidor.
- * 2. Gateway Bypass: Utiliza a Anon Key do Supabase para transpor o Kong Gateway.
- * 3. Delegação de Rota: Erros 401 lançam exceções, abortam o fluxo local e 
- * ativam o Protocolo de Amnésia global.
+ * 1. Gateway Bypass: Valida o JWT recebido via 'x-session-token' antes de acessar dados.
+ * 2. Integridade: Verifica assinatura para garantir que a sessão não foi adulterada.
+ * 3. Sincronia de Banco: Extrai o 'jti' (UUID de sessão) do payload para consulta no Supabase.
+ * 4. Segurança: Retorna headers CORS mesmo em falhas (401), prevenindo bloqueios do Browser.
  */
 
-export interface BFFUserProfile {
-  entity_id: string;
-  name: string;
-  document: string;
-  email: string;
-  phone: string;
-  birth_date: string;
-  gender: string;
-  login: string;
-  mothers_name: string;
-  address: {
-    street: string;
-    number: string;
-    complement: string;
-    neighborhood: string;
-    city: string;
-    state: string;
-    zip_code: string;
-    country: string;
-  } | null;
-  metadata: {
-    processedAt: string;
-    originIp: string;
-  };
-}
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 
-/**
- * Busca o perfil do usuário no servidor.
- * @param sessionToken O JWT Próprio de sessão gerado pelo nosso backend.
- */
-export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfile> => {
-  // [STATE]: Resgate de variáveis de ambiente e preferências de armazenamento local
-  const storedAmbiente = localStorage.getItem("sandbox_env") || "stage";
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-  // [NETWORK]: Chamada segura para a Edge Function via API REST
-  const response = await fetch(`${supabaseUrl}/functions/v1/sbx-sbx-user`, {
-    method: "GET",
-    headers: {
-      // [SECURITY]: Chaves públicas obrigatórias do Supabase. 
-      // Isso impede que o Gateway do Supabase bloqueie a requisição antes de chegar na Edge Function.
-      "Authorization": `Bearer ${supabaseAnonKey}`,
-      "apikey": supabaseAnonKey,
-      
-      // [BUSINESS LOGIC]: O JWT Próprio (session_token) passa a trafegar via header customizado.
-      // IMPORTANTE: A sua Edge Function (sbx-data) PRECISA ser alterada para capturar 'x-session-token'
-      // e validar a assinatura deste JWT antes de buscar os dados no banco/Superbid.
-      "x-session-token": sessionToken,
-      
-      "x-sbx-env": storedAmbiente,
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    },
-  });
-
-  if (response.status === 401) {
-    // -----------------------------------------------------------------------
-    // [SECURITY]: Gatilho do Protocolo de Amnésia
-    // -----------------------------------------------------------------------
-    // Ao invés de delegar a limpeza de estado apenas para o componente pai (que pode falhar ou vazar dados),
-    // gritamos para o FinancialAuthContext matar a sessão globalmente e forçar o redirecionamento limpo.
-    window.dispatchEvent(new CustomEvent('session_expired'));
-
-    // [CRITICAL FIX]: Interrompe a guerra de rotas e a execução do componente local.
-    // O throw garante que o `await fetchMyProfile` no componente pare aqui e não tente setar um estado com erro.
-    throw new Error("SESSION_EXPIRED");
-  }
-
-  if (!response.ok) {
-    // [BUSINESS LOGIC]: Interceptação de falhas sistêmicas da API (500, 403, 404)
-    throw new Error("API_ERROR");
-  }
-  
-  // [DATA]: Retorna os dados hidratados caso a resposta seja 200 OK
-  return response.json();
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-session-token, x-sbx-env',
 };
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  const sessionToken = req.headers.get("x-session-token");
+  
+  // [GUARD]: Ejeção imediata caso o token esteja ausente
+  if (!sessionToken) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { 
+      status: 401, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+
+  try {
+    // 1. [SECURITY]: Validação de Assinatura JWT
+    const jwtSecret = Deno.env.get("JWT_SECRET");
+    const key = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(jwtSecret), 
+      { name: "HMAC", hash: "SHA-256" }, false, ["verify"]
+    );
+    
+    // Decodifica e verifica a assinatura (se o token for inválido, cai no catch)
+    const payload = await verify(sessionToken, key);
+    const sessionId = payload.jti as string; // O UUID original que gravamos no JWT
+
+    // 2. [DATA]: Consulta ao Banco usando o sessionId (JTI) validado
+    const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    
+    const { data, error } = await supabaseAdmin
+      .from('sbx_sessions')
+      .select('*')
+      .eq('session_token', sessionId)
+      .single();
+
+    if (error || !data) throw new Error("Invalid session");
+
+    // 3. [RESPONSE]: Retorno hidratado
+    return new Response(JSON.stringify({
+      entity_id: data.user_id,
+      status: "authenticated",
+      metadata: { processedAt: new Date().toISOString() }
+    }), { 
+      status: 200, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+
+  } catch (err) {
+    // [ERROR HANDLING]: Fallback de segurança com CORS (prevenindo bloqueio do browser)
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { 
+      status: 401, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+});
