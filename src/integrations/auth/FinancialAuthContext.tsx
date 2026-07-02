@@ -1,17 +1,25 @@
 /**
- * @fileoverview FinancialAuthContext
+ * @fileoverview Contexto: FinancialAuthContext
  * @description Contexto de autenticação exclusivo para o Sandbox/Financial Hub.
  * Lê, gerencia e propaga o session_token e user_id para toda a aplicação.
+ * * [ARQUITETURA DE SEGURANÇA - BFF & JWT PRÓPRIO]:
+ * - O token real da Superbid (sbx_access_token) fica retido no backend (Edge Function).
+ * - O frontend opera exclusivamente com um JWT Próprio (session_token), assinado pelo 
+ * nosso backend. Este JWT próprio embute a validade sincronizada com a Superbid.
+ * * [RESPONSABILIDADES]:
+ * 1. State Management: Propaga o token da sessão pela árvore de componentes.
+ * 2. Hidratação (Mount): Recupera dados do localStorage após reloads (F5).
+ * 3. Kill Switch (Amnésia): Escuta ativamente por violações de tempo ou rede e 
+ * destrói a sessão para evitar vazamento de dados de simulação (Cross-User Leak).
  */
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 interface FinancialAuthContextType {
-  token: string | null; // Nosso session_token (UUID)
-  sbxToken: string | null; // Novo: o token da Superbid
+  token: string | null; // Nosso session_token (JWT Próprio do App)
   userId: string | null;
   isLoading: boolean;
-  setSession: (token: string, sbxToken: string, userId?: string) => void; 
+  setSession: (token: string, userId?: string) => void; 
   logout: () => void;
 }
 
@@ -19,7 +27,6 @@ const FinancialAuthContext = createContext<FinancialAuthContextType | undefined>
 
 export function FinancialAuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
-  const [sbxToken, setSbxToken] = useState<string | null>(null); // Novo estado
   const [userId, setUserId] = useState<string | null>(null);
   
   // Começa como true para evitar renderizar rotas protegidas antes de ler o storage
@@ -38,7 +45,6 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
 
       // 2. RESETA O ESTADO GLOBAL
       setToken(null);
-      setSbxToken(null);
       setUserId(null);
       
       // 3. EXPULSÃO FÍSICA E DEFINITIVA
@@ -60,7 +66,6 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   useEffect(() => {
     // [BUSINESS LOGIC]: Hidratação segura dos dados persistidos no cliente
     const storedToken = localStorage.getItem("session_token");
-    const storedSbxToken = localStorage.getItem("sbx_access_token"); // [FIX]: Agora o sbxToken sobrevive ao F5
     const storedUserId = localStorage.getItem("user_id");
 
     console.log("🔍 [AuthContext] Carregando sessão:", { 
@@ -70,7 +75,6 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
 
     if (storedToken) {
       setToken(storedToken);
-      setSbxToken(storedSbxToken);
       setUserId(storedUserId);
     }
     
@@ -82,11 +86,9 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   // [ACTIONS]: Métodos de Mutação
   // -----------------------------------------------------------------------
   // Função para logar (salva no state e no storage simultaneamente)
-  const setSession = (newToken: string, newSbxToken: string, newUserId?: string) => {
+  const setSession = (newToken: string, newUserId?: string) => {
     localStorage.setItem("session_token", newToken);
-    localStorage.setItem("sbx_access_token", newSbxToken); // Salva no storage
     setToken(newToken);
-    setSbxToken(newSbxToken);
     
     if (newUserId) {
       localStorage.setItem("user_id", newUserId);
@@ -102,7 +104,6 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
 
     // 2. Reseta o estado para null
     setToken(null);
-    setSbxToken(null);
     setUserId(null);
     
     // 3. Redireciona para a tela de login mantendo o redirect apenas se for intencional
@@ -111,7 +112,7 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   };
 
   return (
-    <FinancialAuthContext.Provider value={{ token, sbxToken, userId, isLoading, setSession, logout }}>
+    <FinancialAuthContext.Provider value={{ token, userId, isLoading, setSession, logout }}>
       {children}
     </FinancialAuthContext.Provider>
   );

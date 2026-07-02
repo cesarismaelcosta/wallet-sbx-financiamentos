@@ -1,11 +1,14 @@
 /**
  * @fileoverview Componente: CustomLogin (Rota: /accounts/signin)
- * * @description
- * Interface de autenticação local.
- * * [RESPONSABILIDADES]:
+ * @description Interface de autenticação local.
+ * * * [ARQUITETURA DE SEGURANÇA]:
+ * O componente atua como um cliente burro (Dumb Component). Ele desconhece
+ * as regras de JWT e Clock Drift. Sua única função é coletar credenciais,
+ * disparar o serviço de autenticação e injetar o token resultante no Contexto Global.
+ * * * [RESPONSABILIDADES]:
  * 1. Coleta: Capturar credenciais e definir o ambiente alvo ('staging' ou 'production').
- * 2. Segurança: Delegar a autenticação real para a Edge Function (Proxy de Auth).
- * 3. Sessão: Persistir o session_token (UUID) via FinancialAuthContext.
+ * 2. Segurança: Delegar a autenticação real para o serviço (auth.ts).
+ * 3. Sessão: Persistir o session_token (JWT Próprio) via FinancialAuthContext.
  * 4. Roteamento: Redirecionar o usuário de forma reativa e segura.
  */
 
@@ -15,7 +18,6 @@ import { Eye, EyeOff } from "lucide-react";
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { jwtDecode } from "jwt-decode";
 
 // =========================================================================
 // [TYPES]: Tipagens e Interfaces
@@ -102,7 +104,7 @@ export function CustomLogin() {
 
     setIsLoading(true);
 
-    // [NETWORK]: Delegação da validação para a Edge Function
+    // [NETWORK]: Delegação da validação para o Serviço
     const response = await autenticateWalletsbX(login, password, ambiente);
 
     if (response?.success) {
@@ -111,31 +113,9 @@ export function CustomLogin() {
       
       console.log("DEBUG API Response:", response);
       
-      const uuidSessao = response.token;       // O UUID com hifens
-      const tokenSuperbid = response.sbxToken; // O token curto da Superbid (JWT Real)
-
-      // -----------------------------------------------------------------------
-      // [SECURITY]: Cálculo de compensação do relógio (Clock Drift)
-      // Resolve a vulnerabilidade de desincronização entre o PC do usuário e o backend,
-      // garantindo que os Guards avaliem a expiração com precisão.
-      // -----------------------------------------------------------------------
-      try {
-        const decoded = jwtDecode<{ iat?: number }>(tokenSuperbid);
-
-        if (decoded.iat) {
-          const serverTimeMs = decoded.iat * 1000;
-          const localTimeMs = Date.now();
-          const timeDelta = serverTimeMs - localTimeMs;
-          
-          localStorage.setItem('time_delta', timeDelta.toString());
-          console.log(`⏱️ [AUTH] Clock Drift ajustado. Diferença: ${timeDelta}ms`);
-        }
-      } catch (err) {
-        console.warn("⚠️ [AUTH] Falha ao calcular relógio. O token da Superbid pode não ser um JWT válido.", err);
-      }
-
-      // [STATE]: Atualiza o estado global na ordem certa (UUID primeiro)
-      setSession(uuidSessao, tokenSuperbid, response.userId);
+      // [SECURITY]: O auth.ts já salvou silenciosamente os dados de tempo (Clock Drift)
+      // no localStorage usando o nosso JWT. Aqui nós só passamos o token e o userId para o Contexto.
+      setSession(response.token, response.userId);
 
     } else {
       // [ERROR HANDLING]: Exibição de falhas controladas do servidor

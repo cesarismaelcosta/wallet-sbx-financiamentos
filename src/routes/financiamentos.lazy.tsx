@@ -2,7 +2,7 @@
  * @fileoverview Rota Pai: /financiamentos
  * @path src/routes/financiamentos.lazy.tsx
  * 
- * * * ÁRVORE DE DEPENDÊNCIAS (ROUTING):
+ * * * * ÁRVORE DE DEPENDÊNCIAS (ROUTING):
  * --------------------------------------------------------------------------------
  * src/routes/
  * ├── financiamentos.lazy.tsx      # [AQUI] Layout Pai (Mestre)
@@ -13,13 +13,8 @@
  * --------------------------------------------------------------------------------
  * * * PROPÓSITO:
  * Atuar como o "Wrapper" (Envoltório) global para todas as jornadas de crédito.
- * Define o `FinancialHubLayout` como a base visual comum (Header, FAQ, Footer) e 
- * garante que a estrutura base de todas as rotas financeiras seja consistente.
- * * * ARQUITETURA E FLUXO:
- * - O `FinancialHubLayout` é o componente pai que envelopa o `<Outlet />`.
- * - Qualquer rota filha (ex: /cartao) será renderizada dentro da área de conteúdo 
- * do Layout, garantindo que o cabeçalho e rodapé não precisem de ser re-renderizados 
- * durante a navegação entre passos.
+ * Define o `FinancialHubLayout` como a base visual comum e garante que a
+ * estrutura base de todas as rotas financeiras seja consistente.
  */
 
 import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
@@ -28,22 +23,50 @@ import { useProductConsult } from "@/features/financial-hub/core/contexts/Financ
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
+import { jwtDecode } from "jwt-decode"; 
 
 const FinanciamentosGuard = () => {
+  // [ARQUITETURA]: Apenas o token do app (JWT Próprio) é acessível aqui.
   const { token, isLoading } = useFinancialAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const productConsult = useProductConsult();
 
   useEffect(() => {
-    // [BUSINESS LOGIC]: Bloqueio de acesso não autenticado.
-    // A condição '!== /accounts/signin' impede o loop infinito, garantindo
-    // que o redirect capture APENAS a URL original.
-    if (!isLoading && !token && location.pathname !== '/accounts/signin') {
+    // 0. Ignora enquanto hidrata o estado
+    if (isLoading) return;
+
+    // 1. [BUSINESS LOGIC]: Bloqueio de acesso não autenticado.
+    if (!token && location.pathname !== '/accounts/signin') {
       navigate({ 
         to: '/accounts/signin',
         search: { redirect: location.pathname }
       });
+      return;
+    }
+
+    // 2. [SECURITY]: Validação Passiva de Expiração (UX Guard)
+    // Valida o seu JWT localmente contra a expiração, usando o Clock Drift calculado no login.
+    if (token) {
+      try {
+        const decoded = jwtDecode<{ exp?: number }>(token);
+        
+        // Resgata o desvio do relógio salvo no momento do login
+        const timeDelta = parseInt(localStorage.getItem('time_delta') || '0', 10);
+        
+        // Hora da máquina + diferença = Hora Real sincronizada com o Servidor
+        const syncedCurrentTimeInSeconds = Math.floor((Date.now() + timeDelta) / 1000);
+
+        if (decoded.exp && decoded.exp < syncedCurrentTimeInSeconds) {
+          console.warn("🚨 [UX Guard] Token expirado localmente. Acionando Amnésia.");
+          window.dispatchEvent(new CustomEvent('session_expired'));
+          return;
+        }
+      } catch (error) {
+        console.warn("⚠️ [UX Guard] Token malformado. Expulsando por segurança.");
+        window.dispatchEvent(new CustomEvent('session_expired'));
+        return;
+      }
     }
   }, [token, isLoading, navigate, location.pathname]);
 

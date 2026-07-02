@@ -3,10 +3,11 @@
  * Busca os dados do usuário autenticado através da Edge Function sbx-data.
  * Centraliza a chamada para garantir compliance e segurança.
  * * [RESPONSABILIDADES]:
- * 1. Interface de comunicação: O front-end envia apenas o session_token (UUID),
- * mantendo os tokens reais da API protegidos no servidor.
+ * 1. Interface de comunicação: O front-end envia apenas o session_token (JWT Próprio),
+ * mantendo os tokens reais da API da Superbid protegidos no servidor.
  * 2. Gateway Bypass: Utiliza a Anon Key do Supabase para transpor o Kong Gateway.
- * 3. Delegação de Rota: Erros 401 lançam exceções, delegando o roteamento ao SandboxLayout.
+ * 3. Delegação de Rota: Erros 401 lançam exceções, abortam o fluxo local e 
+ * ativam o Protocolo de Amnésia global.
  */
 
 export interface BFFUserProfile {
@@ -37,7 +38,7 @@ export interface BFFUserProfile {
 
 /**
  * Busca o perfil do usuário no servidor.
- * @param sessionToken O UUID de sessão (Cofre) salvo no banco de dados.
+ * @param sessionToken O JWT Próprio de sessão gerado pelo nosso backend.
  */
 export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfile> => {
   // [STATE]: Resgate de variáveis de ambiente e preferências de armazenamento local
@@ -46,7 +47,7 @@ export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfi
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   // [NETWORK]: Chamada segura para a Edge Function via API REST
-  const response = await fetch(`${supabaseUrl}/functions/v1/sbx-data`, {
+  const response = await fetch(`${supabaseUrl}/functions/v1/sbx-sbx-user`, {
     method: "GET",
     headers: {
       // [SECURITY]: Chaves públicas obrigatórias do Supabase. 
@@ -54,8 +55,9 @@ export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfi
       "Authorization": `Bearer ${supabaseAnonKey}`,
       "apikey": supabaseAnonKey,
       
-      // [BUSINESS LOGIC]: O UUID do cofre passa a trafegar via header customizado.
-      // IMPORTANTE: A sua Edge Function (sbx-data) PRECISA ser alterada para capturar 'x-session-token'.
+      // [BUSINESS LOGIC]: O JWT Próprio (session_token) passa a trafegar via header customizado.
+      // IMPORTANTE: A sua Edge Function (sbx-data) PRECISA ser alterada para capturar 'x-session-token'
+      // e validar a assinatura deste JWT antes de buscar os dados no banco/Superbid.
       "x-session-token": sessionToken,
       
       "x-sbx-env": storedAmbiente,

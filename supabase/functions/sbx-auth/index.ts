@@ -1,14 +1,14 @@
 /**
  * @fileoverview Edge Function: Auth SBX (Login Proxy)
- * 
- * Esta função atua como um proxy seguro para o login na API da Superbid (SBX).
+ * * Esta função atua como um proxy seguro para o login na API da Superbid (SBX).
  * Ela gerencia:
  * 1. A seleção dinâmica de ambiente ('staging' ou 'production').
  * 2. A requisição OAuth2 usando client_id e portalid ocultos no servidor.
  * 3. O cálculo dinâmico da expiração do token (com margem de segurança de 15 min).
  * 4. A gravação segura da sessão no banco de dados, retornando apenas um 
- *    session_token (UUID) e o user_id para o front-end.
- * 
+ * session_token (UUID), o user_id, e as referências de tempo para o front-end.
+ * * [SECURITY]: O token real da Superbid (sbx_access_token) NUNCA é retornado 
+ * para o front-end, garantindo o isolamento do Gateway.
  * --------------------------------------------------------------------------------
  */
 
@@ -40,7 +40,7 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  //  IP do usuárioi do cabeçalho da requisição recebida
+  //  IP do usuário do cabeçalho da requisição recebida
   const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || '0.0.0.0';
 
   try {
@@ -120,17 +120,22 @@ serve(async (req) => {
     }
 
     // ---------------------------------------------------------------------------
-    // RESPOSTA DE SUCESSO AO FRONT-END
+    // RESPOSTA DE SUCESSO AO FRONT-END (Gateway Bypass Respeitado)
     // ---------------------------------------------------------------------------
     return new Response(JSON.stringify({
-      session_token: data.session_token,
+      success: true,
+      session_token: data.session_token,     // Apenas o UUID desce pro front
       user_id: sbxData.userId,
-      sbx_access_token: sbxData.access_token
+      
+      // [NOVO]: Variáveis para o front-end calcular o Clock Drift com segurança
+      expires_at: Math.floor(nossaExpiracao.getTime() / 1000), // Limite em segundos
+      server_now_ms: agora.getTime()                           // Hora exata da requisição
     }), { 
       status: 200, 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     })
-} catch (err) {
+
+  } catch (err) {
     // ---------------------------------------------------------------------------
     // FALLBACK DE ERROS CRÍTICOS
     // ---------------------------------------------------------------------------
