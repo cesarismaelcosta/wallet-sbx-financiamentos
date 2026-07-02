@@ -18,6 +18,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
+import { jwtDecode } from "jwt-decode";
 
 // =========================================================================
 // [TYPES]: Tipagens e Interfaces
