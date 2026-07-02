@@ -20,7 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { fetchMyProfile } from "@/services/user";
+import { useContext } from "react";
+import { UserDataContext } from "./sandbox.lazy";
 
 import {
   Entity as EntityType,
@@ -236,9 +237,14 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   // -----------------------------------------------------------------------
   // [CONTEXT]: Integração com Autenticação e Roteamento
   // -----------------------------------------------------------------------
-  const { sbxToken, logout, userId } = useFinancialAuth();
+  const { logout, userId } = useFinancialAuth();
   const navigate = useNavigate();
   const currentFlow = FLOW_MAP[flowKey as any];
+
+  // useOutletContext lê exatamente o que foi passado via <Outlet context={{ userData }} />
+  const { userData } = useContext(UserDataContext) || {};
+
+  console.log("DEBUG FILHO:", userData);
 
   // -----------------------------------------------------------------------
   // [STATE]: Controles locais da interface
@@ -248,8 +254,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // [DATA]: Estado hidratado a partir do BFF
-  const [apiEntity, setApiEntity] = useState<EntityType | null>(null);
+  // [BUSINESS LOGIC]: Prioriza a entidade real (userData) sobre o Mock
+  const entity = userData || Entity[pessoa];
 
   // -----------------------------------------------------------------------
   // [EFFECTS]: Ciclo de vida e dependências
@@ -257,54 +263,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   useEffect(() => {
     if (currentFlow) setCategoria(currentFlow.category.split("|")[0].trim());
   }, [flowKey, currentFlow]);
-
-  // =========================================================================
-  // [TRANSFORM]: Mapper para normalização de dados do BFF
-  // =========================================================================
-  const hydrateUserEntity = (data: any): EntityType | null => {
-    if (!data || !data.name) {
-      console.warn("⚠️ [Mapper] Dados incompletos recebidos do BFF:", data);
-      return null;
-    }
-
-    return {
-      entity_id: String(data.entity_id),
-      name: data.name,
-      document: data.document,   
-      phone: data.phone,
-      email: data.email,
-      birth_date: data.birth_date,
-      gender: data.gender,
-    };
-  };
-
-  // =========================================================================
-  // [NETWORK]: Fetch e Tratamento de Exceção
-  // =========================================================================
-  const fetchEntity = async () => {
-    if (!sbxToken) return;
-
-    try {
-      const data = await fetchMyProfile(sbxToken);
-      const mappedData = hydrateUserEntity(data);
-    
-      console.log("🔍 [Debug Entity Após Mapping]:", mappedData);
-      setApiEntity(mappedData);
-
-    } catch (error: any) {
-      console.error("🚨 [Debug] Erro no fetchEntity:", error);
-      
-      if (error.message === "SESSION_EXPIRED") {
-        // [CRITICAL FIX]: O Token é expurgado localmente antes de alterar a rota.
-        // Isso previne que a tela de SignIn leia lixo de memória e cause um loop infinito.
-        logout();
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (sbxToken) fetchEntity();
-  }, [sbxToken]);
 
   // -----------------------------------------------------------------------
   // [MEMOIZATION]: Imagens e Logos
@@ -353,9 +311,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   // -----------------------------------------------------------------------
   const activeOffer = Offers[categoria as keyof typeof Offers];
   
-  // A entidade real tem prioridade sobre o Mock
-  const entity = apiEntity || Entity[pessoa];
-
   // -----------------------------------------------------------------------
   // [HANDLERS]: Eventos de Interação
   // -----------------------------------------------------------------------
