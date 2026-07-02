@@ -1,6 +1,6 @@
 /**
  * @fileoverview Definição de Tipos - Jornada de Cartão
- * @path src/components/card/cartao.types.ts
+ * 
  */
 
 export interface PageConfig {

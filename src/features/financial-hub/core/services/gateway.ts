@@ -89,7 +89,6 @@ export async function callSimulation(payload: any, step: 'CHECK_ELIGIBILITY' | '
   
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-gateway`;
 
-  
   console.log("gateway payload:", payload);
 
   const response = await fetch(url, {
