@@ -451,13 +451,6 @@ serve(async (req: Request) => {
     });
   }
 
-  // A partir daqui, seu código continua normalmente...
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    { auth: { persistSession: false } }
-  );
-
   // Inicialização do cliente com Service Role para bypass de RLS
   // Essencial para que o modo GET consiga ler dados protegidos para o Front-end.
   const supabase = createClient(
