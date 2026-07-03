@@ -571,9 +571,6 @@ if (req.method === 'GET') {
         });
       }
 
-      // 1. Snapshots dos dados relacionados (O cofre foi aberto com segurança)
-      const visitOfferData = visit.visit_offers?.[0] || {};
-
       // 1. Snapshots dos dados relacionados
       const visitOfferData = visit.visit_offers?.[0] || {};
       const visitEntityData = visit.visit_entities?.[0] || {};
