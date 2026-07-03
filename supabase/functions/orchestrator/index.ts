@@ -49,14 +49,6 @@ const debugLog = (message: string, data?: any) => {
   }
 };
 
-
-// CONFIGURAÇÃO DE CORS
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token, x-visit-id, x-visit-update-id, x-simulation-id",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
-
 /**
  * REGRAS DE OBRIGATORIEDADE E INTEGRIDADE:
  * - interaction_context: Sempre obrigatório.
@@ -443,25 +435,28 @@ async function resolveOrchestratorConfigs(
  */
 serve(async (req: Request) => {
     
-  /**
-   * ETAPA 1: Setup Inicial e CORS
-   * Usando a configuração global que contém os headers customizados (Padrão Cofre)
-   */
-  const allowedHeaders = "authorization, x-client-info, apikey, content-type, x-session-token, x-visit-id, x-visit-update-id, x-simulation-id";
-
-  const localCorsHeaders = {
+  // 1. DEFINIÇÃO ÚNICA E ROBUSTA DOS HEADERS
+  const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": allowedHeaders,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token, x-visit-id, x-visit-update-id, x-simulation-id",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Content-Type": "application/json"
   };
 
-  // O Voo de Reconhecimento (Preflight)
+  // 2. PREFLIGHT (CORS) - TRATADO LOGO NO INÍCIO
   if (req.method === 'OPTIONS') {
     return new Response('ok', { 
       status: 200, 
-      headers: localCorsHeaders 
+      headers: corsHeaders 
     });
   }
+
+  // A partir daqui, seu código continua normalmente...
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false } }
+  );
 
   // Inicialização do cliente com Service Role para bypass de RLS
   // Essencial para que o modo GET consiga ler dados protegidos para o Front-end.
