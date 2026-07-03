@@ -1,63 +1,21 @@
 /**
- * ORQUESTRADOR CENTRAL (Gateway de Roteamento)
- * Este módulo atua como a única porta de entrada para todas as interações vindas da Superbid.
- * Sua responsabilidade é garantir que cada "clique" seja devidamente registrado (visita)
- * e direcionado para o destino correto (página de simulação ou parceiro).
- * A página de simulação de cada produto, se houver, chamará o respectivo parceiro.
- * Alguns produtos poderão ser redirecionados para a página do parceiro.
+ * @fileoverview sbX API Gateway & Orchestrator
+ * @module supabase/functions/orchestrator
+ * * @description 
+ * Ponto de entrada central (Single Point of Entry) para todas as jornadas financeiras e de parceiros.
+ * Responsável por gerenciar o ciclo de vida da visita, roteamento inteligente e hidratação de contexto.
+ * * * --- ARQUITETURA DE TRANSPORTE (ZERO-URL-STATE) ---
+ * Este microsserviço opera sob o padrão de estado atômico e isolado.
+ * 1. O servidor NÃO injeta chaves de sessão (visit_id, update_id) na URL de navegação (`target_url`).
+ * 2. O payload HTTP (JSON) atua como o único transportador oficial de chaves de identidade.
+ * 3. A aplicação cliente (Front-end) é responsável por interceptar o payload, persistir no cofre 
+ * (sessionStorage) e executar a navegação limpa, prevenindo o vazamento de estado na History Stack.
  */
-
-/**
- * @fileoverview Orquestrador de Fluxos - Ponto único de entrada.
- * @description Centraliza o registro de visitas (visits e visit_offers).
- * 
- * @input {JSON} Payload de Entrada (OrchestratorPayload):
- * - entity: { entity_id, name, document, phone, email, birth_date, gender }
- * - interaction_context: { utm_source, origin_url }
- * - product_id: number (Obrigatório para campanhas externas)
- * - manager/seller/event/offer: Snapshots detalhados para persistência em visit_offers.
- * - visit_id: ID da sessão para persistência da jornada.
- * - utm_source: Origem (Ex: 'direct' (entrada direta na página), 'banner', 'whatsapp', 'instagram', 'email').
- * - utm_medium:Meio (Ex: 'cpc', 'push', 'qr-code', 'organic').
- * - utm_campaign: Nome da campanha (Ex: 'cashback_maio', 'lote_400').
- *
- * @output {JSON} Resposta de Roteamento (OrchestratorResponse):
- * - action: "REDIRECT"
- * - url: URL com visit_id injetado para hidratação no destino.
- **/
-
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { persistVisitData } from "./persist-data.ts";
 import { sql } from '../_shared/db.ts';
-
-/**
- * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
- */
-
-// Chave de controle para logs de depuração
-const DEBUG_MODE = true;
-
-/**
- * FUNÇÃO DE LOG PADRONIZADA
- * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
- */
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[ORCHESTRATOR-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
-};
-
-/**
- * REGRAS DE OBRIGATORIEDADE E INTEGRIDADE:
- * - interaction_context: Sempre obrigatório.
- * - client: Obrigatório para todas as origens.
- * - product_id: Obrigatório se utm_source IN ('banner', 'whatsapp', 'email', 'sms').
- * - category_id: Opcional (se enviado, deve existir em category_types).
- * - event/offer: Obrigatórios se utm_source === 'offer'.
- * - vehicle: Obrigatório se categoria mapeada para 'Caminhões' ou 'Carros'.
- */
 
 import { 
   OriginDetails, 
@@ -72,8 +30,28 @@ import {
   OrchestratorResponse
 } from "../_shared/types.ts";
 
+/** ============================================================================
+ * CONFIGURAÇÕES GLOBAIS E UTILITÁRIOS
+ * ============================================================================ */
+
+const DEBUG_MODE = true;
+
 /**
- * Helper para extrair OS e Device básico do User Agent
+ * Utilitário central de log. Condicionado à flag de debug para evitar ruído 
+ * excessivo nos logs do Supabase em ambiente de produção (se desativado).
+ * @param {string} message - Ação ou contexto do log.
+ * @param {any} [data] - Objeto de dados para dump (opcional).
+ */
+const debugLog = (message: string, data?: any) => {
+  if (DEBUG_MODE) {
+    console.log(`[ORCHESTRATOR-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
+  }
+};
+
+/**
+ * Analisador primário de User Agent para classificação de tráfego.
+ * @param {string} ua - String bruta do cabeçalho 'user-agent'.
+ * @returns {{os: string, device: string}} Classificação macro do dispositivo.
  */
 function parseUserAgent(ua: string) {
   const os = ua.includes('Windows') ? 'Windows' : 
@@ -85,19 +63,21 @@ function parseUserAgent(ua: string) {
   return { os, device };
 }
 
+/** ============================================================================
+ * SERVIÇOS DE DOMÍNIO (DOMAIN SERVICES)
+ * ============================================================================ */
+
 /**
- * Captura dados detalhados de infraestrutura e geolocalização.
- * 
- * Lógica de Geo:
- * 1. Tenta recuperar via headers da Cloudflare (produção Supabase).
- * 2. Se falhar (localhost/dev), utiliza o IP-API como fallback.
- * 
- * @param {Request} req - O objeto da requisição HTTP.
- * @returns {Promise<object>} Objeto contendo IP, Geo, OS e Device Type.
+ * Resolve a identidade e geolocalização do cliente na borda (Edge).
+ * Implementa estratégia de fallback: tenta extrair headers do CDN/Gateway primeiro,
+ * recorrendo a uma API externa (ip-api) apenas se os dados cruciais estiverem ausentes.
+ * * @param {Request} req - Objeto de requisição HTTP nativo do Deno.
+ * @returns {Promise<OriginDetails>} Snapshot rastreável da origem do usuário.
  */
-async function captureInfrastructure(req: Request) {
+async function captureInfrastructure(req: Request): Promise<OriginDetails> {
   const ua = req.headers.get('user-agent') || '';
-  // Melhora a captura do IP
+  
+  // Resolução de IP considerando proxies reversos e arquitetura serverless
   const ip = req.headers.get('x-real-ip') || 
              req.headers.get('cf-connecting-ip') || 
              req.headers.get('x-forwarded-for')?.split(',')[0] || 
@@ -105,18 +85,16 @@ async function captureInfrastructure(req: Request) {
   
   const { os, device } = parseUserAgent(ua);
 
-  // Tenta capturar dos headers da Vercel/Supabase (mais comuns no Edge)
+  // Tentativa Primária: Headers do provedor de infra (Cloudflare / Vercel)
   let geo = {
     country: req.headers.get('x-vercel-ip-country') || req.headers.get('cf-ipcountry'),
     state: req.headers.get('x-vercel-ip-country-region') || req.headers.get('cf-region'),
     city: req.headers.get('x-vercel-ip-city') || req.headers.get('cf-ipcity')
   };
 
-  // 3. SE ALGUM CAMPO ESTIVER FALTANDO, DISPARA O FALLBACK
-  // Mudamos a condição para ser mais agressiva: se não tem cidade ou estado, busca no IP-API
+  // Tentativa Secundária (Fallback): Consulta DNS/IP se a infra falhar em identificar
   if (!geo.country || geo.country === 'XX' || !geo.city) {
     try {
-      // Importante: se o IP for 0.0.0.0 ou 127.0.0.1, o ip-api não retorna nada útil localmente
       const queryIp = (ip === '0.0.0.0' || ip === '127.0.0.1') ? '' : ip;
       const res = await fetch(`http://ip-api.com/json/${queryIp}?fields=countryCode,regionName,city`);
       const fallback = await res.json();
@@ -126,12 +104,12 @@ async function captureInfrastructure(req: Request) {
         state: fallback?.regionName || geo.state || 'N/A',
         city: fallback?.city || geo.city || 'N/A'
       };
-    } catch (e) {
+    } catch (e: any) {
       console.warn("[sbX Infrastructure] Falha no fallback de Geo:", e.message);
     }
   }
 
-  const originData: OriginDetails = {
+  return {
     ip_address: ip,
     country: geo.country || 'N/A',
     state: geo.state || 'N/A',
@@ -140,18 +118,20 @@ async function captureInfrastructure(req: Request) {
     device_type: device,
     operating_system: os,
     metadata: {
-      timestamp: new Date().toISOString(), // Adicionado para cumprir a interface
-      tls_version: req.headers.get('x-tls-version') || null // Adicionado para cumprir a interface
+      timestamp: new Date().toISOString(), 
+      tls_version: req.headers.get('x-tls-version') || null 
     }
   };
-
-  return originData;
 }
 
 /**
- * Função: validatePayload
- * @description Valida a integridade total do payload campo a campo.
- * Mantém o rigor da versão original, diferenciando a obrigatoriedade entre VISIT e SIMULATION.
+ * Validador de Contrato de Entrada (Schema Guard).
+ * Assegura que o payload respeita as regras de negócio antes de qualquer acesso ao banco.
+ * Lida com a mutação estrutural entre clientes Pessoa Física (PF) e Jurídica (PJ).
+ * * @param {any} supabaseClient - Instância conectada do banco de dados.
+ * @param {OrchestratorPayload} payload - Corpo da requisição a ser avaliado.
+ * @throws {Error} Interrompe a execução caso encontre inconformidades (Validation Error).
+ * @returns {Promise<{ category_id?: number, product_id?: number, action: string }>} Contexto sanitarizado.
  */
 async function validatePayload(
   supabaseClient: any, 
@@ -162,36 +142,19 @@ async function validatePayload(
   let found_category_id: number | undefined;
   let found_product_id: number | undefined = payload.product_id;
 
-  // 1. Definição da Ação e Contexto (Normalização)
-  const action = payload.action?.toUpperCase();
-  payload.action = action as 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT';
+  const action = payload.action?.toUpperCase() as 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT';
+  payload.action = action;
 
-  // Identificação e Contexto (Sempre Obrigatório)
+  // 1. Validações de Roteamento de Origem
   if (!payload.interaction_context?.utm_source) errors.push("interaction_context.utm_source ausente.");
-  const source = payload.interaction_context?.utm_source;
-
-  // Valida origin_url no contexto
-  if (!payload.interaction_context?.origin_url) {
-    errors.push("interaction_context.origin_url ausente.");
+  if (!payload.interaction_context?.origin_url) errors.push("interaction_context.origin_url ausente.");
+  if (!payload.origin_url) errors.push("origin_url ausente na raiz do payload. É obrigatório para o roteamento.");
+  
+  if (['VISIT', 'REDIRECT', 'CONTACT'].includes(action) && !payload.target_url) {
+    errors.push(`target_url ausente. Obrigatório enviar o destino da página para ações do tipo ${action}.`);
   }
 
-  // 2. Validação de origin_url e target_url na raiz (usado pelo persistVisitData)
-  if (!payload.origin_url) {
-    errors.push("origin_url ausente na raiz do payload. É obrigatório para o roteamento.");
-  }
-
-  // target_url para ações de tráfego direto
-  // Se for VISIT, REDIRECT ou CONTACT, é o frontend quem está pilotando a navegação. Ele sabe a página que carregou, então ele é obrigado a informar o target_url.
-  // Se for SIMULATE, é o backend quem pilota o destino. Então, a validação não exige o target_url de quem fez a chamada.
-  if (['VISIT', 'REDIRECT', 'CONTACT'].includes(action)) {
-    if (!payload.target_url) {
-      errors.push(`target_url ausente. Obrigatório enviar o destino da página para ações do tipo ${action}.`);
-    }
-  }
-
-  // =========================================================================
-  // 3. VALIDAÇÃO DO NÓ: ENTITY (DINÂMICO PF VS PJ)
-  // =========================================================================
+  // 2. Validações de Entidade (Dynamic PF/PJ Checking)
   if (action === 'SIMULATE' || action === 'CONSULT' || payload.entity) {
     if (!payload.entity?.entity_id) errors.push("entity.entity_id ausente.");
     if (!payload.entity?.name) errors.push("entity.name ausente.");
@@ -199,69 +162,47 @@ async function validatePayload(
     if (!payload.entity?.phone) errors.push("entity.phone ausente.");
     if (!payload.entity?.email) errors.push("entity.email ausente.");
 
-    // Higieniza o documento para analisar o tamanho do rastro real
+    // Avaliação do tipo de documento pelo tamanho limpo (11 PF / 14 PJ)
     const cleanDoc = String(payload.entity?.document || "").replace(/\D/g, "");
     const isPJ = cleanDoc.length === 14;
 
-    // Se NÃO for PJ (ou seja, for conta PF), aplica obrigatoriedade estrita
     if (!isPJ) {
-      if (!payload.entity?.birth_date) errors.push("entity.birth_date ausente. Campo obrigatório para Pessoa Física (PF).");
-      if (!payload.entity?.gender) errors.push("entity.gender ausente. Campo obrigatório para Pessoa Física (PF).");
-    } else {
-      // Sanitização preventiva para PJ não estourar restrições de coluna do banco no insert
-      if (payload.entity) {
-        payload.entity.gender = payload.entity.gender || "";
-        payload.entity.birth_date = payload.entity.birth_date || "";
-      }
+      if (!payload.entity?.birth_date) errors.push("entity.birth_date ausente (Obrigatório para PF).");
+      if (!payload.entity?.gender) errors.push("entity.gender ausente (Obrigatório para PF).");
+    } else if (payload.entity) {
+      // Previne erros de tipagem no banco ao inserir nulos em campos string
+      payload.entity.gender = payload.entity.gender || "";
+      payload.entity.birth_date = payload.entity.birth_date || "";
     }
   } 
 
-  // =========================================================================
-  // 4. VALIDAÇÃO DOS NÓS DE CONTEXTO (OFFER, SELLER, MANAGER, EVENT)
-  // =========================================================================
-  // Se 'payload.offer' estiver vazio ou nulo, o sistema entende que é uma jornada direta
+  // 3. Validações de Oferta e Contexto de Venda
+  const source = payload.interaction_context?.utm_source;
   const hasOfferContext = !!payload.offer && (source === 'offer' || !!payload.offer.offer_id);
 
   if (hasOfferContext) {
-    // --- Nó MANAGER ---
     if (!payload.manager?.manager_name) errors.push("manager.manager_name é obrigatório.");
-
-    // --- Nó SELLER ---
     if (!payload.seller?.seller_id) errors.push("seller.seller_id é obrigatório.");
     if (!payload.seller?.legal_name) errors.push("seller.legal_name é obrigatório.");
-    if (!payload.seller?.trade_name) errors.push("seller.trade_name é obrigatório.");
-    if (!payload.seller?.economic_group) errors.push("seller.economic_group é obrigatório.");
-
-    // --- Nó EVENT ---
     if (!payload.event?.event_id) errors.push("event.event_id é obrigatório.");
-    if (!payload.event?.event_description) errors.push("event.event_description é obrigatório.");
-    if (!payload.event?.event_start_date) errors.push("event.event_start_date é obrigatório.");
-    if (!payload.event?.event_end_date) errors.push("event.event_end_date é obrigatório.");
-
-    // --- Nó OFFER ---
     if (!payload.offer?.offer_id) errors.push("offer.offer_id é obrigatório.");
-    if (!payload.offer?.offer_description) errors.push("offer.offer_description é obrigatório.");
     if (!payload.offer?.offer_value) errors.push("offer.offer_value é obrigatório.");
 
-    // Resolução de Categoria (Se houver texto de categoria)
+    // Resolução dinâmica de Category ID via texto
     if (payload.offer?.category) {
-      debugLog("ValidatePayload categoria recebida:" & payload.offer?.category)
-
       const { data: catData } = await supabaseClient
         .from('category_types')
         .select('id, product_id')
         .ilike('name', `%${payload.offer.category}%`)
         .single();
-
-      debugLog("ValidatePayload encontratndo id da categoria em category_types:" & catData.id)
       
       if (!catData) {
         errors.push(`Categoria '${payload.offer.category}' não mapeada.`);
       } else {
         found_category_id = catData.id;
         payload.offer!.category_id = catData.id;
-
-        // Só atribui se o payload.product_id for nulo, undefined ou vazio
+        
+        // Categoria herda product_id se o payload não definir explicitamente
         if (!payload.product_id && catData.product_id) {
           found_product_id = catData.product_id;
           payload.product_id = catData.product_id;
@@ -270,21 +211,25 @@ async function validatePayload(
     }
   }
 
-  // 5. Validação de Canais de Marketing
+  // 4. Regras de Canais Externos
   if (['banner', 'whatsapp', 'email', 'sms'].includes(source || '') && !found_product_id) {
     errors.push(`Para o canal '${source}', o 'product_id' é obrigatório.`);
   }
 
-  // 6. Lançamento de Erros
   if (errors.length > 0) throw new Error(`[sbX Validation Error]: ${errors.join(" | ")}`);
 
   return { category_id: found_category_id, product_id: found_product_id, action };
 }
 
 /**
- * @function resolveDestination
- * @description Resolve o destino de redirecionamento. 
- * Para SIMULATION, busca no banco. Para VISIT, valida e retorna a URL enviada.
+ * Resolução Dinâmica de Destino (Routing Engine).
+ * Calcula a rota exata de navegação e as configurações de integração baseadas
+ * em uma árvore de prioridades rigorosa: Produto > Evento > Seller > Categoria.
+ * * @param {any} supabaseClient - Instância do banco.
+ * @param {string} action - Ação solicitada no payload.
+ * @param {string} [payloadTargetUrl] - URL manual (obrigatória para VISIT).
+ * @throws {Error} Caso o fluxo seja SIMULATE e não exista configuração ativa no banco.
+ * @returns {Promise<Object>} URL de destino resolvida e metadados de parceria.
  */
 async function resolveDestination(
   supabaseClient: any, 
@@ -295,32 +240,18 @@ async function resolveDestination(
   categoryId?: number,
   productId?: number,
   entityDocument?: string
-): Promise<{ 
-    orchestrator_config_id?: number,
-    url: string, 
-    partner_id?: number, 
-    is_integrated?: boolean,
-    integration_method?: string, 
-    integration_details?: any 
-}> {
+) {
   
-  // 1. CASO VISIT: Retorna a URL que veio no payload (ou uma padrão do sistema)
-  debugLog(`RESOLVE DESTINATION: Ação ${action} recebida. Iniciando resolução de destino...category: ${categoryId}... product_id: ${productId}... eventId: ${eventId}... sellerId: ${sellerId}... entityDocument: ${entityDocument}`);
-
-  if (action === 'VISIT' || action === 'REDIRECT' || action === 'CONTACT') {
-    if (!payloadTargetUrl) {
-      throw new Error("Para ações de 'VISIT', a target_url é obrigatória no payload.");
-    }
-    return { 
-      url: payloadTargetUrl 
-    };
+  // Fast-track para roteamento estático conduzido pelo Front-end
+  if (['VISIT', 'REDIRECT', 'CONTACT'].includes(action)) {
+    if (!payloadTargetUrl) throw new Error(`Ação '${action}' requer target_url no payload.`);
+    return { url: payloadTargetUrl };
   }
 
-  // Identifica o perfil do lead atual ('PF' ou 'PJ') baseando-se no tamanho do documento limpo
   const cleanDoc = String(entityDocument || "").replace(/\D/g, "");
   const currentProfile = cleanDoc.length === 14 ? 'PJ' : 'PF';
 
-  // 2. Hierarquia de prioridades
+  // Árvore de Prioridade (Cascata de Roteamento)
   const priorities = [
     { type: 'PRODUCT', id: productId ? Number(productId) : undefined },
     { type: 'EVENT', id: eventId ? Number(eventId) : undefined },
@@ -330,9 +261,6 @@ async function resolveDestination(
   
   for (const priority of priorities) {
     if (priority.id && !isNaN(priority.id)) {
-      // Log para conferir o que está saindo para a query
-      debugLog(`resolveDestination tentando query: ${priority.type} com ID: ${priority.id}`);
-      // Com filtro para respeitar as chaves: 'PF', 'PJ' ou 'PF+PJ' configuradas na tabela
       const { data, error } = await supabaseClient
         .from('orchestrator_configs')
         .select('id, page_url, partner_id, is_integrated, integration_method, integration_details, entity_type')
@@ -342,18 +270,9 @@ async function resolveDestination(
         .in('entity_type', [currentProfile, 'PF+PJ'])
         .maybeSingle();
 
-      if (error) {
-        debugLog(`[ROTEAMENTO AVISO] Erro na query de ${priority.type}:`, error.message);
-        continue; // Deu erro no banco, pula para a próxima prioridade
-      }
+      if (error || !data) continue; // Tenta o próximo nível hierárquico
 
-      if (!data) {
-        debugLog(`[ROTEAMENTO AVISO] Registro não encontrado para ${priority.type} ID ${priority.id}. Continuando busca...`);
-        continue; // e não achou dados, obriga o loop a passar para o próximo item!
-      }
-
-      // Se achou o registro, mata a execução do loop e retorna o destino na hora
-      debugLog(`[ROTEAMENTO SUCESSO] Match cravado via ${priority.type} -> `, data);
+      debugLog(`[ROTEAMENTO SUCESSO] Match: ${priority.type} ID ${priority.id}`);
       return { 
         orchestrator_config_id: data.id,
         url: data.page_url, 
@@ -365,13 +284,13 @@ async function resolveDestination(
     }
   }
   
-  // Só vai chegar aqui se o loop rodar as 4 prioridades e todas retornarem vazias ou com erro, ou se os IDs forem inválidos (ex: string "undefined" que não é convertida para número).
-  throw new Error("Nenhuma configuração de destino ativa encontrada para esta simulação.");
+  throw new Error("Nenhuma configuração de destino ativa encontrada para o contexto atual.");
 }
 
 /**
- * @function resolveOrchestratorConfigs
- * @description Executa a busca em cascata (Filtro de Prioridade) nas configurações JSONB.
+ * Resolução de Configurações (Hydration Engine).
+ * Recupera regras de negócio, limites de simulação e UI (branding/FAQ) para o front-end.
+ * Utiliza a mesma árvore de prioridade do roteamento.
  */
 async function resolveOrchestratorConfigs(
   supabase: any,
@@ -379,14 +298,11 @@ async function resolveOrchestratorConfigs(
   sellerId?: any,
   categoryId?: any,
   productId?: any,
-  entityDocument?: string // Passando o documento para filtrar as configs ativas para o perfil correto (PF ou PJ)
+  entityDocument?: string
 ) {
-
-  // 1. Identifica o perfil do lead atual ('PF' ou 'PJ') limpando pontos e traços
   const cleanDoc = String(entityDocument || "").replace(/\D/g, "");
   const currentProfile = cleanDoc.length === 14 ? 'PJ' : 'PF';
 
-  // Define a hierarquia de prioridades
   const priorities = [
     { type: 'PRODUCT', id: productId },
     { type: 'EVENT', id: eventId },
@@ -395,47 +311,28 @@ async function resolveOrchestratorConfigs(
   ];
 
   for (const priority of priorities) {
-    // Só tenta buscar se o ID existir e não for a string "undefined"
     if (priority.id && priority.id !== "undefined") {
       const { data, error } = await supabase
         .from('orchestrator_configs')
-        .select('partner_id, rules, consent_configs, page_configs, page_faqs, is_integrated, integration_method, integration_details')
+        .select('partner_id, rules, consent_configs, page_configs, page_faqs, is_integrated, integration_method, integration_details, simulation_rules')
         .eq('lookup_id', Number(priority.id)) 
         .eq('config_type', priority.type)
         .eq('is_active', true)
         .in('entity_type', [currentProfile, 'PF+PJ'])
         .maybeSingle();
 
-      if (error) {
-        debugLog("ERRO NA CONSULTA RULES E CONFIGS EM OSQUESTRATOR_CONFIGS: Erro na busca", error.message);
-        continue;
-      }
-
-      if (data) {
-        debugLog("CONSULTA RULES E CONFIGS EM OSQUESTRATOR_CONFIGS:", data);
-        return data;
-      }
-      
-      debugLog("CONSULTA RULES E CONFIGS EM OSQUESTRATOR_CONFIGS:", `Nada encontrado para ${priority.type} ID ${priority.id}`);
+      if (!error && data) return data;
     }
   }
-
-  debugLog("CONSULTA RULES E CONFIGS EM OSQUESTRATOR_CONFIGS:", "Nenhuma configuração ativa encontrada.");
   return null;
 }
 
-/**
- * HANDLER PRINCIPAL: serve
- * @description Ponto de entrada único para requisições da Superbid.
- * Este handler agora opera como um componente de E/S (Entrada e Saída) Bilateral:
- * * 1. MODO LEITURA (GET) - "Hidratação":
- * Recupera o raw_payload usando o visit_id para preencher formulários automaticamente.
- * * 2. MODO ESCRITA (POST) - "Orquestração":
- * Valida, registra a visita e define o destino (redirecionamento).
- */
+/** ============================================================================
+ * GATEWAY HTTP (EDGE FUNCTION HANDLER)
+ * ============================================================================ */
+
 serve(async (req: Request) => {
     
-  // 1. DEFINIÇÃO ÚNICA E ROBUSTA DOS HEADERS
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token, x-visit-id, x-visit-update-id, x-simulation-id",
@@ -443,152 +340,86 @@ serve(async (req: Request) => {
     "Content-Type": "application/json"
   };
 
-  // 2. PREFLIGHT (CORS) - TRATADO LOGO NO INÍCIO
+  // Resposta imediata para Preflight (Padrão W3C)
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { 
-      status: 200, 
-      headers: corsHeaders 
-    });
+    return new Response('ok', { status: 200, headers: corsHeaders });
   }
 
-  // Inicialização do cliente com Service Role para bypass de RLS
-  // Essencial para que o modo GET consiga ler dados protegidos para o Front-end.
+  // Cliente operando em Modo Bypass (Service Role) para consolidar dados espalhados
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    {
-      auth: {
-        persistSession: false,
-      },
-    }
+    { auth: { persistSession: false } }
   );
 
-  // =========================================================================
-  // MODO LEITURA (GET): Hidratação de Contexto (O Pulo do Gato)
-  // =========================================================================
-if (req.method === 'GET') {
+  /**
+   * FLUXO DE LEITURA (GET) - HIDRATAÇÃO DO FRONT-END
+   * Extrai o contexto do banco de dados baseado na sessão e devolve ao cliente.
+   * Totalmente protegido contra exposição de URL; confia exclusivamente nos Headers HTTP.
+   */
+  if (req.method === 'GET') {
     try {
-      // 1. CAPTURA SEGURA (Padrão Cofre): Extraindo do Header e não da URL
       const visitId = req.headers.get('x-visit-id');
       const visitUpdateId = req.headers.get('x-visit-update-id');
       const simulationId = req.headers.get('x-simulation-id');
-
-      // 2. TRAVA 1: Identificação do Usuário via JWT
       const sessionToken = req.headers.get("x-session-token");
+
+      // Autenticação Rigorosa de Chamada
       if (!sessionToken) {
         return new Response(JSON.stringify({ code: "AUTH_REQUIRED", message: "Token de sessão ausente." }), { 
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          status: 401, headers: corsHeaders 
         });
       }
+      if (!visitId) throw new Error("Parâmetro 'x-visit-id' obrigatório no cabeçalho.");
 
-      // Decodifica o Token JWT para saber quem está pedindo o dado
-      const tokenParts = sessionToken.split('.');
-      const jwtPayload = JSON.parse(atob(tokenParts[1]));
+      // Identidade do requisitante
+      const jwtPayload = JSON.parse(atob(sessionToken.split('.')[1]));
       const sessionUserId = jwtPayload.sub; 
 
-      // Validação de Entrada: Garante que a requisição possui as chaves mestra
-      if (!visitId) throw new Error("O parâmetro 'x-visit-id' é obrigatório no cabeçalho.");
-
-      // Se vier simulation_id, buscamos os dados da simulação para hidratar
-      let simulationData = null;
-      if (simulationId) {
-        const { data: sim, error: simError } = await supabase
-          .from('simulations')
-          .select('*')
-          .eq('id', simulationId)
-          .single();
-        
-        if (!simError) simulationData = sim;
-      }
-
-      // 1. Validação de Entrada: Garante que a requisição possui as chaves mestra (visit_id e visit_update_id).
-      if (!visitId) throw new Error("O parâmetro 'visit_id' é obrigatório.");
-
-      // 2. BUSCA PROFUNDA (Join Nativo):
-      // Consultamos a tabela 'visits' e trazemos via relacionamento a 'visit_entities' e 'visit_offers'.
-      // O snapshot JSONB 'entity_details' é a nossa fonte primária de verdade.
+      // Join Nativo: Recupera a visita e seus instantâneos
       const { data: visit, error: visitError } = await supabase
         .from('visits')
         .select(`
-          id,
-          product_id,
-          partner_id,
-          utm_source,
-          utm_medium,
-          utm_campaign,
-          origin_url,
-          target_url,
-          visit_entities (
-            entity_id,
-            name,
-            document,
-            phone,
-            email,
-            birth_date,
-            gender,
-            entity_details
-          ),
-          visit_offers (
-            offer_id,
-            offer_value,
-            manager_details,
-            seller_details,
-            event_details,
-            offer_details,
-            category_id,
-            offer_details
-          )
+          id, product_id, partner_id, utm_source, utm_medium, utm_campaign, origin_url, target_url,
+          visit_entities ( entity_id, name, document, phone, email, birth_date, gender, entity_details ),
+          visit_offers ( offer_id, offer_value, manager_details, seller_details, event_details, offer_details, category_id )
         `)
         .eq('id', visitId)
         .single();
 
-      debugLog("VISIT no GET:", visit);
+      if (visitError || !visit) throw new Error("Visita não encontrada ou expirada.");
 
-      // Safety Guard: Bloqueia o processo se a visita não existir ou se houver erro de RLS.
-      if (visitError || !visit) {
-        console.error("[ORCHESTRATOR ERROR]:", visitError?.message);
-        throw new Error("Visita não encontrada ou expirada.");
-      }
-
-      //  Validação de Propriedade (Cross-User)
+      // Cross-User Security Check: Previne que o Usuário A injete o ID da Visita do Usuário B
       const visitEntityData = visit.visit_entities?.[0] || {};
-      
-      // Verifica se o dono do JWT é o mesmo dono da Visita
       if (visitEntityData.entity_id && visitEntityData.entity_id !== String(sessionUserId)) {
-        console.warn(`[SECURITY] Violação barrada! User: ${sessionUserId} tentou acessar Visita: ${visitId}`);
-        return new Response(JSON.stringify({ 
-          code: "FORBIDDEN_ACCESS", 
-          message: "Acesso negado: O recurso solicitado não pertence a esta sessão." 
-        }), { 
-          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        return new Response(JSON.stringify({ code: "FORBIDDEN_ACCESS", message: "Acesso negado à sessão." }), { 
+          status: 403, headers: corsHeaders 
         });
       }
 
-      // 1. Snapshots dos dados relacionados
       const visitOfferData = visit.visit_offers?.[0] || {};
-
-      // 2. BUSCA EM CASCATA: Evento > Seller > Categoria
+      
+      // Construção do Motor de Regras e Branding
       const orchestratorConfigs = await resolveOrchestratorConfigs(
         supabase,
-        visitOfferData.event_details?.event_id,       // Prioridade 1 : evento
-        visitOfferData.seller_detaiLs?.seller_id,     // Prioridade 2 : seller
-        visitOfferData.category_id,                   // Prioridade 3 : categoria
-        visit.product_id,                             // Prioridade 4 : produto
-        visitEntityData.document                      // Para filtrar as configs ativas para o perfil correto (PF ou PJ)
+        visitOfferData.event_details?.event_id,       
+        visitOfferData.seller_detaiLs?.seller_id,     
+        visitOfferData.category_id,                   
+        visit.product_id,                             
+        visitEntityData.document                      
       );
 
-      // Bloqueio de segurança caso o banco retorne nulo por falta de amarração de rota
       if (!orchestratorConfigs) {
-        throw new Error(`[resolveOrchestratorConfigs]: Configurações não localizadas para o produto/evento/seller/categoria/tipo de documento.`);
+        throw new Error("Falha Crítica: Regras e Configurações não localizadas para o contexto.");
       }
 
-      debugLog("PARAMETRIZAÇÕES DO ORCHESTRATOR: ", orchestratorConfigs);
+      let simulationData = null;
+      if (simulationId) {
+        const { data: sim } = await supabase.from('simulations').select('*').eq('id', simulationId).single();
+        if (sim) simulationData = sim;
+      }
 
-      /**
-       * CONTRATO DE HIDRATAÇÃO SIMPLIFICADO (sbX Minimalist)
-       * @description Simplifica o acesso aos dados removendo o sufixo _details.
-       * @author Cesar Ismael
-       */
+      // Montagem do Payload de Hidratação (Retorno Limpo)
       const hydratedPayload = {
         visit_id: visit.id,
         visit_update_id: visitUpdateId,
@@ -596,7 +427,6 @@ if (req.method === 'GET') {
         product_id: visit.product_id,
         partner_id: orchestratorConfigs.partner_id,
         origin_url: visit.origin_url,
-        // --- Contexto ---
         interaction_context: {
           utm_source: visit.utm_source,
           utm_medium: visit.utm_medium,
@@ -604,15 +434,11 @@ if (req.method === 'GET') {
           origin_url: visit.origin_url,
         },
         target_url: visit.target_url,
-        // --- Entidades (Ajustado para a nova tabela visit_entities) ---
         entity: visitEntityData.entity_details || {},
         manager: visitOfferData.manager_details || {},
         seller: visitOfferData.seller_details || {},
         event: visitOfferData.event_details || {},
         offer: visitOfferData.offer_details || {},
-
-        // --- REGRAS DE NEGÓCIO (LIMITES) ---
-        // --- INJEÇÃO DOS VALORES CONFIGURADOS NA ROTA ---
         rules: orchestratorConfigs?.rules, 
         consent_configs: orchestratorConfigs?.consent_configs,
         page_configs: orchestratorConfigs?.page_configs,
@@ -620,127 +446,75 @@ if (req.method === 'GET') {
         is_integrated: orchestratorConfigs?.is_integrated,
         integration_method: orchestratorConfigs?.integration_method,
         integration_details: orchestratorConfigs?.integration_details,
-
         simulation_details: simulationData?.simulation_details || {
           requested_value: visitOfferData.offer_details?.offer_value ? parseFloat(visitOfferData.offer_details.offer_value) : null,
           installments: null,
-          down_payment_percentage: orchestratorConfigs?.simulation_rules?.min_down_payment_percentage ?? null, // Sem fallback numérico fixo
+          down_payment_percentage: orchestratorConfigs?.simulation_rules?.min_down_payment_percentage ?? null,
           down_payment_amount: (visitOfferData.offer_details?.offer_value && orchestratorConfigs?.simulation_rules?.min_down_payment_percentage)
             ? (parseFloat(visitOfferData.offer_details.offer_value) * (orchestratorConfigs?.simulation_rules?.min_down_payment_percentage / 100)) 
             : null
         }
       };
 
-      debugLog("HIDRATED PAYLOAD: ", hydratedPayload);
-
-      // Retorno Bilateral: O Front recebe os dados prontos para o 'setForm' ou 'setSimData'.
-      return new Response(JSON.stringify(hydratedPayload), {
-        status: 200, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify(hydratedPayload), { status: 200, headers: corsHeaders });
 
     } catch (error: any) {
-      // Log de Erro: Monitoramento via logs do Supabase Functions.
       console.error(`[Orquestrador GET Error]: ${error.message}`);
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: corsHeaders });
     }
   }
 
-  // =========================================================================
-  // MODO ESCRITA (POST): Ciclo de Vida do Clique (Orquestração sbX)
-  // =========================================================================
+  /**
+   * FLUXO DE ESCRITA (POST) - ORQUESTRAÇÃO DE NAVEGAÇÃO
+   * Recebe ações, cadastra snapshots e orienta a UI para qual rota seguir.
+   */
   if (req.method === 'POST') {
     try {
       const payload: OrchestratorPayload = await req.json();
       const infra = await captureInfrastructure(req);
       
-      debugLog("INFOS DE ORIGEM DA CHAMADA NO 'POST': ", infra)
-      debugLog("Payload enviado no 'POST': ", payload)
-      
-      // 1. Validação do Payload e Definição da Ação (VISIT ou SIMULATION)
       const { category_id, product_id, action } = await validatePayload(supabase, payload);
 
-      debugLog("Retorno validatePayload: ", category_id)
-      debugLog("Retorno validatePayload: ", product_id)
-      debugLog("Retorno validatePayload: ", action)
-
-      // 2. Resolução de Destino (Busca onde o usuário deve pousar)
       const destination = await resolveDestination(
-        supabase, 
-        action, 
-        payload.target_url,
-        payload.event?.event_id, 
-        payload.seller?.seller_id,
-        category_id, 
-        product_id,
-        payload.entity?.document   // Document para identificar se é PF ou PJ
+        supabase, action, payload.target_url, payload.event?.event_id, 
+        payload.seller?.seller_id, category_id, product_id, payload.entity?.document 
       );
 
-      payload.target_url = destination.url; // Garantimos que o payload tenha a URL final para o log de navegação
-      payload.is_integrated = destination.is_integrated; // Injetamos a informação de integração para uso futuro
+      // Injeta variáveis de integração na cadeia de persistência
+      payload.target_url = destination.url; 
+      payload.is_integrated = destination.is_integrated; 
       payload.integration_method = destination.integration_method;
       payload.integration_details = destination.integration_details;
-      payload.partner_id = destination.partner_id; // Amarração direta para atualização do campo partner_id na visita, facilitando análises futuras por parceiro
+      payload.partner_id = destination.partner_id; 
 
-      debugLog("DESTINO RESOLVIDO: ", destination);
-      debugLog("PAYLOAD APÓS RESOLUÇÃO DE DESTINO: partnet_id ", payload.partner_id);
-
-      // 3. Persistência (Usa o visit_id que mapeamos na interface)
-      // Aqui ele faz o "One-Shot" para não duplicar sua visita.
+      // Gravação Definitiva no Banco (Criação de Entidades e Ofertas Atreladas)
       const { visitId, visitUpdateId } = await persistVisitData(
-        sql, 
-        payload, 
-        infra, 
-        category_id, 
-        payload.action,
-        payload.origin_url,
-        destination.url,
-        payload.visit_id,
-        destination.orchestrator_config_id
+        sql, payload, infra, category_id, action,
+        payload.origin_url, destination.url, payload.visit_id, destination.orchestrator_config_id
       );
 
-      // Captura o simulation_id se ele vier no payload ou na jornada
-      const simulationId = payload.simulation_id || null;
-
-      // [AJUSTE NA RESPOSTA FINAL]: Injeção dinâmica do simulation_id na URL
-      let finalUrl = `${destination.url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
-      if (simulationId) {
-        finalUrl += `&simulation_id=${simulationId}`;
-      }
-
+      // ARQUITETURA ZERO-URL-STATE (O Retorno)
+      // A string de URL enviada para instruir a interface (redirect) não contém chaves sensíveis.
       return new Response(JSON.stringify({ 
         action: 'REDIRECT',
-        url: finalUrl, 
+        url: destination.url, 
         visit_id: visitId,
         visit_update_id: visitUpdateId,
-        simulation_id: simulationId, // Herança para o estado reativo
+        simulation_id: payload.simulation_id || null, 
         partner_id: payload.partner_id 
-      }), { 
-        status: 200, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      });
+      }), { status: 200, headers: corsHeaders });
 
-      } catch (error: any) {
-        debugLog(`[Orquestrador Error]: ${error.message}`);
-        return new Response(JSON.stringify({ 
-          error: error.message,
-          details: "Erro interno no processamento do pipeline" 
-        }), { 
-          status: 400, // Evita o 500/503 genérico
-          headers: { 
-            ...corsHeaders, // Usa os headers definidos no topo
-            "Content-Type": "application/json" 
-          } 
-        });
-      }
+    } catch (error: any) {
+      debugLog(`[Orquestrador Error]: ${error.message}`);
+      return new Response(JSON.stringify({ 
+        error: error.message,
+        details: "Erro interno no processamento do pipeline" 
+      }), { status: 400, headers: corsHeaders });
+    }
   }
 
-  // Caso receba um método não suportado (ex: PUT, DELETE)
+  // Falha Segura para métodos verbais desconhecidos (ex: PUT, DELETE)
   return new Response(JSON.stringify({ error: "Método não permitido" }), {
-    status: 405,
-    headers: { ...corsHeaders, "Content-Type": "application/json" }
+    status: 405, headers: corsHeaders
   });
 });
