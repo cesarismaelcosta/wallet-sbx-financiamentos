@@ -5,12 +5,13 @@
  * 1. Envolver as rotas filhas com o OrchestratorWrapper, garantindo que os dados da API sejam injetados corretamente.
  * 2. Gerenciar o estado global de "hidratação" (isOrchestratorHydrating) para controlar a exibição do loader (cortina).
  * 
- * --------------------------------------------------------------------------------
+ * --- ARQUITETURA DE DADOS ---
+ * - Desacoplado da URL: Agora consome o OrchestratorWrapper que resolve IDs via Hook/SessionStorage.
+ * - Failsafe: Implementa timeout global para prevenir deadlocks na UI.
  */
 
-// Limpei o createContext e useContext daqui, pois agora vêm do arquivo neutro!
 import React, { useState, useEffect } from "react";
-import { useSearch } from "@tanstack/react-router";
+// O useSearch foi removido para desacoplar este componente da estrutura de URL.
 import { OrchestratorWrapper } from "@/features/financial-hub/components/shared/OrchestratorWrapper";
 import { SiteHeader } from "./SiteHeader";
 import { FAQSection } from "./FAQSection"; 
@@ -22,12 +23,10 @@ interface FinancialHubLayoutProps {
 }
 
 export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
-  const search = useSearch({ strict: false });
-
   // 1. Estado da Cortina (grafia corrigida para Orchestrator)
   const [isOrchestratorHydrating, setIsOrchestratorHydrating] = useState(true);
 
-  // 2. O FAILSAFE DE SEGURANÇA (Adicionado no lugar correto, FORA do return)
+  // 2. O FAILSAFE DE SEGURANÇA
   // Garante que a cortina abra após 8s se a rota filha falhar silenciosamente
   useEffect(() => {
     if (isOrchestratorHydrating) {
@@ -40,7 +39,11 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
   }, [isOrchestratorHydrating]);
 
   return (
-    <OrchestratorWrapper visitId={(search as any).visit_id} visitUpdateId={(search as any).visit_update_id}>
+    /* 
+     * O OrchestratorWrapper agora atua de forma autônoma.
+     * Não depende mais de props da URL, pois busca no hook com fallback para sessionStorage.
+     */
+    <OrchestratorWrapper>
       {(simData) => {
   
         // =========================================================================
@@ -61,7 +64,7 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
             console.warn(`[sbX Guard] Rota inválida para esta visita. Redirecionando para: ${intendedPath}`);
             
             // Corrige o caminho substituindo o histórico para limpar a trapaça do botão Voltar
-            window.location.replace(`${simData.target_url}${window.location.search}`);
+            window.location.replace(simData.target_url);
             
             // Retorna nulo para estancar a renderização dos filhos imediatamente
             return null;
@@ -92,10 +95,10 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
               )}            
               
               {/* ---------------------------------------------------------------------------
-              RENDERIZAÇÃO OCULTA (Anti-Flicker)
-              O {children} DEVE estar no DOM para o FinancialHubDataInjector conseguir rodar.
-              Usamos Tailwind para escondê-lo visualmente até a hidratação terminar.
-              --------------------------------------------------------------------------- */}
+                RENDERIZAÇÃO OCULTA (Anti-Flicker)
+                O {children} DEVE estar no DOM para o FinancialHubDataInjector conseguir rodar.
+                Usamos Tailwind para escondê-lo visualmente até a hidratação terminar.
+                --------------------------------------------------------------------------- */}
               <main 
                 className={`flex-1 w-full flex flex-col transition-opacity duration-500 ${
                   isOrchestratorHydrating 
