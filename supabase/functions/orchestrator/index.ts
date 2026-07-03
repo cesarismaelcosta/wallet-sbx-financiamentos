@@ -445,17 +445,22 @@ serve(async (req: Request) => {
     
   /**
    * ETAPA 1: Setup Inicial e CORS
-   * Essencial para permitir que o Sandbox (localhost) ou sites externos
-   * consumam esta Edge Function.
+   * Usando a configuração global que contém os headers customizados (Padrão Cofre)
    */
+  const allowedHeaders = "authorization, x-client-info, apikey, content-type, x-session-token, x-visit-id, x-visit-update-id, x-simulation-id";
 
-  const corsHeaders = {
+  const localCorsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": allowedHeaders,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   };
 
+  // O Voo de Reconhecimento (Preflight)
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { 
+      status: 200, 
+      headers: localCorsHeaders 
+    });
   }
 
   // Inicialização do cliente com Service Role para bypass de RLS
