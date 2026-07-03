@@ -9,7 +9,6 @@
 import { useState, useEffect, useRef } from "react";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 
-
 /**
  * @interface Entity
  * @description Representa o proponente. 
@@ -129,60 +128,60 @@ export interface OrchestratorPayload {
  * @hook useOrchestratorHydration
  * @description Responsável pela HIDRATAÇÃO (GET). 
  * Recupera dados persistidos para preencher formulários e estados iniciais.
- * @param {string} visitId - ID da jornada recuperado via URL.
+ * * @param {string} [visitId] - Opcional. Caso omitido, busca no sessionStorage.
+ * @param {string} [visitUpdateId] - Opcional. Caso omitido, busca no sessionStorage.
+ * @returns {Object} simData, loading, error - Retorna o estado da simulação.
  */
-export function useOrchestratorHydration(visitId: string, visitUpdateId?: string | null) {
+export function useOrchestratorHydration(visitId?: string, visitUpdateId?: string) {
   const [simData, setSimData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // TRAVA DE SEGURANÇA: Garante execução única
+  
+  // TRAVA DE SEGURANÇA: Previne múltiplas requisições idênticas durante re-renders
   const hasFetched = useRef(false);
 
   useEffect(() => {
-    // Se já buscou ou não tem ID, não faz nada.
-    if (hasFetched.current || !visitId) {
+    // RESOLUÇÃO DE DADOS: Prioriza parâmetros passados, fallback para storage.
+    // Isso permite que o layout passe o dado (se existir) ou apenas "acorde" o hook.
+    const effectiveVisitId = visitId || sessionStorage.getItem("sbx_visit_id");
+    const effectiveUpdateId = visitUpdateId || sessionStorage.getItem("sbx_last_update_id");
+
+    if (hasFetched.current || !effectiveVisitId) {
       setLoading(false);
       return;
     }
     
-    // Define o ID efetivo: prioriza a prop, mas recupera do storage se a prop for nula
-    const effectiveUpdateId = visitUpdateId || sessionStorage.getItem("sbx_last_update_id");
-
-    // Trava o fetch: se não tiver o ID, não continua
-    if (!effectiveUpdateId) {
-      setLoading(false);
-      return;
-    }
-
-    // 3. Marca como buscado ANTES da chamada
+    // PERSISTÊNCIA DE SESSÃO: Atualiza o cofre local antes da chamada.
     hasFetched.current = true;
-    sessionStorage.setItem("sbx_last_update_id", effectiveUpdateId);  
+    sessionStorage.setItem("sbx_visit_id", effectiveVisitId); 
+    sessionStorage.setItem("sbx_last_update_id", effectiveUpdateId || ""); 
 
+    // GATEWAY CALL: A chamada ao orchestrator é blindada pelos interceptors no gateway.ts
     callOrchestrator(
-      { visit_id: visitId, visit_update_id: visitUpdateId }, 
+      { visit_id: effectiveVisitId, visit_update_id: effectiveUpdateId }, 
       'GET' 
     )
-      .then((data) => {
-        setSimData(data);
-        setError(null);
-      })
-      .catch((err) => {
-        console.error(`❌ [useOrchestratorHydration] Falha de hidratação p/ visita ${visitId}:`, err);
-        setError(err.message || "Falha na resolução do contrato.");
-      })
-      .finally(() => setLoading(false));
-  }, [visitId]);
+    .then((data) => {
+      setSimData(data);
+      setError(null);
+    })
+    .catch((err) => {
+      // LOG DE SEGURANÇA: Capturamos erros aqui para evitar estouro na UI
+      console.error(`❌ [useOrchestratorHydration] Falha de hidratação:`, err);
+      setError(err.message || "Falha na resolução do contrato.");
+    })
+    .finally(() => setLoading(false));
+  }, [visitId, visitUpdateId]);
 
   return { simData, loading, error };
 }
 
 /**
  * @function orchestrateNavigation
- * @description Responsável pela ORQUESTRAÇÃO (POST).
- * Executa o registro de jornada (One-Shot) e redirecionamento.
- * * @param {'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT'} action - Tipo de intenção do usuário.
- * @param {any} [extraPayload] - Dados adicionais do formulário.
+ * @description Ponto de escrita (POST). Registra jornadas e gerencia redirecionamentos.
+ * * @param {'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT'} action - Intenção do lead.
+ * @param {Object} Payload - Objeto com os metadados da interação.
+ * @throws {Error} Lança erro caso o backend responda com status não 2xx.
  */
 export const orchestrateNavigation = async (
   action: 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT',
@@ -192,42 +191,29 @@ export const orchestrateNavigation = async (
   const visitId = sessionStorage.getItem("sbx_visit_id");
   const originUpdateId = sessionStorage.getItem("sbx_last_update_id");
 
-  // Construção explícita do payload
   const orchestratorPayload = {
-    action: action,
+    action,
     origin_url: Payload.origin_url,
-    target_url: Payload.target_url, // O servidor exige este campo explicitamente
+    target_url: Payload.target_url,
     visit_id: visitId || undefined,
     origin_visit_update_id: originUpdateId || undefined,
     ...Payload,
     interaction_context: {
       utm_source: "sandbox_navigation",
-      origin_url: Payload.origin_url, // Registo: De onde veio
-      target_url: Payload.target_url, // Registo: Para onde queria ir
       ...(Payload.interaction_context || {})
     }
   };
 
-  // DEBUG: Veja isto no F12 > Console antes de dar o erro 400
-  console.log("🚀 [Debug] Payload enviado ao Orquestrador:", JSON.stringify(orchestratorPayload, null, 2));
-
   try {
     const data = await callOrchestrator(orchestratorPayload, 'POST');
     
+    // ATUALIZAÇÃO DE ESTADO: Mantém o cofre sincronizado com a resposta do backend
     if (data?.visit_id) sessionStorage.setItem("sbx_visit_id", data.visit_id);
     if (data?.visit_update_id) sessionStorage.setItem("sbx_last_update_id", data.visit_update_id);
 
-    // 5. Redirecionamento com segurança (o "Travão")
-    if (data?.url) {
-      // Se a URL de destino for a mesma que a atual, não fazemos o refresh para não perder os dados
-      if (data.url === window.location.href) {
-        console.warn("[Orchestrator] Já estamos no destino exato.");
-      } else {
-        window.location.href = data.url;
-      }
-    } else {
-      // Se não vier URL, não recarregamos a página
-      console.warn("Orquestrador respondeu sem URL de destino.");
+    // NAVEGAÇÃO SEGURA: Só redireciona se houver URL válida
+    if (data?.url && data.url !== window.location.href) {
+      window.location.href = data.url;
     }
   } catch (err) {
     console.error("[Orchestrator] Falha:", err);
