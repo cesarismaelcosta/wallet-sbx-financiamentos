@@ -52,9 +52,9 @@ const debugLog = (message: string, data?: any) => {
 
 // CONFIGURAÇÃO DE CORS
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token, x-visit-id, x-visit-update-id, x-simulation-id",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 /**
@@ -473,12 +473,28 @@ serve(async (req: Request) => {
   // =========================================================================
   // MODO LEITURA (GET): Hidratação de Contexto (O Pulo do Gato)
   // =========================================================================
-  if (req.method === 'GET') {
+if (req.method === 'GET') {
     try {
-      const url = new URL(req.url);
-      const visitId = url.searchParams.get('visit_id');
-      const visitUpdateId = url.searchParams.get('visit_update_id');
-      const simulationId = url.searchParams.get('simulation_id');
+      // 1. CAPTURA SEGURA (Padrão Cofre): Extraindo do Header e não da URL
+      const visitId = req.headers.get('x-visit-id');
+      const visitUpdateId = req.headers.get('x-visit-update-id');
+      const simulationId = req.headers.get('x-simulation-id');
+
+      // 2. TRAVA 1: Identificação do Usuário via JWT
+      const sessionToken = req.headers.get("x-session-token");
+      if (!sessionToken) {
+        return new Response(JSON.stringify({ code: "AUTH_REQUIRED", message: "Token de sessão ausente." }), { 
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        });
+      }
+
+      // Decodifica o Token JWT para saber quem está pedindo o dado
+      const tokenParts = sessionToken.split('.');
+      const jwtPayload = JSON.parse(atob(tokenParts[1]));
+      const sessionUserId = jwtPayload.sub; 
+
+      // Validação de Entrada: Garante que a requisição possui as chaves mestra
+      if (!visitId) throw new Error("O parâmetro 'x-visit-id' é obrigatório no cabeçalho.");
 
       // Se vier simulation_id, buscamos os dados da simulação para hidratar
       let simulationData = null;
@@ -535,11 +551,28 @@ serve(async (req: Request) => {
 
       debugLog("VISIT no GET:", visit);
 
-      // 3. Safety Guard: Bloqueia o processo se a visita não existir ou se houver erro de RLS.
+      // Safety Guard: Bloqueia o processo se a visita não existir ou se houver erro de RLS.
       if (visitError || !visit) {
         console.error("[ORCHESTRATOR ERROR]:", visitError?.message);
         throw new Error("Visita não encontrada ou expirada.");
       }
+
+      //  Validação de Propriedade (Cross-User)
+      const visitEntityData = visit.visit_entities?.[0] || {};
+      
+      // Verifica se o dono do JWT é o mesmo dono da Visita
+      if (visitEntityData.entity_id && visitEntityData.entity_id !== String(sessionUserId)) {
+        console.warn(`[SECURITY] Violação barrada! User: ${sessionUserId} tentou acessar Visita: ${visitId}`);
+        return new Response(JSON.stringify({ 
+          code: "FORBIDDEN_ACCESS", 
+          message: "Acesso negado: O recurso solicitado não pertence a esta sessão." 
+        }), { 
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        });
+      }
+
+      // 1. Snapshots dos dados relacionados (O cofre foi aberto com segurança)
+      const visitOfferData = visit.visit_offers?.[0] || {};
 
       // 1. Snapshots dos dados relacionados
       const visitOfferData = visit.visit_offers?.[0] || {};
