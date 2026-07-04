@@ -3,22 +3,20 @@
  * Busca os detalhes da oferta através da Edge Function sbx-offer.
  * Centraliza a chamada para garantir compliance e segurança.
  * * [RESPONSABILIDADES]:
- * 1. Identidade: O front-end envia o offer_token (JWT de Sessão) no header,
- * mantendo os tokens reais da API da Superbid protegidos no servidor.
+ * 1. Identidade: O front-end envia o sessionToken (JWT Próprio) no header customizado,
+ * mantendo o espelho exato da autenticação de user.ts e protegendo os tokens reais.
  * 2. Contexto: O `offer_id` é enviado via Query Params, desacoplando a oferta da sessão.
  * 3. Gateway Bypass: Utiliza a Anon Key do Supabase para transpor o Kong Gateway.
  * 4. Delegação de Rota: Erros 401 lançam exceções, abortam o fluxo local e 
  * ativam o Protocolo de Amnésia global.
  * * @author Cesar Ismael Pereira da Costa
- * @version 2.0.0 (Correção Arquitetural JWT + URL Params)
+ * @version 2.1.0 (Alinhamento de Autenticação x-session-token)
  */
 
-// Importando isoladamente apenas os 4 tipos reais do seu ecossistema
 import type { Offer, Manager, Event, Seller } from "../components/shared/types";
 
-// A Promise agora apenas agrupa os 4 tipos importados
 export const fetchOfferDetails = async (
-  offerToken: string, 
+  sessionToken: string, 
   offerId: string | number
 ): Promise<{ offer: Offer; manager: Manager; event: Event; seller: Seller }> => {
   
@@ -27,21 +25,21 @@ export const fetchOfferDetails = async (
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  // DEBUG: Validação do payload antes da chamada
+  // DEBUG: Validação do payload e do id da oferta antes da chamada
   console.log("DEBUG_OFFER_SERVICE:", { 
     url: supabaseUrl, 
     offerId: offerId,
     hasKey: !!supabaseAnonKey, 
-    token: offerToken ? "presente" : "ausente" 
+    token: sessionToken ? "presente" : "ausente" 
   });
   
-  // A URL agora embute o offer_id como parâmetro
+  // A URL embute o offer_id como parâmetro (Contexto)
   const response = await fetch(`${supabaseUrl}/functions/v1/sbx-offer?offer_id=${offerId}`, {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${supabaseAnonKey}`,
       "apikey": supabaseAnonKey,
-      "x-sbx-offer-token": offerToken, // Apenas a prova de identidade
+      "x-session-token": sessionToken, // Identidade (Alinhado com fetchMyProfile)
       "x-sbx-env": storedAmbiente,
       "Content-Type": "application/json",
       "Accept": "application/json"

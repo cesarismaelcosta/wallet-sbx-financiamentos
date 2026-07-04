@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
+// import { Loader2, AlertCircle, ArrowLeft } from "lucide-react"; // Descomente se for usar
 
-// [IMPORTS CORRIGIDOS] - Verifique se o caminho abaixo está correto no seu projeto
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator";
 import { Offer, Manager, Event, Seller } from "../_shared/types";
@@ -20,15 +19,20 @@ interface OfferDataPayload {
 
 export function OfferDetailsNewSandbox() {
   const navigate = useNavigate();
-  // Inicializando o hook de auth
   const auth = useFinancialAuth();
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<OfferDataPayload | null>(null);
 
-  // [DEBUG] - Se o seu token estiver em outra propriedade, troque 'auth.token' pelo nome correto
   const token = auth.token || auth.accessToken; 
+
+  // =====================================================================
+  // 1. CAPTURAR O ID DA OFERTA (Pegando da URL do navegador)
+  // Ex: se o usuário estiver em /sandbox/offer_new?offer_id=230896
+  // =====================================================================
+  const urlParams = new URLSearchParams(window.location.search);
+  const offerId = urlParams.get("offer_id"); // Substitua por um ID fixo (ex: "230896") se quiser testar rápido
 
   useEffect(() => {
     const fetchOfferData = async () => {
@@ -38,16 +42,25 @@ export function OfferDetailsNewSandbox() {
         return;
       }
 
+      // Se a página for carregada sem o ID na URL, abortamos o fetch para evitar o erro 400
+      if (!offerId) {
+        setError("Nenhum ID de oferta foi passado na URL (?offer_id=...).");
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sbx-offer`, {
+        // =====================================================================
+        // 2. CORREÇÃO DO ERRO 400: Adicionando ?offer_id= na URL da Edge Function
+        // =====================================================================
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sbx-offer?offer_id=${offerId}`, {
           method: "GET",
           headers: {
             "x-sbx-offer-token": token, 
             "x-sbx-env": "stage",
           },
         });
-
 
         if (!response.ok) {
            const errorDetails = await response.text();
@@ -64,7 +77,7 @@ export function OfferDetailsNewSandbox() {
     };
 
     fetchOfferData();
-  }, [token]);
+  }, [token, offerId]); // offerId adicionado nas dependências
 
   const handleSimulacao = async () => {
     if (!data) return;
