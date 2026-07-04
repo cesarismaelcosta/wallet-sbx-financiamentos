@@ -13,7 +13,12 @@
  * Procura automaticamente pelo token padrão do Supabase ou por chaves manuais.
  */
 function getSessionToken(): string {
-  // 1. Tenta buscar da autenticação nativa do Supabase
+  // Busca especificamente a chave 'session_token' que está no seu Local Storage
+  const token = localStorage.getItem("session_token");
+  
+  if (token) return token;
+
+  // Fallback de segurança para o padrão nativo do Supabase (caso você mude a auth no futuro)
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
@@ -26,11 +31,7 @@ function getSessionToken(): string {
     }
   }
   
-  // 2. Fallback para chaves manuais genéricas (caso você salve na mão)
-  return localStorage.getItem("x-session-token") 
-      || sessionStorage.getItem("x-session-token") 
-      || localStorage.getItem("token") 
-      || "";
+  return "";
 }
 
 /**
