@@ -14,7 +14,6 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { processSimulation } from "./simulation-handler.ts";
 
 // Chave de controle para logs de depuração
@@ -36,7 +35,7 @@ const debugLog = (message: string, data?: any) => {
  */
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
   "Content-Type": "application/json",
 };
@@ -48,12 +47,13 @@ serve(async (req) => {
    * Adicionado 'Access-Control-Allow-Methods' para autorizar explicitamente o POST do front-end.
    */
   if (req.method === "OPTIONS") {
+
     return new Response("ok", {
       status: 200,
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token",
       },
     });
   }
@@ -62,42 +62,6 @@ serve(async (req) => {
    * 2. ROTA PRINCIPAL (PROCESSAMENTO ATIVO)* Acionada pelo botão "SIMULAR FINANCIAMENTO" no front-end.
    */
   try {
-
-    // =====================================================================
-    // SEGURANÇA (GATEKEEPER)
-    // =====================================================================
-    const sessionToken = req.headers.get("x-session-token");
-    if (!sessionToken) {
-      return new Response(JSON.stringify({ code: "AUTH_REQUIRED", message: "Token ausente." }), { 
-        status: 401, headers: corsHeaders 
-      });
-    }
-
-    const jwtPayload = JSON.parse(atob(sessionToken.split('.')[1]));
-    const sessionUserId = jwtPayload.sub;
-
-    const visitId = payload.visit_id;
-    if (!visitId) throw new Error("visit_id é obrigatório.");
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      { auth: { persistSession: false } }
-    );
-
-    const { data: visit, error: visitError } = await supabase
-      .from('visits')
-      .select('visit_entities ( entity_id )')
-      .eq('id', visitId)
-      .single();
-
-    if (visitError || !visit || visit.visit_entities?.[0]?.entity_id !== String(sessionUserId)) {
-      return new Response(JSON.stringify({ code: "FORBIDDEN_ACCESS", message: "Acesso negado." }), { 
-        status: 403, headers: corsHeaders 
-      });
-    }
-    // =====================================================================
-
     /**
      * @description Validação de Ingestão: Usando req.text() para
      * capturar payloads vazios sem derrubar o processo.
@@ -109,6 +73,20 @@ serve(async (req) => {
       const rawBody = await req.text();
       if (!rawBody) throw new Error("Payload ausente na requisição POST.");
       payload = JSON.parse(rawBody);
+
+      // Extração e injeção do ID do Token
+      const sessionToken = req.headers.get("x-session-token");
+      if (sessionToken) {
+        try {
+          const sessionUserId = JSON.parse(atob(sessionToken.split('.')[1])).sub;
+          if (payload.entity) {
+            payload.entity.entity_id = String(sessionUserId);
+          }
+        } catch (e) {
+          debugLog("Erro ao extrair ID do token - ignorando");
+        }
+      }
+
     } else {
       // Se cair aqui e não for OPTIONS (já tratado acima), o método não é suportado
       return new Response(JSON.stringify({ error: "Método não permitido" }), {
