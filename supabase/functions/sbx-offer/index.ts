@@ -33,14 +33,16 @@ serve(async (req) => {
   // [HANDLE CORS] Pre-flight requests
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-  const offerToken = req.headers.get("x-sbx-offer-token");
+  // mesmo header do sbx-user
+  // Se o sbx-user usa 'x-session-token', o ideal é usar o mesmo padrão ou 'x-sbx-offer-token'
+  const offerToken = req.headers.get("x-sbx-offer-token"); 
   const env = req.headers.get("x-sbx-env") || "stage";
   const baseUrl = env === "production" ? "https://offer-query.superbid.net" : "https://offer-query.stage.superbid.net";
 
   if (!offerToken) {
     return new Response(JSON.stringify({ error: "OFFER_TOKEN_REQUIRED" }), { status: 401, headers: corsHeaders });
   }
-
+  
   try {
     // [STEP 1] SECURITY: Autenticação do Token
     const jwtSecret = Deno.env.get("JWT_SECRET");
