@@ -568,7 +568,6 @@ serve(async (req: Request) => {
 
       // 1. Snapshots dos dados relacionados
       const visitOfferData = visit.visit_offers?.[0] || {};
-      const visitEntityData = visit.visit_entities?.[0] || {};
 
       // 2. BUSCA EM CASCATA: Evento > Seller > Categoria
       const orchestratorConfigs = await resolveOrchestratorConfigs(
