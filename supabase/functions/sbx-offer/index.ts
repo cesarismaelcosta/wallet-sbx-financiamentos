@@ -121,7 +121,7 @@ serve(async (req) => {
     const payloadResult: { offer: Offer; manager: Manager; event: Event; seller: Seller } = {
       offer: {
         offer_id: String(rawOffer.id),
-        offer_description: rawOffer.offerDescription?.offerDescription || rawOffer.product?.shortDesc || "",
+        offer_description: rawOffer.product?.shortDesc || rawOffer.offerDescription?.offerDescription || "",
         offer_value: rawOffer.price || 0,
         category_id: rawOffer.product?.productType?.id || 0,
         category: rawOffer.product?.productType?.description || "",
