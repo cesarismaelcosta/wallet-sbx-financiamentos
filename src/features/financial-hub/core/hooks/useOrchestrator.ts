@@ -1,9 +1,14 @@
 /**
  * @fileoverview Lógica de Serviço (Service Layer) para o Orquestrador sbX.
- * * ARQUITETURA DE DADOS:
- * - O sistema utiliza Active Tracking: Registro ocorre apenas via interação (click).
- * - O estado da jornada é persistido via sessionStorage para garantir continuidade.
- * - O Orquestrador é o "Single Source of Truth" para rotas e registro de visitas.
+ * * ============================================================================
+ * ARQUITETURA DE DADOS E NAVEGAÇÃO (Padrão Zero-Storage)
+ * ============================================================================
+ * - Active Tracking: O registro de intenção ocorre estritamente via interação (click/submit).
+ * - URL as Single Source of Truth: O estado da jornada foi migrado de sessionStorage 
+ * para URL Search Params (?visit_id=X). Isso imuniza a aplicação contra a falha 
+ * clássica de dessincronização ao usar o botão "Voltar" (Back/Forward) do navegador.
+ * - Responsabilidade: O Orquestrador atua como o "Traffic Controller", garantindo 
+ * que nenhuma simulação ocorra sem rastreabilidade e contexto prévio.
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -11,8 +16,8 @@ import { callOrchestrator } from "@/features/financial-hub/core/services/gateway
 
 /**
  * @interface Entity
- * @description Representa o proponente.
- * A mudança para 'number | string' no entity_id é para suportar o tipo TEXT do banco.
+ * @description Representa o proponente da transação (PF ou PJ).
+ * O 'entity_id' suporta string para garantir conformidade com o tipo TEXT no banco de dados.
  */
 export interface Entity {
   entity_id: number | string;
@@ -20,78 +25,76 @@ export interface Entity {
   document: string;
   phone: string;
   email: string;
-  birth_date: string; // ISO String ou YYYY-MM-DD
+  birth_date: string; // Padrão de ingestão: ISO String ou YYYY-MM-DD
   gender: string;
-  [key: string]: any; // Permite campos extras genéricos (ex: renda, profissão)
+  [key: string]: any; // Extensibilidade para campos dinâmicos (ex: renda, profissão)
 }
 
 /**
  * @interface Manager
- * @description Representa o operador/gerenciador da oferta (manager_details).
- * Esta entidade é responsável pela operação do leilão ou evento.
+ * @description Representa o operador/gerenciador da oferta (ex: Leiloeiro).
+ * Responsável pela operação estrutural do evento de venda.
  */
 export interface Manager {
   manager_name: string;
-  [key: string]: any; // Captura metadados específicos para a coluna JSONB manager_details
+  [key: string]: any; // Metadados para persistência na coluna JSONB 'manager_details'
 }
 
 /**
  * @interface Seller
- * @description Representa o vendedor/proprietário real do bem (seller_details).
- * Importante para fluxos onde o operador (Manager) é diferente do dono do produto.
+ * @description Representa o vendedor ou proprietário real do bem ativo.
+ * Vital para fluxos B2B2C onde o operador (Manager) difere do dono do ativo.
  */
 export interface Seller {
   seller_id: string;
   legal_name: string;
   trade_name: string;
   economic_group: string;
-  [key: string]: any; // Captura metadados específicos para a coluna JSONB seller_details
+  [key: string]: any; // Metadados para persistência na coluna JSONB 'seller_details'
 }
 
 /**
  * @interface Event
- * @description Snapshot do contexto temporal e descritivo do evento (event_details).
- * Focada estritamente em metadados do leilão ou campanha.
+ * @description Snapshot contextual e temporal do evento de origem (ex: Leilão, Campanha).
  */
 export interface Event {
   event_id: string;
   event_description: string;
   event_start_date: string;
   event_end_date: string;
-  [key: string]: any; // Captura campos como 'numero_leilao' ou 'tipo_evento' (event_details)
+  [key: string]: any; // Atributos estendidos (ex: numero_leilao, modalidade_evento)
 }
 
 /**
  * @interface Vehicle
- * @description Atributos técnicos específicos para o nicho de veículos.
+ * @description Atributos técnicos específicos para o nicho de garantias/financiamento automotivo.
  */
 export interface Vehicle {
   manufacture_year: number;
   model_year: number;
   fipe_code: string;
   fipe_value?: number;
-  [key: string]: any; // Captura cor, placa, chassi ou quilometragem
+  [key: string]: any; // Flexibilidade para chassi, quilometragem, placa, cor
 }
 
 /**
  * @interface Offer
- * @description A oferta comercial genérica.
- * Não mapeamos detalhes específicos (veículo, imóvel) aqui para manter a
- * flexibilidade total via index signature.
+ * @description Oferta comercial abstrata (Agnóstica ao tipo de produto).
+ * O detalhamento técnico (vehicle, real_estate) deve ser injetado dinamicamente nas chaves extras.
  */
 export interface Offer {
   offer_id: string;
   offer_description: string;
   offer_value: number;
-  category_id?: number; // Injetado pelo Orquestrador após o de-para
-  category: string; // Texto vindo do site/sandbox
-  [key: string]: any; // Aqui entrará 'vehicle', 'equity' ou qualquer outro detalhe enviado
+  category_id?: number; // Preenchido no backend via roteamento (de-para)
+  category: string;     // String literal enviada pelo frontend/sandbox
+  [key: string]: any;   // Extensão de payload (Ex: Injeção de 'vehicle' ou 'equity')
 }
 
 /**
  * @interface InteractionContext
- * @description Define a origem e o contexto da interação do usuário.
- * É o rastreador que determina as regras de validação que serão aplicadas.
+ * @description Define a matriz de origem e o tracking de marketing do usuário.
+ * Fundamental para o motor de regras definir elegibilidade baseada no canal de aquisição.
  */
 export interface InteractionContext {
   utm_source: "direct" | "offer" | "lp" | "banner" | "whatsapp" | "email" | "sms";
@@ -102,7 +105,8 @@ export interface InteractionContext {
 
 /**
  * @interface OrchestratorPayload
- * @description O contrato mestre de entrada para o ecossistema sbX.
+ * @description Contrato mestre de I/O para o ecossistema sbX. 
+ * Encapsula a jornada, o usuário e a intenção comercial em uma única transação.
  */
 export interface OrchestratorPayload {
   interaction_context: InteractionContext;
@@ -119,113 +123,131 @@ export interface OrchestratorPayload {
   simulation_id?: string;
   origin_url?: string;
   target_url?: string;
-  collateral_vehicle?: Vehicle; // Expansão para car_equity
-  collateral_home?: any; // Expansão para home_equity
+  collateral_vehicle?: Vehicle;
+  collateral_home?: any;
   [key: string]: any;
 }
 
 /**
  * @hook useOrchestratorHydration
- * @description Responsável pela HIDRATAÇÃO (GET).
- * Recupera dados persistidos para preencher formulários e estados iniciais.
- * @param {string} visitId - ID da jornada recuperado via URL.
+ * @description Hook responsável pelo ciclo de vida de HIDRATAÇÃO (GET Method).
+ * Recupera os dados validados do backend utilizando ESTRITAMENTE a URL como fonte.
+ * * @param {string | null} visitId - O ID primário da sessão atual.
+ * @param {string | null} [visitUpdateId] - O ID secundário (snapshot) da última interação.
+ * @returns {Object} { simData, loading, error } - Estado reativo da hidratação.
  */
-export function useOrchestratorHydration(visitId: string, visitUpdateId?: string | null) {
+export function useOrchestratorHydration(visitId: string | null, visitUpdateId?: string | null) {
   const [simData, setSimData] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // TRAVA DE SEGURANÇA: Garante execução única
-  const hasFetched = useRef(false);
+  /**
+   * TRAVA DE SEGURANÇA INTELIGENTE (Anti-Back Button)
+   * Armazena um "hash" composto pela assinatura da URL atual. Se o usuário usar 
+   * a navegação nativa do browser para retroceder, o useEffect detectará a mudança 
+   * de hash e fará um re-fetch limpo do passado, evitando dados fantasmas na tela.
+   */
+  const lastFetchedHash = useRef<string | null>(null);
 
   useEffect(() => {
-    // Se já buscou ou não tem ID, não faz nada.
-    if (hasFetched.current || !visitId) {
+    // 1. Definição Dinâmica do Contexto (Prioridade: Prop -> URL Atual)
+    const urlParams = new URLSearchParams(window.location.search);
+    const effectiveUpdateId = visitUpdateId || urlParams.get("visit_update_id");
+
+    // 2. Early Return: Sem chaves primárias, interrompe o ciclo para economizar I/O.
+    if (!visitId || !effectiveUpdateId) {
       setLoading(false);
       return;
     }
 
-    // Define o ID efetivo: prioriza a prop, mas recupera do storage se a prop for nula
-    const effectiveUpdateId = visitUpdateId || sessionStorage.getItem("sbx_last_update_id");
-
-    // Trava o fetch: se não tiver o ID, não continua
-    if (!effectiveUpdateId) {
-      setLoading(false);
-      return;
+    // 3. Verificação de Integridade de Chamada Dupla (React Strict Mode / Rerenders)
+    const currentHash = `${visitId}-${effectiveUpdateId}`;
+    if (lastFetchedHash.current === currentHash) {
+      return; // Já hidratamos este exato estado, aborta chamada duplicada.
     }
 
-    // 3. Marca como buscado ANTES da chamada
-    hasFetched.current = true;
-    sessionStorage.setItem("sbx_last_update_id", effectiveUpdateId);
+    // 4. Marcação Pré-fetch (Evita Race Conditions)
+    lastFetchedHash.current = currentHash;
+    setLoading(true);
 
-    callOrchestrator({ visit_id: visitId, visit_update_id: visitUpdateId }, "GET")
+    // 5. Execução do Pipeline de Leitura
+    callOrchestrator({ visit_id: visitId, visit_update_id: effectiveUpdateId }, "GET")
       .then((data) => {
         setSimData(data);
         setError(null);
       })
       .catch((err) => {
-        console.error(`❌ [useOrchestratorHydration] Falha de hidratação p/ visita ${visitId}:`, err);
-        setError(err.message || "Falha na resolução do contrato.");
+        console.error(`❌ [Hydration Pipeline] Erro crítico para visita [${visitId}]:`, err);
+        setError(err.message || "Falha na resolução do contrato no Orchestrator.");
       })
       .finally(() => setLoading(false));
-  }, [visitId]);
+
+  }, [visitId, visitUpdateId]); // Array de dependência garante reação a mudanças na rota
 
   return { simData, loading, error };
 }
 
 /**
  * @function orchestrateNavigation
- * @description Responsável pela ORQUESTRAÇÃO (POST).
- * Executa o registro de jornada (One-Shot) e redirecionamento.
- * * @param {'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT'} action - Tipo de intenção do usuário.
- * @param {any} [extraPayload] - Dados adicionais do formulário.
+ * @description Ponto focal para envio de intenções de roteamento (POST Method).
+ * Captura o estado atual, empacota as intenções do usuário e decide o fluxo 
+ * de navegação seguro com base na resposta assinada pelo backend.
+ * * @param {'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT'} action - Categoria da intenção.
+ * @param {any} [Payload={}] - Dados fragmentados ou totais preenchidos no form da interface.
+ * @throws {Error} Propaga falhas de rede ou de pipeline de backend para tratamento na UI.
  */
 export const orchestrateNavigation = async (
   action: "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT",
   Payload: any = {},
 ): Promise<void> => {
-  const visitId = sessionStorage.getItem("sbx_visit_id");
-  const originUpdateId = sessionStorage.getItem("sbx_last_update_id");
+  
+  // 1. Snapshot da Origem: Lê os rastros de onde o usuário está EXATAMENTE agora.
+  const urlParams = new URLSearchParams(window.location.search);
+  const currentVisitId = urlParams.get("visit_id");
+  const currentUpdateId = urlParams.get("visit_update_id");
 
-  // Construção explícita do payload
+  // 2. Montagem do Payload Master
   const orchestratorPayload = {
     action: action,
-    origin_url: Payload.origin_url,
-    target_url: Payload.target_url, // O servidor exige este campo explicitamente
-    visit_id: visitId || undefined,
-    origin_visit_update_id: originUpdateId || undefined,
+    origin_url: Payload.origin_url || window.location.href,
+    target_url: Payload.target_url,
+    visit_id: currentVisitId || undefined,
+    origin_visit_update_id: currentUpdateId || undefined,
     ...Payload,
     interaction_context: {
-      utm_source: "sandbox_navigation",
-      origin_url: Payload.origin_url, // Registo: De onde veio
-      target_url: Payload.target_url, // Registo: Para onde queria ir
+      utm_source: Payload.interaction_context?.utm_source || "sandbox_navigation",
+      origin_url: Payload.origin_url || window.location.href,
+      target_url: Payload.target_url,
       ...(Payload.interaction_context || {}),
     },
   };
 
-  // DEBUG: Veja isto no F12 > Console antes de dar o erro 400
-  console.log("🚀 [Debug] Payload enviado ao Orquestrador:", JSON.stringify(orchestratorPayload, null, 2));
+  console.log("🚀 [Navigation Pipeline] Payload enviado para análise de roteamento:", JSON.stringify(orchestratorPayload, null, 2));
 
   try {
+    // 3. Transmissão Segura
     const data = await callOrchestrator(orchestratorPayload, "POST");
 
-    if (data?.visit_id) sessionStorage.setItem("sbx_visit_id", data.visit_id);
-    if (data?.visit_update_id) sessionStorage.setItem("sbx_last_update_id", data.visit_update_id);
-
-    // 5. Redirecionamento com segurança (o "Travão")
+    // 4. Lógica de Redirecionamento Baseada em Estado (SPA Optimization)
     if (data?.url) {
-      // Se a URL de destino for a mesma que a atual, não fazemos o refresh para não perder os dados
-      if (data.url === window.location.href) {
-        console.warn("[Orchestrator] Já estamos no destino exato.");
+      const currentPath = window.location.href.split('?')[0];
+      const targetPath = data.url.split('?')[0];
+
+      // AVALIAÇÃO DE ROTA:
+      // Se o backend ordenou ficar na mesma página (ex: simulação multipassos no mesmo componente),
+      // fazemos uma injeção silenciosa dos novos parâmetros na URL, preservando o estado vivo do React.
+      if (targetPath === currentPath) {
+        console.warn("[Navigation Pipeline] Destino idêntico à origem. Executando ReplaceState silencioso para hidratar URL.");
+        window.history.replaceState({}, "", data.url);
       } else {
+        // Se a rota for efetivamente nova, repassamos o controle para o navegador (Hard Redirect).
         window.location.href = data.url;
       }
     } else {
-      // Se não vier URL, não recarregamos a página
-      console.warn("Orquestrador respondeu sem URL de destino.");
+      console.warn("⚠️ [Navigation Pipeline] Backend processou o payload, mas reteve a URL de destino.");
     }
   } catch (err) {
-    console.error("[Orchestrator] Falha:", err);
+    console.error("❌ [Navigation Pipeline] Aborto crítico no fluxo de orquestração:", err);
     throw err;
   }
 };
