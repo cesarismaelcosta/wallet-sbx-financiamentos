@@ -52,13 +52,8 @@ export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfi
   const response = await fetch(`${supabaseUrl}/functions/v1/sbx-user`, {
     method: "GET",
     headers: {
-      // CORREÇÃO: O JWT do usuário vai no Authorization
-      "Authorization": `Bearer ${sessionToken}`, 
-      
-      // A chave do Supabase vai no apikey (para transpor o Gateway)
+      "Authorization": `Bearer ${supabaseAnonKey}`,
       "apikey": supabaseAnonKey,
-      
-      // Manter se o seu backend ainda validar isso separadamente
       "x-session-token": sessionToken,
       "x-sbx-env": storedAmbiente,
       "Content-Type": "application/json",

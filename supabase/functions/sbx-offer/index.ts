@@ -128,7 +128,12 @@ serve(async (req) => {
         lot_number: rawOffer.lotNumber || "",
         offer_status: rawOffer.offerStatus || "",
         sale_status: rawOffer.saleStatus || "",
-        end_date: rawOffer.endDate || ""
+        end_date: rawOffer.endDate || "",
+        photos: rawOffer.product?.galleryJson?.map((p: any) => ({
+            link: p.link,
+            thumbnail: p.thumbnailUrl,
+            fileName: p.originalFileName
+          })) || []
       },
       manager: {
         manager_id: rawOffer.manager?.id || 0,
