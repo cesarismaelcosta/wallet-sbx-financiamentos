@@ -52,16 +52,14 @@ export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfi
   const response = await fetch(`${supabaseUrl}/functions/v1/sbx-user`, {
     method: "GET",
     headers: {
-      // [SECURITY]: Chaves públicas obrigatórias do Supabase. 
-      // Isso impede que o Gateway do Supabase bloqueie a requisição antes de chegar na Edge Function.
-      "Authorization": `Bearer ${supabaseAnonKey}`,
+      // CORREÇÃO: O JWT do usuário vai no Authorization
+      "Authorization": `Bearer ${sessionToken}`, 
+      
+      // A chave do Supabase vai no apikey (para transpor o Gateway)
       "apikey": supabaseAnonKey,
       
-      // [BUSINESS LOGIC]: O JWT Próprio (session_token) passa a trafegar via header customizado.
-      // IMPORTANTE: A sua Edge Function (sbx-data) PRECISA ser alterada para capturar 'x-session-token'
-      // e validar a assinatura deste JWT antes de buscar os dados no banco/Superbid.
+      // Manter se o seu backend ainda validar isso separadamente
       "x-session-token": sessionToken,
-      
       "x-sbx-env": storedAmbiente,
       "Content-Type": "application/json",
       "Accept": "application/json"

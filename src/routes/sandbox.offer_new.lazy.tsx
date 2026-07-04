@@ -1,23 +1,19 @@
 /**
  * @fileoverview Componente: OfferDetailsNewSandbox (Flow: Sequential Auth & Resilient Orchestration)
  * * ARQUITETURA DE VIEW E AGREGAÇÃO SEQUENCIAL:
- * Este componente garante a integridade da sessão do usuário antes de buscar dados 
- * da oferta, prevenindo chamadas órfãs e isolando falhas de serviço.
+ * Garantia de execução sequencial: 1. Auth/Perfil -> 2. Oferta.
+ * Implementa logs agressivos para diagnóstico de rede no console.
  * * [RESPONSABILIDADES]:
- * 1. Sequenciamento: Executa o fetch do usuário e, mediante sucesso, tenta buscar a oferta.
- * 2. Resiliência: Isola o erro da oferta para permitir a visualização parcial do perfil.
+ * 1. Sequenciamento: Executa o fetch do usuário e, mediante sucesso, busca a oferta.
+ * 2. Observabilidade: Logs de console em cada etapa da orquestração.
  * 3. Renderização: Exibe os dois contextos de forma unificada e reativa.
  * * @author Cesar Ismael Pereira da Costa
- * @version 4.2.0 (Refatoração: Isolamento de falhas e estados independentes)
+ * @version 4.3.0 (Debugging Ativo)
  */
 
 import { useState, useEffect } from "react";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
-
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator";
-
-// [NETWORK]: Importação explícita dos dois serviços
 import { fetchMyProfile, type BFFUserProfile } from "@/services/user";
 import { fetchOfferDetails } from "@/services/offer";
 import { Offer, Manager, Event, Seller } from "../_shared/types";
@@ -38,40 +34,46 @@ export function OfferDetailsNewSandbox() {
   const auth = useFinancialAuth();
   
   const [loading, setLoading] = useState(true);
-  const [userError, setUserError] = useState<string | null>(null);
-  const [offerError, setOfferError] = useState<string | null>(null);
-  
   const [userData, setUserData] = useState<BFFUserProfile | null>(null);
   const [offerData, setOfferData] = useState<OfferDataPayload | null>(null);
+  const [errorLog, setErrorLog] = useState<string | null>(null);
 
   const token = auth.token || auth.accessToken; 
   const offerId = "2969794";
 
   useEffect(() => {
     const runSequence = async () => {
+      console.log("[DEBUG:FLOW] Iniciando sequência...");
+      
       if (!token) {
-        setUserError("Usuário não autenticado.");
+        console.error("[DEBUG:FLOW] Token ausente!");
+        setErrorLog("Token ausente");
         setLoading(false);
         return;
       }
 
       setLoading(true);
 
-      // [FLOW]: Chamada 1 - Perfil do Usuário (Obrigatório)
+      // PASSO 1: Fetch Usuário
       try {
+        console.log("[DEBUG:FLOW] Chamando fetchMyProfile...");
         const user = await fetchMyProfile(token);
+        console.log("[DEBUG:FLOW] Usuário recebido:", user);
         setUserData(user);
         
-        // [FLOW]: Chamada 2 - Detalhes da Oferta (Opcional para a tela)
+        // PASSO 2: Fetch Oferta
         try {
+          console.log("[DEBUG:FLOW] Chamando fetchOfferDetails...");
           const offer = await fetchOfferDetails(token, offerId);
+          console.log("[DEBUG:FLOW] Oferta recebida:", offer);
           setOfferData(offer);
         } catch (err: any) {
-          setOfferError(err.message); // Apenas marca o erro da oferta
+          console.error("[DEBUG:FLOW] Erro na Oferta:", err);
+          setErrorLog(`Oferta: ${err.message}`);
         }
-
       } catch (err: any) {
-        setUserError(err.message); // Falha crítica: usuário não carregou
+        console.error("[DEBUG:FLOW] Erro no Usuário:", err);
+        setErrorLog(`Usuário: ${err.message}`);
       } finally {
         setLoading(false);
       }
@@ -80,50 +82,21 @@ export function OfferDetailsNewSandbox() {
     runSequence();
   }, [token]);
 
-  const handleSimulacao = async () => {
-    if (!offerData) return;
-    const payload = {
-      action: "SIMULATE",
-      timestamp: new Date().toISOString(),
-      offer: offerData.offer,
-      manager: offerData.manager,
-      event: offerData.event,
-      seller: offerData.seller,
-    };
-    await orchestrateNavigation("SIMULATE", payload as any);
-  };
-
-  // [RENDER]: Estados de Loading ou Erro Crítico de Identidade
-  if (loading) return <div className="p-6">Orquestrando fluxos...</div>;
-  if (userError) return <div className="p-6 text-red-500 font-bold">Erro Crítico: {userError}</div>;
+  if (loading) return <div className="p-6">Carregando dados...</div>;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <button onClick={() => navigate({ to: "/sandbox" })} className="mb-6 underline">Voltar</button>
+      {errorLog && <div className="bg-red-100 p-4 mb-4 text-red-700">Erro: {errorLog}</div>}
       
-      <div className="space-y-6">
-        {/* PERFIL (Sempre visível se carregou) */}
-        <section className="bg-white p-6 rounded shadow border-l-4 border-blue-500">
-          <h2 className="text-xs font-black uppercase text-blue-500 mb-2">Perfil Identificado</h2>
-          <p className="font-bold">{userData?.name}</p>
-        </section>
+      <section className="bg-white p-6 rounded shadow border-l-4 border-blue-500 mb-6">
+        <h2 className="text-xs font-black uppercase text-blue-500 mb-2">Perfil Identificado</h2>
+        <p className="font-bold">{userData?.name || "Não carregado"}</p>
+      </section>
 
-        {/* OFERTA (Com tratamento de erro independente) */}
-        <section className="bg-white p-6 rounded shadow border-l-4 border-green-500">
-          <h2 className="text-xs font-black uppercase text-green-500 mb-2">Oferta Relacionada</h2>
-          {offerError ? (
-            <p className="text-red-500 italic">Erro ao carregar oferta: {offerError}</p>
-          ) : (
-            <p className="font-bold">{offerData?.offer.offer_description}</p>
-          )}
-        </section>
-      </div>
-
-      {!offerError && (
-        <button onClick={handleSimulacao} className="mt-8 w-full bg-purple-600 text-white p-4 rounded font-bold">
-          Ir para Simulação
-        </button>
-      )}
+      <section className="bg-white p-6 rounded shadow border-l-4 border-green-500">
+        <h2 className="text-xs font-black uppercase text-green-500 mb-2">Oferta Relacionada</h2>
+        <pre className="font-mono text-xs">{JSON.stringify(offerData, null, 2)}</pre>
+      </section>
     </div>
   );
 }
