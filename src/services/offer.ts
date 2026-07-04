@@ -3,10 +3,11 @@
  * Busca os detalhes da oferta através da Edge Function sbx-offer.
  * Centraliza a chamada para garantir compliance e segurança.
  * * [RESPONSABILIDADES]:
- * 1. Interface de comunicação: O front-end envia o token de oferta,
- * mantendo a integridade da chamada protegida no servidor.
+ * 1. Interface de comunicação: O front-end envia apenas o offer_token (JWT Próprio),
+ * mantendo os tokens reais da API da Superbid protegidos no servidor.
  * 2. Gateway Bypass: Utiliza a Anon Key do Supabase para transpor o Kong Gateway.
- * 3. Delegação de Rota: Erros 401/403 ativam o Protocolo de Amnésia global.
+ * 3. Delegação de Rota: Erros 401 lançam exceções, abortam o fluxo local e 
+ * ativam o Protocolo de Amnésia global.
  * * @author Cesar Ismael Pereira da Costa
  * @version 1.0.0
  */
@@ -58,6 +59,6 @@ export const fetchOfferDetails = async (offerToken: string): Promise<BFFOfferDet
   if (!response.ok) {
     throw new Error("OFFER_API_ERROR");
   }
-
+  
   return response.json();
 };

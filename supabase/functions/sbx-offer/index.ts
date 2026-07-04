@@ -25,6 +25,9 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // =========================================================================
+  // 1. HANDSHAKE (OPTIONS)
+  // =========================================================================
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const offerToken = req.headers.get("x-sbx-offer-token");
@@ -36,6 +39,9 @@ serve(async (req) => {
   }
 
   try {
+    // =========================================================================
+    // 2. SEGURANÇA: VALIDAÇÃO DO JWT E SESSÃO
+    // =========================================================================
     const jwtSecret = Deno.env.get("JWT_SECRET");
     if (!jwtSecret) throw new Error("INTERNAL_CONFIG_ERROR");
 
@@ -60,15 +66,17 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "SESSION_EXPIRED" }), { status: 401, headers: corsHeaders });
     }
 
-    const offerId = payload.offer_id;
-    const queryUrl = `${baseUrl}/offers/?filter=id:${offerId}&locale=pt_BR&portalId=[2,15]`;
+    // =========================================================================
+    // 3. INTEGRAÇÃO: CHAMADA UPSTREAM
+    // =========================================================================
+    const queryUrl = `${baseUrl}/offers/?filter=id:${payload.offer_id}&locale=pt_BR&portalId=[2,15]`;
     
     const response = await fetch(queryUrl, {
       method: "GET",
       headers: { 
-          "Authorization": `Bearer ${session.sbx_access_token}`,
-          "Accept": "application/json", 
-          "Content-Type": "application/json" 
+        "Authorization": `Bearer ${session.sbx_access_token}`,
+        "Accept": "application/json", 
+        "Content-Type": "application/json" 
       },
     });
 
@@ -83,43 +91,37 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "OFFER_NOT_FOUND" }), { status: 404, headers: corsHeaders });
     }
 
-    const offerData: Offer = {
-      offer_id: String(offer.id),
-      offer_description: offer.offerDescription?.offerDescription || offer.product?.shortDesc || "",
-      offer_value: offer.price || 0,
-      category_id: offer.product?.productType?.id,
-      category: offer.product?.productType?.description || "",
-      lot_number: offer.lotNumber,
-      offer_status: offer.offerStatus,
-      sale_status: offer.saleStatus,
-      end_date: offer.endDate
+    // =========================================================================
+    // 4. MAPPING: ESTRUTURAÇÃO PARA TIPOS COMPARTILHADOS (sbX Contracts)
+    // =========================================================================
+    const enrichedData = {
+      offer: {
+        offer_id: String(offer.id),
+        offer_description: offer.offerDescription?.offerDescription || offer.product?.shortDesc || "",
+        offer_value: offer.price || 0,
+        category_id: offer.product?.productType?.id,
+        category: offer.product?.productType?.description || "",
+        lot_number: offer.lotNumber,
+        offer_status: offer.offerStatus,
+        sale_status: offer.saleStatus,
+        end_date: offer.endDate
+      },
+      manager: { manager_id: offer.manager?.id, manager_name: offer.manager?.name || "N/A" },
+      event: {
+        event_id: String(offer.auction?.id),
+        event_description: offer.auction?.desc || "",
+        event_start_date: offer.auction?.beginDate || "",
+        event_end_date: offer.auction?.endDate || ""
+      },
+      seller: {
+        seller_id: String(offer.seller?.id || ""),
+        legal_name: offer.seller?.name || "N/A",
+        trade_name: offer.seller?.company?.[0]?.fantasyName || "N/A",
+        economic_group: offer.seller?.company?.[0]?.fantasyName || "N/A"
+      }
     };
 
-    const managerData: Manager = {
-      manager_id: offer.manager?.id,
-      manager_name: offer.manager?.name || "N/A"
-    };
-
-    const eventData: Event = {
-      event_id: String(offer.auction?.id),
-      event_description: offer.auction?.desc || "",
-      event_start_date: offer.auction?.beginDate || "",
-      event_end_date: offer.auction?.endDate || ""
-    };
-
-    const sellerData: Seller = {
-      seller_id: String(offer.seller?.id || ""),
-      legal_name: offer.seller?.name || "N/A",
-      trade_name: offer.seller?.company?.[0]?.fantasyName || "N/A",
-      economic_group: offer.seller?.company?.[0]?.fantasyName || "N/A"
-    };
-
-    return new Response(JSON.stringify({
-      offer: offerData,
-      manager: managerData,
-      event: eventData,
-      seller: sellerData
-    }), {
+    return new Response(JSON.stringify(enrichedData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
