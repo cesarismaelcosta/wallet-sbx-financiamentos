@@ -27,14 +27,13 @@ export function OrchestratorWrapper({ visitId, visitUpdateId, children }: Orches
       primary_color: "#B300FF",
     };
 
-    // Segurança: Garantimos que page_configs existe antes de acessar theme
-    const config = simData?.page_configs?.theme || fallback;
+    const config = simData?.page_configs.theme || fallback;
     return {
       "--brand-primary": config.primary_color ?? fallback.primary_color,
     } as React.CSSProperties;
   }, [simData]);
 
-// Efeito Global: Injeta as cores no :root do HTML (Isso é válido aqui pois é um side-effect lógico)
+  // Efeito Global: Injeta as cores no :root do HTML (Isso é válido aqui pois é um side-effect lógico)
   useEffect(() => {
     const root = document.documentElement;
     Object.entries(brandStyles).forEach(([key, value]) => root.style.setProperty(key, value as string));

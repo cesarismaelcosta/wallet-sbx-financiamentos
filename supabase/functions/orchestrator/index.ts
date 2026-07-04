@@ -485,21 +485,6 @@ serve(async (req: Request) => {
   // =========================================================================
   if (req.method === "GET") {
     try {
-      // VALIDA USERID DO TOKEN COM ENTITY_ID DA VISITA
-      const sessionToken = req.headers.get("x-session-token");
-      if (!sessionToken) {
-        return new Response(JSON.stringify({ code: "AUTH_REQUIRED" }), { status: 401, headers: corsHeaders });
-      }
-      const jwtPayload = JSON.parse(atob(sessionToken.split('.')[1]));
-      const sessionUserId = jwtPayload.sub;
-
-      const payload: OrchestratorPayload = await req.json();
-      
-      // Força a vinculação no payload antes do persistVisitData
-      if (payload.entity) {
-        payload.entity.entity_id = String(sessionUserId);
-      }
-
       const url = new URL(req.url);
       const visitId = url.searchParams.get("visit_id");
       const visitUpdateId = url.searchParams.get("visit_update_id");
@@ -562,24 +547,23 @@ serve(async (req: Request) => {
 
       debugLog("VISIT no GET:", visit);
 
-      // 3. Safety Guard: Bloqueia o processo se a visita não existir ou se houver erro de RLS.
-      if (visitError || !visit) {
-        console.error("[ORCHESTRATOR ERROR]:", visitError?.message);
-        throw new Error("Visita não encontrada ou expirada.");
-      }
-
-      // VALIDAÇÃO DO USERID DO TOKEN COM A ENTITY_ID DA VISITA
-
+      // Validação de token no GET
       const sessionToken = req.headers.get("x-session-token");
       if (!sessionToken) {
         return new Response(JSON.stringify({ code: "AUTH_REQUIRED" }), { status: 401, headers: corsHeaders });
       }
-      const jwtPayload = JSON.parse(atob(sessionToken.split('.')[1]));
-      const sessionUserId = jwtPayload.sub;
+      const sessionUserId = JSON.parse(atob(sessionToken.split('.')[1])).sub;
 
-      // Força a vinculação no payload antes do persistVisitData
-      if (payload.entity) {
-        payload.entity.entity_id = String(sessionUserId);
+      // Trava de segurança: verifica se a visita pertence ao usuário do token
+      const visitEntityData = visit.visit_entities?.[0] || {};
+      if (visitEntityData.entity_id && visitEntityData.entity_id !== String(sessionUserId)) {
+        return new Response(JSON.stringify({ code: "FORBIDDEN_ACCESS" }), { status: 403, headers: corsHeaders });
+      }
+
+      // 3. Safety Guard: Bloqueia o processo se a visita não existir ou se houver erro de RLS.
+      if (visitError || !visit) {
+        console.error("[ORCHESTRATOR ERROR]:", visitError?.message);
+        throw new Error("Visita não encontrada ou expirada.");
       }
 
       // 1. Snapshots dos dados relacionados
@@ -680,6 +664,20 @@ serve(async (req: Request) => {
   if (req.method === "POST") {
     try {
       const payload: OrchestratorPayload = await req.json();
+
+      // Validação de token no POST
+      const sessionToken = req.headers.get("x-session-token");
+      if (sessionToken) {
+        try {
+          const sessionUserId = JSON.parse(atob(sessionToken.split('.')[1])).sub;
+          if (payload.entity) {
+            payload.entity.entity_id = String(sessionUserId);
+          }
+        } catch (e) {
+          debugLog("Erro ao processar token no POST");
+        }
+      }
+
       const infra = await captureInfrastructure(req);
 
       debugLog("INFOS DE ORIGEM DA CHAMADA NO 'POST': ", infra);
