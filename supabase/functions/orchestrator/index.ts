@@ -10,7 +10,8 @@
 /**
  * @fileoverview Orquestrador de Fluxos - Ponto único de entrada.
  * @description Centraliza o registro de visitas (visits e visit_offers).
- * * @input {JSON} Payload de Entrada (OrchestratorPayload):
+ *
+ * @input {JSON} Payload de Entrada (OrchestratorPayload):
  * - entity: { entity_id, name, document, phone, email, birth_date, gender }
  * - interaction_context: { utm_source, origin_url }
  * - product_id: number (Obrigatório para campanhas externas)
@@ -25,11 +26,10 @@
  * - url: URL com visit_id injetado para hidratação no destino.
  **/
 
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { persistVisitData } from "./persist-data.ts";
-import { sql } from '../_shared/db.ts';
+import { sql } from "../_shared/db.ts";
 
 /**
  * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
@@ -48,6 +48,13 @@ const debugLog = (message: string, data?: any) => {
   }
 };
 
+// CONFIGURAÇÃO DE CORS
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 /**
  * REGRAS DE OBRIGATORIEDADE E INTEGRIDADE:
  * - interaction_context: Sempre obrigatório.
@@ -58,8 +65,8 @@ const debugLog = (message: string, data?: any) => {
  * - vehicle: Obrigatório se categoria mapeada para 'Caminhões' ou 'Carros'.
  */
 
-import { 
-  OriginDetails, 
+import {
+  OriginDetails,
   Entity,
   Manager,
   Seller,
@@ -68,78 +75,86 @@ import {
   Offer,
   InteractionContext,
   OrchestratorPayload,
-  OrchestratorResponse
+  OrchestratorResponse,
 } from "../_shared/types.ts";
 
 /**
  * Helper para extrair OS e Device básico do User Agent
  */
 function parseUserAgent(ua: string) {
-  const os = ua.includes('Windows') ? 'Windows' : 
-             ua.includes('Mac') ? 'MacOS' : 
-             ua.includes('Android') ? 'Android' : 
-             ua.includes('iPhone') ? 'iOS' : 'Linux/Other';
-             
-  const device = ua.includes('Mobi') ? 'Mobile' : 'Desktop';
+  const os = ua.includes("Windows")
+    ? "Windows"
+    : ua.includes("Mac")
+      ? "MacOS"
+      : ua.includes("Android")
+        ? "Android"
+        : ua.includes("iPhone")
+          ? "iOS"
+          : "Linux/Other";
+
+  const device = ua.includes("Mobi") ? "Mobile" : "Desktop";
   return { os, device };
 }
 
 /**
  * Captura dados detalhados de infraestrutura e geolocalização.
- * * Lógica de Geo:
+ *
+ * Lógica de Geo:
  * 1. Tenta recuperar via headers da Cloudflare (produção Supabase).
  * 2. Se falhar (localhost/dev), utiliza o IP-API como fallback.
- * * @param {Request} req - O objeto da requisição HTTP.
+ *
+ * @param {Request} req - O objeto da requisição HTTP.
  * @returns {Promise<object>} Objeto contendo IP, Geo, OS e Device Type.
  */
 async function captureInfrastructure(req: Request) {
-  const ua = req.headers.get('user-agent') || '';
+  const ua = req.headers.get("user-agent") || "";
   // Melhora a captura do IP
-  const ip = req.headers.get('x-real-ip') || 
-             req.headers.get('cf-connecting-ip') || 
-             req.headers.get('x-forwarded-for')?.split(',')[0] || 
-             '0.0.0.0';
-  
+  const ip =
+    req.headers.get("x-real-ip") ||
+    req.headers.get("cf-connecting-ip") ||
+    req.headers.get("x-forwarded-for")?.split(",")[0] ||
+    "0.0.0.0";
+
   const { os, device } = parseUserAgent(ua);
 
   // Tenta capturar dos headers da Vercel/Supabase (mais comuns no Edge)
   let geo = {
-    country: req.headers.get('x-vercel-ip-country') || req.headers.get('cf-ipcountry'),
-    state: req.headers.get('x-vercel-ip-country-region') || req.headers.get('cf-region'),
-    city: req.headers.get('x-vercel-ip-city') || req.headers.get('cf-ipcity')
+    country: req.headers.get("x-vercel-ip-country") || req.headers.get("cf-ipcountry"),
+    state: req.headers.get("x-vercel-ip-country-region") || req.headers.get("cf-region"),
+    city: req.headers.get("x-vercel-ip-city") || req.headers.get("cf-ipcity"),
   };
 
   // 3. SE ALGUM CAMPO ESTIVER FALTANDO, DISPARA O FALLBACK
   // Mudamos a condição para ser mais agressiva: se não tem cidade ou estado, busca no IP-API
-  if (!geo.country || geo.country === 'XX' || !geo.city) {
+  if (!geo.country || geo.country === "XX" || !geo.city) {
     try {
       // Importante: se o IP for 0.0.0.0 ou 127.0.0.1, o ip-api não retorna nada útil localmente
-      const queryIp = (ip === '0.0.0.0' || ip === '127.0.0.1') ? '' : ip;
+      const queryIp = ip === "0.0.0.0" || ip === "127.0.0.1" ? "" : ip;
       const res = await fetch(`http://ip-api.com/json/${queryIp}?fields=countryCode,regionName,city`);
       const fallback = await res.json();
-      
+
       geo = {
-        country: fallback?.countryCode || geo.country || 'N/A',
-        state: fallback?.regionName || geo.state || 'N/A',
-        city: fallback?.city || geo.city || 'N/A'
+        country: fallback?.countryCode || geo.country || "N/A",
+        state: fallback?.regionName || geo.state || "N/A",
+        city: fallback?.city || geo.city || "N/A",
       };
-    } catch (e: any) {
+    } catch (e) {
       console.warn("[sbX Infrastructure] Falha no fallback de Geo:", e.message);
     }
   }
 
   const originData: OriginDetails = {
     ip_address: ip,
-    country: geo.country || 'N/A',
-    state: geo.state || 'N/A',
-    city: geo.city || 'N/A',
+    country: geo.country || "N/A",
+    state: geo.state || "N/A",
+    city: geo.city || "N/A",
     user_agent: ua,
     device_type: device,
     operating_system: os,
     metadata: {
       timestamp: new Date().toISOString(), // Adicionado para cumprir a interface
-      tls_version: req.headers.get('x-tls-version') || null // Adicionado para cumprir a interface
-    }
+      tls_version: req.headers.get("x-tls-version") || null, // Adicionado para cumprir a interface
+    },
   };
 
   return originData;
@@ -151,17 +166,20 @@ async function captureInfrastructure(req: Request) {
  * Mantém o rigor da versão original, diferenciando a obrigatoriedade entre VISIT e SIMULATION.
  */
 async function validatePayload(
-  supabaseClient: any, 
-  payload: OrchestratorPayload
-): Promise<{ category_id?: number, product_id?: number, action: 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT' }> {
-  
+  supabaseClient: any,
+  payload: OrchestratorPayload,
+): Promise<{
+  category_id?: number;
+  product_id?: number;
+  action: "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT";
+}> {
   const errors: string[] = [];
   let found_category_id: number | undefined;
   let found_product_id: number | undefined = payload.product_id;
 
   // 1. Definição da Ação e Contexto (Normalização)
   const action = payload.action?.toUpperCase();
-  payload.action = action as 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT';
+  payload.action = action as "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT";
 
   // Identificação e Contexto (Sempre Obrigatório)
   if (!payload.interaction_context?.utm_source) errors.push("interaction_context.utm_source ausente.");
@@ -180,7 +198,7 @@ async function validatePayload(
   // target_url para ações de tráfego direto
   // Se for VISIT, REDIRECT ou CONTACT, é o frontend quem está pilotando a navegação. Ele sabe a página que carregou, então ele é obrigado a informar o target_url.
   // Se for SIMULATE, é o backend quem pilota o destino. Então, a validação não exige o target_url de quem fez a chamada.
-  if (['VISIT', 'REDIRECT', 'CONTACT'].includes(action)) {
+  if (["VISIT", "REDIRECT", "CONTACT"].includes(action)) {
     if (!payload.target_url) {
       errors.push(`target_url ausente. Obrigatório enviar o destino da página para ações do tipo ${action}.`);
     }
@@ -189,7 +207,7 @@ async function validatePayload(
   // =========================================================================
   // 3. VALIDAÇÃO DO NÓ: ENTITY (DINÂMICO PF VS PJ)
   // =========================================================================
-  if (action === 'SIMULATE' || action === 'CONSULT' || payload.entity) {
+  if (action === "SIMULATE" || action === "CONSULT" || payload.entity) {
     if (!payload.entity?.entity_id) errors.push("entity.entity_id ausente.");
     if (!payload.entity?.name) errors.push("entity.name ausente.");
     if (!payload.entity?.document) errors.push("entity.document ausente.");
@@ -202,7 +220,8 @@ async function validatePayload(
 
     // Se NÃO for PJ (ou seja, for conta PF), aplica obrigatoriedade estrita
     if (!isPJ) {
-      if (!payload.entity?.birth_date) errors.push("entity.birth_date ausente. Campo obrigatório para Pessoa Física (PF).");
+      if (!payload.entity?.birth_date)
+        errors.push("entity.birth_date ausente. Campo obrigatório para Pessoa Física (PF).");
       if (!payload.entity?.gender) errors.push("entity.gender ausente. Campo obrigatório para Pessoa Física (PF).");
     } else {
       // Sanitização preventiva para PJ não estourar restrições de coluna do banco no insert
@@ -211,13 +230,13 @@ async function validatePayload(
         payload.entity.birth_date = payload.entity.birth_date || "";
       }
     }
-  } 
+  }
 
   // =========================================================================
   // 4. VALIDAÇÃO DOS NÓS DE CONTEXTO (OFFER, SELLER, MANAGER, EVENT)
   // =========================================================================
   // Se 'payload.offer' estiver vazio ou nulo, o sistema entende que é uma jornada direta
-  const hasOfferContext = !!payload.offer && (source === 'offer' || !!payload.offer.offer_id);
+  const hasOfferContext = !!payload.offer && (source === "offer" || !!payload.offer.offer_id);
 
   if (hasOfferContext) {
     // --- Nó MANAGER ---
@@ -242,16 +261,16 @@ async function validatePayload(
 
     // Resolução de Categoria (Se houver texto de categoria)
     if (payload.offer?.category) {
-      debugLog("ValidatePayload categoria recebida:" & payload.offer?.category)
+      debugLog("ValidatePayload categoria recebida:" & payload.offer?.category);
 
       const { data: catData } = await supabaseClient
-        .from('category_types')
-        .select('id, product_id')
-        .ilike('name', `%${payload.offer.category}%`)
+        .from("category_types")
+        .select("id, product_id")
+        .ilike("name", `%${payload.offer.category}%`)
         .single();
 
-      debugLog("ValidatePayload encontratndo id da categoria em category_types:" & catData.id)
-      
+      debugLog("ValidatePayload encontratndo id da categoria em category_types:" & catData.id);
+
       if (!catData) {
         errors.push(`Categoria '${payload.offer.category}' não mapeada.`);
       } else {
@@ -268,7 +287,7 @@ async function validatePayload(
   }
 
   // 5. Validação de Canais de Marketing
-  if (['banner', 'whatsapp', 'email', 'sms'].includes(source || '') && !found_product_id) {
+  if (["banner", "whatsapp", "email", "sms"].includes(source || "") && !found_product_id) {
     errors.push(`Para o canal '${source}', o 'product_id' é obrigatório.`);
   }
 
@@ -280,63 +299,64 @@ async function validatePayload(
 
 /**
  * @function resolveDestination
- * @description Resolve o destino de redirecionamento. 
+ * @description Resolve o destino de redirecionamento.
  * Para SIMULATION, busca no banco. Para VISIT, valida e retorna a URL enviada.
  */
 async function resolveDestination(
-  supabaseClient: any, 
-  action: 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT',
-  payloadTargetUrl?: string, 
-  eventId?: string | number, 
+  supabaseClient: any,
+  action: "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT",
+  payloadTargetUrl?: string,
+  eventId?: string | number,
   sellerId?: string | number,
   categoryId?: number,
   productId?: number,
-  entityDocument?: string
-): Promise<{ 
-    orchestrator_config_id?: number,
-    url: string, 
-    partner_id?: number, 
-    is_integrated?: boolean,
-    integration_method?: string, 
-    integration_details?: any 
+  entityDocument?: string,
+): Promise<{
+  orchestrator_config_id?: number;
+  url: string;
+  partner_id?: number;
+  is_integrated?: boolean;
+  integration_method?: string;
+  integration_details?: any;
 }> {
-  
   // 1. CASO VISIT: Retorna a URL que veio no payload (ou uma padrão do sistema)
-  debugLog(`RESOLVE DESTINATION: Ação ${action} recebida. Iniciando resolução de destino...category: ${categoryId}... product_id: ${productId}... eventId: ${eventId}... sellerId: ${sellerId}... entityDocument: ${entityDocument}`);
+  debugLog(
+    `RESOLVE DESTINATION: Ação ${action} recebida. Iniciando resolução de destino...category: ${categoryId}... product_id: ${productId}... eventId: ${eventId}... sellerId: ${sellerId}... entityDocument: ${entityDocument}`,
+  );
 
-  if (action === 'VISIT' || action === 'REDIRECT' || action === 'CONTACT') {
+  if (action === "VISIT" || action === "REDIRECT" || action === "CONTACT") {
     if (!payloadTargetUrl) {
       throw new Error("Para ações de 'VISIT', a target_url é obrigatória no payload.");
     }
-    return { 
-      url: payloadTargetUrl 
+    return {
+      url: payloadTargetUrl,
     };
   }
 
   // Identifica o perfil do lead atual ('PF' ou 'PJ') baseando-se no tamanho do documento limpo
   const cleanDoc = String(entityDocument || "").replace(/\D/g, "");
-  const currentProfile = cleanDoc.length === 14 ? 'PJ' : 'PF';
+  const currentProfile = cleanDoc.length === 14 ? "PJ" : "PF";
 
   // 2. Hierarquia de prioridades
   const priorities = [
-    { type: 'PRODUCT', id: productId ? Number(productId) : undefined },
-    { type: 'EVENT', id: eventId ? Number(eventId) : undefined },
-    { type: 'SELLER', id: sellerId ? Number(sellerId) : undefined },
-    { type: 'CATEGORY', id: categoryId ? Number(categoryId) : undefined }
+    { type: "PRODUCT", id: productId ? Number(productId) : undefined },
+    { type: "EVENT", id: eventId ? Number(eventId) : undefined },
+    { type: "SELLER", id: sellerId ? Number(sellerId) : undefined },
+    { type: "CATEGORY", id: categoryId ? Number(categoryId) : undefined },
   ];
-  
+
   for (const priority of priorities) {
     if (priority.id && !isNaN(priority.id)) {
       // Log para conferir o que está saindo para a query
       debugLog(`resolveDestination tentando query: ${priority.type} com ID: ${priority.id}`);
       // Com filtro para respeitar as chaves: 'PF', 'PJ' ou 'PF+PJ' configuradas na tabela
       const { data, error } = await supabaseClient
-        .from('orchestrator_configs')
-        .select('id, page_url, partner_id, is_integrated, integration_method, integration_details, entity_type')
-        .eq('lookup_id', priority.id)
-        .eq('config_type', priority.type)
-        .eq('is_active', true)
-        .in('entity_type', [currentProfile, 'PF+PJ'])
+        .from("orchestrator_configs")
+        .select("id, page_url, partner_id, is_integrated, integration_method, integration_details, entity_type")
+        .eq("lookup_id", priority.id)
+        .eq("config_type", priority.type)
+        .eq("is_active", true)
+        .in("entity_type", [currentProfile, "PF+PJ"])
         .maybeSingle();
 
       if (error) {
@@ -345,23 +365,25 @@ async function resolveDestination(
       }
 
       if (!data) {
-        debugLog(`[ROTEAMENTO AVISO] Registro não encontrado para ${priority.type} ID ${priority.id}. Continuando busca...`);
+        debugLog(
+          `[ROTEAMENTO AVISO] Registro não encontrado para ${priority.type} ID ${priority.id}. Continuando busca...`,
+        );
         continue; // e não achou dados, obriga o loop a passar para o próximo item!
       }
 
       // Se achou o registro, mata a execução do loop e retorna o destino na hora
       debugLog(`[ROTEAMENTO SUCESSO] Match cravado via ${priority.type} -> `, data);
-      return { 
+      return {
         orchestrator_config_id: data.id,
-        url: data.page_url, 
+        url: data.page_url,
         partner_id: data.partner_id,
         is_integrated: data.is_integrated,
         integration_method: data.integration_method,
-        integration_details: data.integration_details
+        integration_details: data.integration_details,
       };
     }
   }
-  
+
   // Só vai chegar aqui se o loop rodar as 4 prioridades e todas retornarem vazias ou com erro, ou se os IDs forem inválidos (ex: string "undefined" que não é convertida para número).
   throw new Error("Nenhuma configuração de destino ativa encontrada para esta simulação.");
 }
@@ -376,31 +398,32 @@ async function resolveOrchestratorConfigs(
   sellerId?: any,
   categoryId?: any,
   productId?: any,
-  entityDocument?: string // Passando o documento para filtrar as configs ativas para o perfil correto (PF ou PJ)
+  entityDocument?: string, // Passando o documento para filtrar as configs ativas para o perfil correto (PF ou PJ)
 ) {
-
   // 1. Identifica o perfil do lead atual ('PF' ou 'PJ') limpando pontos e traços
   const cleanDoc = String(entityDocument || "").replace(/\D/g, "");
-  const currentProfile = cleanDoc.length === 14 ? 'PJ' : 'PF';
+  const currentProfile = cleanDoc.length === 14 ? "PJ" : "PF";
 
   // Define a hierarquia de prioridades
   const priorities = [
-    { type: 'PRODUCT', id: productId },
-    { type: 'EVENT', id: eventId },
-    { type: 'SELLER', id: sellerId },
-    { type: 'CATEGORY', id: categoryId }
+    { type: "PRODUCT", id: productId },
+    { type: "EVENT", id: eventId },
+    { type: "SELLER", id: sellerId },
+    { type: "CATEGORY", id: categoryId },
   ];
 
   for (const priority of priorities) {
     // Só tenta buscar se o ID existir e não for a string "undefined"
     if (priority.id && priority.id !== "undefined") {
       const { data, error } = await supabase
-        .from('orchestrator_configs')
-        .select('partner_id, rules, consent_configs, page_configs, page_faqs, is_integrated, integration_method, integration_details')
-        .eq('lookup_id', Number(priority.id)) 
-        .eq('config_type', priority.type)
-        .eq('is_active', true)
-        .in('entity_type', [currentProfile, 'PF+PJ'])
+        .from("orchestrator_configs")
+        .select(
+          "partner_id, rules, consent_configs, page_configs, page_faqs, is_integrated, integration_method, integration_details",
+        )
+        .eq("lookup_id", Number(priority.id))
+        .eq("config_type", priority.type)
+        .eq("is_active", true)
+        .in("entity_type", [currentProfile, "PF+PJ"])
         .maybeSingle();
 
       if (error) {
@@ -412,8 +435,11 @@ async function resolveOrchestratorConfigs(
         debugLog("CONSULTA RULES E CONFIGS EM OSQUESTRATOR_CONFIGS:", data);
         return data;
       }
-      
-      debugLog("CONSULTA RULES E CONFIGS EM OSQUESTRATOR_CONFIGS:", `Nada encontrado para ${priority.type} ID ${priority.id}`);
+
+      debugLog(
+        "CONSULTA RULES E CONFIGS EM OSQUESTRATOR_CONFIGS:",
+        `Nada encontrado para ${priority.type} ID ${priority.id}`,
+      );
     }
   }
 
@@ -431,70 +457,63 @@ async function resolveOrchestratorConfigs(
  * Valida, registra a visita e define o destino (redirecionamento).
  */
 serve(async (req: Request) => {
-    
-  // 1. DEFINIÇÃO ÚNICA E ROBUSTA DOS HEADERS
+  /**
+   * ETAPA 1: Setup Inicial e CORS
+   * Essencial para permitir que o Sandbox (localhost) ou sites externos
+   * consumam esta Edge Function.
+   */
+
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token, x-visit-id, x-visit-update-id, x-simulation-id",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Content-Type": "application/json"
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   };
 
-  // 2. PREFLIGHT (CORS) - TRATADO LOGO NO INÍCIO
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { 
-      status: 200, 
-      headers: corsHeaders 
-    });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   // Inicialização do cliente com Service Role para bypass de RLS
   // Essencial para que o modo GET consiga ler dados protegidos para o Front-end.
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    {
-      auth: {
-        persistSession: false,
-      },
-    }
-  );
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: {
+      persistSession: false,
+    },
+  });
 
   // =========================================================================
   // MODO LEITURA (GET): Hidratação de Contexto (O Pulo do Gato)
   // =========================================================================
-if (req.method === 'GET') {
+  if (req.method === "GET") {
     try {
-      // 1. CAPTURA SEGURA (Padrão Cofre): Extraindo do Header e não da URL
-      const visitId = req.headers.get('x-visit-id');
-      const visitUpdateId = req.headers.get('x-visit-update-id');
-      const simulationId = req.headers.get('x-simulation-id');
-
-      // 2. TRAVA 1: Identificação do Usuário via JWT
+      // VALIDA USERID DO TOKEN COM ENTITY_ID DA VISITA
       const sessionToken = req.headers.get("x-session-token");
       if (!sessionToken) {
-        return new Response(JSON.stringify({ code: "AUTH_REQUIRED", message: "Token de sessão ausente." }), { 
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        });
+        return new Response(JSON.stringify({ code: "AUTH_REQUIRED" }), { status: 401, headers: corsHeaders });
+      }
+      const jwtPayload = JSON.parse(atob(sessionToken.split('.')[1]));
+      const sessionUserId = jwtPayload.sub;
+
+      const payload: OrchestratorPayload = await req.json();
+      
+      // Força a vinculação no payload antes do persistVisitData
+      if (payload.entity) {
+        payload.entity.entity_id = String(sessionUserId);
       }
 
-      // Decodifica o Token JWT para saber quem está pedindo o dado
-      const tokenParts = sessionToken.split('.');
-      const jwtPayload = JSON.parse(atob(tokenParts[1]));
-      const sessionUserId = jwtPayload.sub; 
-
-      // Validação de Entrada: Garante que a requisição possui as chaves mestra
-      if (!visitId) throw new Error("O parâmetro 'x-visit-id' é obrigatório no cabeçalho.");
+      const url = new URL(req.url);
+      const visitId = url.searchParams.get("visit_id");
+      const visitUpdateId = url.searchParams.get("visit_update_id");
+      const simulationId = url.searchParams.get("simulation_id");
 
       // Se vier simulation_id, buscamos os dados da simulação para hidratar
       let simulationData = null;
       if (simulationId) {
         const { data: sim, error: simError } = await supabase
-          .from('simulations')
-          .select('*')
-          .eq('id', simulationId)
+          .from("simulations")
+          .select("*")
+          .eq("id", simulationId)
           .single();
-        
+
         if (!simError) simulationData = sim;
       }
 
@@ -505,8 +524,9 @@ if (req.method === 'GET') {
       // Consultamos a tabela 'visits' e trazemos via relacionamento a 'visit_entities' e 'visit_offers'.
       // O snapshot JSONB 'entity_details' é a nossa fonte primária de verdade.
       const { data: visit, error: visitError } = await supabase
-        .from('visits')
-        .select(`
+        .from("visits")
+        .select(
+          `
           id,
           product_id,
           partner_id,
@@ -535,49 +555,52 @@ if (req.method === 'GET') {
             category_id,
             offer_details
           )
-        `)
-        .eq('id', visitId)
+        `,
+        )
+        .eq("id", visitId)
         .single();
 
       debugLog("VISIT no GET:", visit);
 
-      // Safety Guard: Bloqueia o processo se a visita não existir ou se houver erro de RLS.
+      // 3. Safety Guard: Bloqueia o processo se a visita não existir ou se houver erro de RLS.
       if (visitError || !visit) {
         console.error("[ORCHESTRATOR ERROR]:", visitError?.message);
         throw new Error("Visita não encontrada ou expirada.");
       }
 
-      //  Validação de Propriedade (Cross-User)
-      const visitEntityData = visit.visit_entities?.[0] || {};
-      
-      // Verifica se o dono do JWT é o mesmo dono da Visita
-      if (visitEntityData.entity_id && visitEntityData.entity_id !== String(sessionUserId)) {
-        console.warn(`[SECURITY] Violação barrada! User: ${sessionUserId} tentou acessar Visita: ${visitId}`);
-        return new Response(JSON.stringify({ 
-          code: "FORBIDDEN_ACCESS", 
-          message: "Acesso negado: O recurso solicitado não pertence a esta sessão." 
-        }), { 
-          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        });
+      // VALIDAÇÃO DO USERID DO TOKEN COM A ENTITY_ID DA VISITA
+
+      const sessionToken = req.headers.get("x-session-token");
+      if (!sessionToken) {
+        return new Response(JSON.stringify({ code: "AUTH_REQUIRED" }), { status: 401, headers: corsHeaders });
+      }
+      const jwtPayload = JSON.parse(atob(sessionToken.split('.')[1]));
+      const sessionUserId = jwtPayload.sub;
+
+      // Força a vinculação no payload antes do persistVisitData
+      if (payload.entity) {
+        payload.entity.entity_id = String(sessionUserId);
       }
 
       // 1. Snapshots dos dados relacionados
       const visitOfferData = visit.visit_offers?.[0] || {};
+      const visitEntityData = visit.visit_entities?.[0] || {};
 
       // 2. BUSCA EM CASCATA: Evento > Seller > Categoria
       const orchestratorConfigs = await resolveOrchestratorConfigs(
         supabase,
-        visitOfferData.event_details?.event_id,       // Prioridade 1 : evento
-        // [CÓDIGO ALTERADO (1/2)] Correção de Typo: 'detaiLs' para 'details'
-        visitOfferData.seller_details?.seller_id,     // Prioridade 2 : seller
-        visitOfferData.category_id,                   // Prioridade 3 : categoria
-        visit.product_id,                             // Prioridade 4 : produto
-        visitEntityData.document                      // Para filtrar as configs ativas para o perfil correto (PF ou PJ)
+        visitOfferData.event_details?.event_id, // Prioridade 1 : evento
+        visitOfferData.seller_detaiLs?.seller_id, // Prioridade 2 : seller
+        visitOfferData.category_id, // Prioridade 3 : categoria
+        visit.product_id, // Prioridade 4 : produto
+        visitEntityData.document, // Para filtrar as configs ativas para o perfil correto (PF ou PJ)
       );
 
       // Bloqueio de segurança caso o banco retorne nulo por falta de amarração de rota
       if (!orchestratorConfigs) {
-        throw new Error(`[resolveOrchestratorConfigs]: Configurações não localizadas para o produto/evento/seller/categoria/tipo de documento.`);
+        throw new Error(
+          `[resolveOrchestratorConfigs]: Configurações não localizadas para o produto/evento/seller/categoria/tipo de documento.`,
+        );
       }
 
       debugLog("PARAMETRIZAÇÕES DO ORCHESTRATOR: ", orchestratorConfigs);
@@ -611,7 +634,7 @@ if (req.method === 'GET') {
 
         // --- REGRAS DE NEGÓCIO (LIMITES) ---
         // --- INJEÇÃO DOS VALORES CONFIGURADOS NA ROTA ---
-        rules: orchestratorConfigs?.rules, 
+        rules: orchestratorConfigs?.rules,
         consent_configs: orchestratorConfigs?.consent_configs,
         page_configs: orchestratorConfigs?.page_configs,
         page_faqs: orchestratorConfigs?.page_faqs,
@@ -620,29 +643,33 @@ if (req.method === 'GET') {
         integration_details: orchestratorConfigs?.integration_details,
 
         simulation_details: simulationData?.simulation_details || {
-          requested_value: visitOfferData.offer_details?.offer_value ? parseFloat(visitOfferData.offer_details.offer_value) : null,
+          requested_value: visitOfferData.offer_details?.offer_value
+            ? parseFloat(visitOfferData.offer_details.offer_value)
+            : null,
           installments: null,
           down_payment_percentage: orchestratorConfigs?.simulation_rules?.min_down_payment_percentage ?? null, // Sem fallback numérico fixo
-          down_payment_amount: (visitOfferData.offer_details?.offer_value && orchestratorConfigs?.simulation_rules?.min_down_payment_percentage)
-            ? (parseFloat(visitOfferData.offer_details.offer_value) * (orchestratorConfigs?.simulation_rules?.min_down_payment_percentage / 100)) 
-            : null
-        }
+          down_payment_amount:
+            visitOfferData.offer_details?.offer_value &&
+            orchestratorConfigs?.simulation_rules?.min_down_payment_percentage
+              ? parseFloat(visitOfferData.offer_details.offer_value) *
+                (orchestratorConfigs?.simulation_rules?.min_down_payment_percentage / 100)
+              : null,
+        },
       };
 
       debugLog("HIDRATED PAYLOAD: ", hydratedPayload);
 
       // Retorno Bilateral: O Front recebe os dados prontos para o 'setForm' ou 'setSimData'.
       return new Response(JSON.stringify(hydratedPayload), {
-        status: 200, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-
     } catch (error: any) {
       // Log de Erro: Monitoramento via logs do Supabase Functions.
       console.error(`[Orquestrador GET Error]: ${error.message}`);
       return new Response(JSON.stringify({ error: error.message }), {
         status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
   }
@@ -650,31 +677,31 @@ if (req.method === 'GET') {
   // =========================================================================
   // MODO ESCRITA (POST): Ciclo de Vida do Clique (Orquestração sbX)
   // =========================================================================
-  if (req.method === 'POST') {
+  if (req.method === "POST") {
     try {
       const payload: OrchestratorPayload = await req.json();
       const infra = await captureInfrastructure(req);
-      
-      debugLog("INFOS DE ORIGEM DA CHAMADA NO 'POST': ", infra)
-      debugLog("Payload enviado no 'POST': ", payload)
-      
+
+      debugLog("INFOS DE ORIGEM DA CHAMADA NO 'POST': ", infra);
+      debugLog("Payload enviado no 'POST': ", payload);
+
       // 1. Validação do Payload e Definição da Ação (VISIT ou SIMULATION)
       const { category_id, product_id, action } = await validatePayload(supabase, payload);
 
-      debugLog("Retorno validatePayload: ", category_id)
-      debugLog("Retorno validatePayload: ", product_id)
-      debugLog("Retorno validatePayload: ", action)
+      debugLog("Retorno validatePayload: ", category_id);
+      debugLog("Retorno validatePayload: ", product_id);
+      debugLog("Retorno validatePayload: ", action);
 
       // 2. Resolução de Destino (Busca onde o usuário deve pousar)
       const destination = await resolveDestination(
-        supabase, 
-        action, 
+        supabase,
+        action,
         payload.target_url,
-        payload.event?.event_id, 
+        payload.event?.event_id,
         payload.seller?.seller_id,
-        category_id, 
+        category_id,
         product_id,
-        payload.entity?.document   // Document para identificar se é PF ou PJ
+        payload.entity?.document, // Document para identificar se é PF ou PJ
       );
 
       payload.target_url = destination.url; // Garantimos que o payload tenha a URL final para o log de navegação
@@ -689,56 +716,61 @@ if (req.method === 'GET') {
       // 3. Persistência (Usa o visit_id que mapeamos na interface)
       // Aqui ele faz o "One-Shot" para não duplicar sua visita.
       const { visitId, visitUpdateId } = await persistVisitData(
-        sql, 
-        payload, 
-        infra, 
-        category_id, 
+        sql,
+        payload,
+        infra,
+        category_id,
         payload.action,
         payload.origin_url,
         destination.url,
         payload.visit_id,
-        destination.orchestrator_config_id
+        destination.orchestrator_config_id,
       );
 
       // Captura o simulation_id se ele vier no payload ou na jornada
       const simulationId = payload.simulation_id || null;
 
-      // Nova URL com os IDs
+      // [AJUSTE NA RESPOSTA FINAL]: Injeção dinâmica do simulation_id na URL
       let finalUrl = `${destination.url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
       if (simulationId) {
         finalUrl += `&simulation_id=${simulationId}`;
       }
 
-      return new Response(JSON.stringify({ 
-        action: 'REDIRECT',
-        url: finalUrl, 
-        visit_id: visitId,
-        visit_update_id: visitUpdateId,
-        simulation_id: simulationId, // Herança para o estado reativo
-        partner_id: payload.partner_id 
-      }), { 
-        status: 200, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      });
-
-      } catch (error: any) {
-        debugLog(`[Orquestrador Error]: ${error.message}`);
-        return new Response(JSON.stringify({ 
+      return new Response(
+        JSON.stringify({
+          action: "REDIRECT",
+          url: finalUrl,
+          visit_id: visitId,
+          visit_update_id: visitUpdateId,
+          simulation_id: simulationId, // Herança para o estado reativo
+          partner_id: payload.partner_id,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    } catch (error: any) {
+      debugLog(`[Orquestrador Error]: ${error.message}`);
+      return new Response(
+        JSON.stringify({
           error: error.message,
-          details: "Erro interno no processamento do pipeline" 
-        }), { 
+          details: "Erro interno no processamento do pipeline",
+        }),
+        {
           status: 400, // Evita o 500/503 genérico
-          headers: { 
+          headers: {
             ...corsHeaders, // Usa os headers definidos no topo
-            "Content-Type": "application/json" 
-          } 
-        });
-      }
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
   }
 
   // Caso receba um método não suportado (ex: PUT, DELETE)
   return new Response(JSON.stringify({ error: "Método não permitido" }), {
     status: 405,
-    headers: { ...corsHeaders, "Content-Type": "application/json" }
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });

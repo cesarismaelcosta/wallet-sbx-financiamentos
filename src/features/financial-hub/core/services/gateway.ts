@@ -44,6 +44,8 @@ export async function callOrchestrator(
     "Content-Type": "application/json",
     "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
     "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+    "x-visit-id": payload.visit_id || "",
+    "x-visit-update-id": payload.visit_update_id || "",
   };
 
   if (sessionToken) {
@@ -108,6 +110,8 @@ export async function callSimulation(payload: any, step: 'CHECK_ELIGIBILITY' | '
     "Content-Type": "application/json",
     "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
     "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+    "x-visit-id": payload.visit_id || "",
+    "x-visit-update-id": payload.visit_update_id || "",
   };
 
   if (sessionToken) {
