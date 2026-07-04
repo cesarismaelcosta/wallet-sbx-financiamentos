@@ -3,59 +3,63 @@
  * Busca os detalhes da oferta através da Edge Function sbx-offer.
  * Centraliza a chamada para garantir compliance e segurança.
  * * [RESPONSABILIDADES]:
- * 1. Interface de comunicação: O front-end envia apenas o offer_token (JWT Próprio),
+ * 1. Identidade: O front-end envia o offer_token (JWT de Sessão) no header,
  * mantendo os tokens reais da API da Superbid protegidos no servidor.
- * 2. Gateway Bypass: Utiliza a Anon Key do Supabase para transpor o Kong Gateway.
- * 3. Delegação de Rota: Erros 401 lançam exceções, abortam o fluxo local e 
+ * 2. Contexto: O `offer_id` é enviado via Query Params, desacoplando a oferta da sessão.
+ * 3. Gateway Bypass: Utiliza a Anon Key do Supabase para transpor o Kong Gateway.
+ * 4. Delegação de Rota: Erros 401 lançam exceções, abortam o fluxo local e 
  * ativam o Protocolo de Amnésia global.
  * * @author Cesar Ismael Pereira da Costa
- * @version 1.0.0
+ * @version 2.0.0 (Correção Arquitetural JWT + URL Params)
  */
 
-export interface BFFOfferDetails {
-  offer: {
-    offer_id: string;
-    offer_description: string;
-    offer_value: number;
-    category_id: number;
-    category: string;
-    lot_number: string;
-    offer_status: string;
-    sale_status: string;
-    end_date: string;
-  };
-  manager: { manager_id: number; manager_name: string; };
-  event: { event_id: string; event_description: string; event_start_date: string; event_end_date: string; };
-  seller: { seller_id: string; legal_name: string; trade_name: string; economic_group: string; };
-}
+// Importando isoladamente apenas os 4 tipos reais do seu ecossistema
+import type { Offer, Manager, Event, Seller } from "../components/shared/types";
 
-export const fetchOfferDetails = async (offerToken: string): Promise<BFFOfferDetails> => {
+// A Promise agora apenas agrupa os 4 tipos importados
+export const fetchOfferDetails = async (
+  offerToken: string, 
+  offerId: string | number
+): Promise<{ offer: Offer; manager: Manager; event: Event; seller: Seller }> => {
+  
   const isBrowser = typeof window !== 'undefined';
   const storedAmbiente = isBrowser ? (localStorage.getItem("sandbox_env") || "stage") : "stage";
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  const response = await fetch(`${supabaseUrl}/functions/v1/sbx-offer`, {
+  // DEBUG: Validação do payload antes da chamada
+  console.log("DEBUG_OFFER_SERVICE:", { 
+    url: supabaseUrl, 
+    offerId: offerId,
+    hasKey: !!supabaseAnonKey, 
+    token: offerToken ? "presente" : "ausente" 
+  });
+  
+  // A URL agora embute o offer_id como parâmetro
+  const response = await fetch(`${supabaseUrl}/functions/v1/sbx-offer?offer_id=${offerId}`, {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${supabaseAnonKey}`,
       "apikey": supabaseAnonKey,
-      "x-sbx-offer-token": offerToken,
+      "x-sbx-offer-token": offerToken, // Apenas a prova de identidade
       "x-sbx-env": storedAmbiente,
       "Content-Type": "application/json",
       "Accept": "application/json"
     },
   });
 
+  // Tratamento de Sessão Inválida ou Expirada
   if (response.status === 401 || response.status === 403) {
     window.dispatchEvent(new CustomEvent('session_expired'));
     throw new Error("OFFER_ACCESS_DENIED");
   }
 
+  // Tratamento de Oferta não encontrada / encerrada
   if (response.status === 410) {
     throw new Error("OFFER_EXPIRED");
   }
 
+  // Falha Genérica / Upstream
   if (!response.ok) {
     throw new Error("OFFER_API_ERROR");
   }
