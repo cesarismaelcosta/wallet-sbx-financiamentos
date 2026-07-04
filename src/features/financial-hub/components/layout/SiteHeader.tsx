@@ -6,13 +6,13 @@
  * que o utilizador permaneça na rota correta.
  * * INTEGRAÇÃO:
  * - Utiliza `scrollIntoView` para navegação suave dentro da mesma página.
- * * INTERDEPENDÊNCIAS:
- * - `WalletLogo`: Componente de branding corporativo.
+ * - [NOVO] Integra telemetria visual (State Debugger) consumindo o contexto.
  */
 
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
+import { useProductConsult } from "@/features/financial-hub/core/contexts/FinancialHubContext"; // 🚀 Import do Cofre
 
 const links = [
   { href: "simular", label: "Simular" },
@@ -22,18 +22,16 @@ const links = [
 
 export function SiteHeader() {
   const navigate = useNavigate();
+  const context = useProductConsult(); // 🚀 Consome o estado hidratado da memória
 
   /**
    * handleScroll
    * Impede a navegação padrão do Router e força o scroll suave até o elemento com o ID alvo.
-   * @param e - Evento de clique do mouse.
-   * @param id - O ID do elemento HTML de destino (ex: 'simular', 'duvidas').
    */
   const handleScroll = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
     e.preventDefault();
     const element = document.getElementById(id);
     if (element) {
-      // scrollIntoView garante que o elemento alvo seja trazido para a visão
       element.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
       console.warn(`[SiteHeader] Elemento com id="${id}" não encontrado no DOM.`);
@@ -47,9 +45,17 @@ export function SiteHeader() {
         {/* Lado Esquerdo: Botão Voltar + Divisor + Logo */}
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => navigate({ to: "/" })} 
+            onClick={() => {
+              // Tenta voltar na pilha do navegador primeiro
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                // Fallback para a home se não houver histórico
+                navigate({ to: "/" });
+              }
+            }}
             className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-primary transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
-            aria-label="Voltar para a Home"
+            aria-label="Voltar para a página anterior"
           >
             <ArrowLeft size={16} />
             <span className="hidden sm:inline">Voltar</span>
@@ -57,7 +63,6 @@ export function SiteHeader() {
           
           <div className="h-6 w-px bg-slate-200" />
           
-          {/* Logo - Ajuste responsivo: esconde tagline no mobile para poupar espaço */}
           <div className="hidden sm:block">
             <WalletLogo size="md" withTagline />
           </div>
@@ -66,19 +71,52 @@ export function SiteHeader() {
           </div>
         </div>
 
-        {/* Navegação Manual (Âncoras) */}
-        <nav className="hidden md:flex gap-6">
-          {links.map((link) => (
-            <a
-              key={link.href}
-              href={`#${link.href}`}
-              onClick={(e) => handleScroll(e, link.href)}
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm px-1 -ml-1"
-            >
-              {link.label}
-            </a>
-          ))}
-        </nav>
+        {/* Lado Direito: Navegação + Debugger */}
+        <div className="flex items-center gap-6">
+          {/* Navegação Manual (Âncoras) */}
+          <nav className="hidden md:flex gap-6">
+            {links.map((link) => (
+              <a
+                key={link.href}
+                href={`#${link.href}`}
+                onClick={(e) => handleScroll(e, link.href)}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm px-1 -ml-1"
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+
+          {/* 🚀 STATE DEBUGGER 
+            Visível apenas em telas grandes (lg) para não amassar a navegação em dispositivos menores.
+            Os IDs são truncados (.split('-')[0]) para exibir apenas o primeiro bloco numérico (Ex: 5f3a2b1...).
+          */}
+          {context?.visit_id && (
+            <div className="hidden lg:flex items-center gap-4 border-l border-slate-300 pl-6 ml-2">
+              <div className="flex flex-col text-right">
+                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Visit</span>
+                <span className="text-xs font-mono font-medium text-emerald-600">
+                  {context.visit_id.split('-')[0]}
+                </span>
+              </div>
+              
+              <div className="flex flex-col text-right">
+                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Update</span>
+                <span className="text-xs font-mono font-medium text-amber-600">
+                  {context.visit_update_id ? context.visit_update_id.split('-')[0] : 'N/A'}
+                </span>
+              </div>
+
+              <div className="flex flex-col text-right">
+                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Sim</span>
+                <span className="text-xs font-mono font-medium text-sky-600">
+                  {context.simulation_id ? context.simulation_id.split('-')[0] : 'N/A'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
       </div>
     </header>
   );

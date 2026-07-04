@@ -703,9 +703,11 @@ if (req.method === 'GET') {
       // Captura o simulation_id se ele vier no payload ou na jornada
       const simulationId = payload.simulation_id || null;
 
-      // [CÓDIGO ALTERADO (2/2)] ARQUITETURA ZERO-URL-STATE: Higienização de Saída
-      // A URL enviada para o front-end é opaca. Os IDs vão no corpo do JSON.
-      const finalUrl = destination.url;
+      // Nova URL com os IDs
+      let finalUrl = `${destination.url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
+      if (simulationId) {
+        finalUrl += `&simulation_id=${simulationId}`;
+      }
 
       return new Response(JSON.stringify({ 
         action: 'REDIRECT',

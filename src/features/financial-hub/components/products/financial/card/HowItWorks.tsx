@@ -32,9 +32,9 @@ export function HowItWorks() {
   return (
     <section id="como-funciona" className="scroll-mt-24 bg-background py-16 sm:py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        <h2 className="text-center text-3xl font-bold mb-12 text-slate-800 tracking-tight">
+        <h2 className="text-center text-3xl font-semibold mb-12 text-slate-800 tracking-tight">
           Em <span style={{ color: "var(--primary)" }}>3 passos</span> você realiza seu pagamento na{" "}
-          <span style={{ color: "var(--primary)" }} className="font-black">
+          <span style={{ color: "var(--primary)" }} className="font-bold">
             Superbid
           </span>{" "}
           com cartão de crédito.

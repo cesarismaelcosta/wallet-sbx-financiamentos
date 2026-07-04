@@ -21,7 +21,7 @@ export async function callOrchestrator(
   method: 'GET' | 'POST' = 'POST'
 ) {
 
-  // ADICIONE ISSO AQUI NO TOPO DA FUNÇÃO:
+  // Validações:
   if (method !== 'GET' && method !== 'POST') {
     console.error("[DEBUG] Gateway chamado com método inválido:", method);
     console.trace("[DEBUG] Stack Trace de quem chamou:");
@@ -35,42 +35,43 @@ export async function callOrchestrator(
     }
   }
 
-  // 1. Configuração estática da URL (Sem Query Params expostos)
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orchestrator`;
-  const sessionToken = localStorage.getItem('session_token'); // Resgata a chave do cofre local
+  // 1. Configuração estática da URL base
+  const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orchestrator`;
+  const sessionToken = localStorage.getItem('session_token');
 
-  // 2. Montagem dos Headers (O Fundo Falso)
+  // 2. Montagem dos Headers (O Fundo Falso - Apenas Segurança)
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-    "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY, // Obrigatório para o Kong Gateway
+    "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
   };
 
-  // Se o usuário estiver logado, envia o token de sessão customizado
   if (sessionToken) {
     headers["x-session-token"] = sessionToken;
   }
 
-  // Se for GET, injetamos as chaves sensíveis de forma oculta no cabeçalho
-  if (method === 'GET') {
-    if (payload?.visit_id) headers["x-visit-id"] = payload.visit_id;
-    if (payload?.visit_update_id) headers["x-visit-update-id"] = payload.visit_update_id;
-    if (payload?.simulation_id) headers["x-simulation-id"] = payload.simulation_id;
-  }
-
+  // 3. Lógica de URL (GET com Query Params / POST com Body)
+  let finalUrl = baseUrl;
   const options: RequestInit = {
     method: method,
     headers: headers,
   };
 
-  console.log(`[Gateway] Preparando chamada para ${method} ${url} com payload:`, payload);
+  if (method === 'GET') {
+    const params = new URLSearchParams();
+    if (payload?.visit_id) params.append("visit_id", payload.visit_id);
+    if (payload?.visit_update_id) params.append("visit_update_id", payload.visit_update_id);
+    if (payload?.simulation_id) params.append("simulation_id", payload.simulation_id);
+    finalUrl = `${baseUrl}?${params.toString()}`;
+  } else {
+    options.body = JSON.stringify(payload);
+  }
 
-  // Se for POST, o payload vai no corpo normalmente
-  if (method === 'POST') options.body = JSON.stringify(payload);
+  console.log(`[Gateway] Preparando chamada para ${method} ${finalUrl} com payload:`, payload);
 
-  const response = await fetch(url, options);
+  const response = await fetch(finalUrl, options);
 
-  // 3. O VIGILANTE: Protocolo de Amnésia
+  // 4. O VIGILANTE: Protocolo de Amnésia
   if (response.status === 401 || response.status === 403) {
     console.warn(`[Gateway] Bloqueio de segurança detectado no Orchestrator (${response.status}). Acionando amnésia.`);
     window.dispatchEvent(new CustomEvent('session_expired'));
@@ -83,7 +84,7 @@ export async function callOrchestrator(
     throw new Error(`Erro na comunicação com o Gateway: ${response.status}`);
   }
   
-  console.log(`[Gateway] Retorno ${method} ${url} com sucesso.`);
+  console.log(`[Gateway] Retorno ${method} ${finalUrl} com sucesso.`);
 
   return response.json();
 }
@@ -103,14 +104,12 @@ export async function callSimulation(payload: any, step: 'CHECK_ELIGIBILITY' | '
 
   console.log("gateway payload:", payload);
 
-  // 1. Padronização de Headers (Padrão Cofre)
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
     "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
   };
 
-  // Adiciona o token da sessão se existir
   if (sessionToken) {
     headers["x-session-token"] = sessionToken;
   }
@@ -124,7 +123,6 @@ export async function callSimulation(payload: any, step: 'CHECK_ELIGIBILITY' | '
     }),
   });
 
-  // 2. O VIGILANTE: Protocolo de Amnésia (Para o fluxo de simulação)
   if (response.status === 401 || response.status === 403) {
     console.warn(`[Gateway] Sessão morta durante simulação (${response.status}). Acionando amnésia.`);
     window.dispatchEvent(new CustomEvent('session_expired'));

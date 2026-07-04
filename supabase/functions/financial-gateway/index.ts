@@ -49,6 +49,12 @@ serve(async (req) => {
   }
 
   try {
+    // =====================================================================
+    // [NOVO PADRÃO] Captura de IDs via URL (Consistência com Orchestrator)
+    // =====================================================================
+    const url = new URL(req.url);
+    const visitIdFromUrl = url.searchParams.get("visit_id");
+
     let payload;
     
     // Captura e valida o payload
@@ -61,6 +67,11 @@ serve(async (req) => {
         status: 405, 
         headers: corsHeaders 
       });
+    }
+
+    // Se o visit_id veio pela URL, injetamos no payload para garantir o funcionamento
+    if (visitIdFromUrl) {
+      payload.visit_id = visitIdFromUrl;
     }
 
     // =====================================================================
@@ -82,7 +93,7 @@ serve(async (req) => {
     // =====================================================================
     const visitId = payload.visit_id;
     if (!visitId) {
-      throw new Error("O parâmetro 'visit_id' é obrigatório no payload da simulação.");
+      throw new Error("O parâmetro 'visit_id' é obrigatório no payload da simulação ou na URL.");
     }
 
     const supabase = createClient(
