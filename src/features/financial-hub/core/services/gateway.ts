@@ -9,6 +9,31 @@
  */
 
 /**
+ * Função auxiliar para capturar o JWT do usuário ativo.
+ * Procura automaticamente pelo token padrão do Supabase ou por chaves manuais.
+ */
+function getSessionToken(): string {
+  // 1. Tenta buscar da autenticação nativa do Supabase
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+      try {
+        const authData = JSON.parse(localStorage.getItem(key) || '{}');
+        if (authData.access_token) return authData.access_token;
+      } catch (e) {
+        console.warn("[Gateway] Erro ao fazer parse do token Supabase", e);
+      }
+    }
+  }
+  
+  // 2. Fallback para chaves manuais genéricas (caso você salve na mão)
+  return localStorage.getItem("x-session-token") 
+      || sessionStorage.getItem("x-session-token") 
+      || localStorage.getItem("token") 
+      || "";
+}
+
+/**
  * callOrchestrator
  * Executa uma chamada HTTP para a Edge Function ou intercepta via Mock.
  * * @param payload - O corpo da requisição contendo o product_id.
@@ -16,7 +41,6 @@
  * @returns Promise com os dados da resposta (JSON).
  */
 export async function callOrchestrator(payload: any, method: "GET" | "POST" = "POST") {
-  // ADICIONE ISSO AQUI NO TOPO DA FUNÇÃO:
   if (method !== "GET" && method !== "POST") {
     console.error("[DEBUG] Gateway chamado com método inválido:", method);
     console.trace("[DEBUG] Stack Trace de quem chamou:");
@@ -35,11 +59,16 @@ export async function callOrchestrator(payload: any, method: "GET" | "POST" = "P
   // 2. MODO REAL: Execução padrão via Edge Function (Orchestrator fixo)
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orchestrator`;
 
+  // CAPTURA DO TOKEN PARA A TRAVA DE SEGURANÇA
+  const sessionToken = getSessionToken();
+
   const options: RequestInit = {
     method: method,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      // INJEÇÃO DO HEADER DE SEGURANÇA
+      ...(sessionToken ? { "x-session-token": sessionToken } : {})
     },
   };
 
@@ -87,11 +116,16 @@ export async function callSimulation(
 
   console.log("gateway payload:", payload);
 
+  // CAPTURA DO TOKEN PARA A TRAVA DE SEGURANÇA
+  const sessionToken = getSessionToken();
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      // INJEÇÃO DO HEADER DE SEGURANÇA
+      ...(sessionToken ? { "x-session-token": sessionToken } : {})
     },
     body: JSON.stringify({
       ...payload,
