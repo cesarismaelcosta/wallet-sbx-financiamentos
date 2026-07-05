@@ -130,9 +130,9 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   // =========================================================================
   if (!activeOffer) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
-        <Loader2 className="h-8 w-8 animate-spin text-[#B300FF] mb-4" />
-        <span className="text-sm font-semibold text-slate-500 animate-pulse">Carregando detalhes do lote...</span>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+        <p className="text-slate-500 font-medium">Carregando detalhes do lote...</p>
       </div>
     );
   }

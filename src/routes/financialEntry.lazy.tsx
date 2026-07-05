@@ -9,7 +9,7 @@
  * 1. Segurança: Intercepta a requisição, valida o token e evita execuções duplicadas.
  * 2. Reidratação (BFF): Busca perfil do usuário e dados consolidados da oferta.
  * 3. Orquestração: Monta o SimulationPayload e delega decisão ao Core.
- * 4. Resiliência: Trata expiração de oferta com degradação graciosa e fallback (PT-BR).
+ * 4. Resiliência: Trata expiração de oferta com degradação graciosa e fallback.
  */
 
 import { useEffect, useState, useRef } from "react";
@@ -17,9 +17,12 @@ import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile } from "@/services/user";
 import { fetchOfferDetails } from "@/services/offer";
-import { callOrchestration } from "@/features/financial-hub/core/orchestrator";
-import { callNavigation } from "@/features/financial-hub/core/navigator";
 import { Loader2, Clock } from "lucide-react";
+
+// =========================================================================
+// [DEPENDÊNCIAS DE DOMÍNIO]: Hooks do Hub Financeiro
+// =========================================================================
+import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator";
 
 import type { 
   UserProfile, 
@@ -58,7 +61,7 @@ export function FinancialEntry() {
   // [SEGURANÇA]: Cadeado para evitar execução duplicada (React 18 Strict Mode)
   const hasInitialized = useRef(false);
 
-  // [STATE]: Estados de UX e Controle de Fluxo (Localizados para PT-BR)
+  // [STATE]: Estados de UX e Controle de Fluxo
   const [statusText, setStatusText] = useState("Preparando um ambiente seguro...");
   const [offerExpired, setOfferExpired] = useState(false);
   const [countdown, setCountdown] = useState(5); // 5 segundos de espera amigável
@@ -76,40 +79,43 @@ export function FinancialEntry() {
   // [CORE]: Orquestração e Validação de Dados
   // -----------------------------------------------------------------------
   useEffect(() => {
-    // Trava de segurança: impede o disparo duplo da simulação
+    // 1. Aguarda o Contexto terminar de ler o localStorage
+    if (auth.isLoading) return;
+
+    // 2. Trava de segurança: impede o disparo duplo da simulação
     if (hasInitialized.current) return;
     
     const bootstrapContext = async () => {
       hasInitialized.current = true;
       
-      const currentEnvironment = searchEnv || "prd";
-      const activeToken = searchToken || auth.token || auth.accessToken;
+      const currentEnvironment = searchEnv;
+      const activeToken = searchToken || auth.token;
 
       if (!activeToken) {
         setStatusText("Redirecionando para acesso seguro...");
-        callNavigation({ target: "/login" });
+        navigate({ to: "/login" });
         return;
       }
 
       if (searchToken) {
-        auth.setToken(searchToken);
+        auth.setSession(searchToken);
       }
 
       try {
-        setStatusText("Validando seu perfil financeiro...");
+        setStatusText("Validando seus dados na Wallet sbX...");
         const userProfile = await fetchMyProfile(activeToken);
 
         let offerData = null;
         
         if (searchOfferId) {
-          setStatusText("Sincronizando as informações do lote...");
+          setStatusText("Buscando informações da oferta...");
           offerData = await fetchOfferDetails(activeToken, searchOfferId);
         }
 
         const interactionContext: InteractionContext = {
-          utm_source: searchUtmSource || "sbx_external_unknown",
-          utm_medium: searchUtmMedium || "financial_gateway",
-          utm_campaign: searchUtmCampaign || (searchProductId ? `product_${searchProductId}_flow` : "generic_flow"),
+          utm_source: searchUtmSource,
+          utm_medium: searchUtmMedium,
+          utm_campaign: searchUtmCampaign,
           origin_url: window.location.href, 
         };
 
@@ -118,39 +124,27 @@ export function FinancialEntry() {
           timestamp: new Date().toISOString(),
           environment: currentEnvironment, 
           entity: userProfile as UserProfile,
-          product_id: searchProductId || null,
-          offer: (offerData?.offer as Offer) || null,
-          seller: (offerData?.seller as Seller) || null,
-          event: (offerData?.event as Event) || null,
-          manager: (offerData?.manager as Manager) || null,
+          product_id: searchProductId,
+          offer: offerData?.offer as Offer,
+          seller: offerData?.seller as Seller,
+          event: offerData?.event as Event,
+          manager: offerData?.manager as Manager,
           interaction_context: interactionContext,
         };
 
-        setStatusText("Processando as melhores condições para você...");
+        setStatusText("Carregando informações do produto...");
         
-        const decision = await callOrchestration("SIMULATE", payload);
+        console.log("[FINANCIAL_ENTRY] Payload de Orquestração:", payload);
 
-        if (decision) {
-          callNavigation(decision);
-        }
+        // Dispara o núcleo do sistema
+        await orchestrateNavigation("CONSULT", payload);
         
       } catch (error: any) {
         console.error(`[FINANCIAL_ENTRY ERROR]:`, error);
         
-        const errorMsg = error.message.toUpperCase();
-        
-        // Trata lote finalizado, removido ou expirado
-        if (errorMsg.includes("NOT_FOUND") || errorMsg.includes("EXPIRED") || errorMsg.includes("410") || errorMsg.includes("404")) {
-          setOfferExpired(true);
-          return; 
-        }
-        
-        // Trata instabilidades sistêmicas (Gateway, Rede)
-        setStatusText("Ocorreu uma instabilidade momentânea.");
-        callNavigation({ 
-          target: "/error", 
-          params: { code: "ENTRY_BOOTSTRAP_FAILED", message: error.message } 
-        });
+        // Unifica o comportamento: qualquer erro dispara o fallback de resiliência
+        setOfferExpired(true);
+        setStatusText("Ocorreu uma instabilidade momentânea ao processar a simulação.");
       }
     };
 
@@ -159,7 +153,7 @@ export function FinancialEntry() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [searchEnv, searchToken, searchOfferId, searchProductId, searchUtmSource, searchUtmMedium, searchUtmCampaign, auth]);
+  }, [searchEnv, searchToken, searchOfferId, searchProductId, searchUtmSource, searchUtmMedium, searchUtmCampaign, auth, navigate]);
 
   // -----------------------------------------------------------------------
   // [UX FALLBACK]: Timer de Redirecionamento Automático
@@ -185,46 +179,36 @@ export function FinancialEntry() {
 
 
   // =========================================================================
-  // [VIEW 1]: Lote Indisponível (Degradação Graciosa com Timer)
+  // [VIEW 1]: Lote Indisponível (Sem Spinner, Título Slate-800, Link Roxo, Fonte Inter)
   // =========================================================================
   if (offerExpired) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-50 p-6 font-['Plus_Jakarta_Sans'] text-center">
-        <div className="w-20 h-20 bg-slate-200/50 rounded-full flex items-center justify-center mb-6 shadow-inner">
-          <Clock className="w-8 h-8 text-slate-400 animate-pulse" />
-        </div>
-        <h2 className="text-2xl font-black text-slate-800 mb-3 tracking-tight">Oferta Indisponível</h2>
-        <p className="text-sm text-slate-500 max-w-sm mx-auto mb-10 leading-relaxed">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Inter'] p-6 text-center">
+        {/* Spinner removido conforme imagem de referência */}
+        <h2 className="text-xl font-bold text-slate-800 mb-4">Oferta Indisponível</h2>
+        <p className="text-slate-500 mb-6 max-w-sm leading-relaxed">
           Este lote pode já ter sido arrematado, suspenso ou o período de avaliação foi encerrado.
         </p>
-        
-        <div className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 bg-white px-6 py-3 rounded-full border border-slate-200 shadow-sm transition-all">
-          <Loader2 className="w-3 h-3 animate-spin text-[#B300FF]" />
-          Redirecionando em <span className="text-[#B300FF] text-sm w-4">{countdown}</span> segundos
-        </div>
+        <p className="text-sm text-slate-400 mb-6">Redirecionando em {countdown} segundos...</p>
         
         <button 
           onClick={() => window.history.length > 2 ? window.history.back() : navigate({ to: "/sandbox", replace: true })}
-          className="mt-6 text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2 transition-colors"
+          className="text-sm text-[#B300FF] underline underline-offset-2 hover:opacity-80 font-medium"
         >
           Voltar agora
         </button>
       </div>
     );
   }
+  }
 
   // =========================================================================
-  // [VIEW 2]: Progresso Padrão do Gateway (Spinner)
+  // [VIEW 2]: Progresso (Spinner + Cor Roxo + Inter)
   // =========================================================================
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/95 backdrop-blur-md">
-      <div className="relative flex items-center justify-center mb-6">
-        <div className="absolute inset-0 border-4 border-[#B300FF]/20 rounded-full blur-sm"></div>
-        <Loader2 className="h-12 w-12 animate-spin text-[#B300FF] relative z-10" strokeWidth={2.5} />
-      </div>
-      <p className="text-sm text-slate-600 font-semibold tracking-wide animate-pulse">
-        {statusText}
-      </p>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Inter']">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B300FF] mb-4"></div>
+      <p className="text-slate-500 font-medium">{statusText}</p>
     </div>
   );
 }
