@@ -179,16 +179,20 @@ export function FinancialEntry() {
 
 
   // =========================================================================
-  // [VIEW 1]: Lote Indisponível (Sem Spinner, Título Slate-800, Link Roxo, Fonte Inter)
+  // [VIEW 1]: Lote Indisponível (Spinner + Título Slate-800 + Link Roxo + Inter)
   // =========================================================================
   if (offerExpired) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Inter'] p-6 text-center">
-        {/* Spinner removido conforme imagem de referência */}
+        {/* Spinner posicionado antes do título */}
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B300FF] mb-6"></div>
+        
         <h2 className="text-xl font-bold text-slate-800 mb-4">Oferta Indisponível</h2>
+        
         <p className="text-slate-500 mb-6 max-w-sm leading-relaxed">
           Este lote pode já ter sido arrematado, suspenso ou o período de avaliação foi encerrado.
         </p>
+        
         <p className="text-sm text-slate-400 mb-6">Redirecionando em {countdown} segundos...</p>
         
         <button 
@@ -200,7 +204,7 @@ export function FinancialEntry() {
       </div>
     );
   }
-  }
+
 
   // =========================================================================
   // [VIEW 2]: Progresso (Spinner + Cor Roxo + Inter)
