@@ -40,10 +40,19 @@ const SandboxHome = () => {
     (localStorage.getItem("sandbox_env") as "staging" | "production") || "production"
   );
 
-  // Sincroniza a escolha visual com o cofre do navegador
+  // Sincroniza a escolha visual com o cofre do navegador e DERRUBA a sessão
   const handleAmbienteChange = (novoAmbiente: "staging" | "production") => {
+    // Se clicar no mesmo ambiente que já está ativo, não faz nada
+    if (ambiente === novoAmbiente) return;
+
+    // 1. Atualiza o estado e o cofre do navegador
     setAmbiente(novoAmbiente);
     localStorage.setItem("sandbox_env", novoAmbiente);
+    
+    // 2. FORÇA O LOGOUT IMEDIATO
+    // Isso vai limpar o token e fazer o sandbox.lazy jogar o usuário
+    // de volta para a tela de autenticação do ambiente selecionado.
+    logout();
   };
 
   // -----------------------------------------------------------------------

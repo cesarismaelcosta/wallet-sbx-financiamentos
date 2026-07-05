@@ -10,7 +10,7 @@ import { fetchMyProfile, type BFFUserProfile } from "@/services/user";
 import { fetchOfferDetails } from "@/services/offer";
 import { Offer, Manager, Event, Seller } from "../_shared/types";
 
-export const Route = createLazyFileRoute("/sandbox/offer_new")({
+export const Route = createLazyFileRoute("/sandbox/consultabsx")({
   component: OfferDetailsNewSandbox,
 });
 

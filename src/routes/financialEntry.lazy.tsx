@@ -46,7 +46,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute } from "@tanstack/react-router";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile } from "@/services/user";
 import { fetchOfferDetails } from "@/services/offer";
@@ -68,7 +68,7 @@ import type {
 // =========================================================================
 // [CONTRATO DE ENTRADA]: Validação estrita dos Query Params via TanStack Router
 // =========================================================================
-export const Route = createFileRoute("/sandbox/financialEntry")({
+export const Route = createLazyFileRoute("/financialEntry")({
   validateSearch: (search: Record<string, unknown>) => ({
     // Controle de Ambiente
     environment: search.environment as string | undefined,

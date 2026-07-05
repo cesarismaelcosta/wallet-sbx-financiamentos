@@ -19,6 +19,15 @@ import { verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 // ============================================================================
 import type { Offer, Manager, Event, Seller } from "../../../src/features/financial-hub/components/shared/types.ts";
 
+const DEBUG_MODE = true;
+
+const debugLog = (message: string, data?: any) => {
+  if (DEBUG_MODE) {
+    console.log(`[SBX-OFFER] ${message}`, data ? JSON.stringify(data) : "");
+  }
+};
+
+
 // IMPORTANTE: 'x-session-token' adicionado aos headers permitidos no CORS
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -107,6 +116,9 @@ serve(async (req) => {
         const errBody = await response.text();
         throw new Error(`UPSTREAM_ERROR (${response.status}): ${errBody}`);
     }
+
+    // LOG PARA AUDITORIA (Retorno da SBX)
+    debuglog(`[DEBUG SUPERBID RAW DATA - LOTE ${offerId}]:`, JSON.stringify(data).substring(0, 1000));
 
     const data = await response.json();
     const rawOffer = data.offers?.[0];

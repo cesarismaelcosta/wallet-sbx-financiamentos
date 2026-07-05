@@ -9,7 +9,7 @@
  */
 
 import { useState, useMemo, useEffect, useContext } from "react";
-import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
+import { useNavigate, createFileRoute } from "@tanstack/react-router";
 import { Loader2, CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
@@ -24,7 +24,7 @@ const formatCPF = (cpf: string) => cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "
 // =========================================================================
 // CONFIGURAÇÃO DA ROTA (TANSTACK ROUTER)
 // =========================================================================
-export const Route = createLazyFileRoute("/sandbox/offer")({
+export const Route = createFileRoute("/sandbox/offer_new")({
   component: () => {
     const search = Route.useSearch();
     const flow = (search as any).flow;
@@ -61,10 +61,19 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   const [loadingBff, setLoadingBff] = useState(false);
   const [fotoAtiva, setFotoAtiva] = useState(0);
 
-  // Sincroniza alterações do seletor visual diretamente com o storage
+  // Sincroniza a escolha visual com o cofre do navegador e DERRUBA a sessão
   const handleAmbienteChange = (novoAmbiente: "staging" | "production") => {
+    // Se clicar no mesmo ambiente que já está ativo, não faz nada
+    if (ambiente === novoAmbiente) return;
+
+    // 1. Atualiza o estado e o cofre do navegador
     setAmbiente(novoAmbiente);
     localStorage.setItem("sandbox_env", novoAmbiente);
+    
+    // 2. FORÇA O LOGOUT IMEDIATO
+    // Isso vai limpar o token e fazer o sandbox.lazy jogar o usuário
+    // de volta para a tela de autenticação do ambiente selecionado.
+    logout();
   };
 
   // -----------------------------------------------------------------------
@@ -82,7 +91,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
         } catch (error) {
           console.error("[SANDBOX BFF FETCH ERROR]:", error);
           setActiveOffer(null);
-        } gold {
+        } finally { 
           setLoadingBff(false);
         }
       } else {
