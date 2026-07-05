@@ -30,7 +30,7 @@ export function OfferDetailsNewSandbox() {
   const [error, setError] = useState<string | null>(null);
 
   const token = auth.token || auth.accessToken; 
-  const offerId = "2969794";
+  const offerId = "3106187";
 
   useEffect(() => {
     const loadData = async () => {

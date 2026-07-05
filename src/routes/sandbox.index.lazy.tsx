@@ -1,6 +1,14 @@
 /**
  * @fileoverview Componente: SandboxHome (Rota: /sandbox/)
- * @description Ponto de entrada do ambiente de homologação.
+ * * =========================================================================
+ * [ARQUITETURA & CONTROLE DE AMBIENTE]
+ * =========================================================================
+ * Ponto de entrada do ambiente de homologação e testes do Financial Hub.
+ * * [Responsabilidades]:
+ * 1. Navegação Baseada em Fluxos: Mapeia as jornadas (Cartão, Veículos, Seguro, etc.).
+ * 2. Controle de Ambiente Reativo: Permite alternar a variável de ambiente (HML/PRD) 
+ * no localStorage em tempo real, sem necessidade de reautenticação.
+ * 3. Gestão de Sessão: Exibe os dados do utilizador logado e permite o logout.
  */
 
 import React, { useState, JSX } from "react";
@@ -23,8 +31,24 @@ interface MenuOption {
 const SandboxHome = () => {
   const navigate = useNavigate();
   const { logout, userId, token } = useFinancialAuth();
+  
+  // -----------------------------------------------------------------------
+  // [STATE]: Controle de loading e Ambiente Reativo
+  // -----------------------------------------------------------------------
   const [loading, setLoading] = useState(false);
+  const [ambiente, setAmbiente] = useState<"staging" | "production">(
+    (localStorage.getItem("sandbox_env") as "staging" | "production") || "production"
+  );
 
+  // Sincroniza a escolha visual com o cofre do navegador
+  const handleAmbienteChange = (novoAmbiente: "staging" | "production") => {
+    setAmbiente(novoAmbiente);
+    localStorage.setItem("sandbox_env", novoAmbiente);
+  };
+
+  // -----------------------------------------------------------------------
+  // [HANDLERS]: Navegação de Jornadas
+  // -----------------------------------------------------------------------
   const handleProductClick = async (route: string, flowKey?: string) => {
     setLoading(true);
     try {
@@ -35,6 +59,9 @@ const SandboxHome = () => {
     }
   };
 
+  // -----------------------------------------------------------------------
+  // [CONFIG]: Mapa de Jornadas
+  // -----------------------------------------------------------------------
   const menuOptions: MenuOption[] = [
     {
       title: "Cartão de Crédito",
@@ -73,12 +100,12 @@ const SandboxHome = () => {
       disabled: true,
     },
     {
-      title: "Home/Auto Equit",
+      title: "Home/Auto Equity",
       subtitle: "Crédito para investir na Superbid",
       icon: <TrendingUp className="w-8 h-8 text-primary" />,
       route: "/sandbox/offer",
       flowKey: "AutoEquity",
-      description: "Simulação integrada para jornadas auto e home equity da Creditas dou Flow (mock auto-equity).",
+      description: "Simulação integrada para jornadas auto e home equity da Creditas ou Flow (mock auto-equity).",
       disabled: false,
     },
     {
@@ -92,11 +119,17 @@ const SandboxHome = () => {
     },
   ];
 
+  // =========================================================================
+  // [VIEW]: Renderização da Interface
+  // =========================================================================
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col overflow-hidden relative">
-      {/* HEADER */}
+      
+      {/* HEADER: Central de Controle */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+          
+          {/* Lado Esquerdo: Marca e Contexto */}
           <div className="flex items-center gap-4">
             <WalletLogo size="md" withTagline />
             <div className="h-6 w-px bg-slate-200 ml-2 hidden sm:block" />
@@ -104,43 +137,72 @@ const SandboxHome = () => {
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 Jornadas de Financiamentos & Seguros
               </span>
-              
-              {/* Exibição do UserId */}
               <span className="text-[9px] font-mono text-slate-400 mt-0.5">
-                ID DO USUÁRIO LOGADO: {userId || "Não identificado"}
-              </span>
-
-              {/* Exibição do Ambiente e Token */}
-              <span className="text-[9px] font-mono text-slate-400">
-                AMBIENTE: {localStorage.getItem("sandbox_env")?.toUpperCase() || "STAGE"}
-                <span className="text-purple-600"> (Sessão: {token ? token.slice(0, 8) : "N/A"})</span>
+                SESSÃO ATIVA: {token ? token.slice(0, 8) + "..." : "N/A"}
               </span>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
-            <Link
-              to="/backoffice"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm"
-            >
-              Backoffice
-            </Link>
-            <button
-              onClick={logout}
-              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold transition-all"
-            >
-              <LogOut className="w-3 h-3" />
-              Sair
-            </button>
+          {/* Lado Direito: Controles (Ambiente, Backoffice, Logout) */}
+          <div className="flex items-center gap-6">
+            
+            {/* TOGGLE REATIVO DE AMBIENTE */}
+            <div className="hidden md:flex h-9 p-0.5 bg-gray-100 rounded-full gap-0.5 border border-gray-200 w-40">
+              <button
+                type="button"
+                onClick={() => handleAmbienteChange("staging")}
+                className={`flex-1 text-[10px] font-bold rounded-full transition-all border ${
+                  ambiente === "staging"
+                    ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm"
+                    : "text-gray-400 hover:text-gray-600 border-transparent"
+                }`}
+              >
+                STAGE
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAmbienteChange("production")}
+                className={`flex-1 text-[10px] font-bold rounded-full transition-all border ${
+                  ambiente === "production"
+                    ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm"
+                    : "text-gray-400 hover:text-gray-600 border-transparent"
+                }`}
+              >
+                PRODUÇÃO
+              </button>
+            </div>
+
+            {/* AÇÕES DE UTILIZADOR */}
+            <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
+              <div className="flex flex-col items-end text-right hidden sm:flex">
+                <span className="text-[9px] font-mono text-slate-500">USER ID: {userId || "---"}</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase">Sandbox Hub</span>
+              </div>
+              <Link
+                to="/backoffice"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm hidden sm:block"
+              >
+                Backoffice
+              </Link>
+              <button
+                onClick={logout}
+                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold transition-all"
+              >
+                <LogOut className="w-3 h-3" />
+                <span className="hidden sm:inline">Sair</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* MAIN */}
-      <main className="flex-grow max-w-6xl mx-auto px-8 py-12 w-full">
+      {/* MAIN: Catálogo de Jornadas */}
+      <main className="flex-grow max-w-6xl mx-auto px-4 sm:px-8 py-12 w-full">
         <div className="mb-10 text-left">
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">O que vamos testar hoje?</h2>
-          <p className="text-slate-500 mt-2 text-sm">Selecione uma jornada ativa para iniciar a orquestração.</p>
+          <p className="text-slate-500 mt-2 text-sm">
+            Selecione uma jornada ativa para iniciar a simulação no ambiente <strong className="text-purple-600 uppercase">{ambiente}</strong>.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -190,7 +252,9 @@ const SandboxHome = () => {
       {loading && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm">
           <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
-          <p className="text-sm text-slate-500 font-medium animate-pulse">Carregando oferta...</p>
+          <p className="text-sm text-slate-500 font-medium animate-pulse">
+            A preparar o ambiente de simulação...
+          </p>
         </div>
       )}
     </div>
