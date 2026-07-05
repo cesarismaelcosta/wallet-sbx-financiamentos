@@ -118,7 +118,7 @@ serve(async (req) => {
     }
 
     // LOG PARA AUDITORIA (Retorno da SBX)
-    debuglog(`[DEBUG SUPERBID RAW DATA - LOTE ${offerId}]:`, JSON.stringify(data).substring(0, 1000));
+    debugLog(`[DEBUG SUPERBID RAW DATA - LOTE ${offerId}]:`, JSON.stringify(data).substring(0, 1000));
 
     const data = await response.json();
     const rawOffer = data.offers?.[0];
