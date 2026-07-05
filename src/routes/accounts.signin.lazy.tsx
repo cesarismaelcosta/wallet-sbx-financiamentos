@@ -110,7 +110,7 @@ export function CustomLogin() {
 
     if (response?.success) {
       // [STATE]: Persistência de ambiente de testes
-      localStorage.setItem('sandbox_env', ambiente); 
+      localStorage.setItem('sbx_environment', ambiente); 
       
       console.log("DEBUG API Response:", response);
       

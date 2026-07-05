@@ -31,7 +31,7 @@ export function SandboxLayout() {
   
   // [STATE - PRE-LOGIN]: Controle do ambiente antes de autenticar
   const [envPreLogin, setEnvPreLogin] = useState<"staging" | "production">(
-    (localStorage.getItem("sandbox_env") as "staging" | "production") || "production"
+    (localStorage.getItem("sbx_environment") as "staging" | "production") || "production"
   );
 
   // [DATA]: Armazena o perfil hidratado para consumo das rotas filhas.
@@ -115,7 +115,7 @@ export function SandboxLayout() {
   if (!token) {
     const irParaLogin = () => {
       // Guarda a decisão de ambiente e delega para o Login Component Genérico
-      localStorage.setItem("sandbox_env", envPreLogin);
+      localStorage.setItem("sbx_environment", envPreLogin);
       navigate({ 
         to: '/accounts/signin',
         search: { redirect: location.pathname }

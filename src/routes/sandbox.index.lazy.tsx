@@ -37,7 +37,7 @@ const SandboxHome = () => {
   // -----------------------------------------------------------------------
   const [loading, setLoading] = useState(false);
   const [ambiente, setAmbiente] = useState<"staging" | "production">(
-    (localStorage.getItem("sandbox_env") as "staging" | "production") || "production"
+    (localStorage.getItem("sbx_environment") as "staging" | "production") || "production"
   );
 
   // Sincroniza a escolha visual com o cofre do navegador e DERRUBA a sessão
@@ -47,7 +47,7 @@ const SandboxHome = () => {
 
     // 1. Atualiza o estado e o cofre do navegador
     setAmbiente(novoAmbiente);
-    localStorage.setItem("sandbox_env", novoAmbiente);
+    localStorage.setItem("sbx_environment", novoAmbiente);
     
     // 2. FORÇA O LOGOUT IMEDIATO
     // Isso vai limpar o token e fazer o sandbox.lazy jogar o usuário

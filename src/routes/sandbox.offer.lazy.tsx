@@ -422,7 +422,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
                   ID DO USUÁRIO LOGADO: {userId || "---"}
                 </span>
                 <span className="text-[9px] font-mono text-slate-500 uppercase">
-                  AMBIENTE: {localStorage.getItem("sandbox_env")?.toUpperCase() || "STAGE"}
+                  AMBIENTE: {localStorage.getItem("sbx_environment")?.toUpperCase() || "STAGE"}
                 </span>
               </div>
 

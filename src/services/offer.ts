@@ -21,7 +21,7 @@ export const fetchOfferDetails = async (
 ): Promise<{ offer: Offer; manager: Manager; event: Event; seller: Seller }> => {
   
   const isBrowser = typeof window !== 'undefined';
-  const storedAmbiente = isBrowser ? (localStorage.getItem("sandbox_env") || "stage") : "stage";
+  const storedAmbiente = isBrowser ? (localStorage.getItem("sbx_environment") || "stage") : "stage";
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 

@@ -87,10 +87,17 @@ serve(async (req) => {
     // 3. INTEGRAÇÃO UPSTREAM (Superbid API)
     // =========================================================================
     const env = req.headers.get("x-sbx-env") || "stage";
-    const baseUrl = env === "production" ? "https://offer-query.superbid.net" : "https://offer-query.stage.superbid.net";
-    
+    // Dependências da Superbid
+    const offerBaseUrl = env === "production" 
+        ? "https://offer-query.superbid.net" 
+        : "https://offer-query.stage.superbid.net";
+        
+    const eventBaseUrl = env === "production" 
+        ? "https://event-query.superbid.net" 
+        : "https://event-query.stage.superbid.net";
+
     // Sintaxe exata exigida pelo parser da Superbid: id:[VALOR]
-    const upstreamUrl = `${baseUrl}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${offerId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
+    const upstreamUrl = `${offerBaseUrl}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${offerId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
 
     const response = await fetch(upstreamUrl, {
       method: "GET",
@@ -104,7 +111,7 @@ serve(async (req) => {
     });
 
     // =========================================================================
-    // [NOVO] 4. INTERCEPTAÇÃO DE TOKEN EXPIRADO NA SUPERBID
+    // 4. INTERCEPTAÇÃO DE TOKEN EXPIRADO NA SUPERBID
     // =========================================================================
     if (response.status === 401) {
         // Ao lançar a palavra "SESSION", o catch traduzirá para HTTP 401.
@@ -117,10 +124,11 @@ serve(async (req) => {
         throw new Error(`UPSTREAM_ERROR (${response.status}): ${errBody}`);
     }
 
+    const data = await response.json();
+
     // LOG PARA AUDITORIA (Retorno da SBX)
     debugLog(`[DEBUG SUPERBID RAW DATA - LOTE ${offerId}]:`, JSON.stringify(data).substring(0, 1000));
 
-    const data = await response.json();
     const rawOffer = data.offers?.[0];
 
     if (!rawOffer) {
@@ -128,12 +136,40 @@ serve(async (req) => {
     }
 
     // =========================================================================
-    // 5. MAPEAMENTO DO PAYLOAD (BFF Contract com Type Safety)
+    // 5. BUSCA DADOS DO EVENTO
+    // =========================================================================
+    let eventData: any = {};
+    const auctionId = rawOffer.auction?.id;
+
+    if (auctionId) {
+        const eventUrl = `${eventBaseUrl}/events/v2/?portalId=[2,15]&locale=pt_BR&timeZoneId=America%2FSao_Paulo&filter=id:${auctionId}&pageSize=1`;
+        
+        const eventResponse = await fetch(eventUrl, {
+          method: "GET",
+          headers: { 
+            "Authorization": `Bearer ${session.sbx_access_token}`, // MESMO TOKEN
+            "Accept": "application/json", 
+            "Content-Type": "application/json",
+            "Origin": "https://www.superbid.net",
+            "Referer": "https://www.superbid.net/"
+          },
+        });
+        
+        if (eventResponse.ok) {
+            const eventJson = await eventResponse.json();
+            eventData = eventJson.events?.[0] || {};
+        }
+    }
+
+    // =========================================================================
+    // 6. MAPEAMENTO DO PAYLOAD (BFF Contract com Type Safety)
     // =========================================================================
     const payloadResult: { offer: Offer; manager: Manager; event: Event; seller: Seller } = {
       offer: {
         offer_id: String(rawOffer.id),
+        lot_number: rawOffer.lotNumber || 1,
         offer_description: rawOffer.product?.shortDesc || rawOffer.offerDescription?.offerDescription || "",
+        offer_detailed_description: rawOffer.offerDescription?.offerDescription || "",
         offer_value: rawOffer.price || 0,
         category_id: rawOffer.product?.productType?.id || 0,
         category: rawOffer.product?.productType?.description || "",
@@ -142,9 +178,12 @@ serve(async (req) => {
         sale_status: rawOffer.saleStatus || "",
         end_date: rawOffer.endDate || "",
         photos: rawOffer.product?.galleryJson?.map((p: any) => ({
+            highlight: p.highlight || false,
             link: p.link,
             thumbnail: p.thumbnailUrl,
-            fileName: p.originalFileName
+            file_name: p.originalFileName,
+            type: p.type || "photo",
+            content_type: p.contentType || "image/jpeg"
           })) || []
       },
       manager: {
@@ -153,9 +192,14 @@ serve(async (req) => {
       },
       event: {
         event_id: String(rawOffer.auction?.id || ""),
-        event_description: rawOffer.auction?.desc || "",
+        event_description: `${rawOffer.auction?.desc || ""}${rawOffer.auction?.desc && eventData.fullDescription ? " - " : ""}${eventData.fullDescription || ""}`.trim(),
         event_start_date: rawOffer.auction?.beginDate || "",
-        event_end_date: rawOffer.auction?.endDate || ""
+        event_end_date: rawOffer.auction?.endDate || "",
+        modality_id: eventData.modalityId ?? null,
+        status_id: eventData.statusId ?? null,
+        event_short_description: rawOffer.auction?.desc || "",
+        event_full_description: eventData.fullDescription || "",
+        event_image_url: eventData.imageURL || ""
       },
       seller: {
         seller_id: String(rawOffer.seller?.id || ""),

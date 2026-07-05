@@ -44,7 +44,7 @@ export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfi
   // [STATE]: Resgate de variáveis de ambiente e preferências de armazenamento local
   // [SSR SAFEGUARD]: Só acessa o localStorage se estiver rodando no navegador
   const isBrowser = typeof window !== 'undefined';
-  const storedAmbiente = isBrowser ? (localStorage.getItem("sandbox_env") || "stage") : "stage";
+  const storedAmbiente = isBrowser ? (localStorage.getItem("sbx_environment") || "stage") : "stage";
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 

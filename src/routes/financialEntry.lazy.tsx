@@ -4,57 +4,19 @@
  * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
- * Implementa o padrão "Entry Point Gateway" (DMZ). Esta rota não possui interface 
- * de usuário final. Ela atua como um "Porteiro" protetor entre o ecossistema 
- * externo (ex: site/app da SBX) e o núcleo interno do Financial Hub.
- * 
- * [Responsabilidades]:
- * 1. Sanitização: Lê o contrato da URL (Identificadores + UTMs + Ambiente).
- * 2. Autenticação: Resolve conflitos de token (Prioridade para o token de entrada).
- * 3. Reidratação (BFF): Busca os dados brutos e os traduz para as nossas Interfaces estritas.
- * 4. Telemetria: Monta o InteractionContext para rastreamento de conversão.
- * 5. Delegação (CQRS): Passa o payload fortemente tipado para o Cérebro (Orchestrator).
- * 
- * =========================================================================
- * [MANUAL DE INTEGRAÇÃO PARA A EQUIPA SBX (COMO CHAMAR ESTA ROTA)]
- * =========================================================================
- * A SBX deve redirecionar o utilizador para esta rota passando os parâmetros via URL.
- * Base URL: https://[URL-DO-SEU-APP]/sandbox/financialEntry
- * 
- * --- CONTROLE DE AMBIENTE ---
- * @param {string} environment - O ambiente alvo da integração (Ex: "hml", "prd", "sandbox"). 
- *                               Por padrão, se omitido, assume-se "prd".
- * 
- * --- PILARES ESTRUTURAIS ---
- * @param {string} sbx_token  - Token JWT do usuário (Opcional se já autenticado).
- * @param {string} offer_id   - ID do Lote/Oferta na Superbid (Para financiamento de veículos/bens).
- * @param {string} product_id - ID do Produto Financeiro (Ex: 7 para Auto Equity, 9 para Seguro).
- * 
- * --- INTERACTION CONTEXT (UTMs PARA BI, MARKETING E OKRs) ---
- * @param {string} utm_medium   - [O AMBIENTE] (Ex: "home_page", "offer_detail_page", "email_crm")
- * @param {string} utm_source   - [O GATILHO] (Ex: "banner_principal", "box_financiamento")
- * @param {string} utm_campaign - [A CAMPANHA] (Ex: "flow_caminhoes", "promo_julho")
- * 
- * =========================================================================
- * [EXEMPLOS PRÁTICOS DE CHAMADA]
- * =========================================================================
- * CENÁRIO 1: Teste de Integração em Homologação (HML)
- * /sandbox/financialEntry?environment=hml&sbx_token=xxx&offer_id=123&utm_source=teste
- * 
- * CENÁRIO 2: Financiamento de Lote Real (PRD)
- * /sandbox/financialEntry?environment=prd&sbx_token=xxx&offer_id=4680825&utm_source=box_financiamento&utm_medium=offer_detail_page
+ * Implementa o padrão "Entry Point Gateway" (DMZ). Atua como um "Porteiro" 
+ * protetor entre o ecossistema externo e o núcleo interno do Financial Hub.
  */
 
 import { useEffect, useState } from "react";
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile } from "@/services/user";
 import { fetchOfferDetails } from "@/services/offer";
 import { callOrchestration } from "@/features/financial-hub/core/orchestrator";
 import { callNavigation } from "@/features/financial-hub/core/navigator";
-import { Loader2 } from "lucide-react";
+import { Loader2, Clock } from "lucide-react";
 
-// Importação das interfaces de domínio (O Padrão de Ferro)
 import type { 
   UserProfile, 
   Offer, 
@@ -66,19 +28,14 @@ import type {
 } from "@/features/financial-hub/shared/types";
 
 // =========================================================================
-// [CONTRATO DE ENTRADA]: Validação estrita dos Query Params via TanStack Router
+// [CONTRATO DE ENTRADA]: Validação estrita via TanStack Router
 // =========================================================================
 export const Route = createLazyFileRoute("/financialEntry")({
   validateSearch: (search: Record<string, unknown>) => ({
-    // Controle de Ambiente
     environment: search.environment as string | undefined,
-
-    // Pilares Estruturais
     sbx_token: search.sbx_token as string | undefined,
     offer_id: search.offer_id as string | undefined,
     product_id: search.product_id as string | undefined,
-    
-    // Pilares de Telemetria (Interaction Context)
     utm_source: search.utm_source as string | undefined,     
     utm_medium: search.utm_medium as string | undefined,     
     utm_campaign: search.utm_campaign as string | undefined, 
@@ -87,103 +44,88 @@ export const Route = createLazyFileRoute("/financialEntry")({
 });
 
 // =========================================================================
-// [COMPONENTE PRINCIPAL]: Controlador de Bootstrapping
+// [COMPONENTE PRINCIPAL]: Controlador de Bootstrapping e UX
 // =========================================================================
 export function FinancialEntry() {
   const search = Route.useSearch();
   const auth = useFinancialAuth();
+  const navigate = useNavigate();
   
-  // Estado de UI para feedback visual de progresso
-  const [statusText, setStatusText] = useState("A inicializar ambiente seguro...");
+  // Estados de UX e Controle de Fluxo
+  const [statusText, setStatusText] = useState("A preparar um ambiente seguro...");
+  const [offerExpired, setOfferExpired] = useState(false);
+  const [countdown, setCountdown] = useState(5); // 5 segundos de espera amigável
 
+  // -----------------------------------------------------------------------
+  // [CORE]: Orquestração e Validação de Dados
+  // -----------------------------------------------------------------------
   useEffect(() => {
     const bootstrapContext = async () => {
-      // Definição do ambiente (Fallback seguro para produção se não for enviado)
       const currentEnvironment = search.environment || "prd";
-
-      // -------------------------------------------------------------------
-      // 1. RESOLUÇÃO DE IDENTIDADE
-      // Prioridade: Token da URL > Token de Sessão Local.
-      // -------------------------------------------------------------------
       const activeToken = search.sbx_token || auth.token || auth.accessToken;
 
       if (!activeToken) {
-        setStatusText("Sessão não identificada. A redirecionar para autenticação...");
+        setStatusText("A redirecionar para acesso seguro...");
         callNavigation({ target: "/login" });
         return;
       }
 
-      // Injeta o token externo fresco no cofre global da aplicação
       if (search.sbx_token) {
         auth.setToken(search.sbx_token);
       }
 
       try {
-        // -------------------------------------------------------------------
-        // 2. REIDRATAÇÃO DE DADOS VIA BFF (Backend For Frontend)
-        // Dica: O currentEnvironment pode ser repassado para as funções fetch
-        // caso o backend precise rotear para bancos HML/PRD.
-        // -------------------------------------------------------------------
-        setStatusText(`A recuperar o seu perfil financeiro (${currentEnvironment.toUpperCase()})...`);
+        setStatusText("A validar o seu perfil financeiro...");
         const userProfile = await fetchMyProfile(activeToken);
 
         let offerData = null;
         
-        // Operação condicional: Certos produtos (ex: Auto Equity) funcionam sem lote.
         if (search.offer_id) {
-          setStatusText(`A sincronizar os dados do lote ${search.offer_id}...`);
+          setStatusText("A sincronizar as informações do lote...");
           offerData = await fetchOfferDetails(activeToken, search.offer_id);
         }
 
-        // -------------------------------------------------------------------
-        // 3. MONTAGEM DO CONTEXTO DE INTERAÇÃO (BI & Telemetria)
-        // -------------------------------------------------------------------
         const interactionContext: InteractionContext = {
           utm_source: search.utm_source || "sbx_external_unknown",
           utm_medium: search.utm_medium || "financial_gateway",
           utm_campaign: search.utm_campaign || (search.product_id ? `product_${search.product_id}_flow` : "generic_flow"),
-          origin_url: window.location.href, // Garante a rastreabilidade exata
+          origin_url: window.location.href, 
         };
 
-        // -------------------------------------------------------------------
-        // 4. PREPARAÇÃO DO PAYLOAD FORTEMENTE TIPADO
-        // O TypeScript garante que a base de dados receberá os JSONs corretos.
-        // -------------------------------------------------------------------
         const payload: SimulationPayload = {
           action: "SIMULATE",
           timestamp: new Date().toISOString(),
-          environment: currentEnvironment, // Repassando o ambiente para o motor
-          
+          environment: currentEnvironment, 
           entity: userProfile as UserProfile,
           product_id: search.product_id || null,
-          
-          // O BFF garante as propriedades. Caso falhe, injetamos null de forma segura.
           offer: (offerData?.offer as Offer) || null,
           seller: (offerData?.seller as Seller) || null,
           event: (offerData?.event as Event) || null,
           manager: (offerData?.manager as Manager) || null,
-          
           interaction_context: interactionContext,
         };
 
-        // -------------------------------------------------------------------
-        // 5. DELEGAÇÃO DE RESPONSABILIDADE (Decisão + Execução)
-        // -------------------------------------------------------------------
-        setStatusText("A processar regras de aprovação...");
+        setStatusText("A processar as melhores condições para si...");
         
-        // O Cérebro avalia o Payload completo e define o alvo
         const decision = await callOrchestration("SIMULATE", payload);
 
-        // As Pernas executam a navegação (Mudança física de página no TanStack Router)
         if (decision) {
           callNavigation(decision);
         }
         
       } catch (error: any) {
-        console.error(`[FINANCIAL_ENTRY FATAL ERROR - ENV: ${currentEnvironment}]:`, error);
-        setStatusText("Ocorreu uma falha ao iniciar a simulação.");
+        console.error(`[FINANCIAL_ENTRY ERROR]:`, error);
         
-        // Proteção contra ecrã branco (Fallback elegante)
+        const errorMsg = error.message.toUpperCase();
+        
+        // Se a API ou a Edge Function sinalizarem que a oferta não existe/expirou
+        if (errorMsg.includes("NOT_FOUND") || errorMsg.includes("EXPIRED") || errorMsg.includes("410") || errorMsg.includes("404")) {
+          setOfferExpired(true);
+          return; // Interrompe o fluxo aqui para acionar o timer visual
+        }
+        
+        // Outros erros críticos (ex: rede, falha de tipagem)
+        setStatusText("Ocorreu uma instabilidade momentânea.");
         callNavigation({ 
           target: "/error", 
           params: { code: "ENTRY_BOOTSTRAP_FAILED", message: error.message } 
@@ -191,8 +133,6 @@ export function FinancialEntry() {
       }
     };
 
-    // Atraso intencional curto (400ms) para evitar layout shift ("flicker" brusco)
-    // Garantindo que a UX do loading overlay ocorra de forma suave
     const timer = setTimeout(() => {
       bootstrapContext();
     }, 400);
@@ -200,17 +140,69 @@ export function FinancialEntry() {
     return () => clearTimeout(timer);
   }, [search, auth]);
 
+  // -----------------------------------------------------------------------
+  // [UX FALLBACK]: Timer de Redirecionamento Automático
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
+    if (offerExpired) {
+      if (countdown > 0) {
+        timer = setTimeout(() => setCountdown(c => c - 1), 1000);
+      } else {
+        // Redirecionamento Inteligente ao chegar a 0
+        if (window.history.length > 2) {
+          window.history.back(); // Retorna exatamente para onde o utilizador estava
+        } else {
+          navigate({ to: "/sandbox", replace: true }); // Fallback seguro
+        }
+      }
+    }
+    
+    return () => clearTimeout(timer);
+  }, [offerExpired, countdown, navigate]);
+
+
   // =========================================================================
-  // [VIEW]: Interface minimalista (Design System do Hub)
-  // Utiliza a sobreposição com desfoque (backdrop-blur) e o ícone pulsante.
+  // [VIEW 1]: Lote Indisponível (Degradação Graciosa com Timer)
+  // =========================================================================
+  if (offerExpired) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-50 p-6 font-['Plus_Jakarta_Sans'] text-center">
+        <div className="w-20 h-20 bg-slate-200/50 rounded-full flex items-center justify-center mb-6 shadow-inner">
+          <Clock className="w-8 h-8 text-slate-400 animate-pulse" />
+        </div>
+        <h2 className="text-2xl font-black text-slate-800 mb-3 tracking-tight">Oferta Indisponível</h2>
+        <p className="text-sm text-slate-500 max-w-sm mx-auto mb-10 leading-relaxed">
+          Este lote pode já ter sido arrematado, suspenso ou o período de avaliação foi encerrado.
+        </p>
+        
+        <div className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 bg-white px-6 py-3 rounded-full border border-slate-200 shadow-sm transition-all">
+          <Loader2 className="w-3 h-3 animate-spin text-[#B300FF]" />
+          A redirecionar em <span className="text-[#B300FF] text-sm w-4">{countdown}</span> segundos
+        </div>
+        
+        {/* Permite ao utilizador forçar a saída antes do timer acabar */}
+        <button 
+          onClick={() => window.history.length > 2 ? window.history.back() : navigate({ to: "/sandbox", replace: true })}
+          className="mt-6 text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2 transition-colors"
+        >
+          Voltar agora
+        </button>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // [VIEW 2]: Progresso Padrão do Gateway (Spinner)
   // =========================================================================
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm">
-      <Loader2 
-        className="h-10 w-10 animate-spin mb-4" 
-        style={{ color: "#B300FF" }} 
-      />
-      <p className="text-sm text-slate-500 font-medium animate-pulse">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/95 backdrop-blur-md">
+      <div className="relative flex items-center justify-center mb-6">
+        <div className="absolute inset-0 border-4 border-[#B300FF]/20 rounded-full blur-sm"></div>
+        <Loader2 className="h-12 w-12 animate-spin text-[#B300FF] relative z-10" strokeWidth={2.5} />
+      </div>
+      <p className="text-sm text-slate-600 font-semibold tracking-wide animate-pulse">
         {statusText}
       </p>
     </div>
