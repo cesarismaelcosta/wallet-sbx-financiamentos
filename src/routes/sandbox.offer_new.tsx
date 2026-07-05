@@ -1,13 +1,15 @@
 /**
  * @fileoverview Componente: OfferDetailsSandbox (Rota: /sandbox/offer_new)
- * * @description
- * Visualização de detalhes de uma oferta (ativo) integrada com o Financial Hub e BFF.
- * [LAYOUT SYNC]: Estrutura visual idêntica ao código de referência.
- * [ARQUITETURA]: Lógica de fetching e estados do [Código Alvo] preservados.
+ * * =========================================================================
+ * [ARQUITETURA & CLEAN ARCHITECTURE]
+ * =========================================================================
+ * Visualização de detalhes de uma oferta (ativo) na Sandbox.
+ * Atua apenas como "vitrine". A responsabilidade de orquestração foi 
+ * delegada para o Gateway (/financialEntry).
  * * [RESPONSABILIDADES]:
- * 1. Interface: Renderização do layout original (tabelas, carrossel, filtros, banners).
- * 2. Segurança: Consumo de token, reidratação de perfil e uso seguro de localStorage (SSR).
- * 3. Orquestração: Delegação da jornada de simulação ao Financial Hub.
+ * 1. Interface: Renderização do layout original (tabelas, carrossel, filtros).
+ * 2. Visualização (BFF): Busca os dados da oferta apenas para exibição em tela.
+ * 3. Delegação: Redireciona o usuário para o DMZ Gateway com os "documentos" (IDs e Token).
  */
 
 import { useState, useMemo, useEffect, useContext } from "react";
@@ -16,15 +18,9 @@ import { Loader2, CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { UserDataContext } from "./sandbox.lazy";
 import { fetchOfferDetails } from "@/services/offer";
-
-import {
-  Entity as EntityType,
-  InteractionContext,
-} from "@/features/financial-hub/shared/types";
 
 // =========================================================================
 // [FORMATTERS]: Utilitários de Apresentação
@@ -34,8 +30,6 @@ const formatPhone = (phone: string) => {
   const cleaned = phone.replace(/^55/, "");
   return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
 };
-
-const commonInputClass = "h-10 text-sm transition-all duration-300 focus-visible:ring-2 focus-visible:ring-offset-0";
 
 const FLOW_MAP: Record<string, { name: string; entity: string; category: string; product_id?: string; offer_id: string; info: string; link: "Box Financiamento" | "Box Parcelamento" | "Banner" }> = {
   Veículos: { name: "Fin. Carros e Caminhões", offer_id: "4680825", entity: "PF | PJ", category: "Carros | Caminhões", info: "Entity, Event, Manager, Offer, Vehicle", link: "Box Financiamento" },
@@ -55,11 +49,14 @@ export const Route = createFileRoute("/sandbox/offer_new")({
   component: () => {
     const search = Route.useSearch();
     const flow = (search as any).flow;
-    if (!flow) return <div>Aguardando carregamento...</div>;
+    if (!flow) return <div className="min-h-screen flex items-center justify-center font-bold text-slate-500">Aguardando carregamento do fluxo...</div>;
     return <OfferDetailsSandbox key={flow} flowKey={flow} />;
   },
 });
 
+// =========================================================================
+// [COMPONENTE PRINCIPAL]
+// =========================================================================
 export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
   const { logout, userId, token } = useFinancialAuth();
   const navigate = useNavigate();
@@ -78,6 +75,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     if (stored) setAmbiente(stored);
   }, []);
 
+  // [FETCH VISUAL]: Busca os dados apenas para desenhar a tela para o usuário
   useEffect(() => {
     const loadOffer = async () => {
       if (currentFlow?.offer_id && token) {
@@ -85,48 +83,59 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
         try {
           const data = await fetchOfferDetails(token, currentFlow.offer_id);
           setActiveOffer(data);
-        } catch (e) { console.error("[OFFER_FETCH_ERROR]:", e); }
-        finally { setLoading(false); }
+        } catch (e) { 
+          console.error("[OFFER_FETCH_ERROR]:", e); 
+        } finally { 
+          setLoading(false); 
+        }
       }
     };
     loadOffer();
   }, [currentFlow, token]);
 
   const entity = userData || { name: "João da Silva", document: "43577059087", email: "cesar.costa@superbid.net", phone: "21988550999" };
-  // Ordena as fotos para que 'highlight: true' seja o índice 0
+  
   const imagens = useMemo(() => {
     if (!activeOffer?.offer?.photos) return [];
-
-    // Criamos uma cópia do array para não mutar o original
     return [...activeOffer.offer.photos]
       .sort((a, b) => (a.highlight === b.highlight ? 0 : a.highlight ? -1 : 1))
       .map((p: any) => p.link);
   }, [activeOffer]);
-  const logoPath = activeOffer?.seller?.logo_url || "";
 
-  const handleSimulacao = async () => {
+  // =========================================================================
+  // [HANDLERS]: Ação de Delegação para o Gateway
+  // =========================================================================
+  const handleSimulacao = () => {
     if (!activeOffer) return;
     setLoading(true);
-    const payload: any = {
-      action: "SIMULATE",
-      timestamp: new Date().toISOString(),
-      entity: entity,
-      product_id: currentFlow.product_id,
-      offer: activeOffer.offer,
-      seller: activeOffer.seller,
-      event: activeOffer.event,
-      manager: activeOffer.manager,
-      interaction_context: {
+
+    // DELEGAÇÃO PARA O GATEWAY DMZ:
+    // Passamos todos os parâmetros exatos que o validateSearch do Gateway exige.
+    navigate({
+      to: "/financialEntry",
+      search: {
+        environment: ambiente,
+        sbx_token: token,
+        offer_id: currentFlow.offer_id,
+        product_id: currentFlow.product_id,
         utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
         utm_medium: "home",
         utm_campaign: `flow_${flowKey?.toLowerCase()}`,
-        origin_url: window.location.href,
-      } as InteractionContext
-    };
-    await orchestrateNavigation("SIMULATE", payload);
+      } as any 
+    });
   };
 
-  if (!activeOffer) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  // =========================================================================
+  // [UI/UX]: Renderização e Proteções de Estado
+  // =========================================================================
+  if (!activeOffer) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-[#B300FF] mb-4" />
+        <span className="text-sm font-semibold text-slate-500 animate-pulse">Carregando detalhes do lote...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -170,11 +179,17 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       {/* BANNER PROMOCIONAL */}
       {currentFlow.link === "Banner" && (
         <div style={{ maxWidth: "1160px", margin: "20px auto", padding: "0 20px" }}>
-            <img 
-                src={(() => { const flowBusca = formatarCaminho(String(flowKey)); const chave = Object.keys(allFiles).find((p) => formatarCaminho(p).includes(`/banner/${flowBusca}/banner`)); return chave ? (allFiles[chave] as any)?.default || "" : ""; })()}
-                alt="Banner" 
-                className="w-full rounded-xl"
-            />
+            <button 
+                onClick={handleSimulacao}
+                disabled={loading}
+                className="w-full text-left border-none bg-transparent p-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] transition-transform"
+            >
+              <img 
+                  src={(() => { const flowBusca = formatarCaminho(String(flowKey)); const chave = Object.keys(allFiles).find((p) => formatarCaminho(p).includes(`/banner/${flowBusca}/banner`)); return chave ? (allFiles[chave] as any)?.default || "" : ""; })()}
+                  alt="Banner" 
+                  className="w-full rounded-xl"
+              />
+            </button>
         </div>
       )}
 
@@ -184,8 +199,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
         {/* TÍTULO E LOGO NO TOPO */}
         <div style={{ marginBottom: "24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-              
-              {/* Bloco substituído */}
               {activeOffer.event.event_image_url && (
               <img 
                   src={activeOffer.event.event_image_url} 
@@ -193,7 +206,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
                   style={{ width: "32px", height: "32px", borderRadius: "50%", objectFit: "cover" }} 
               />
               )}
-              
               <span style={{ fontSize: "14px", fontWeight: "700", color: "#333" }}>
               {activeOffer.event.event_description}
               </span>
@@ -233,8 +245,12 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
                     <span className="w-6 h-6 rounded-full border border-gray-800 flex items-center justify-center text-sm font-bold text-gray-800">$</span>
                     <h5 className="m-0 text-base font-bold">Esta oferta pode ser financiada</h5>
                   </div>
-                  <button onClick={handleSimulacao} className="text-[var(--brand-primary)] font-bold text-base cursor-pointer hover:underline border-none bg-transparent">
-                    {loading ? "Processando..." : "Simular financiamento"}
+                  <button 
+                    onClick={handleSimulacao} 
+                    disabled={loading}
+                    className="text-[var(--brand-primary)] font-bold text-base cursor-pointer hover:underline border-none bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? "Redirecionando..." : "Simular financiamento"}
                   </button>
                 </div>
               )}
@@ -247,8 +263,12 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
                   <p className="text-sm text-gray-600 leading-relaxed mb-4">
                     Para pagamentos de lotes até R$ 120.000,00 neste evento você pode utilizar seu cartão de crédito para pagar com toda a segurança da <strong>sbXPay</strong>.
                   </p>
-                  <button onClick={handleSimulacao} className="text-[var(--brand-primary)] font-bold text-base cursor-pointer hover:underline border-none bg-transparent">
-                    {loading ? "Processando..." : "Simular parcelamento"}
+                  <button 
+                    onClick={handleSimulacao} 
+                    disabled={loading}
+                    className="text-[var(--brand-primary)] font-bold text-base cursor-pointer hover:underline border-none bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? "Redirecionando..." : "Simular parcelamento"}
                   </button>
                 </div>
               )}

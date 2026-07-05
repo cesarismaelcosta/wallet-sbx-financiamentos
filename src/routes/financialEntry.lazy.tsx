@@ -1,14 +1,18 @@
 /**
  * @fileoverview Rota: financialEntry (Gateway de Entrada e Reidratação de Contexto)
- * 
- * =========================================================================
+ * * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
  * Implementa o padrão "Entry Point Gateway" (DMZ). Atua como um "Porteiro" 
  * protetor entre o ecossistema externo e o núcleo interno do Financial Hub.
+ * * [RESPONSABILIDADES]:
+ * 1. Segurança: Intercepta a requisição, valida o token e evita execuções duplicadas.
+ * 2. Reidratação (BFF): Busca perfil do usuário e dados consolidados da oferta.
+ * 3. Orquestração: Monta o SimulationPayload e delega decisão ao Core.
+ * 4. Resiliência: Trata expiração de oferta com degradação graciosa e fallback (PT-BR).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile } from "@/services/user";
@@ -51,44 +55,61 @@ export function FinancialEntry() {
   const auth = useFinancialAuth();
   const navigate = useNavigate();
   
-  // Estados de UX e Controle de Fluxo
-  const [statusText, setStatusText] = useState("A preparar um ambiente seguro...");
+  // [SEGURANÇA]: Cadeado para evitar execução duplicada (React 18 Strict Mode)
+  const hasInitialized = useRef(false);
+
+  // [STATE]: Estados de UX e Controle de Fluxo (Localizados para PT-BR)
+  const [statusText, setStatusText] = useState("Preparando um ambiente seguro...");
   const [offerExpired, setOfferExpired] = useState(false);
   const [countdown, setCountdown] = useState(5); // 5 segundos de espera amigável
+
+  // [OTIMIZAÇÃO]: Extração de primitivos para evitar loop infinito de re-renderização
+  const searchEnv = search.environment;
+  const searchToken = search.sbx_token;
+  const searchOfferId = search.offer_id;
+  const searchProductId = search.product_id;
+  const searchUtmSource = search.utm_source;
+  const searchUtmMedium = search.utm_medium;
+  const searchUtmCampaign = search.utm_campaign;
 
   // -----------------------------------------------------------------------
   // [CORE]: Orquestração e Validação de Dados
   // -----------------------------------------------------------------------
   useEffect(() => {
+    // Trava de segurança: impede o disparo duplo da simulação
+    if (hasInitialized.current) return;
+    
     const bootstrapContext = async () => {
-      const currentEnvironment = search.environment || "prd";
-      const activeToken = search.sbx_token || auth.token || auth.accessToken;
+      hasInitialized.current = true;
+      
+      const currentEnvironment = searchEnv || "prd";
+      const activeToken = searchToken || auth.token || auth.accessToken;
 
       if (!activeToken) {
-        setStatusText("A redirecionar para acesso seguro...");
+        setStatusText("Redirecionando para acesso seguro...");
         callNavigation({ target: "/login" });
         return;
       }
 
-      if (search.sbx_token) {
-        auth.setToken(search.sbx_token);
+      if (searchToken) {
+        auth.setToken(searchToken);
       }
 
       try {
-        setStatusText("A validar o seu perfil financeiro...");
+        setStatusText("Validando seu perfil financeiro...");
         const userProfile = await fetchMyProfile(activeToken);
 
         let offerData = null;
         
-        if (search.offer_id) {
-          setStatusText("A sincronizar as informações do lote...");
-          offerData = await fetchOfferDetails(activeToken, search.offer_id);
+        if (searchOfferId) {
+          setStatusText("Sincronizando as informações do lote...");
+          offerData = await fetchOfferDetails(activeToken, searchOfferId);
         }
 
         const interactionContext: InteractionContext = {
-          utm_source: search.utm_source || "sbx_external_unknown",
-          utm_medium: search.utm_medium || "financial_gateway",
-          utm_campaign: search.utm_campaign || (search.product_id ? `product_${search.product_id}_flow` : "generic_flow"),
+          utm_source: searchUtmSource || "sbx_external_unknown",
+          utm_medium: searchUtmMedium || "financial_gateway",
+          utm_campaign: searchUtmCampaign || (searchProductId ? `product_${searchProductId}_flow` : "generic_flow"),
           origin_url: window.location.href, 
         };
 
@@ -97,7 +118,7 @@ export function FinancialEntry() {
           timestamp: new Date().toISOString(),
           environment: currentEnvironment, 
           entity: userProfile as UserProfile,
-          product_id: search.product_id || null,
+          product_id: searchProductId || null,
           offer: (offerData?.offer as Offer) || null,
           seller: (offerData?.seller as Seller) || null,
           event: (offerData?.event as Event) || null,
@@ -105,7 +126,7 @@ export function FinancialEntry() {
           interaction_context: interactionContext,
         };
 
-        setStatusText("A processar as melhores condições para si...");
+        setStatusText("Processando as melhores condições para você...");
         
         const decision = await callOrchestration("SIMULATE", payload);
 
@@ -118,13 +139,13 @@ export function FinancialEntry() {
         
         const errorMsg = error.message.toUpperCase();
         
-        // Se a API ou a Edge Function sinalizarem que a oferta não existe/expirou
+        // Trata lote finalizado, removido ou expirado
         if (errorMsg.includes("NOT_FOUND") || errorMsg.includes("EXPIRED") || errorMsg.includes("410") || errorMsg.includes("404")) {
           setOfferExpired(true);
-          return; // Interrompe o fluxo aqui para acionar o timer visual
+          return; 
         }
         
-        // Outros erros críticos (ex: rede, falha de tipagem)
+        // Trata instabilidades sistêmicas (Gateway, Rede)
         setStatusText("Ocorreu uma instabilidade momentânea.");
         callNavigation({ 
           target: "/error", 
@@ -138,7 +159,7 @@ export function FinancialEntry() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [search, auth]);
+  }, [searchEnv, searchToken, searchOfferId, searchProductId, searchUtmSource, searchUtmMedium, searchUtmCampaign, auth]);
 
   // -----------------------------------------------------------------------
   // [UX FALLBACK]: Timer de Redirecionamento Automático
@@ -150,11 +171,11 @@ export function FinancialEntry() {
       if (countdown > 0) {
         timer = setTimeout(() => setCountdown(c => c - 1), 1000);
       } else {
-        // Redirecionamento Inteligente ao chegar a 0
+        // Fallback Inteligente: Garante que o usuário não fique preso em uma rota sem saída
         if (window.history.length > 2) {
-          window.history.back(); // Retorna exatamente para onde o utilizador estava
+          window.history.back(); 
         } else {
-          navigate({ to: "/sandbox", replace: true }); // Fallback seguro
+          navigate({ to: "/sandbox", replace: true }); 
         }
       }
     }
@@ -179,10 +200,9 @@ export function FinancialEntry() {
         
         <div className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 bg-white px-6 py-3 rounded-full border border-slate-200 shadow-sm transition-all">
           <Loader2 className="w-3 h-3 animate-spin text-[#B300FF]" />
-          A redirecionar em <span className="text-[#B300FF] text-sm w-4">{countdown}</span> segundos
+          Redirecionando em <span className="text-[#B300FF] text-sm w-4">{countdown}</span> segundos
         </div>
         
-        {/* Permite ao utilizador forçar a saída antes do timer acabar */}
         <button 
           onClick={() => window.history.length > 2 ? window.history.back() : navigate({ to: "/sandbox", replace: true })}
           className="mt-6 text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2 transition-colors"
