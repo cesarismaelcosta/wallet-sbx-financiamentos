@@ -103,11 +103,13 @@ export function FinancialEntry() {
         auth.setSession(searchToken);
       }
 
+      // Variáveis declaradas FORA do try para o catch enxergá-las
+      let userProfile = null;
+      let offerData: any = null;
+
       try {
         setStatusText("Validando seus dados na Wallet sbX...");
-        const userProfile = await fetchMyProfile(activeToken);
-
-        let offerData = null;
+        userProfile = await fetchMyProfile(activeToken);
         
         if (searchOfferId) {
           setStatusText("Buscando informações da oferta...");
@@ -141,43 +143,43 @@ export function FinancialEntry() {
         // Dispara o núcleo do sistema
         await orchestrateNavigation("CONSULT", payload);
         
-    } catch (error: any) {
-      console.error(`[FINANCIAL_GATEWAY_ENTRY ERROR]:`, error);
+      } catch (error: any) {
+        console.error(`[FINANCIAL_GATEWAY_ENTRY ERROR]:`, error);
 
-      // Payload enriquecido com contexto transacional e de ambiente
-      const monitorPayload = {
-        userId: user?.id || null,
-        userProfile: user || null,
-        offerData: offer || null,
-        offerId: offer?.id || offer_id_produto || null,
-        productId: offer?.product_id || null,
-        // Identificação do ambiente atual
-        environment: import.meta.env.MODE, 
-        gatewayContext: {
-          url: window.location.href,
-          timestamp: new Date().toISOString(),
-          errorCode: error?.code || 'UNKNOWN_ERROR'
+        // Snapshot do contexto no momento da falha
+        const monitorPayload = {
+          user: userProfile || null,
+          offerData: offerData || null,
+          attemptedOfferId: searchOfferId || null,
+          productId: searchProductId || null,
+          environment: import.meta.env.MODE,
+          gatewayContext: {
+            url: window.location.href,
+            timestamp: new Date().toISOString(),
+            errorCode: error?.code || 'UNKNOWN_ERROR'
+          }
+        };
+
+        // [LOGGING]: Envio assíncrono (não bloqueante)
+        logSystemError(activeToken, {
+          context: 'FINANCIAL-GATEWAY',
+          message: error.message || 'Erro não identificado',
+          details: error,
+          payload: monitorPayload,
+          visit_id: null,
+          simulation_id: null
+        });
+
+        // [RESILIÊNCIA]: Tratamento de UI
+        if (error?.code === 'OFFER_NOT_FOUND') {
+          setGatewayError('OFFER_EXPIRED');
+        } else {
+          setGatewayError('TECHNICAL_INSTABILITY');
         }
-      };
-
-      logSystemError(sessionToken, {
-        context: 'FINANCIAL-GATEWAY',
-        message: error.message || 'Erro não identificado',
-        details: error,
-        payload: monitorPayload,
-        visit_id: activeVisitId || null,
-        simulation_id: activeSimulationId || null
-      });
-
-      // Protocolo de Resiliência (UI)
-      if (error?.code === 'OFFER_NOT_FOUND') {
-        setGatewayError('OFFER_EXPIRED');
-      } else {
-        setGatewayError('TECHNICAL_INSTABILITY');
+        
+        setStatusText("Ocorreu uma instabilidade momentânea.");
       }
-      
-      setStatusText("Ocorreu uma instabilidade momentânea.");
-    }
+    };
 
     const timer = setTimeout(() => {
       bootstrapContext();
@@ -208,49 +210,41 @@ export function FinancialEntry() {
     return () => clearTimeout(timer);
   }, [gatewayError, countdown, navigate]);
 
-
   // =========================================================================
   // [VIEW 1]: Lote Indisponível (Spinner + Título Slate-800 + Link Roxo + Inter)
   // =========================================================================
-  } catch (error: any) {
-    console.error(`[FINANCIAL_GATEWAY_ENTRY ERROR]:`, error);
-
-    // Snapshot do contexto no momento da falha
-    const monitorPayload = {
-      user: userProfile || null,
-      offerData: offerData || null,
-      attemptedOfferId: searchOfferId || null,
-      productId: searchProductId || null,
-      environment: import.meta.env.MODE,
-      gatewayContext: {
-        url: window.location.href,
-        timestamp: new Date().toISOString(),
-        errorCode: error?.code || 'UNKNOWN_ERROR'
-      }
-    };
-
-    // [LOGGING]: Envio assíncrono (não bloqueante)
-    logSystemError(activeToken, {
-      context: 'FINANCIAL-GATEWAY',
-      message: error.message || 'Erro não identificado',
-      details: error,
-      payload: monitorPayload,
-      visit_id: null,             // Não disponível neste escopo
-      visit_update_id: null,      // Não disponível neste escopo
-      simulation_id: null,        // Não disponível neste escopo
-      simulation_update_id: null  // Não disponível neste escopo
-    });
-
-    // [RESILIÊNCIA]: Tratamento de UI
-    if (error?.code === 'OFFER_NOT_FOUND') {
-      setGatewayError('OFFER_EXPIRED');
-    } else {
-      setGatewayError('TECHNICAL_INSTABILITY');
-    }
-    
-    setStatusText("Ocorreu uma instabilidade momentânea.");
+  if (gatewayError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Inter'] p-6 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B300FF] mb-6"></div>
+        
+        <h2 className="text-xl font-bold text-slate-800 mb-4">
+          {gatewayError === 'OFFER_EXPIRED' ? "Oferta Indisponível" : "Sistema Indisponível"}
+        </h2>
+        
+        <p className="text-slate-500 mb-6 max-w-sm leading-relaxed">
+          {gatewayError === 'OFFER_EXPIRED' 
+            ? "Este lote pode já ter sido arrematado, suspenso ou o período de avaliação foi encerrado." 
+            : "Ocorreu uma instabilidade momentânea ao processar sua solicitação."}
+        </p>
+        
+        <p className="text-sm text-slate-400 mb-6">Redirecionando em {countdown} segundos...</p>
+        
+        <button 
+          onClick={() => {
+            if (gatewayError === 'TECHNICAL_INSTABILITY') {
+              window.location.reload();
+            } else {
+              window.history.length > 2 ? window.history.back() : navigate({ to: "/sandbox", replace: true });
+            }
+          }}
+          className="text-sm text-[#B300FF] underline underline-offset-2 hover:opacity-80 font-medium"
+        >
+          {gatewayError === 'TECHNICAL_INSTABILITY' ? "Tentar novamente" : "Voltar agora"}
+        </button>
+      </div>
+    );
   }
-
 
   // =========================================================================
   // [VIEW 2]: Progresso (Spinner + Cor Roxo + Inter)
