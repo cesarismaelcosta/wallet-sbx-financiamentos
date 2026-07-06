@@ -146,6 +146,10 @@ export function FinancialEntry() {
       } catch (error: any) {
         console.error(`[FINANCIAL_GATEWAY_ENTRY ERROR]:`, error);
 
+        // Capturamos a mensagem e os detalhes brutos do erro do Gateway
+        const errorMessage = error?.message || 'Erro não identificado na orquestração';
+        const errorDetails = typeof error === 'object' ? error : { details: error };
+
         // Snapshot do contexto no momento da falha
         const monitorPayload = {
           user: userProfile || null,
@@ -156,15 +160,16 @@ export function FinancialEntry() {
           gatewayContext: {
             url: window.location.href,
             timestamp: new Date().toISOString(),
-            errorCode: error?.code || 'UNKNOWN_ERROR'
+            errorCode: error?.code,
+            rawError: errorDetails
           }
         };
 
         // [LOGGING]: Envio assíncrono (não bloqueante)
         logSystemError(activeToken, {
           context: 'FINANCIAL-GATEWAY',
-          message: error.message || 'Erro não identificado',
-          details: error,
+          message: errorMessage,
+          details: errorDetails,
           payload: monitorPayload,
           visit_id: null,
           simulation_id: null
