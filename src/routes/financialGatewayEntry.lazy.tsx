@@ -44,8 +44,8 @@ export const Route = createLazyFileRoute("/financialGatewayEntry")({
     sbx_token: search.sbx_token as string | undefined,
     offer_id: search.offer_id as string | undefined,
     product_id: search.product_id as string | undefined,
-    utm_source: search.utm_source as string | undefined,     
-    utm_medium: search.utm_medium as string | undefined,     
+    utm_source: search.utm_source as string | undefined,      
+    utm_medium: search.utm_medium as string | undefined,      
     utm_campaign: search.utm_campaign as string | undefined, 
   }),
   component: FinancialEntry,
@@ -143,24 +143,26 @@ export function FinancialEntry() {
         // Dispara o núcleo do sistema
         await orchestrateNavigation("CONSULT", payload);
         
-} catch (error: any) {
+    } catch (error: any) {
       console.error("[FINANCIAL_GATEWAY_ENTRY ERROR]:", error);
 
       const errorMessage = error?.message || 'Erro não identificado na orquestração';
       
-      // PARSER SAFE: Removemos o spread operator (...) e o ternário complexo
-      // para evitar que o gerador de rotas trave durante o crawling.
-      let errorDetails = { details: String(error) };
+      // SUBSTITUA O TERNÁRIO COM SPREAD POR ESTE IF/ELSE (Sintaxe ES5 compatível)
+      let errorDetails: any;
       if (error instanceof Error) {
         errorDetails = { 
           name: error.name, 
           message: error.message, 
-          stack: error.stack || '' 
+          stack: error.stack 
         };
       } else if (typeof error === 'object' && error !== null) {
         errorDetails = error;
+      } else {
+        errorDetails = { details: String(error) };
       }
 
+      // O monitorPayload abaixo é o SEU ORIGINAL, intocado.
       const monitorPayload = {
         user: userProfile || null,
         offerData: offerData || null,
