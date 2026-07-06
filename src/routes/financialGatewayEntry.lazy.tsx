@@ -143,22 +143,30 @@ export function FinancialEntry() {
         // Dispara o núcleo do sistema
         await orchestrateNavigation("CONSULT", payload);
         
-    } catch (error: any) {
-      console.error(`[FINANCIAL_GATEWAY_ENTRY ERROR]:`, error);
+} catch (error: any) {
+      console.error("[FINANCIAL_GATEWAY_ENTRY ERROR]:", error);
 
       const errorMessage = error?.message || 'Erro não identificado na orquestração';
       
-      // A MÁGICA ACONTECE AQUI: Desestruturamos o erro nativo para forçar o JSON.stringify a ler os dados
-      const errorDetails = error instanceof Error 
-        ? { name: error.name, message: error.message, stack: error.stack, ...error } 
-        : (typeof error === 'object' ? error : { details: String(error) });
+      // PARSER SAFE: Removemos o spread operator (...) e o ternário complexo
+      // para evitar que o gerador de rotas trave durante o crawling.
+      let errorDetails = { details: String(error) };
+      if (error instanceof Error) {
+        errorDetails = { 
+          name: error.name, 
+          message: error.message, 
+          stack: error.stack || '' 
+        };
+      } else if (typeof error === 'object' && error !== null) {
+        errorDetails = error;
+      }
 
       const monitorPayload = {
         user: userProfile || null,
         offerData: offerData || null,
         attemptedOfferId: searchOfferId || null,
         productId: searchProductId || null,
-        environment: import.meta.env.MODE,
+        environment: searchEnv,
         gatewayContext: {
           url: window.location.href,
           timestamp: new Date().toISOString(),
@@ -170,7 +178,7 @@ export function FinancialEntry() {
       logSystemError(activeToken, {
         context: 'FINANCIAL-GATEWAY',
         message: errorMessage,
-        details: errorDetails, // O erro agora vai preenchido
+        details: errorDetails,
         payload: monitorPayload,
         visit_id: null,
         simulation_id: null
