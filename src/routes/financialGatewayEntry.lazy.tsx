@@ -143,48 +143,47 @@ export function FinancialEntry() {
         // Dispara o núcleo do sistema
         await orchestrateNavigation("CONSULT", payload);
         
-      } catch (error: any) {
-        console.error(`[FINANCIAL_GATEWAY_ENTRY ERROR]:`, error);
+    } catch (error: any) {
+      console.error(`[FINANCIAL_GATEWAY_ENTRY ERROR]:`, error);
 
-        // Capturamos a mensagem e os detalhes brutos do erro do Gateway
-        const errorMessage = error?.message || 'Erro não identificado na orquestração';
-        const errorDetails = typeof error === 'object' ? error : { details: error };
+      const errorMessage = error?.message || 'Erro não identificado na orquestração';
+      
+      // A MÁGICA ACONTECE AQUI: Desestruturamos o erro nativo para forçar o JSON.stringify a ler os dados
+      const errorDetails = error instanceof Error 
+        ? { name: error.name, message: error.message, stack: error.stack, ...error } 
+        : (typeof error === 'object' ? error : { details: String(error) });
 
-        // Snapshot do contexto no momento da falha
-        const monitorPayload = {
-          user: userProfile || null,
-          offerData: offerData || null,
-          attemptedOfferId: searchOfferId || null,
-          productId: searchProductId || null,
-          environment: import.meta.env.MODE,
-          gatewayContext: {
-            url: window.location.href,
-            timestamp: new Date().toISOString(),
-            errorCode: error?.code,
-            rawError: errorDetails
-          }
-        };
-
-        // [LOGGING]: Envio assíncrono (não bloqueante)
-        logSystemError(activeToken, {
-          context: 'FINANCIAL-GATEWAY',
-          message: errorMessage,
-          details: errorDetails,
-          payload: monitorPayload,
-          visit_id: null,
-          simulation_id: null
-        });
-
-        // [RESILIÊNCIA]: Tratamento de UI
-        if (error?.code === 'OFFER_NOT_FOUND') {
-          setGatewayError('OFFER_EXPIRED');
-        } else {
-          setGatewayError('TECHNICAL_INSTABILITY');
+      const monitorPayload = {
+        user: userProfile || null,
+        offerData: offerData || null,
+        attemptedOfferId: searchOfferId || null,
+        productId: searchProductId || null,
+        environment: import.meta.env.MODE,
+        gatewayContext: {
+          url: window.location.href,
+          timestamp: new Date().toISOString(),
+          errorCode: error?.code || 'UNKNOWN_ERROR',
+          rawError: errorDetails
         }
-        
-        setStatusText("Ocorreu uma instabilidade momentânea.");
+      };
+
+      logSystemError(activeToken, {
+        context: 'FINANCIAL-GATEWAY',
+        message: errorMessage,
+        details: errorDetails, // O erro agora vai preenchido
+        payload: monitorPayload,
+        visit_id: null,
+        simulation_id: null
+      });
+
+      if (error?.code === 'OFFER_NOT_FOUND') {
+        setGatewayError('OFFER_EXPIRED');
+      } else {
+        setGatewayError('TECHNICAL_INSTABILITY');
       }
-    };
+      
+      setStatusText("Ocorreu uma instabilidade momentânea.");
+    }
 
     const timer = setTimeout(() => {
       bootstrapContext();
