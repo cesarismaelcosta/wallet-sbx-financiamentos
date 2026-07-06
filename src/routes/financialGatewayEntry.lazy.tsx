@@ -13,11 +13,12 @@
  */
 
 import { useEffect, useState, useRef } from "react";
+import { Loader2, Clock } from "lucide-react";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile } from "@/services/user";
 import { fetchOfferDetails } from "@/services/offer";
-import { Loader2, Clock } from "lucide-react";
+import { logSystemError } from "@/services/notification";
 
 // =========================================================================
 // [DEPENDÊNCIAS DE DOMÍNIO]: Hooks do Hub Financeiro
@@ -37,7 +38,7 @@ import type {
 // =========================================================================
 // [CONTRATO DE ENTRADA]: Validação estrita via TanStack Router
 // =========================================================================
-export const Route = createLazyFileRoute("/financialEntry")({
+export const Route = createLazyFileRoute("/financialGatewayEntry")({
   validateSearch: (search: Record<string, unknown>) => ({
     environment: search.environment as string | undefined,
     sbx_token: search.sbx_token as string | undefined,
@@ -62,9 +63,10 @@ export function FinancialEntry() {
   const hasInitialized = useRef(false);
 
   // [STATE]: Estados de UX e Controle de Fluxo
-  const [statusText, setStatusText] = useState("Preparando um ambiente seguro...");
-  const [offerExpired, setOfferExpired] = useState(false);
-  const [countdown, setCountdown] = useState(5); // 5 segundos de espera amigável
+  const [statusText, setStatusText] = useState("Preparando simulação...");
+  // [UX]: Estado unificado de erro para resiliência do Gateway
+  const [gatewayError, setGatewayError] = useState<'OFFER_EXPIRED' | 'TECHNICAL_INSTABILITY' | 'AUTH_EXPIRED' | null>(null);
+  const [countdown, setCountdown] = useState(5);
 
   // [OTIMIZAÇÃO]: Extração de primitivos para evitar loop infinito de re-renderização
   const searchEnv = search.environment;
@@ -92,7 +94,7 @@ export function FinancialEntry() {
       const activeToken = searchToken || auth.token;
 
       if (!activeToken) {
-        setStatusText("Redirecionando para acesso seguro...");
+        setStatusText("Redirecionando para login da Wallet sbX...");
         navigate({ to: "/login" });
         return;
       }
@@ -132,21 +134,50 @@ export function FinancialEntry() {
           interaction_context: interactionContext,
         };
 
-        setStatusText("Carregando informações do produto...");
+        setStatusText("Carregando informações do simulação...");
         
-        console.log("[FINANCIAL_ENTRY] Payload de Orquestração:", payload);
+        console.log("[FINANCIAL_GATEWAY_ENTRY] Payload de Orquestração:", payload);
 
         // Dispara o núcleo do sistema
         await orchestrateNavigation("CONSULT", payload);
         
-      } catch (error: any) {
-        console.error(`[FINANCIAL_ENTRY ERROR]:`, error);
-        
-        // Unifica o comportamento: qualquer erro dispara o fallback de resiliência
-        setOfferExpired(true);
-        setStatusText("Ocorreu uma instabilidade momentânea ao processar a simulação.");
+    } catch (error: any) {
+      console.error(`[FINANCIAL_GATEWAY_ENTRY ERROR]:`, error);
+
+      // Payload enriquecido com contexto transacional e de ambiente
+      const monitorPayload = {
+        userId: user?.id || null,
+        userProfile: user || null,
+        offerData: offer || null,
+        offerId: offer?.id || offer_id_produto || null,
+        productId: offer?.product_id || null,
+        // Identificação do ambiente atual
+        environment: import.meta.env.MODE, 
+        gatewayContext: {
+          url: window.location.href,
+          timestamp: new Date().toISOString(),
+          errorCode: error?.code || 'UNKNOWN_ERROR'
+        }
+      };
+
+      logSystemError(sessionToken, {
+        context: 'FINANCIAL-GATEWAY',
+        message: error.message || 'Erro não identificado',
+        details: error,
+        payload: monitorPayload,
+        visit_id: activeVisitId || null,
+        simulation_id: activeSimulationId || null
+      });
+
+      // Protocolo de Resiliência (UI)
+      if (error?.code === 'OFFER_NOT_FOUND') {
+        setGatewayError('OFFER_EXPIRED');
+      } else {
+        setGatewayError('TECHNICAL_INSTABILITY');
       }
-    };
+      
+      setStatusText("Ocorreu uma instabilidade momentânea.");
+    }
 
     const timer = setTimeout(() => {
       bootstrapContext();
@@ -161,7 +192,7 @@ export function FinancialEntry() {
   useEffect(() => {
     let timer: NodeJS.Timeout;
     
-    if (offerExpired) {
+    if (gatewayError) {
       if (countdown > 0) {
         timer = setTimeout(() => setCountdown(c => c - 1), 1000);
       } else {
@@ -175,31 +206,49 @@ export function FinancialEntry() {
     }
     
     return () => clearTimeout(timer);
-  }, [offerExpired, countdown, navigate]);
+  }, [gatewayError, countdown, navigate]);
 
 
   // =========================================================================
   // [VIEW 1]: Lote Indisponível (Spinner + Título Slate-800 + Link Roxo + Inter)
   // =========================================================================
-  if (offerExpired) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Inter'] p-6 text-center">
-        {/* Spinner posicionado antes do título */}
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B300FF] mb-6"></div>
-        <h2 className="text-xl font-bold text-slate-800 mb-4">Oferta Indisponível</h2>
-        <p className="text-slate-500 mb-6 max-w-sm leading-relaxed">
-          Este lote pode já ter sido arrematado, suspenso ou o período de avaliação foi encerrado.
-        </p>
-        <p className="text-sm text-slate-400 mb-6">Redirecionando em {countdown} segundos...</p>
-        
-        <button 
-          onClick={() => window.history.length > 2 ? window.history.back() : navigate({ to: "/sandbox", replace: true })}
-          className="text-sm text-[#B300FF] underline underline-offset-2 hover:opacity-80 font-medium"
-        >
-          Voltar agora
-        </button>
-      </div>
-    );
+  } catch (error: any) {
+    console.error(`[FINANCIAL_GATEWAY_ENTRY ERROR]:`, error);
+
+    // Snapshot do contexto no momento da falha
+    const monitorPayload = {
+      user: userProfile || null,
+      offerData: offerData || null,
+      attemptedOfferId: searchOfferId || null,
+      productId: searchProductId || null,
+      environment: import.meta.env.MODE,
+      gatewayContext: {
+        url: window.location.href,
+        timestamp: new Date().toISOString(),
+        errorCode: error?.code || 'UNKNOWN_ERROR'
+      }
+    };
+
+    // [LOGGING]: Envio assíncrono (não bloqueante)
+    logSystemError(activeToken, {
+      context: 'FINANCIAL-GATEWAY',
+      message: error.message || 'Erro não identificado',
+      details: error,
+      payload: monitorPayload,
+      visit_id: null,             // Não disponível neste escopo
+      visit_update_id: null,      // Não disponível neste escopo
+      simulation_id: null,        // Não disponível neste escopo
+      simulation_update_id: null  // Não disponível neste escopo
+    });
+
+    // [RESILIÊNCIA]: Tratamento de UI
+    if (error?.code === 'OFFER_NOT_FOUND') {
+      setGatewayError('OFFER_EXPIRED');
+    } else {
+      setGatewayError('TECHNICAL_INSTABILITY');
+    }
+    
+    setStatusText("Ocorreu uma instabilidade momentânea.");
   }
 
 

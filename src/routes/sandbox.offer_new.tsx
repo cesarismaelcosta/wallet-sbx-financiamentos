@@ -112,7 +112,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     // DELEGAÇÃO PARA O GATEWAY DMZ:
     // Passamos todos os parâmetros exatos que o validateSearch do Gateway exige.
     navigate({
-      to: "/financialEntry",
+      to: "/financialGatewayEntry",
       search: {
         environment: ambiente,
         sbx_token: token,
