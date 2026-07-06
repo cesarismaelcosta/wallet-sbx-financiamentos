@@ -12,6 +12,11 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { generateSystemErrorEmailHtml } from './system-message-notification.ts'
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-session-token',
+};
+
 /**
  * @function Deno.serve
  * @description Orquestra o recebimento de erros e a persistência na fila quente.
@@ -20,6 +25,11 @@ Deno.serve(async (req) => {
   // 1. REGISTRO DE ACESSO E MÉTODO:
   if (req.method !== 'POST') {
     return new Response("Method not allowed", { status: 405 });
+  }
+
+  // Trata a requisição de Preflight (CORS)
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
   }
 
   // 2. INICIALIZAÇÃO DO SUPABASE:
@@ -69,7 +79,7 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ status: "queued" }), { 
       status: 200,
-      headers: { "Content-Type": "application/json" }
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (err: any) {
@@ -77,7 +87,7 @@ Deno.serve(async (req) => {
     console.error("[NOTIFICATION-SYSTEM-MESSAGE ERROR]:", err.message);
     return new Response(JSON.stringify({ error: err.message }), { 
       status: 500,
-      headers: { "Content-Type": "application/json" }
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
 });
