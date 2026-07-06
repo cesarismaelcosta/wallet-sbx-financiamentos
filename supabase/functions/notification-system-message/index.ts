@@ -6,11 +6,9 @@
  * =========================================================================
  * Porta de Ingestão do Sistema de Notificações. Atua como um sumidouro 
  * assíncrono de telemetria e erros técnicos para o ecossistema do Hub Financeiro.
- * 
- * Garante o desacoplamento total entre falhas de infraestrutura/integração
+ * * Garante o desacoplamento total entre falhas de infraestrutura/integração
  * e a experiência do usuário (UX), operando sob o princípio de tolerância a falhas.
- * 
- * [RESPONSABILIDADES]:
+ * * [RESPONSABILIDADES]:
  * 1. Protocolo de Borda: Responde síncronamente ao aperto de mão de segurança (CORS OPTIONS).
  * 2. Validação Contratual: Garante a presença dos metadados mínimos de rastreabilidade.
  * 3. Persistência de Transição: Deposita a mensagem na Outbox como 'pending' para processamento assíncrono.
@@ -96,7 +94,8 @@ Deno.serve(async (req) => {
     // -----------------------------------------------------------------------
     // [DOMÍNIO]: Processamento e Renderização Visual do Alerta
     // -----------------------------------------------------------------------
-    const htmlContent = generateSystemErrorEmailHtml(context, message, details);
+    // CORREÇÃO: Variável nomeada como templateResult para alinhar com o insert
+    const templateResult = generateSystemErrorEmailHtml(context, message, details);
     
     // -----------------------------------------------------------------------
     // [PERSISTÊNCIA]: Ingestão na Fila Quente (Notification Outbox)
