@@ -142,48 +142,50 @@ export function FinancialEntry() {
 
         // Dispara o núcleo do sistema
         await orchestrateNavigation("CONSULT", payload);
-        
-    } catch (error: any) {
-      console.error("[FINANCIAL_GATEWAY_ENTRY ERROR]:", error);
 
-      const errorMessage = error?.message || 'Erro não identificado na orquestração';
+      } catch (error: any) {
+        console.error("[FINANCIAL_GATEWAY_ENTRY ERROR]:", error);
 
-      const monitorPayload = {
-        user: userProfile || null,
-        offerData: offerData || null,
-        attemptedOfferId: searchOfferId || null,
-        productId: searchProductId || null,
-        environment: searchEnv,
-        gatewayContext: {
-          url: window.location.href,
-          timestamp: new Date().toISOString(),
-          errorCode: error?.code || 'UNKNOWN_ERROR',
-          rawError: error // <-- O erro bruto era passado diretamente aqui
+        const errorMessage = error?.message || 'Erro não identificado na orquestração';
+
+        const monitorPayload = {
+          user: userProfile || null,
+          offerData: offerData || null,
+          attemptedOfferId: searchOfferId || null,
+          productId: searchProductId || null,
+          environment: searchEnv,
+          gatewayContext: {
+            url: window.location.href,
+            timestamp: new Date().toISOString(),
+            errorCode: error?.code || 'UNKNOWN_ERROR',
+            rawError: error // <-- O erro bruto era passado diretamente aqui
+          }
+        };
+
+        logSystemError(activeToken, {
+          context: 'FINANCIAL-GATEWAY',
+          message: errorMessage,
+          details: error, // <-- E aqui
+          payload: monitorPayload,
+          visit_id: null,
+          simulation_id: null
+        });
+
+        if (error?.code === 'OFFER_NOT_FOUND') {
+          setGatewayError('OFFER_EXPIRED');
+        } else {
+          setGatewayError('TECHNICAL_INSTABILITY');
         }
-      };
-
-      logSystemError(activeToken, {
-        context: 'FINANCIAL-GATEWAY',
-        message: errorMessage,
-        details: error, // <-- E aqui
-        payload: monitorPayload,
-        visit_id: null,
-        simulation_id: null
-      });
-
-      if (error?.code === 'OFFER_NOT_FOUND') {
-        setGatewayError('OFFER_EXPIRED');
-      } else {
-        setGatewayError('TECHNICAL_INSTABILITY');
+        
+        setStatusText("Ocorreu uma instabilidade momentânea.");
       }
-      
-      setStatusText("Ocorreu uma instabilidade momentânea.");
-    }
 
+    }
+    
     const timer = setTimeout(() => {
       bootstrapContext();
     }, 400);
-
+  
     return () => clearTimeout(timer);
   }, [searchEnv, searchToken, searchOfferId, searchProductId, searchUtmSource, searchUtmMedium, searchUtmCampaign, auth, navigate]);
 

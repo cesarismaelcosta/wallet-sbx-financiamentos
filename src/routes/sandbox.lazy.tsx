@@ -30,9 +30,18 @@ export function SandboxLayout() {
   const location = useLocation();
   
   // [STATE - PRE-LOGIN]: Controle do ambiente antes de autenticar
-  const [envPreLogin, setEnvPreLogin] = useState<"staging" | "production">(
-    (localStorage.getItem("sbx_environment") as "staging" | "production") || "production"
-  );
+  // 1. O SSR inicia de forma segura com um valor padrão (Node.js não trava)
+  const [envPreLogin, setEnvPreLogin] = useState<"staging" | "production">("production");
+
+  // 2. O useEffect só roda no navegador do usuário, onde o localStorage existe
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedEnv = localStorage.getItem("sbx_environment") as "staging" | "production";
+      if (savedEnv) {
+        setEnvPreLogin(savedEnv);
+      }
+    }
+  }, []);
 
   // [DATA]: Armazena o perfil hidratado para consumo das rotas filhas.
   const [userData, setUserData] = useState<any>(null);
