@@ -51,12 +51,13 @@ const SandboxHome = () => {
   const handleAmbienteChange = async (novoAmbiente: "staging" | "production") => {
     if (ambiente === novoAmbiente) return;
 
-    // 1. Atualiza apenas o Storage (NÃO chama setAmbiente para não forçar re-render agora)
+    // 1. Define o ambiente
     localStorage.setItem("sbx_environment", novoAmbiente);
+    setAmbiente(novoAmbiente);
 
-    // 2. Chama o seu logout oficial do contexto para limpar a sessão
-    // Se o seu logout for uma Promise, o await garante que ele termine
-    await logout(); 
+    // 2. Chama o logout para limpar TUDO (exceto o ambiente, que acabamos de setar)
+    // Como o logout agora usa 'removeItem' em vez de 'clear', ele é mais estável
+    logout();
   };
 
   // -----------------------------------------------------------------------
