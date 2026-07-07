@@ -45,7 +45,7 @@ const formatarCaminho = (str: string) => str.normalize("NFD").replace(/[\u0300-\
 // =========================================================================
 // CONFIGURAÇÃO DA ROTA
 // =========================================================================
-export const Route = createFileRoute("/sandbox/offer_new")({
+export const Route = createFileRoute("/sandbox/offer")({
   component: () => {
     const search = Route.useSearch();
     const flow = (search as any).flow;

@@ -147,22 +147,7 @@ export function FinancialEntry() {
       console.error("[FINANCIAL_GATEWAY_ENTRY ERROR]:", error);
 
       const errorMessage = error?.message || 'Erro não identificado na orquestração';
-      
-      // SUBSTITUA O TERNÁRIO COM SPREAD POR ESTE IF/ELSE (Sintaxe ES5 compatível)
-      let errorDetails: any;
-      if (error instanceof Error) {
-        errorDetails = { 
-          name: error.name, 
-          message: error.message, 
-          stack: error.stack 
-        };
-      } else if (typeof error === 'object' && error !== null) {
-        errorDetails = error;
-      } else {
-        errorDetails = { details: String(error) };
-      }
 
-      // O monitorPayload abaixo é o SEU ORIGINAL, intocado.
       const monitorPayload = {
         user: userProfile || null,
         offerData: offerData || null,
@@ -173,14 +158,14 @@ export function FinancialEntry() {
           url: window.location.href,
           timestamp: new Date().toISOString(),
           errorCode: error?.code || 'UNKNOWN_ERROR',
-          rawError: errorDetails
+          rawError: error // <-- O erro bruto era passado diretamente aqui
         }
       };
 
       logSystemError(activeToken, {
         context: 'FINANCIAL-GATEWAY',
         message: errorMessage,
-        details: errorDetails,
+        details: error, // <-- E aqui
         payload: monitorPayload,
         visit_id: null,
         simulation_id: null
