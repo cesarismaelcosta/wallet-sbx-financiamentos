@@ -167,6 +167,9 @@ export function FinancialEntry() {
           }
         };
 
+        // Log antes de logSystemError:
+        console.log("financialGatewayEntryLazy: O que estamos enviando para o e-mail via logSystemError:", JSON.stringify(errorDetails));
+
         // 2. Passamos o objeto puro
         logSystemError(activeToken, {
           context: 'FINANCIAL-GATEWAY',

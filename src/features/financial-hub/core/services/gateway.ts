@@ -143,6 +143,7 @@ export async function callSimulation(
    * para permitir log de diagnóstico detalhado no frontend e monitoramento externo.
    */
   if (!response.ok) {
+    
     // Tenta decodificar o corpo do erro como JSON; fallback para texto simples.
     // Capturas o payload de erro como um objeto puro
     const errorData = await response.json().catch(() => ({ 
@@ -150,31 +151,20 @@ export async function callSimulation(
       details: "O servidor retornou um erro não estruturado" 
     }));
 
-    console.error(`[Gateway] Erro HTTP ${response.status}:`, errorData);
+    console.error(`[gateway.ts] Erro HTTP ${response.status}:`, errorData);
 
-    /**
-     * [ERRO ENRIQUECIDO]
-     * Injeta metadados de contexto (response, code, status) no objeto de erro 
-     * padrão do JavaScript. Isso impede que a serialização transforme o erro 
-     * em um objeto vazio '{}' durante o transporte para o serviço de e-mail.
-     */
-    const orchestratorError = new Error(
-      errorData?.error || errorData?.message || `Erro na comunicação com o Gateway: ${response.status}`
-    );
-    
-    (orchestratorError as any).response = errorData;
-    (orchestratorError as any).code = 'GATEWAY_ERROR';
-    (orchestratorError as any).status = response.status;
-    
-    console.log("DEBUG: O Gateway vai lançar este erro:", {
-      message: orchestratorError.message,
-      response: (orchestratorError as any).response
-    });
-
-    throw orchestratorError;
+    // NÃO crie uma instância de Error. 
+    // Lance um objeto simples. Isso impede que qualquer camada 
+    // superior "limpe" os dados ao tentar acessar .message
+    throw {
+        message: errorData?.error || errorData?.message || `Erro: ${response.status}`,
+        code: 'GATEWAY_ERROR',
+        status: response.status,
+        response: errorData
+    };
   }
 
-  console.log(`[Gateway] Retorno ${method} ${url} com payload:`, payload);
+  console.log(`[gateway.ts] Retorno ${method} ${url} com payload:`, payload);
 
   return response.json();
   
