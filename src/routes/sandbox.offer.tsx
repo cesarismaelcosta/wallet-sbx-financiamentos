@@ -275,17 +275,16 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   // =========================================================================
   if (fetchError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans',_sans-serif] p-6 text-center">
-        
-        <h2 className="text-[22px] font-bold text-[#0F2846] mb-5 tracking-tight">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center font-['Inter']">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">
           Erro de Carregamento
         </h2>
         
-        <p className="text-[16px] text-[#5A6E85] mb-8">
+        <p className="text-sm text-gray-600 mb-8 max-w-sm">
           Esta oferta não foi encontrada ou não está disponível.
         </p>
         
-        <p className="text-[14px] text-[#8CA0B3] mb-8">
+        <p className="text-xs text-gray-400 mb-8">
           Redirecionando em {countdown} segundos...
         </p>
         
@@ -294,11 +293,10 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
             hasInitialized.current = false;
             window.location.reload();
           }}
-          className="text-[15px] font-semibold text-[#0F2846] underline underline-offset-4 decoration-1 hover:text-[#B300FF] hover:decoration-[#B300FF] transition-colors cursor-pointer border-none bg-transparent"
+          className="text-sm font-bold text-[#B300FF] hover:underline cursor-pointer border-none bg-transparent"
         >
           Tentar novamente
         </button>
-        
       </div>
     );
   }
