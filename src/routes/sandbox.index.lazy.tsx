@@ -17,7 +17,6 @@ import { WalletLogo } from "@/components/brand/WalletLogo";
 import { CreditCard, Car, Home, UserSquare2, TrendingUp, ShieldCheck, ChevronRight, Loader2, LogOut } from "lucide-react";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 
-// Interfaces para tipagem estrita de contratos de navegação
 interface JourneyLink {
   label: string;
   flowKey: string;
@@ -39,30 +38,13 @@ const SandboxHome = () => {
   const navigate = useNavigate();
   const { logout, userId, token } = useFinancialAuth();
   
-  // -----------------------------------------------------------------------
-  // [STATE]: Controle de loading e Ambiente Reativo
-  // -----------------------------------------------------------------------
   const [loading, setLoading] = useState(false);
-  const [ambiente, setAmbiente] = useState<"staging" | "production">(
-    (localStorage.getItem("sbx_environment") as "staging" | "production") || "production"
-  );
 
-  // Sincroniza a escolha visual com o cofre do navegador e DERRUBA a sessão
-  const handleAmbienteChange = async (novoAmbiente: "staging" | "production") => {
-    if (ambiente === novoAmbiente) return;
-
-    // 1. Define o ambiente
-    localStorage.setItem("sbx_environment", novoAmbiente);
-    setAmbiente(novoAmbiente);
-
-    // 2. Chama o logout para limpar TUDO (exceto o ambiente, que acabamos de setar)
-    // Como o logout agora usa 'removeItem' em vez de 'clear', ele é mais estável
-    logout();
+  const handleLogout = async () => {
+    localStorage.removeItem("sbx_environment");
+    await logout();
   };
 
-  // -----------------------------------------------------------------------
-  // [HANDLERS]: Navegação de Jornadas
-  // -----------------------------------------------------------------------
   const handleProductClick = async (route: string, flowKey?: string) => {
     setLoading(true);
     try {
@@ -79,9 +61,6 @@ const SandboxHome = () => {
     }
   };
 
-  // -----------------------------------------------------------------------
-  // [CONFIG]: Mapa de Jornadas com Links Internos e Mapeamento de Sub-fluxos
-  // -----------------------------------------------------------------------
   const menuOptions: MenuOption[] = [
     {
       title: "Cartão de Crédito",
@@ -146,13 +125,9 @@ const SandboxHome = () => {
     },
   ];
 
-  // =========================================================================
-  // [VIEW]: Renderização da Interface
-  // =========================================================================
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col overflow-hidden relative">
       
-      {/* HEADER: Central de Controle */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           
@@ -170,31 +145,6 @@ const SandboxHome = () => {
           </div>
           
           <div className="flex items-center gap-6">
-            <div className="hidden md:flex h-9 p-0.5 bg-gray-100 rounded-full gap-0.5 border border-gray-200 w-40">
-              <button
-                type="button"
-                onClick={() => handleAmbienteChange("staging")}
-                className={`flex-1 text-[10px] font-bold rounded-full transition-all border ${
-                  ambiente === "staging"
-                    ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm"
-                    : "text-gray-400 hover:text-gray-600 border-transparent"
-                }`}
-              >
-                STAGE
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAmbienteChange("production")}
-                className={`flex-1 text-[10px] font-bold rounded-full transition-all border ${
-                  ambiente === "production"
-                    ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm"
-                    : "text-gray-400 hover:text-gray-600 border-transparent"
-                }`}
-              >
-                PRODUÇÃO
-              </button>
-            </div>
-
             <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
               <div className="flex flex-col items-end text-right hidden sm:flex">
                 <span className="text-[9px] font-mono text-slate-500">USER ID: {userId || "---"}</span>
@@ -207,7 +157,7 @@ const SandboxHome = () => {
                 Backoffice
               </Link>
               <button
-                onClick={logout}
+                onClick={handleLogout}
                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold transition-all"
               >
                 <LogOut className="w-3 h-3" />
@@ -218,7 +168,6 @@ const SandboxHome = () => {
         </div>
       </header>
 
-      {/* MAIN: Catálogo de Jornadas */}
       <main className="flex-grow max-w-6xl mx-auto px-4 sm:px-8 py-12 w-full">
         <div className="mb-10 text-left">
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">O que vamos testar?</h2>
@@ -229,12 +178,7 @@ const SandboxHome = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {menuOptions.map((option, index) => {
-            // Se o card está disabled, ele não deve renderizar links internos
             const hasLinks = !option.disabled && option.links && option.links.length > 0;
-            
-            // Renderização polimórfica controlada: 
-            // - 'div': Card com links (não pode ser botão global)
-            // - 'button': Card com clique direto ou Card Desabilitado (para aplicar opacity e not-allowed)
             const CardContainer = hasLinks ? "div" : "button";
 
             return (
@@ -273,7 +217,6 @@ const SandboxHome = () => {
                     <p className="text-xs text-slate-500 leading-snug">{option.description}</p>
                   </div>
 
-                  {/* Links internos escondidos quando disabled=true */}
                   {hasLinks && (
                     <div className="mt-5 pt-3 border-t border-slate-100 flex flex-col gap-2">
                       {option.links?.map((link, linkIdx) => (
@@ -299,12 +242,10 @@ const SandboxHome = () => {
         </div>
       </main>
 
-      {/* FOOTER */}
       <footer className="py-4 text-center text-slate-400 text-[9px] uppercase tracking-[0.3em] border-t border-slate-100 bg-white/50">
         Wallet sbX | Jornadas de Financiamentos & Seguros
       </footer>
 
-      {/* OVERLAY DE LOADING */}
       {loading && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm">
           <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
