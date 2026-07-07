@@ -5,7 +5,7 @@
  * =========================================================================
  * Ponto de entrada do ambiente de homologação e testes do Financial Hub.
  * * [Responsabilidades]:
- * 1. Navegação Baseada em Fluxos: Mapeia as jornadas (Cartão, Veículos, Seguro, etc.).
+ * 1. Navegação Baseada em Fluxos: Mapeia as jornadas via links diretos ou cliques.
  * 2. Controle de Ambiente Reativo: Permite alternar a variável de ambiente (STG/PRD) 
  * no localStorage em tempo real, sem necessidade de reautenticação.
  * 3. Gestão de Sessão: Exibe os dados do utilizador logado e permite o logout.
@@ -17,7 +17,13 @@ import { WalletLogo } from "@/components/brand/WalletLogo";
 import { CreditCard, Car, Home, UserSquare2, TrendingUp, ShieldCheck, ChevronRight, Loader2, LogOut } from "lucide-react";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 
-// Interface para tipar as opções do menu
+// Interfaces para tipagem estrita de contratos de navegação
+interface JourneyLink {
+  label: string;
+  flowKey: string;
+  disabled?: boolean;
+}
+
 interface MenuOption {
   title: string;
   subtitle: string;
@@ -26,6 +32,7 @@ interface MenuOption {
   flowKey?: string;
   description: string;
   disabled?: boolean;
+  links?: JourneyLink[];
 }
 
 const SandboxHome = () => {
@@ -42,16 +49,10 @@ const SandboxHome = () => {
 
   // Sincroniza a escolha visual com o cofre do navegador e DERRUBA a sessão
   const handleAmbienteChange = (novoAmbiente: "staging" | "production") => {
-    // Se clicar no mesmo ambiente que já está ativo, não faz nada
     if (ambiente === novoAmbiente) return;
 
-    // 1. Atualiza o estado e o cofre do navegador
     setAmbiente(novoAmbiente);
     localStorage.setItem("sbx_environment", novoAmbiente);
-    
-    // 2. FORÇA O LOGOUT IMEDIATO
-    // Isso vai limpar o token e fazer o sandbox.lazy jogar o usuário
-    // de volta para a tela de autenticação do ambiente selecionado.
     logout();
   };
 
@@ -61,7 +62,6 @@ const SandboxHome = () => {
   const handleProductClick = async (route: string, flowKey?: string) => {
     setLoading(true);
     try {
-      // [REDIRECT_URI]: Passando o path atual para que o /offer e o Gateway saibam para onde voltar
       await navigate({ 
         to: route, 
         search: { 
@@ -76,7 +76,7 @@ const SandboxHome = () => {
   };
 
   // -----------------------------------------------------------------------
-  // [CONFIG]: Mapa de Jornadas
+  // [CONFIG]: Mapa de Jornadas com Links Internos e Mapeamento de Sub-fluxos
   // -----------------------------------------------------------------------
   const menuOptions: MenuOption[] = [
     {
@@ -84,27 +84,34 @@ const SandboxHome = () => {
       subtitle: "Parcelamento até 18x",
       icon: <CreditCard className="w-8 h-8 text-primary" />,
       route: "/sandbox/offer",
-      flowKey: "Cartão",
       description: "Simulação de parcelamento de lote para prazos e tarifas cadastradas no app.",
       disabled: false,
+      links: [
+        { label: "Consultar ofertas para parcelamento", flowKey: "Cartão" }
+      ]
     },
     {
       title: "Veículos",
       subtitle: "Financiamento de carros e caminhões",
       icon: <Car className="w-8 h-8 text-primary" />,
       route: "/sandbox/offer",
-      flowKey: "Veículos",
       description: "Simulação de financiamentos de carros e caminhões da MeResolve integradas para PF e e-mail para PJ.",
       disabled: false,
+      links: [
+        { label: "Consultar carros com financiamento", flowKey: "Carros" },
+        { label: "Consultar caminhões com financiamento", flowKey: "Caminhões" }
+      ]
     },
     {
       title: "Imóveis",
       subtitle: "Financiamento de imóveis",
       icon: <Home className="w-8 h-8 text-primary" />,
       route: "/sandbox/offer",
-      flowKey: "Imóveis",
       description: "Simulação de financiamento de imóveis integrada com a Creditas ou Flow.",
       disabled: true,
+      links: [
+        { label: "Consultar imóveis com financiamento", flowKey: "Imóveis" }
+      ]
     },
     {
       title: "Vendedor",
@@ -145,7 +152,6 @@ const SandboxHome = () => {
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           
-          {/* Lado Esquerdo: Marca e Contexto */}
           <div className="flex items-center gap-4">
             <WalletLogo size="md" withTagline />
             <div className="h-6 w-px bg-slate-200 ml-2 hidden sm:block" />
@@ -159,10 +165,7 @@ const SandboxHome = () => {
             </div>
           </div>
           
-          {/* Lado Direito: Controles (Ambiente, Backoffice, Logout) */}
           <div className="flex items-center gap-6">
-            
-            {/* TOGGLE REATIVO DE AMBIENTE */}
             <div className="hidden md:flex h-9 p-0.5 bg-gray-100 rounded-full gap-0.5 border border-gray-200 w-40">
               <button
                 type="button"
@@ -188,7 +191,6 @@ const SandboxHome = () => {
               </button>
             </div>
 
-            {/* AÇÕES DE UTILIZADOR */}
             <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
               <div className="flex flex-col items-end text-right hidden sm:flex">
                 <span className="text-[9px] font-mono text-slate-500">USER ID: {userId || "---"}</span>
@@ -215,47 +217,78 @@ const SandboxHome = () => {
       {/* MAIN: Catálogo de Jornadas */}
       <main className="flex-grow max-w-6xl mx-auto px-4 sm:px-8 py-12 w-full">
         <div className="mb-10 text-left">
-          <h2 className="text-3xl font-black text-slate-800 tracking-tight">O que vamos testar hoje?</h2>
+          <h2 className="text-3xl font-black text-slate-800 tracking-tight">O que vamos testar?</h2>
           <p className="text-slate-500 mt-2 text-sm">
-            Selecione uma jornada ativa para iniciar a simulação no ambiente <strong className="text-purple-600 uppercase">{ambiente}</strong>.
+            Selecione uma jornada ativa para iniciar a <strong>simulação</strong>.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {menuOptions.map((option, index) => (
-            <button
-              key={index}
-              onClick={() => !option.disabled && handleProductClick(option.route, option.flowKey)}
-              disabled={option.disabled}
-              className={`group flex flex-col p-5 bg-white border-2 rounded-2xl transition-all duration-300 text-left 
-                ${
-                  option.disabled
-                    ? "opacity-50 cursor-not-allowed border-slate-200"
-                    : "border-primary/20 hover:border-primary hover:shadow-lg hover:translate-y-[-2px]"
-                }`}
-            >
-              <div className="flex items-center gap-3 w-full">
-                <div
-                  className={`p-2 rounded-lg transition-colors ${option.disabled ? "text-slate-400 bg-slate-100" : "text-primary bg-primary/5 group-hover:bg-primary/10"}`}
-                >
-                  {option.icon}
-                </div>
-                <h3 className="text-lg font-bold text-slate-800 tracking-tight flex-grow flex items-center justify-between">
-                  {option.title}
-                  {!option.disabled && (
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
-                  )}
-                </h3>
-              </div>
+          {menuOptions.map((option, index) => {
+            const hasLinks = option.links && option.links.length > 0;
+            
+            // Alteração polimórfica para evitar botões aninhados semanticamente incorretos
+            const CardContainer = hasLinks ? "div" : "button";
 
-              <div className="mt-4 w-full">
-                <p className="text-[10px] font-bold text-primary/80 uppercase tracking-widest mb-1.5">
-                  {option.subtitle}
-                </p>
-                <p className="text-xs text-slate-500 leading-snug">{option.description}</p>
-              </div>
-            </button>
-          ))}
+            return (
+              <CardContainer
+                key={index}
+                {...(!hasLinks && {
+                  onClick: () => !option.disabled && handleProductClick(option.route, option.flowKey),
+                  disabled: option.disabled
+                })}
+                className={`group flex flex-col p-5 bg-white border-2 rounded-2xl transition-all duration-300 text-left 
+                  ${
+                    option.disabled && !hasLinks
+                      ? "opacity-50 cursor-not-allowed border-slate-200"
+                      : "border-primary/20 hover:border-primary hover:shadow-lg " + (hasLinks ? "" : "hover:translate-y-[-2px]")
+                  }`}
+              >
+                <div className="flex items-center gap-3 w-full">
+                  <div
+                    className={`p-2 rounded-lg transition-colors ${option.disabled && !hasLinks ? "text-slate-400 bg-slate-100" : "text-primary bg-primary/5 group-hover:bg-primary/10"}`}
+                  >
+                    {option.icon}
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800 tracking-tight flex-grow flex items-center justify-between">
+                    {option.title}
+                    {!option.disabled && !hasLinks && (
+                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" />
+                    )}
+                  </h3>
+                </div>
+
+                <div className="mt-4 w-full flex-grow flex flex-col justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold text-primary/80 uppercase tracking-widest mb-1.5">
+                      {option.subtitle}
+                    </p>
+                    <p className="text-xs text-slate-500 leading-snug">{option.description}</p>
+                  </div>
+
+                  {/* Links internos de redirecionamento cirúrgico de sub-fluxos */}
+                  {hasLinks && (
+                    <div className="mt-5 pt-3 border-t border-slate-100 flex flex-col gap-2">
+                      {option.links?.map((link, linkIdx) => (
+                        <button
+                          key={linkIdx}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!link.disabled) handleProductClick(option.route, link.flowKey);
+                          }}
+                          disabled={link.disabled}
+                          className="flex items-center justify-between text-xs font-bold text-[#B400FF] hover:text-purple-800 transition-colors bg-purple-50/50 hover:bg-purple-50 px-3 py-2.5 rounded-xl group/link border border-purple-100/50"
+                        >
+                          <span>{link.label}</span>
+                          <ChevronRight className="w-3.5 h-3.5 text-[#B400FF]/60 group-hover/link:translate-x-0.5 transition-transform" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContainer>
+            );
+          })}
         </div>
       </main>
 

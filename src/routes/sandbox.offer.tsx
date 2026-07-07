@@ -7,7 +7,7 @@
  * Atua apenas como "vitrine". A responsabilidade de orquestração foi 
  * delegada para o Gateway (/financialEntry).
  * * [RESPONSABILIDADES]:
- * 1. Interface: Renderização do layout original (tabelas, carrossel, filtros).
+ * 1. Interface: Renderização do layout original (tabelas, carrossel, sem filtros).
  * 2. Visualização (BFF): Busca os dados da oferta apenas para exibição em tela.
  * 3. Delegação: Redireciona o usuário para o DMZ Gateway com os "documentos" (IDs e Token).
  */
@@ -16,7 +16,6 @@ import { useState, useMemo, useEffect, useContext, useRef } from "react";
 import { useNavigate, createFileRoute } from "@tanstack/react-router";
 import { Loader2, CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { UserDataContext } from "./sandbox.lazy";
@@ -32,12 +31,70 @@ const formatPhone = (phone: string) => {
   return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
 };
 
-const FLOW_MAP: Record<string, { name: string; entity: string; category: string; product_id?: string; offer_id: string; info: string; link: "Box Financiamento" | "Box Parcelamento" | "Banner" }> = {
-  Veículos: { name: "Fin. Carros e Caminhões", offer_id: "4680825", entity: "PF | PJ", category: "Carros | Caminhões", info: "Entity, Event, Manager, Offer, Vehicle", link: "Box Financiamento" },
-  Cartão: { name: "Parcelamento com Cartão", offer_id: "4739764", entity: "PF", category: "Informática", product_id: "8", info: "Entity, Event, Manager, Offer", link: "Box Parcelamento" },
-  Vendedor: { name: "Parcelamento do vendedor VRental", offer_id: "4492361", entity: "PF", category: "Máquinas Amarelas", info: "Entity, Event, Manager, Offer", link: "Box Financiamento" },
-  AutoEquity: { name: "Auto Equity", offer_id: "4728101", entity: "PF", category: "Carros", product_id: "7", info: "Entity", link: "Banner" },
-  SeguroAuto: { name: "Seguro Auto", offer_id: "4728101", entity: "PF", category: "Carros", product_id: "9", info: "Entity", link: "Banner" },
+// =========================================================================
+// [CONFIGURAÇÃO DE FLUXOS]: Mapeamento de Ambiente (Staging vs Production)
+// =========================================================================
+const FLOW_MAP: Record<string, { 
+  name: string; 
+  category: string; 
+  product_id?: string; 
+  offer_id: { staging: string; production: string }; 
+  info: string; 
+  link: "Box Financiamento" | "Box Parcelamento" | "Banner" 
+}> = {
+  Carros: { 
+    name: "Financiamento de Carros", 
+    offer_id: { staging: "4753216", production: "4753216" }, 
+    category: "Carros", 
+    info: "Entity, Event, Manager, Offer, Vehicle", 
+    link: "Box Financiamento" 
+  },
+  Caminhões: { 
+    name: "Financiamento de Caminhões", 
+    offer_id: { staging: "4680825", production: "4680825" }, 
+    category: "Caminhões", 
+    info: "Entity, Event, Manager, Offer, Vehicle", 
+    link: "Box Financiamento" 
+  },
+  Imóveis: { 
+    name: "Financiamento de Imóveis", 
+    offer_id: "4680825", 
+    entity: "PF | PJ", 
+    category: "Imóveis", 
+    info: "Entity, Event, Manager, Offer, RealEstate", 
+    link: "Box Financiamento" 
+  },
+  Cartão: { 
+    name: "Parcelamento com Cartão", 
+    offer_id: { staging: "4739764", production: "4739764" }, 
+    category: "Informática", 
+    product_id: "8", 
+    info: "Entity, Event, Manager, Offer", 
+    link: "Box Parcelamento" 
+  },
+  Vendedor: { 
+    name: "Parcelamento do vendedor VRental", 
+    offer_id: { staging: "4492361", production: "4492361" }, 
+    category: "Máquinas Amarelas", 
+    info: "Entity, Event, Manager, Offer", 
+    link: "Box Financiamento" 
+  },
+  AutoEquity: { 
+    name: "Auto Equity", 
+    offer_id: { staging: "4728101", production: "4728101" }, 
+    category: "Carros", 
+    product_id: "7", 
+    info: "Entity", 
+    link: "Banner" 
+  },
+  SeguroAuto: { 
+    name: "Seguro Auto", 
+    offer_id: { staging: "4728101", production: "4728101" }, 
+    category: "Carros", 
+    product_id: "9", 
+    info: "Entity", 
+    link: "Banner" 
+  },
 };
 
 const allFiles = import.meta.glob("/src/assets/sandbox/**/*.{jpg,jpeg,png,gif,asset.json}", { eager: true });
@@ -78,36 +135,40 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   const { logout, userId, token } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = Route.useSearch();
-  const currentFlow = FLOW_MAP[flowKey as any];
+  
+  const currentFlow = FLOW_MAP[flowKey as any] || FLOW_MAP["Carros"];
   const { userData } = useContext(UserDataContext) || {};
 
   // [SEGURANÇA]: Trava estrita contra loops de concorrência de renderização
   const hasInitialized = useRef(false);
   const isFetching = useRef(false);
 
-  const [pessoa, setPessoa] = useState<"PF" | "PJ">("PF");
-  const [categoria, setCategoria] = useState(currentFlow?.category?.split("|")[0].trim() || "Carros");
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [loading, setLoading] = useState(false);
   const [activeOffer, setActiveOffer] = useState<any>(null);
-  const [ambiente, setAmbiente] = useState("production");
+  
+  // [AMBIENTE]: Inicialização imediata síncrona para evitar race-condition no fetch inicial
+  const [ambiente, setAmbiente] = useState<"staging" | "production">(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem("sbx_environment") as "staging" | "production") || "production";
+    }
+    return "production";
+  });
   
   // [CONTROLE DE FALLBACK]: Estados de resiliência espelhados do Gateway
   const [fetchError, setFetchError] = useState<'TECHNICAL_INSTABILITY' | null>(null);
   const [countdown, setCountdown] = useState(5);
 
+  // Resolvendo dinamicamente o ID do upstream alvo baseado no escopo do ambiente reativo
+  const targetOfferId = ambiente === "production" ? currentFlow.offer_id.production : currentFlow.offer_id.staging;
+
   // [REDIRECIONAMENTO DINÂMICO]: Captura a URL de retorno preservando a origem
   const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sandbox";
 
-  useEffect(() => {
-    const stored = localStorage.getItem("sbx_environment");
-    if (stored) setAmbiente(stored);
-  }, []);
-
-  // [FETCH VISUAL]: Busca dados com proteção rígida de concorrência
+  // [FETCH VISUAL]: Busca dados com proteção rígida de concorrência baseada no ID resolvido
   useEffect(() => {
     // [GUARD CLAUSE]: Aborta imediatamente se já inicializado, buscando ou se houver erro terminal
-    if (hasInitialized.current || isFetching.current || fetchError || !currentFlow?.offer_id || !token) return;
+    if (hasInitialized.current || isFetching.current || fetchError || !targetOfferId || !token) return;
 
     const loadOffer = async () => {
       isFetching.current = true;
@@ -116,22 +177,28 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       setFetchError(null);
 
       try {
-        const data = await fetchOfferDetails(token, currentFlow.offer_id);
+        const data = await fetchOfferDetails(token, targetOfferId);
         setActiveOffer(data);
       } catch (error: any) {
         console.error("[OFFER_FETCH_ERROR]:", error);
 
-        // [PROPAGAÇÃO OBRIGATÓRIA]: Dispara telemetria de erro operacional do Hub
         logSystemError(token || "NO_TOKEN", {
           context: 'SANDBOX-OFFER-FETCH',
           message: error?.message || "Erro desconhecido na busca de oferta na sandbox",
-          details: error,
-          payload: { offer_id: currentFlow.offer_id },
+          details: {
+            name: error?.name || "Error",
+            message: error?.message,
+            stack: error?.stack
+          },
+          payload: { 
+            offer_id: targetOfferId,
+            flow_key: flowKey,
+            environment: ambiente
+          },
           visit_id: null,
           simulation_id: null
         });
 
-        // [ESTADO TERMINAL]: Trava o componente em visualização de erro
         setFetchError('TECHNICAL_INSTABILITY');
       } finally {
         setLoading(false);
@@ -140,7 +207,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     };
 
     loadOffer();
-  }, [currentFlow, token]);
+  }, [targetOfferId, token, ambiente]);
 
   // [UX FALLBACK]: Contador regressivo dinâmico para a Redirect URI
   useEffect(() => {
@@ -150,7 +217,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       if (countdown > 0) {
         timer = setTimeout(() => setCountdown(c => c - 1), 1000);
       } else {
-        // Redirecionamento suportando navegação externa ou interna
         if (dynamicReturnUri.startsWith("http")) {
           window.location.href = dynamicReturnUri;
         } else {
@@ -183,9 +249,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       search: {
         environment: ambiente,
         sbx_token: token,
-        offer_id: currentFlow.offer_id,
+        offer_id: targetOfferId,
         product_id: currentFlow.product_id,
-        // PRESERVA OS PARÂMETROS ORIGINAIS: Garante que o gateway não perca o flow nem o redirect_uri
         return_uri: window.location.pathname + window.location.search,
         utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
         utm_medium: "home",
@@ -195,32 +260,34 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   };
 
   // =========================================================================
-  // [VIEW 1]: Erro (Visual Consolidado do Gateway com Mensagem do Sandbox)
+  // [VIEW 1]: Erro (Visual Exato da Referência - Clean Layout)
   // =========================================================================
   if (fetchError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Inter'] p-6 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B300FF] mb-6"></div>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans',_sans-serif] p-6 text-center">
         
-        <h2 className="text-xl font-bold text-slate-800 mb-4">
+        <h2 className="text-[22px] font-bold text-[#0F2846] mb-5 tracking-tight">
           Erro de Carregamento
         </h2>
         
-        <p className="text-slate-500 mb-6 max-w-sm leading-relaxed">
+        <p className="text-[16px] text-[#5A6E85] mb-8">
           Esta oferta não foi encontrada ou não está disponível.
         </p>
         
-        <p className="text-sm text-slate-400 mb-6">Redirecionando em {countdown} segundos...</p>
+        <p className="text-[14px] text-[#8CA0B3] mb-8">
+          Redirecionando em {countdown} segundos...
+        </p>
         
         <button 
           onClick={() => {
             hasInitialized.current = false;
             window.location.reload();
           }}
-          className="text-sm text-[#B300FF] underline underline-offset-2 hover:opacity-80 font-medium"
+          className="text-[15px] font-semibold text-[#0F2846] underline underline-offset-4 decoration-1 hover:text-[#B300FF] hover:decoration-[#B300FF] transition-colors cursor-pointer border-none bg-transparent"
         >
           Tentar novamente
         </button>
+        
       </div>
     );
   }
@@ -275,18 +342,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
           </div>
         </div>
       </header>
-
-      {/* FILTROS E SELETORES */}
-      {(currentFlow.category.includes("|") || currentFlow.entity.includes("|")) && (
-        <div className="p-4 bg-white border-b border-border flex flex-row items-center justify-center gap-6">
-          {currentFlow.entity.includes("|") && (
-            <div className="flex gap-2">
-              <button onClick={() => setPessoa("PF")} className={`h-10 px-6 text-sm font-bold rounded-full border-2 ${pessoa === "PF" ? "bg-[var(--brand-primary)] text-white border-[var(--brand-primary)]" : "bg-white text-[var(--brand-primary)] border-[var(--brand-primary)]"}`}>PF</button>
-              <button onClick={() => setPessoa("PJ")} className={`h-10 px-6 text-sm font-bold rounded-full border-2 ${pessoa === "PJ" ? "bg-[var(--brand-primary)] text-white border-[var(--brand-primary)]" : "bg-white text-[var(--brand-primary)] border-[var(--brand-primary)]"}`}>PJ</button>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* BANNER PROMOCIONAL */}
       {currentFlow.link === "Banner" && (
