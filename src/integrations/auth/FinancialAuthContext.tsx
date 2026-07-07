@@ -99,17 +99,25 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     }
   };
 
-  // Função para deslogar (limpa state e storage corretamente)
+  // Função para deslogar (mantem ambiente, mas limpa sessão e força redirect)
   const logout = () => {
-    // 1. Removemos tudo agressivamente para garantir segurança máxima em apps financeiros
+    // 1. Resgate o que você NÃO quer perder antes de limpar
+    const ambienteAtual = localStorage.getItem("sbx_environment");
+
+    // 2. Agora sim, faça a limpeza agressiva da sessão
     localStorage.clear();
     sessionStorage.clear();
 
-    // 2. Reseta o estado para null
+    // 3. Restaure apenas o que deve sobreviver
+    if (ambienteAtual) {
+      localStorage.setItem("sbx_environment", ambienteAtual);
+    }
+
+    // 4. Reseta o estado para null
     setToken(null);
     setUserId(null);
     
-    // 3. Redireciona para a tela de login mantendo o redirect apenas se for intencional
+    // 5. Redireciona
     const currentPath = window.location.pathname + window.location.search;
     window.location.href = `/accounts/signin?redirect=${encodeURIComponent(currentPath)}`;
   };

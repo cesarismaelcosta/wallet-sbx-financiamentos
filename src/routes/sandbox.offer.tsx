@@ -421,31 +421,43 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
                     <span className="w-6 h-6 rounded-full border border-gray-800 flex items-center justify-center text-sm font-bold text-gray-800">$</span>
                     <h5 className="m-0 text-base font-bold">Esta oferta pode ser financiada</h5>
                   </div>
-                  <button 
-                    onClick={handleSimulacao} 
-                    disabled={loading}
-                    className="text-[var(--brand-primary)] font-bold text-base cursor-pointer hover:underline border-none bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                  <p className="text-sm text-gray-600 leading-relaxed mb-4">
+                    Faça uma simulação sem compromisso para conhecer nossas condições especiais de parcelamento e
+                    negocie com nossos especialistas uma proposta personalizada. Sujeito à análise de
+                    crédito.
+                  </p>
+                  <a
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (!loading) handleSimulacao();
+                    }}
+                    className="text-[var(--brand-primary)] font-bold text-base cursor-pointer hover:underline"
                   >
-                    {loading ? "Redirecionando..." : "Simular financiamento"}
-                  </button>
+                    {loading ? "Processando..." : "Simular financiamento"}
+                  </a>
                 </div>
               )}
               {currentFlow.link.includes("Parcelamento") && (
                 <div className="p-5 border border-gray-200 bg-white rounded-md shadow-sm">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-6 h-6 rounded-full border border-gray-800 flex items-center justify-center"><CreditCard size={14} className="text-gray-800" /></div>
+                    <div className="w-6 h-6 rounded-full border border-gray-800 flex items-center justify-center">
+                      <CreditCard size={14} className="text-gray-800" />
+                    </div>
                     <h5 className="m-0 text-base font-bold">Parcele suas compras em até 18x</h5>
                   </div>
                   <p className="text-sm text-gray-600 leading-relaxed mb-4">
-                    Para pagamentos de lotes até R$ 120.000,00 neste evento você pode utilizar seu cartão de crédito para pagar com toda a segurança da <strong>sbXPay</strong>.
+                    Para pagamentos de lotes até R$ 120.000,00 neste evento você pode utilizar seu cartão de crédito
+                    para pagar com toda a segurança da <strong>sbXPay</strong>.
                   </p>
-                  <button 
-                    onClick={handleSimulacao} 
-                    disabled={loading}
-                    className="text-[var(--brand-primary)] font-bold text-base cursor-pointer hover:underline border-none bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                  <a
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (!loading) handleSimulacao();
+                    }}
+                    className="text-[var(--brand-primary)] font-bold text-base cursor-pointer hover:underline"
                   >
-                    {loading ? "Redirecionando..." : "Simular parcelamento"}
-                  </button>
+                    {loading ? "Processando..." : "Simular parcelamento"}
+                  </a>
                 </div>
               )}
             </div>

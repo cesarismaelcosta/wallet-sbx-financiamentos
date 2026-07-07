@@ -48,12 +48,15 @@ const SandboxHome = () => {
   );
 
   // Sincroniza a escolha visual com o cofre do navegador e DERRUBA a sessão
-  const handleAmbienteChange = (novoAmbiente: "staging" | "production") => {
+  const handleAmbienteChange = async (novoAmbiente: "staging" | "production") => {
     if (ambiente === novoAmbiente) return;
 
-    setAmbiente(novoAmbiente);
+    // 1. Atualiza apenas o Storage (NÃO chama setAmbiente para não forçar re-render agora)
     localStorage.setItem("sbx_environment", novoAmbiente);
-    logout();
+
+    // 2. Chama o seu logout oficial do contexto para limpar a sessão
+    // Se o seu logout for uma Promise, o await garante que ele termine
+    await logout(); 
   };
 
   // -----------------------------------------------------------------------
