@@ -1,66 +1,159 @@
 /**
  * @fileoverview Serviço: Offer Details
- * Busca os detalhes da oferta através da Edge Function sbx-offer.
- * Centraliza a chamada para garantir compliance e segurança.
+ * * =========================================================================
+ * [ARQUITETURA & CLEAN ARCHITECTURE]
+ * =========================================================================
+ * Busca os dados consolidados da oferta através da Edge Function sbx-offer.
+ * Atua na camada de Gateway de Serviços (Data Provider) do Hub Financeiro.
  * * [RESPONSABILIDADES]:
- * 1. Identidade: O front-end envia o sessionToken (JWT Próprio) no header customizado,
- * mantendo o espelho exato da autenticação de user.ts e protegendo os tokens reais.
- * 2. Contexto: O `offer_id` é enviado via Query Params, desacoplando a oferta da sessão.
- * 3. Gateway Bypass: Utiliza a Anon Key do Supabase para transpor o Kong Gateway.
- * 4. Delegação de Rota: Erros 401 lançam exceções, abortam o fluxo local e 
- * ativam o Protocolo de Amnésia global.
- * * @author Cesar Ismael Pereira da Costa
- * @version 2.1.0 (Alinhamento de Autenticação x-session-token)
+ * 1. Interface (Type Safety): Define o contrato BFFOfferDetails para tipagem forte.
+ * 2. Gateway Bypass: Utiliza a Anon Key para transpor o Kong Gateway.
+ * 3. Transparência: Propaga mensagens brutas do upstream (Superbid) para logs.
+ * 4. Segurança: Erros 401 disparam o Protocolo de Amnésia global.
  */
 
-import type { Offer, Manager, Event, Seller } from "../components/shared/types";
+// =========================================================================
+// [CONTRATO DE DADOS]: Interface de Reidratação do BFF
+// =========================================================================
+export interface BFFOfferPhoto {
+  highlight: boolean;
+  link: string;
+  thumbnail?: string;
+  file_name?: string;
+  type: string;
+  content_type: string;
+}
 
-export const fetchOfferDetails = async (
-  sessionToken: string, 
-  offerId: string | number
-): Promise<{ offer: Offer; manager: Manager; event: Event; seller: Seller }> => {
-  
+export interface BFFOfferDetails {
+  offer: {
+    offer_id: string;
+    lot_number: string | number;
+    offer_description: string;
+    offer_detailed_description: string;
+    offer_value: number;
+    category_id: number;
+    category: string;
+    offer_status: string;
+    sale_status: string;
+    end_date: string;
+    photos: BFFOfferPhoto[];
+  };
+  manager: {
+    manager_id: number;
+    manager_name: string;
+  };
+  event: {
+    event_id: string;
+    event_description: string;
+    event_start_date: string;
+    event_end_date: string;
+    modality_id: number | null;
+    status_id: number | null;
+    event_short_description: string;
+    event_full_description: string;
+    event_image_url: string;
+  };
+  seller: {
+    seller_id: string;
+    legal_name: string;
+    trade_name: string;
+    economic_group: string;
+  };
+}
+
+// =========================================================================
+// [SERVIÇO CORE]: Abstração de Chamada HTTP e Telemetria
+// =========================================================================
+
+/**
+ * Busca os detalhes de uma oferta específica no servidor.
+ * @param sessionToken O JWT Próprio de sessão gerado pelo backend.
+ * @param offerId O ID do lote/oferta na Superbid.
+ */
+export const fetchOfferDetails = async (sessionToken: string, offerId: string): Promise<BFFOfferDetails> => {
+  // [STATE]: Resgate de variáveis de ambiente e preferências de armazenamento local
+  // [SSR SAFEGUARD]: Só acessa o localStorage se estiver rodando no navegador
   const isBrowser = typeof window !== 'undefined';
   const storedAmbiente = isBrowser ? (localStorage.getItem("sbx_environment") || "stage") : "stage";
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ldzutiojmcawhwdhojlo.supabase.co';
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  // DEBUG: Validação do payload e do id da oferta antes da chamada
-  console.log("DEBUG_OFFER_SERVICE:", { 
-    url: supabaseUrl, 
+  const url = `${supabaseUrl}/functions/v1/sbx-offer?offer_id=${offerId}`;
+
+  // -----------------------------------------------------------------------
+  // [TELEMETRIA]: Log Operacional de Diagnóstico Inicial
+  // -----------------------------------------------------------------------
+  console.log("DEBUG_OFFER_SERVICE: ", {
+    url: supabaseUrl,
     offerId: offerId,
-    hasKey: !!supabaseAnonKey, 
-    token: sessionToken ? "presente" : "ausente" 
+    hasKey: !!supabaseAnonKey,
+    token: sessionToken ? 'presente' : 'ausente',
+    env: storedAmbiente
   });
-  
-  // A URL embute o offer_id como parâmetro (Contexto)
-  const response = await fetch(`${supabaseUrl}/functions/v1/sbx-offer?offer_id=${offerId}`, {
+
+  const options: RequestInit = {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${supabaseAnonKey}`,
       "apikey": supabaseAnonKey,
-      "x-session-token": sessionToken, // Identidade (Alinhado com fetchMyProfile)
+      "x-session-token": sessionToken,
       "x-sbx-env": storedAmbiente,
       "Content-Type": "application/json",
       "Accept": "application/json"
-    },
-  });
+    }
+  };
 
-  // Tratamento de Sessão Inválida ou Expirada
-  if (response.status === 401 || response.status === 403) {
-    window.dispatchEvent(new CustomEvent('session_expired'));
-    throw new Error("OFFER_ACCESS_DENIED");
-  }
+  try {
+    // [NETWORK]: Chamada segura para a Edge Function via API REST
+    const response = await fetch(url, options);
 
-  // Tratamento de Oferta não encontrada / encerrada
-  if (response.status === 410) {
-    throw new Error("OFFER_EXPIRED");
-  }
+    if (response.status === 401) {
+      // -----------------------------------------------------------------------
+      // [SECURITY]: Gatilho do Protocolo de Amnésia
+      // -----------------------------------------------------------------------
+      if (isBrowser) {
+        window.dispatchEvent(new CustomEvent('session_expired'));
+      }
+      throw new Error("SESSION_EXPIRED");
+    }
 
-  // Falha Genérica / Upstream
-  if (!response.ok) {
-    throw new Error("OFFER_API_ERROR");
+    // -----------------------------------------------------------------------
+    // [INTERCEPTAÇÃO DE ERRO]: Tratamento e Extração de Payload do Upstream
+    // -----------------------------------------------------------------------
+    if (!response.ok) {
+      let backendReason = "OFFER_API_ERROR";
+      
+      try {
+        // Tenta ler o corpo bruto enviado pela Edge Function
+        const textError = await response.text();
+        
+        try {
+          // Tenta fazer o parse estruturado caso seja um JSON de erro do Supabase
+          const jsonError = JSON.parse(textError);
+          // Prioriza as mensagens fatais detalhadas vindas do backend
+          backendReason = jsonError?.event_message || jsonError?.error || jsonError?.message || textError;
+        } catch {
+          // Fallback para texto bruto
+          backendReason = textError || `HTTP ${response.status} ${response.statusText}`;
+        }
+      } catch (parseError) {
+        backendReason = `HTTP ${response.status} (Falha crítica ao ler corpo da resposta)`;
+      }
+
+      // [CRITICAL FIX]: Interrompe a execução e lança o erro detalhado da infraestrutura
+      throw new Error(backendReason);
+    }
+
+    // [DATA]: Retorna os dados hidratados garantindo a tipagem do contrato BFF
+    return await response.json();
+    
+  } catch (error: any) {
+    // Se for o nosso erro tratado (ex: SESSION_EXPIRED ou o throw da infra), propaga direto
+    if (error.message && error.message !== "Failed to fetch") {
+      throw error;
+    }
+    
+    // [FALLBACK]: Erro genérico (ex: CORS, queda de conexão)
+    throw new Error(`OFFER_API_ERROR: ${error.message || "Erro desconhecido de comunicação física"}`);
   }
-  
-  return response.json();
 };

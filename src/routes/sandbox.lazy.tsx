@@ -136,9 +136,9 @@ export function SandboxLayout() {
         <div className="w-full max-w-[400px] bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
           <div className="flex justify-center mb-6"><WalletLogo size="md" /></div>
           
-          <h1 className="text-lg font-black text-slate-800 mb-2 tracking-tight">Ambiente de Simulação</h1>
+          <h1 className="text-lg font-semibold text-slate-600 mb-2 tracking-tight">Jornadas de Simulação</h1>
           <p className="text-sm text-slate-500 mb-8">
-            Para onde os dados gerados nesta sessão devem ser apontados?
+            Selecione o ambiente para carregar as ofertas. O login e a lógica de simulação seguem o fluxo real que está sendo criado para cada produto.
           </p>
 
           <div className="flex bg-gray-100 rounded-full p-1 mb-8 border border-gray-200">
@@ -148,7 +148,7 @@ export function SandboxLayout() {
                 envPreLogin === "staging" ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm" : "text-gray-400 border-transparent hover:text-gray-600"
               }`}
             >
-              STAGE (HML)
+              STAGE
             </button>
             <button
               onClick={() => setEnvPreLogin("production")}
@@ -156,7 +156,7 @@ export function SandboxLayout() {
                 envPreLogin === "production" ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm" : "text-gray-400 border-transparent hover:text-gray-600"
               }`}
             >
-              PRODUÇÃO (PRD)
+              PRODUÇÃO
             </button>
           </div>
 

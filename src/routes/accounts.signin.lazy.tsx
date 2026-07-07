@@ -1,86 +1,58 @@
 /**
  * @fileoverview Componente: CustomLogin (Rota: /accounts/signin)
- * @description Interface de autenticação local.
- * * * [ARQUITETURA DE SEGURANÇA]:
- * O componente atua como um cliente burro (Dumb Component). Ele desconhece
- * as regras de JWT e Clock Drift. Sua única função é coletar credenciais,
- * disparar o serviço de autenticação e injetar o token resultante no Contexto Global.
- * * * [RESPONSABILIDADES]:
- * 1. Coleta: Capturar credenciais e definir o ambiente alvo ('staging' ou 'production').
- * 2. Segurança: Delegar a autenticação real para o serviço (auth.ts).
- * 3. Sessão: Persistir o session_token (JWT Próprio) via FinancialAuthContext.
- * 4. Roteamento: Redirecionar o usuário de forma reativa e segura.
+ * @description Interface de autenticação local com validação estrita.
  */
 
-import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import React, { useState, useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react"; 
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { jwtDecode } from "jwt-decode";
 
 // =========================================================================
-// [TYPES]: Tipagens e Interfaces
+// [HELPERS]: Validação e Formatação de Documentos (Mantidos)
 // =========================================================================
-type AccountsSearch = {
-  redirect_uri?: string;
-  redirect?: string;
-  response_type?: string;
-  client_id?: string;
-  portal_id?: string;
-  [key: string]: any; 
-};
+const isCPF = (str: string) => /^\d{11}$/.test(str.replace(/\D/g, ''));
+const isCNPJ = (str: string) => /^\d{14}$/.test(str.replace(/\D/g, ''));
+
+const formatCPF = (val: string) => 
+  val.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})/, '$1-$2').slice(0, 14);
+
+const formatCNPJ = (val: string) => 
+  val.replace(/\D/g, '').replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d{1,2})/, '$1-$2').slice(0, 18);
 
 export const Route = createLazyFileRoute('/accounts/signin')({
   component: CustomLogin,
 });
 
 export function CustomLogin() {
-  // -----------------------------------------------------------------------
-  // [CONTEXT]: Integração com Autenticação e Roteamento
-  // -----------------------------------------------------------------------
   const { setSession, token } = useFinancialAuth();
   const navigate = useNavigate();
-  const searchParams = useSearch({ strict: false }) as AccountsSearch;
   
-  // -----------------------------------------------------------------------
-  // [STATE]: Controles locais do formulário e UI
-  // -----------------------------------------------------------------------
   const [tipoPessoa, setTipoPessoa] = useState<"F" | "J">("F");
-  const [ambiente, setAmbiente] = useState<"staging" | "production">("production"); 
-  
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
-  const [isLoginFocused, setIsLoginFocused] = useState(false);
-  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   
   const [loginError, setLoginError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
+  
+  const [ambienteAtual] = useState(() => 
+    typeof window !== "undefined" ? localStorage.getItem("sbx_environment") || "production" : "production"
+  );
 
-  // -----------------------------------------------------------------------
-  // [BUSINESS LOGIC]: Definição de Rota de Destino
-  // -----------------------------------------------------------------------
   const [redirectUri, setRedirectUri] = useState<string | null>(null);
 
   useEffect(() => {
-    // Captura a URL real apenas no cliente após a montagem
     const params = new URLSearchParams(window.location.search);
     const target = params.get("redirect") || params.get("redirect_uri") || "/sandbox";
     setRedirectUri(target);
   }, []);
 
-  // -----------------------------------------------------------------------
-  // [ROUTING]: Navegação Reativa (Fim da Race Condition)
-  // -----------------------------------------------------------------------
   useEffect(() => {
-    // Se o token já existe no contexto global e temos a rota de destino, navegamos.
-    // Isso garante que o redirecionamento SÓ ocorra quando o Contexto estiver 100% atualizado.
     if (token && redirectUri) {
       if (redirectUri.startsWith('http')) {
         window.location.href = redirectUri;
@@ -90,187 +62,141 @@ export function CustomLogin() {
     }
   }, [token, redirectUri, navigate]);
 
-  // =========================================================================
-  // [ACTION]: Submissão de Autenticação
-  // =========================================================================
   const handleRealLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(""); setPasswordError(""); setGeneralError("");
 
-    if (!login.trim() || !password.trim()) {
-      if (!login.trim()) setLoginError("Campo obrigatório");
-      if (!password.trim()) setPasswordError("A senha deve ser informada");
-      return;
+    let hasError = false;
+
+    if (!login.trim()) {
+      setLoginError(tipoPessoa === "F" ? "O e-mail ou login devem ser informados" : "O CNPJ ou login devem ser informados");
+      hasError = true;
     }
+    if (!password.trim()) {
+      setPasswordError("A senha deve ser informada");
+      hasError = true;
+    }
+    
+    const cleanLogin = login.replace(/\D/g, '');
+    if (cleanLogin.length > 0) {
+      if (tipoPessoa === "F" && cleanLogin.length === 11 && !isCPF(cleanLogin)) {
+        setLoginError("CPF inválido");
+        hasError = true;
+      } else if (tipoPessoa === "J" && cleanLogin.length === 14 && !isCNPJ(cleanLogin)) {
+        setLoginError("CNPJ inválido");
+        hasError = true;
+      }
+    }
+
+    if (hasError) return;
 
     setIsLoading(true);
 
-    // [NETWORK]: Delegação da validação para o Serviço
-    const response = await autenticateWalletsbX(login, password, ambiente);
+    const env = localStorage.getItem("sbx_environment") as "staging" | "production" || "production";
+    const response = await autenticateWalletsbX(login, password, env);
 
     if (response?.success) {
-      // [STATE]: Persistência de ambiente de testes
-      localStorage.setItem('sbx_environment', ambiente); 
-      
-      console.log("DEBUG API Response:", response);
-      
-      // [SECURITY]: O auth.ts já salvou silenciosamente os dados de tempo (Clock Drift)
-      // no localStorage usando o nosso JWT. Aqui nós só passamos o token e o userId para o Contexto.
       setSession(response.token, response.userId);
-
     } else {
-      // [ERROR HANDLING]: Exibição de falhas controladas do servidor
-      setGeneralError(response?.message || "Login ou senha inválidos.");
+      setPasswordError("Usuário ou senha inválidos.");
       setIsLoading(false);
     }
   };
 
   const loginLabelText = tipoPessoa === "F" ? "E-mail, login ou CPF" : "CNPJ ou login";
 
-  // =========================================================================
-  // [UI/UX]: Renderização da Interface
-  // =========================================================================
   return (
-    <div className="min-h-screen flex items-start justify-center pt-24 sm:pt-32 bg-gray-50 px-4 font-['Plus_Jakarta_Sans']">
+    <div className="min-h-screen flex items-start justify-center pt-24 sm:pt-32 bg-gray-50 px-4 font-sans">
       <div className="w-full max-w-[440px] bg-white rounded-xl shadow-sm border border-gray-100 p-8 sm:p-10">
         
-        <div className="flex justify-start mb-6">
+        <div className="flex justify-between items-center mb-6">
           <WalletLogo size="md" withTagline />
+          {ambienteAtual === 'staging' && (
+            <span className="text-[10px] uppercase font-bold px-2 py-1 rounded-full border bg-red-50 text-red-600 border-red-200">
+              STAGE
+            </span>
+          )}
         </div>
 
-        {/* ---------------------------------------------------------------------------
-          [UI]: SELETOR DE AMBIENTE 
-          --------------------------------------------------------------------------- */}
-        <div className="mb-6 p-1 bg-gray-100 rounded-full flex gap-1 border border-gray-200">
-          <button
-            type="button"
-            onClick={() => setAmbiente("staging")}
-            className={`flex-1 py-2 text-xs font-bold rounded-full transition-all border ${
-              ambiente === "staging" 
-                ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm"
-                : "text-gray-500 hover:text-gray-700 border-transparent"
-            }`}
-          >
-            STAGE
-          </button>
-          <button
-            type="button"
-            onClick={() => setAmbiente("production")}
-            className={`flex-1 py-2 text-xs font-bold rounded-full transition-all border ${
-              ambiente === "production" 
-                ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm"
-                : "text-gray-500 hover:text-gray-700 border-transparent"
-            }`}
-          >
-            PRODUÇÃO
-          </button>
-        </div>
-
-        {/* ---------------------------------------------------------------------------
-          [UI]: FORMULÁRIO DE LOGIN
-          --------------------------------------------------------------------------- */}
-        <form onSubmit={handleRealLogin} className="flex flex-col gap-5">
-          
-          <input type="hidden" name="personType" value={tipoPessoa} />
-
+        <form onSubmit={handleRealLogin} className="flex flex-col gap-5" noValidate>
+          {/* [UI/UX]: Tab Switcher Minimalista (Com outline-none para remover o quadrado) */}
           <div className="flex w-full border-b border-gray-200 mb-2">
             <button
               type="button"
-              onClick={() => { setTipoPessoa("F"); setLogin(""); setLoginError(""); setPasswordError(""); setGeneralError(""); }}
-              className={`flex-1 text-sm font-semibold py-3 transition-all ${tipoPessoa === "F" ? "text-gray-900 border-b-2 border-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+              onClick={() => { setTipoPessoa("F"); setLogin(""); setLoginError(""); setPasswordError(""); }}
+              className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none focus:outline-none ${
+                tipoPessoa === "F" 
+                ? "text-gray-900 border-gray-900" 
+                : "text-gray-400 border-transparent hover:text-gray-600"
+              }`}
             >
               Pessoa Física
             </button>
             <button
               type="button"
-              onClick={() => { setTipoPessoa("J"); setLogin(""); setLoginError(""); setPasswordError(""); setGeneralError(""); }}
-              className={`flex-1 text-sm font-semibold py-3 transition-all ${tipoPessoa === "J" ? "text-gray-900 border-b-2 border-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+              onClick={() => { setTipoPessoa("J"); setLogin(""); setLoginError(""); setPasswordError(""); }}
+              className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none focus:outline-none ${
+                tipoPessoa === "J" 
+                ? "text-gray-900 border-gray-900" 
+                : "text-gray-400 border-transparent hover:text-gray-600"
+              }`}
             >
               Pessoa Jurídica
             </button>
           </div>
 
           {generalError && (
-            <div className="bg-[#FEF2F2] text-[#C13535] text-sm p-3 rounded border border-[#C13535]/20 text-center font-medium">
+            <div className="bg-red-50 text-red-600 text-sm p-3 rounded border border-red-100 text-center font-medium">
               {generalError}
             </div>
           )}
 
-          {/* [UI]: CAMPO DE LOGIN */}
           <div className="flex flex-col gap-1.5">
-            <div className="relative">
-              <input
-                type="text"
-                id="login"
-                name="login"
-                autoComplete="on"
-                value={login}
-                onFocus={() => setIsLoginFocused(true)}
-                onBlur={() => setIsLoginFocused(false)}
-                onChange={(e) => { setLogin(e.target.value); if (loginError) setLoginError(""); }}
-                className={`peer w-full h-12 border rounded-full px-5 pt-4 pb-0 text-sm text-gray-900 focus:outline-none focus:ring-1 transition-colors bg-transparent placeholder-transparent ${
-                  loginError ? "border-[#C13535] focus:border-[#C13535] focus:ring-[#C13535]" : "border-gray-300 focus:border-[#B400FF] focus:ring-[#B400FF]"
-                }`}
-                placeholder={loginLabelText}
-              />
-              <label 
-                htmlFor="login"
-                className={`absolute left-5 transition-all ${
-                  (isLoginFocused || login) 
-                    ? "top-1.5 text-[10px] text-[#B400FF]" 
-                    : "top-3.5 text-sm text-gray-500"
-                } ${loginError ? "!text-[#C13535]" : ""}`}
-              >
-                {loginLabelText}
-              </label>
-            </div>
-            {loginError && <span className="text-[#C13535] text-[11px] pl-5 font-medium">{loginError}</span>}
+            <input
+              type="text"
+              value={login}
+              onChange={(e) => {
+                const rawValue = e.target.value;
+                const isNumeric = /^\d+$/.test(rawValue.replace(/\D/g, ''));
+                if (isNumeric) {
+                  setLogin(tipoPessoa === "F" ? formatCPF(rawValue) : formatCNPJ(rawValue));
+                } else {
+                  setLogin(rawValue);
+                }
+                if (loginError) setLoginError("");
+              }}
+              className={`w-full h-12 border rounded-full px-5 text-sm outline-none transition-all ${
+                loginError ? "border-[#C13535] focus:ring-1 focus:ring-[#C13535]" : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
+              }`}
+              placeholder={loginLabelText}
+            />
+            {loginError && <span className="text-[#C13535] text-[11px] pl-5 font-medium mt-1">{loginError}</span>}
           </div>
 
-          {/* [UI]: CAMPO DE SENHA */}
-          <div className="flex flex-col gap-1.5">
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                id="password"
-                name="password"
-                autoComplete="on"
-                maxLength={20}
-                value={password}
-                onFocus={() => setIsPasswordFocused(true)}
-                onBlur={() => setIsPasswordFocused(false)}
-                onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(""); }}
-                className={`peer w-full h-12 border rounded-full pl-5 pr-12 pt-4 pb-0 text-sm text-gray-900 focus:outline-none focus:ring-1 transition-colors bg-transparent placeholder-transparent ${
-                  passwordError ? "border-[#C13535] focus:border-[#C13535] focus:ring-[#C13535]" : "border-gray-300 focus:border-[#B400FF] focus:ring-[#B400FF]"
-                }`}
-                placeholder="Senha"
-              />
-              <label 
-                htmlFor="password"
-                className={`absolute left-5 transition-all ${
-                  (isPasswordFocused || password) 
-                    ? "top-1.5 text-[10px] text-[#B400FF]" 
-                    : "top-3.5 text-sm text-gray-500"
-                } ${passwordError ? "!text-[#C13535]" : ""}`}
-              >
-                Senha
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600 outline-none focus:outline-none"
-              >
-                {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
-              </button>
-            </div>
-            {passwordError && <span className="text-[#C13535] text-[11px] pl-5 font-medium">{passwordError}</span>}
+          <div className="relative flex flex-col gap-1.5">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(""); }}
+              className={`w-full h-12 border rounded-full pl-5 pr-12 text-sm outline-none transition-all ${
+                passwordError ? "border-[#C13535] focus:ring-1 focus:ring-[#C13535]" : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
+              }`}
+              placeholder="Senha"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-3.5 text-gray-400 hover:text-gray-600 outline-none focus:outline-none"
+            >
+              {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+            </button>
+            {passwordError && <span className="text-[#C13535] text-[11px] pl-5 font-medium mt-1">{passwordError}</span>}
           </div>
 
-          {/* [UI]: SUBMIT */}
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full h-12 bg-[#B400FF] hover:bg-[#9a00db] text-white font-semibold rounded-full transition-colors flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed mt-2 text-base"
+            className="w-full h-12 bg-[#B400FF] hover:bg-[#9a00db] text-white font-semibold rounded-full transition-colors disabled:opacity-70 mt-2"
           >
             {isLoading ? "Validando..." : "Entrar"}
           </button>

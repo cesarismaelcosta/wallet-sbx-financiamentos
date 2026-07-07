@@ -73,7 +73,7 @@ export async function callOrchestrator(payload: any, method: "GET" | "POST" = "P
     },
   };
 
-  console.log(`[Gateway] Preparando chamada para ${method} ${url} com payload:`, payload);
+  console.log(`[gateway.ts | callOrchestrator] Preparando chamada para ${method} ${url} com payload:`, payload);
 
   if (method === "POST") options.body = JSON.stringify(payload);
 
@@ -90,13 +90,37 @@ export async function callOrchestrator(payload: any, method: "GET" | "POST" = "P
 
   const response = await fetch(finalUrl, options);
 
+  /**
+   * [TRATAMENTO DE ERRO: Normalização]
+   * -------------------------------------------------------------------------
+   * [CONTEXTO]: Valida a resposta HTTP. Se falhar, tenta extrair a mensagem 
+   * legível do servidor antes de interromper o fluxo.
+   * [RESPONSABILIDADE]: Converter erros de rede/servidor em erros ricos (enriquecidos) 
+   * para permitir log de diagnóstico detalhado no frontend e monitoramento externo.
+   */
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[Gateway] Erro HTTP ${response.status}:`, errorText);
-    throw new Error(`Erro na comunicação com o Gateway: ${response.status}`);
+    
+    // Tenta decodificar o corpo do erro como JSON; fallback para texto simples.
+    // Capturas o payload de erro como um objeto puro
+    const errorData = await response.json().catch(() => ({ 
+      error: "Erro de parsing no Gateway", 
+      details: "O servidor retornou um erro não estruturado" 
+    }));
+
+    console.error(`[gateway.ts | callOrchestrator] Erro HTTP ${response.status}:`, errorData);
+
+    // NÃO crie uma instância de Error. 
+    // Lance um objeto simples. Isso impede que qualquer camada 
+    // superior "limpe" os dados ao tentar acessar .message
+    throw {
+        message: errorData?.error || errorData?.message || `Erro: ${response.status}`,
+        code: 'GATEWAY_ERROR',
+        status: response.status,
+        response: errorData
+    };
   }
 
-  console.log(`[Gateway] Retorno ${method} ${url} com payload:`, payload);
+  console.log(`[gateway.ts | callOrchestrator] Retorno ${method} ${url} com payload:`, payload);
 
   return response.json();
 }
@@ -115,7 +139,7 @@ export async function callSimulation(
 ) {
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-gateway`;
 
-  console.log("gateway payload:", payload);
+  console.log(`[gateway.ts | callSimulation] Preparando chamada para ${method} ${url} com payload:`, payload);
 
   // CAPTURA DO TOKEN PARA A TRAVA DE SEGURANÇA
   const sessionToken = getSessionToken();
@@ -151,7 +175,7 @@ export async function callSimulation(
       details: "O servidor retornou um erro não estruturado" 
     }));
 
-    console.error(`[gateway.ts] Erro HTTP ${response.status}:`, errorData);
+    console.error(`[gateway.ts | callSimulation] Erro HTTP ${response.status}:`, errorData);
 
     // NÃO crie uma instância de Error. 
     // Lance um objeto simples. Isso impede que qualquer camada 
@@ -164,7 +188,7 @@ export async function callSimulation(
     };
   }
 
-  console.log(`[gateway.ts] Retorno ${method} ${url} com payload:`, payload);
+  console.log(`[gateway.ts | callSimulation] Retorno ${method} ${url} com payload:`, payload);
 
   return response.json();
   

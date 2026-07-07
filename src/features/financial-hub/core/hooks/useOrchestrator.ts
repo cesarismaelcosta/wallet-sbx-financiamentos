@@ -177,7 +177,7 @@ export function useOrchestratorHydration(visitId: string | null, visitUpdateId?:
         setError(null);
       })
       .catch((err) => {
-        console.error(`❌ [Hydration Pipeline] Erro crítico para visita [${visitId}]:`, err);
+        console.error(`❌ [useOrchestrator.ts | useOrchestratorHydration] Erro crítico para visita [${visitId}]:`, err);
         setError(err.message || "Falha na resolução do contrato no Orchestrator.");
       })
       .finally(() => setLoading(false));
@@ -222,7 +222,7 @@ export const orchestrateNavigation = async (
     },
   };
 
-  console.log("🚀 [Navigation Pipeline] Payload enviado para análise de roteamento:", JSON.stringify(orchestratorPayload, null, 2));
+  console.log("🚀 [useOrchestrator.ts | orchestrateNavigation] Payload enviado para análise de roteamento:", JSON.stringify(orchestratorPayload, null, 2));
 
   try {
     // 3. Transmissão Segura
@@ -237,17 +237,17 @@ export const orchestrateNavigation = async (
       // Se o backend ordenou ficar na mesma página (ex: simulação multipassos no mesmo componente),
       // fazemos uma injeção silenciosa dos novos parâmetros na URL, preservando o estado vivo do React.
       if (targetPath === currentPath) {
-        console.warn("[Navigation Pipeline] Destino idêntico à origem. Executando ReplaceState silencioso para hidratar URL.");
+        console.warn("[useOrchestrator.ts | orchestrateNavigation] Destino idêntico à origem. Executando ReplaceState silencioso para hidratar URL.");
         window.history.replaceState({}, "", data.url);
       } else {
         // Se a rota for efetivamente nova, repassamos o controle para o navegador (Hard Redirect).
         window.location.href = data.url;
       }
     } else {
-      console.warn("⚠️ [Navigation Pipeline] Backend processou o payload, mas reteve a URL de destino.");
+      console.warn("⚠️ [useOrchestrator.ts | orchestrateNavigation] Backend processou o payload, mas reteve a URL de destino.");
     }
   } catch (err) {
-    console.error("❌ [Navigation Pipeline] Aborto crítico no fluxo de orquestração:", err);
+    console.error("❌ [useOrchestrator.ts | orchestrateNavigation] Aborto crítico no fluxo de orquestração:", err);
     throw err;
   }
 };

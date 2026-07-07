@@ -6,7 +6,7 @@
  * Ponto de entrada do ambiente de homologação e testes do Financial Hub.
  * * [Responsabilidades]:
  * 1. Navegação Baseada em Fluxos: Mapeia as jornadas (Cartão, Veículos, Seguro, etc.).
- * 2. Controle de Ambiente Reativo: Permite alternar a variável de ambiente (HML/PRD) 
+ * 2. Controle de Ambiente Reativo: Permite alternar a variável de ambiente (STG/PRD) 
  * no localStorage em tempo real, sem necessidade de reautenticação.
  * 3. Gestão de Sessão: Exibe os dados do utilizador logado e permite o logout.
  */
@@ -61,7 +61,14 @@ const SandboxHome = () => {
   const handleProductClick = async (route: string, flowKey?: string) => {
     setLoading(true);
     try {
-      await navigate({ to: route, search: { flow: flowKey } });
+      // [REDIRECT_URI]: Passando o path atual para que o /offer e o Gateway saibam para onde voltar
+      await navigate({ 
+        to: route, 
+        search: { 
+          flow: flowKey,
+          redirect_uri: window.location.pathname 
+        } as any 
+      });
     } catch (error) {
       console.error("Erro na navegação:", error);
       setLoading(false);

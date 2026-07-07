@@ -44,6 +44,7 @@ export const Route = createLazyFileRoute("/financialGatewayEntry")({
     sbx_token: search.sbx_token as string | undefined,
     offer_id: search.offer_id as string | undefined,
     product_id: search.product_id as string | undefined,
+    return_uri: search.return_uri as string | undefined,
     utm_source: search.utm_source as string | undefined,      
     utm_medium: search.utm_medium as string | undefined,      
     utm_campaign: search.utm_campaign as string | undefined, 
@@ -59,16 +60,17 @@ export function FinancialEntry() {
   const auth = useFinancialAuth();
   const navigate = useNavigate();
   
-  // [SEGURANÇA]: Cadeado para evitar execução duplicada (React 18 Strict Mode)
+  // [SEGURANÇA]: Cadeado para evitar execução duplicada
   const hasInitialized = useRef(false);
+  // [TRAVA DE LOOP]: Bloqueador de chamadas concorrentes ou repetidas
+  const isFetching = useRef(false);
 
   // [STATE]: Estados de UX e Controle de Fluxo
   const [statusText, setStatusText] = useState("Preparando simulação...");
-  // [UX]: Estado unificado de erro para resiliência do Gateway
   const [gatewayError, setGatewayError] = useState<'OFFER_EXPIRED' | 'TECHNICAL_INSTABILITY' | 'AUTH_EXPIRED' | null>(null);
   const [countdown, setCountdown] = useState(5);
 
-  // [OTIMIZAÇÃO]: Extração de primitivos para evitar loop infinito de re-renderização
+  // [OTIMIZAÇÃO]: Extração de primitivos
   const searchEnv = search.environment;
   const searchToken = search.sbx_token;
   const searchOfferId = search.offer_id;
@@ -81,20 +83,19 @@ export function FinancialEntry() {
   // [CORE]: Orquestração e Validação de Dados
   // -----------------------------------------------------------------------
   useEffect(() => {
-    // 1. Aguarda o Contexto terminar de ler o localStorage
-    if (auth.isLoading) return;
-
-    // 2. Trava de segurança: impede o disparo duplo da simulação
-    if (hasInitialized.current) return;
+    // [GUARD CLAUSE]: Bloqueio estrito contra loops. Se já houver erro, para imediatamente.
+    if (auth.isLoading || hasInitialized.current || isFetching.current || gatewayError) return;
     
     const bootstrapContext = async () => {
+      // [TRAVA DE FLUXO]: Ativa bloqueio de novas chamadas
+      isFetching.current = true;
       hasInitialized.current = true;
       
       const currentEnvironment = searchEnv;
       const activeToken = searchToken || auth.token;
 
       if (!activeToken) {
-        setStatusText("Redirecionando para login da Wallet sbX...");
+        setStatusText("[financialGatewayEntryLazy.lazy.tsx] Redirecionando para login da Wallet sbX...");
         navigate({ to: "/login" });
         return;
       }
@@ -103,7 +104,6 @@ export function FinancialEntry() {
         auth.setSession(searchToken);
       }
 
-      // Variáveis declaradas FORA do try para o catch enxergá-las
       let userProfile = null;
       let offerData: any = null;
 
@@ -116,13 +116,6 @@ export function FinancialEntry() {
           offerData = await fetchOfferDetails(activeToken, searchOfferId);
         }
 
-        const interactionContext: InteractionContext = {
-          utm_source: searchUtmSource,
-          utm_medium: searchUtmMedium,
-          utm_campaign: searchUtmCampaign,
-          origin_url: window.location.href, 
-        };
-
         const payload: SimulationPayload = {
           action: "SIMULATE",
           timestamp: new Date().toISOString(),
@@ -133,71 +126,46 @@ export function FinancialEntry() {
           seller: offerData?.seller as Seller,
           event: offerData?.event as Event,
           manager: offerData?.manager as Manager,
-          interaction_context: interactionContext,
+          interaction_context: { 
+            utm_source: searchUtmSource, 
+            utm_medium: searchUtmMedium, 
+            utm_campaign: searchUtmCampaign, 
+            origin_url: window.location.href 
+          },
         };
 
-        setStatusText("Carregando informações do simulação...");
-        
-        console.log("[FINANCIAL_GATEWAY_ENTRY] Payload de Orquestração:", payload);
-
-        // Dispara o núcleo do sistema
+        setStatusText("Carregando informações da simulação...");
         await orchestrateNavigation("CONSULT", payload);
 
       } catch (error: any) {
-        console.error("[FINANCIAL_GATEWAY_ENTRY ERROR]:", error);
+        // [PROPAGAÇÃO DE ERRO]: Log explícito e captura bruta da mensagem
+        const errorMessage = error?.message || error?.error || JSON.stringify(error);
+        const isOfferNotFound = errorMessage.includes("OFFER_NOT_FOUND");
 
-        // 1. Transformamos o erro em um objeto literal puro para garantir a serialização
-        const errorDetails = {
-          message: error.message || "Erro desconhecido",
-          code: error.code || "UNKNOWN_ERROR",
-          status: error.status || 500,
-          // Captura o JSON do Supabase que injetamos no gateway.ts
-          response: error.response || null, 
-          stack: error.stack
-        };
+        console.error("[financialGatewayEntryLazy.lazy.tsx] Erro crítico capturado:", errorMessage);
 
-        const monitorPayload = {
-          user: userProfile || null,
-          // ... (resto do seu payload original)
-          gatewayContext: {
-            url: window.location.href,
-            timestamp: new Date().toISOString(),
-            errorCode: errorDetails.code,
-            rawError: errorDetails // <-- Aqui estamos passando o objeto purificado
-          }
-        };
-
-        // Log antes de logSystemError:
-        console.log("financialGatewayEntryLazy: O que estamos enviando para o e-mail via logSystemError:", JSON.stringify(errorDetails));
-
-        // 2. Passamos o objeto puro
-        logSystemError(activeToken, {
+        // Dispara o monitoramento antes de qualquer outra ação de UI
+        logSystemError(activeToken || "NO_TOKEN", {
           context: 'FINANCIAL-GATEWAY',
-          message: errorDetails.message,
-          details: errorDetails, // <-- E aqui também
-          payload: monitorPayload,
+          message: errorMessage,
+          details: { error, stack: error?.stack },
+          payload: { gatewayContext: { url: window.location.href, code: isOfferNotFound ? 'OFFER_NOT_FOUND' : 'TECHNICAL_INSTABILITY' } },
           visit_id: null,
           simulation_id: null
         });
 
-
-        if (error?.code === 'OFFER_NOT_FOUND') {
-          setGatewayError('OFFER_EXPIRED');
-        } else {
-          setGatewayError('TECHNICAL_INSTABILITY');
-        }
-        
+        // [ESTADO TERMINAL]: Define o erro e para o loop via Guard Clause
+        setGatewayError(isOfferNotFound ? 'OFFER_EXPIRED' : 'TECHNICAL_INSTABILITY');
         setStatusText("Ocorreu uma instabilidade momentânea.");
-      }
 
-    }
+      } finally {
+        // [TRAVA DE FLUXO]: Libera, mas o gatewayError (state) impedirá novas chamadas pelo Guard Clause
+        isFetching.current = false;
+      }
+    };
     
-    const timer = setTimeout(() => {
-      bootstrapContext();
-    }, 400);
-  
-    return () => clearTimeout(timer);
-  }, [searchEnv, searchToken, searchOfferId, searchProductId, searchUtmSource, searchUtmMedium, searchUtmCampaign, auth, navigate]);
+    bootstrapContext();
+  }, [searchEnv, searchToken, searchOfferId, searchProductId, searchUtmSource, searchUtmMedium, searchUtmCampaign, auth, navigate, gatewayError]);
 
   // -----------------------------------------------------------------------
   // [UX FALLBACK]: Timer de Redirecionamento Automático
@@ -209,20 +177,21 @@ export function FinancialEntry() {
       if (countdown > 0) {
         timer = setTimeout(() => setCountdown(c => c - 1), 1000);
       } else {
-        // Fallback Inteligente: Garante que o usuário não fique preso em uma rota sem saída
-        if (window.history.length > 2) {
-          window.history.back(); 
+        if (search.return_to) {
+          navigate({ to: search.return_uri as any, replace: true });
+        } else if (window.history.length > 1) {
+          window.history.back();
         } else {
-          navigate({ to: "/sandbox", replace: true }); 
+          navigate({ to: "/", replace: true });
         }
       }
     }
     
     return () => clearTimeout(timer);
-  }, [gatewayError, countdown, navigate]);
+  }, [gatewayError, countdown, navigate, search]);
 
   // =========================================================================
-  // [VIEW 1]: Lote Indisponível (Spinner + Título Slate-800 + Link Roxo + Inter)
+  // [VIEW 1]: Lote Indisponível
   // =========================================================================
   if (gatewayError) {
     return (
@@ -244,6 +213,7 @@ export function FinancialEntry() {
         <button 
           onClick={() => {
             if (gatewayError === 'TECHNICAL_INSTABILITY') {
+              hasInitialized.current = false; 
               window.location.reload();
             } else {
               window.history.length > 2 ? window.history.back() : navigate({ to: "/sandbox", replace: true });
@@ -251,14 +221,14 @@ export function FinancialEntry() {
           }}
           className="text-sm text-[#B300FF] underline underline-offset-2 hover:opacity-80 font-medium"
         >
-          {gatewayError === 'TECHNICAL_INSTABILITY' ? "Tentar novamente" : "Voltar agora"}
+          Tentar novamente
         </button>
       </div>
     );
   }
 
   // =========================================================================
-  // [VIEW 2]: Progresso (Spinner + Cor Roxo + Inter)
+  // [VIEW 2]: Progresso
   // =========================================================================
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Inter']">

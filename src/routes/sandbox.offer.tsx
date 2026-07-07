@@ -1,5 +1,5 @@
 /**
- * @fileoverview Componente: OfferDetailsSandbox (Rota: /sandbox/offer_new)
+ * @fileoverview Componente: OfferDetailsSandbox (Rota: /sandbox/offer)
  * * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
@@ -12,7 +12,7 @@
  * 3. Delegação: Redireciona o usuário para o DMZ Gateway com os "documentos" (IDs e Token).
  */
 
-import { useState, useMemo, useEffect, useContext } from "react";
+import { useState, useMemo, useEffect, useContext, useRef } from "react";
 import { useNavigate, createFileRoute } from "@tanstack/react-router";
 import { Loader2, CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { UserDataContext } from "./sandbox.lazy";
 import { fetchOfferDetails } from "@/services/offer";
+import { logSystemError } from "@/services/notification";
 
 // =========================================================================
 // [FORMATTERS]: Utilitários de Apresentação
@@ -43,33 +44,31 @@ const allFiles = import.meta.glob("/src/assets/sandbox/**/*.{jpg,jpeg,png,gif,as
 const formatarCaminho = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "").toLowerCase();
 
 // =========================================================================
-// CONFIGURAÇÃO DA ROTA
+// CONFIGURAÇÃO DA ROTA (Isolada para evitar re-render destrutivo)
 // =========================================================================
+function OfferDetailsSandboxPage() {
+  const search = Route.useSearch();
+  const flow = search.flow; 
+
+  if (!flow) {
+    console.warn("🚨 [ROUTER]: O parâmetro '?flow=' não chegou na URL!");
+    return (
+      <div className="flex min-h-screen items-center justify-center font-bold text-slate-500 font-['Inter']">
+        Aguardando carregamento do fluxo... (Parâmetro ausente)
+      </div>
+    );
+  }
+
+  return <OfferDetailsSandbox key={flow} flowKey={flow as any} />;
+}
+
 export const Route = createFileRoute("/sandbox/offer")({
-  // 1. O TanStack Router EXIGE o validateSearch para expor variáveis da URL
   validateSearch: (search: Record<string, unknown>) => ({
     flow: search.flow as string | undefined,
+    return_uri: search.return_uri as string | undefined,
+    redirect_uri: search.redirect_uri as string | undefined,
   }),
-  
-  component: () => {
-    const search = Route.useSearch();
-    
-    // 2. Agora o TanStack expõe a variável corretamente (sem precisar de as any)
-    const flow = search.flow; 
-
-    // 3. Fallback de Segurança: Se o orquestrador esquecer de passar o flow, 
-    // a tela trava. Vamos colocar um log aqui para você saber de quem é a culpa.
-    if (!flow) {
-      console.warn("🚨 [ROUTER]: O parâmetro '?flow=' não chegou na URL!");
-      return (
-        <div className="min-h-screen flex items-center justify-center font-bold text-slate-500">
-          Aguardando carregamento do fluxo... (Parâmetro ausente)
-        </div>
-      );
-    }
-
-    return <OfferDetailsSandbox key={flow} flowKey={flow} />;
-  },
+  component: OfferDetailsSandboxPage,
 });
 
 // =========================================================================
@@ -78,8 +77,13 @@ export const Route = createFileRoute("/sandbox/offer")({
 export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
   const { logout, userId, token } = useFinancialAuth();
   const navigate = useNavigate();
+  const searchParams = Route.useSearch();
   const currentFlow = FLOW_MAP[flowKey as any];
   const { userData } = useContext(UserDataContext) || {};
+
+  // [SEGURANÇA]: Trava estrita contra loops de concorrência de renderização
+  const hasInitialized = useRef(false);
+  const isFetching = useRef(false);
 
   const [pessoa, setPessoa] = useState<"PF" | "PJ">("PF");
   const [categoria, setCategoria] = useState(currentFlow?.category?.split("|")[0].trim() || "Carros");
@@ -87,29 +91,76 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   const [loading, setLoading] = useState(false);
   const [activeOffer, setActiveOffer] = useState<any>(null);
   const [ambiente, setAmbiente] = useState("production");
+  
+  // [CONTROLE DE FALLBACK]: Estados de resiliência espelhados do Gateway
+  const [fetchError, setFetchError] = useState<'TECHNICAL_INSTABILITY' | null>(null);
+  const [countdown, setCountdown] = useState(5);
+
+  // [REDIRECIONAMENTO DINÂMICO]: Captura a URL de retorno preservando a origem
+  const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sandbox";
 
   useEffect(() => {
     const stored = localStorage.getItem("sbx_environment");
     if (stored) setAmbiente(stored);
   }, []);
 
-  // [FETCH VISUAL]: Busca os dados apenas para desenhar a tela para o usuário
+  // [FETCH VISUAL]: Busca dados com proteção rígida de concorrência
   useEffect(() => {
+    // [GUARD CLAUSE]: Aborta imediatamente se já inicializado, buscando ou se houver erro terminal
+    if (hasInitialized.current || isFetching.current || fetchError || !currentFlow?.offer_id || !token) return;
+
     const loadOffer = async () => {
-      if (currentFlow?.offer_id && token) {
-        setLoading(true);
-        try {
-          const data = await fetchOfferDetails(token, currentFlow.offer_id);
-          setActiveOffer(data);
-        } catch (e) { 
-          console.error("[OFFER_FETCH_ERROR]:", e); 
-        } finally { 
-          setLoading(false); 
-        }
+      isFetching.current = true;
+      hasInitialized.current = true;
+      setLoading(true);
+      setFetchError(null);
+
+      try {
+        const data = await fetchOfferDetails(token, currentFlow.offer_id);
+        setActiveOffer(data);
+      } catch (error: any) {
+        console.error("[OFFER_FETCH_ERROR]:", error);
+
+        // [PROPAGAÇÃO OBRIGATÓRIA]: Dispara telemetria de erro operacional do Hub
+        logSystemError(token || "NO_TOKEN", {
+          context: 'SANDBOX-OFFER-FETCH',
+          message: error?.message || "Erro desconhecido na busca de oferta na sandbox",
+          details: error,
+          payload: { offer_id: currentFlow.offer_id },
+          visit_id: null,
+          simulation_id: null
+        });
+
+        // [ESTADO TERMINAL]: Trava o componente em visualização de erro
+        setFetchError('TECHNICAL_INSTABILITY');
+      } finally {
+        setLoading(false);
+        isFetching.current = false;
       }
     };
+
     loadOffer();
   }, [currentFlow, token]);
+
+  // [UX FALLBACK]: Contador regressivo dinâmico para a Redirect URI
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
+    if (fetchError) {
+      if (countdown > 0) {
+        timer = setTimeout(() => setCountdown(c => c - 1), 1000);
+      } else {
+        // Redirecionamento suportando navegação externa ou interna
+        if (dynamicReturnUri.startsWith("http")) {
+          window.location.href = dynamicReturnUri;
+        } else {
+          navigate({ to: dynamicReturnUri as any, replace: true });
+        }
+      }
+    }
+    
+    return () => clearTimeout(timer);
+  }, [fetchError, countdown, navigate, dynamicReturnUri]);
 
   const entity = userData || { name: "João da Silva", document: "43577059087", email: "cesar.costa@superbid.net", phone: "21988550999" };
   
@@ -127,8 +178,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     if (!activeOffer) return;
     setLoading(true);
 
-    // DELEGAÇÃO PARA O GATEWAY DMZ:
-    // Passamos todos os parâmetros exatos que o validateSearch do Gateway exige.
     navigate({
       to: "/financialGatewayEntry",
       search: {
@@ -136,6 +185,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
         sbx_token: token,
         offer_id: currentFlow.offer_id,
         product_id: currentFlow.product_id,
+        // PRESERVA OS PARÂMETROS ORIGINAIS: Garante que o gateway não perca o flow nem o redirect_uri
+        return_uri: window.location.pathname + window.location.search,
         utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
         utm_medium: "home",
         utm_campaign: `flow_${flowKey?.toLowerCase()}`,
@@ -144,17 +195,51 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   };
 
   // =========================================================================
-  // [UI/UX]: Renderização e Proteções de Estado
+  // [VIEW 1]: Erro (Visual Consolidado do Gateway com Mensagem do Sandbox)
   // =========================================================================
-  if (!activeOffer) {
+  if (fetchError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Inter'] p-6 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B300FF] mb-6"></div>
+        
+        <h2 className="text-xl font-bold text-slate-800 mb-4">
+          Erro de Carregamento
+        </h2>
+        
+        <p className="text-slate-500 mb-6 max-w-sm leading-relaxed">
+          Esta oferta não foi encontrada ou não está disponível.
+        </p>
+        
+        <p className="text-sm text-slate-400 mb-6">Redirecionando em {countdown} segundos...</p>
+        
+        <button 
+          onClick={() => {
+            hasInitialized.current = false;
+            window.location.reload();
+          }}
+          className="text-sm text-[#B300FF] underline underline-offset-2 hover:opacity-80 font-medium"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // [VIEW 2]: Carregamento (Visual Identitário do Gateway Financeiro)
+  // =========================================================================
+  if (loading || (!activeOffer && !fetchError)) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Inter']">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B300FF] mb-4"></div>
         <p className="text-slate-500 font-medium">Carregando detalhes do lote...</p>
       </div>
     );
   }
 
+  // =========================================================================
+  // [VIEW 3]: Renderização de Sucesso
+  // =========================================================================
   return (
     <div className="min-h-screen bg-white">
       <style>{`:root { --brand-primary: #B300FF; }`}</style>
@@ -163,7 +248,16 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       <header className="sticky top-0 z-40 border-b border-border/60 bg-white shadow-sm">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate({ to: "/sandbox" })} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-[var(--brand-primary)]">
+            <button 
+              onClick={() => {
+                if (dynamicReturnUri.startsWith("http")) {
+                  window.location.href = dynamicReturnUri;
+                } else {
+                  navigate({ to: dynamicReturnUri as any });
+                }
+              }} 
+              className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-[var(--brand-primary)]"
+            >
               <ArrowLeft size={16} /> Voltar
             </button>
             <div className="h-6 w-px bg-slate-200 hidden sm:block" />
