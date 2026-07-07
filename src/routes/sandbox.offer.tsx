@@ -80,7 +80,7 @@ const FLOW_MAP: Record<string, {
   },
   AutoEquity: { 
     name: "Auto Equity", 
-    offer_id: { staging: "4728101", production: "4728101" }, 
+    offer_id: { staging: "4753216", production: "4753216" }, 
     category: "Carros & Motos", 
     product_id: "7", 
     info: "Entity", 
@@ -88,7 +88,7 @@ const FLOW_MAP: Record<string, {
   },
   SeguroAuto: { 
     name: "Seguro Auto", 
-    offer_id: { staging: "4728101", production: "4728101" }, 
+    offer_id: { staging: "4753216", production: "4753216" }, 
     category: "Carros & Motos", 
     product_id: "9", 
     info: "Entity", 
@@ -243,18 +243,30 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     if (!activeOffer) return;
     setLoading(true);
 
+    // 1. Construção do Payload base (apenas o essencial)
+    const searchPayload: any = {
+      environment: ambiente,
+      sbx_token: token,
+      offer_id: targetOfferId,
+      product_id: currentFlow.product_id,
+      return_uri: window.location.pathname + window.location.search,
+      utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
+      utm_medium: "home",
+      utm_campaign: `flow_${flowKey?.toLowerCase()}`,
+    };
+
+    // 2. Adição condicional: Só enviamos category_id se NÃO for Banner
+    // Isso evita que o backend tente validar categorias para fluxos que não possuem categoria
+    if (currentFlow.link !== "Banner") {
+      // Supondo que você queira passar o category_id caso exista na activeOffer
+      if (activeOffer?.offer?.category_id) {
+        searchPayload.category_id = activeOffer.offer.category_id;
+      }
+    }
+
     navigate({
       to: "/financialGatewayEntry",
-      search: {
-        environment: ambiente,
-        sbx_token: token,
-        offer_id: targetOfferId,
-        product_id: currentFlow.product_id,
-        return_uri: window.location.pathname + window.location.search,
-        utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
-        utm_medium: "home",
-        utm_campaign: `flow_${flowKey?.toLowerCase()}`,
-      } as any 
+      search: searchPayload
     });
   };
 

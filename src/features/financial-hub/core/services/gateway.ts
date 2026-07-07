@@ -137,6 +137,8 @@ export async function callSimulation(
   payload: any,
   step: "CHECK_ELIGIBILITY" | "EXECUTE_SIMULATION" = "EXECUTE_SIMULATION",
 ) {
+
+  const method = "POST";
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-gateway`;
 
   console.log(`[gateway.ts | callSimulation] Preparando chamada para ${method} ${url} com payload:`, payload);
