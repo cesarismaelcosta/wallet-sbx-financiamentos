@@ -270,8 +270,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     });
   };
 
-  // =========================================================================
-  // [VIEW 1]: Erro (Visual Exato da Referência - Clean Layout)
+// =========================================================================
+  // [VIEW 1]: Erro - Alinhado rigorosamente com financialGatewayEntry
   // =========================================================================
   if (fetchError) {
     return (
@@ -302,13 +302,13 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   }
 
   // =========================================================================
-  // [VIEW 2]: Carregamento (Visual Identitário do Gateway Financeiro)
+  // [VIEW 2]: Carregamento - Spinner padrão do sistema
   // =========================================================================
   if (loading || (!activeOffer && !fetchError)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Inter']">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B300FF] mb-4"></div>
-        <p className="text-slate-500 font-medium">Carregando detalhes do lote...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-[#B300FF] mb-4"></div>
+        <p className="text-slate-500 font-medium text-sm">Carregando detalhes da oferta...</p>
       </div>
     );
   }
