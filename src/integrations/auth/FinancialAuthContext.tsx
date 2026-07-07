@@ -10,7 +10,7 @@
  * 1. State Management: Propaga o token da sessão pela árvore de componentes.
  * 2. Hidratação (Mount): Recupera dados do localStorage após reloads (F5).
  * 3. Kill Switch (Amnésia): Escuta ativamente por violações de tempo ou rede e 
- * destrói a sessão para evitar vazamento de dados de simulação (Cross-User Leak).
+ * destrói a sessão puramente no estado, delegando o roteamento aos Gatekeepers.
  */
 
 import React, { createContext, useContext, useState, useEffect } from "react";
@@ -44,14 +44,11 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
       sessionStorage.clear();
 
       // 2. RESETA O ESTADO GLOBAL
+      // Ao removermos o redirecionamento forçado que existia aqui, o React re-renderiza 
+      // a árvore instantaneamente. Os Gatekeepers de cada rota (ex: SandboxLayout)
+      // vão interceptar a falta de token e rotear o usuário da forma correta.
       setToken(null);
       setUserId(null);
-      
-      // 3. EXPULSÃO FÍSICA E DEFINITIVA
-      // Diferente do logout manual, não guardamos o "redirect" da URL. 
-      // Se a sessão expirou no meio da simulação, a esteira foi corrompida. 
-      // O usuário (ou o próximo) deve recomeçar do zero.
-      window.location.href = '/accounts/signin?reason=expired';
     };
 
     // Abre os ouvidos para escutar os disparos dos Guards (financiamentos.lazy) e API (user.ts)
@@ -99,27 +96,18 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     }
   };
 
-  // Função para deslogar (mantem ambiente, mas limpa sessão e força redirect)
+  // Função para deslogar (A Opção Nuclear Pura)
   const logout = () => {
-    // 1. Resgate o que você NÃO quer perder antes de limpar
-    const ambienteAtual = localStorage.getItem("sbx_environment");
-
-    // 2. Agora sim, faça a limpeza agressiva da sessão
+    // 1. Limpeza agressiva da sessão
+    // Não tentamos mais "salvar" a variável de ambiente aqui. 
+    // O ambiente morre junto com a sessão para forçar a re-escolha no Gatekeeper.
     localStorage.clear();
     sessionStorage.clear();
 
-    // 3. Restaure apenas o que deve sobreviver
-    if (ambienteAtual) {
-      localStorage.setItem("sbx_environment", ambienteAtual);
-    }
-
-    // 4. Reseta o estado para null
+    // 2. Reseta o estado para null 
+    // (Isso dispara os hooks nos Layouts, sem forçar navegação de URL)
     setToken(null);
     setUserId(null);
-    
-    // 5. Redireciona
-    const currentPath = window.location.pathname + window.location.search;
-    window.location.href = `/accounts/signin?redirect=${encodeURIComponent(currentPath)}`;
   };
 
   return (

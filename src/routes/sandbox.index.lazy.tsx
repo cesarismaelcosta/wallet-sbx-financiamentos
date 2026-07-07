@@ -6,9 +6,8 @@
  * Ponto de entrada do ambiente de homologação e testes do Financial Hub.
  * * [Responsabilidades]:
  * 1. Navegação Baseada em Fluxos: Mapeia as jornadas via links diretos ou cliques.
- * 2. Controle de Ambiente Reativo: Permite alternar a variável de ambiente (STG/PRD) 
- * no localStorage em tempo real, sem necessidade de reautenticação.
- * 3. Gestão de Sessão: Exibe os dados do utilizador logado e permite o logout.
+ * 2. Visualização de Ambiente: Exibe o ambiente atual (Stage/Prod) em modo read-only.
+ * 3. Gestão de Sessão: Exibe os dados do utilizador logado e permite o logout limpo.
  */
 
 import React, { useState, JSX } from "react";
@@ -38,8 +37,18 @@ const SandboxHome = () => {
   const navigate = useNavigate();
   const { logout, userId, token } = useFinancialAuth();
   
+  // =========================================================================
+  // [STATE]: Controle de loading e Leitura do Ambiente (Read-Only)
+  // =========================================================================
   const [loading, setLoading] = useState(false);
+  
+  const [ambiente] = useState<"staging" | "production">(
+    () => (localStorage.getItem("sbx_environment") as "staging" | "production") || "production"
+  );
 
+  // =========================================================================
+  // [HANDLERS]: Ações do Usuário e Navegação
+  // =========================================================================
   const handleLogout = async () => {
     localStorage.removeItem("sbx_environment");
     await logout();
@@ -61,6 +70,9 @@ const SandboxHome = () => {
     }
   };
 
+  // =========================================================================
+  // [CONFIG]: Mapa de Jornadas com Links Internos
+  // =========================================================================
   const menuOptions: MenuOption[] = [
     {
       title: "Cartão de Crédito",
@@ -125,9 +137,13 @@ const SandboxHome = () => {
     },
   ];
 
+  // =========================================================================
+  // [VIEW]: Renderização da Interface
+  // =========================================================================
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col overflow-hidden relative">
       
+      {/* HEADER: Central de Controle */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           
@@ -146,10 +162,22 @@ const SandboxHome = () => {
           
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
+              
+              {/* BLOCO DE IDENTIFICAÇÃO COM A TAG DE AMBIENTE */}
               <div className="flex flex-col items-end text-right hidden sm:flex">
                 <span className="text-[9px] font-mono text-slate-500">USER ID: {userId || "---"}</span>
-                <span className="text-[9px] font-bold text-slate-400 uppercase">Sandbox Hub</span>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase">Sandbox Hub</span>
+                  <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-sm ml-1 border ${
+                    ambiente === "staging" 
+                      ? "bg-red-50 text-red-500 border-red-100" 
+                      : "bg-emerald-50 text-emerald-600 border-emerald-100"
+                  }`}>
+                    {ambiente === "staging" ? "STAGE" : "PROD"}
+                  </span>
+                </div>
               </div>
+
               <Link
                 to="/backoffice"
                 className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm hidden sm:block"
@@ -168,6 +196,7 @@ const SandboxHome = () => {
         </div>
       </header>
 
+      {/* MAIN: Catálogo de Jornadas */}
       <main className="flex-grow max-w-6xl mx-auto px-4 sm:px-8 py-12 w-full">
         <div className="mb-10 text-left">
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">O que vamos testar?</h2>
@@ -242,10 +271,12 @@ const SandboxHome = () => {
         </div>
       </main>
 
+      {/* FOOTER */}
       <footer className="py-4 text-center text-slate-400 text-[9px] uppercase tracking-[0.3em] border-t border-slate-100 bg-white/50">
         Wallet sbX | Jornadas de Financiamentos & Seguros
       </footer>
 
+      {/* OVERLAY DE LOADING */}
       {loading && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm">
           <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
