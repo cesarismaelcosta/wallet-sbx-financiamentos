@@ -46,10 +46,28 @@ const formatarCaminho = (str: string) => str.normalize("NFD").replace(/[\u0300-\
 // CONFIGURAÇÃO DA ROTA
 // =========================================================================
 export const Route = createFileRoute("/sandbox/offer")({
+  // 1. O TanStack Router EXIGE o validateSearch para expor variáveis da URL
+  validateSearch: (search: Record<string, unknown>) => ({
+    flow: search.flow as string | undefined,
+  }),
+  
   component: () => {
     const search = Route.useSearch();
-    const flow = (search as any).flow;
-    if (!flow) return <div className="min-h-screen flex items-center justify-center font-bold text-slate-500">Aguardando carregamento do fluxo...</div>;
+    
+    // 2. Agora o TanStack expõe a variável corretamente (sem precisar de as any)
+    const flow = search.flow; 
+
+    // 3. Fallback de Segurança: Se o orquestrador esquecer de passar o flow, 
+    // a tela trava. Vamos colocar um log aqui para você saber de quem é a culpa.
+    if (!flow) {
+      console.warn("🚨 [ROUTER]: O parâmetro '?flow=' não chegou na URL!");
+      return (
+        <div className="min-h-screen flex items-center justify-center font-bold text-slate-500">
+          Aguardando carregamento do fluxo... (Parâmetro ausente)
+        </div>
+      );
+    }
+
     return <OfferDetailsSandbox key={flow} flowKey={flow} />;
   },
 });

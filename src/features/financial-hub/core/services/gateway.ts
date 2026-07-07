@@ -134,11 +134,48 @@ export async function callSimulation(
     }),
   });
 
+  /**
+   * [TRATAMENTO DE ERRO: Normalização]
+   * -------------------------------------------------------------------------
+   * [CONTEXTO]: Valida a resposta HTTP. Se falhar, tenta extrair a mensagem 
+   * legível do servidor antes de interromper o fluxo.
+   * [RESPONSABILIDADE]: Converter erros de rede/servidor em erros ricos (enriquecidos) 
+   * para permitir log de diagnóstico detalhado no frontend e monitoramento externo.
+   */
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error("[Gateway] Erro na simulação:", errorText);
-    throw new Error(`Erro ao processar simulação: ${response.status}`);
+    // Tenta decodificar o corpo do erro como JSON; fallback para texto simples.
+    // Capturas o payload de erro como um objeto puro
+    const errorData = await response.json().catch(() => ({ 
+      error: "Erro de parsing no Gateway", 
+      details: "O servidor retornou um erro não estruturado" 
+    }));
+
+    console.error(`[Gateway] Erro HTTP ${response.status}:`, errorData);
+
+    /**
+     * [ERRO ENRIQUECIDO]
+     * Injeta metadados de contexto (response, code, status) no objeto de erro 
+     * padrão do JavaScript. Isso impede que a serialização transforme o erro 
+     * em um objeto vazio '{}' durante o transporte para o serviço de e-mail.
+     */
+    const orchestratorError = new Error(
+      errorData?.error || errorData?.message || `Erro na comunicação com o Gateway: ${response.status}`
+    );
+    
+    (orchestratorError as any).response = errorData;
+    (orchestratorError as any).code = 'GATEWAY_ERROR';
+    (orchestratorError as any).status = response.status;
+    
+    console.log("DEBUG: O Gateway vai lançar este erro:", {
+      message: orchestratorError.message,
+      response: (orchestratorError as any).response
+    });
+
+    throw orchestratorError;
   }
 
+  console.log(`[Gateway] Retorno ${method} ${url} com payload:`, payload);
+
   return response.json();
+  
 }

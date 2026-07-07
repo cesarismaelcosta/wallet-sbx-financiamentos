@@ -146,30 +146,37 @@ export function FinancialEntry() {
       } catch (error: any) {
         console.error("[FINANCIAL_GATEWAY_ENTRY ERROR]:", error);
 
-        const errorMessage = error?.message || 'Erro não identificado na orquestração';
+        // 1. Transformamos o erro em um objeto literal puro para garantir a serialização
+        const errorDetails = {
+          message: error.message || "Erro desconhecido",
+          code: error.code || "UNKNOWN_ERROR",
+          status: error.status || 500,
+          // Captura o JSON do Supabase que injetamos no gateway.ts
+          response: error.response || null, 
+          stack: error.stack
+        };
 
         const monitorPayload = {
           user: userProfile || null,
-          offerData: offerData || null,
-          attemptedOfferId: searchOfferId || null,
-          productId: searchProductId || null,
-          environment: searchEnv,
+          // ... (resto do seu payload original)
           gatewayContext: {
             url: window.location.href,
             timestamp: new Date().toISOString(),
-            errorCode: error?.code || 'UNKNOWN_ERROR',
-            rawError: error // <-- O erro bruto era passado diretamente aqui
+            errorCode: errorDetails.code,
+            rawError: errorDetails // <-- Aqui estamos passando o objeto purificado
           }
         };
 
+        // 2. Passamos o objeto puro
         logSystemError(activeToken, {
           context: 'FINANCIAL-GATEWAY',
-          message: errorMessage,
-          details: error, // <-- E aqui
+          message: errorDetails.message,
+          details: errorDetails, // <-- E aqui também
           payload: monitorPayload,
           visit_id: null,
           simulation_id: null
         });
+
 
         if (error?.code === 'OFFER_NOT_FOUND') {
           setGatewayError('OFFER_EXPIRED');
