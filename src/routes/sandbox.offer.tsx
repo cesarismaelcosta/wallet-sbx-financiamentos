@@ -45,21 +45,20 @@ const FLOW_MAP: Record<string, {
   Carros: { 
     name: "Financiamento de Carros", 
     offer_id: { staging: "4753216", production: "4753216" }, 
-    category: "Carros", 
+    category: "Carros & Motos", 
     info: "Entity, Event, Manager, Offer, Vehicle", 
     link: "Box Financiamento" 
   },
   Caminhões: { 
     name: "Financiamento de Caminhões", 
     offer_id: { staging: "4680825", production: "4680825" }, 
-    category: "Caminhões", 
+    category: "Caminhões & Ônibus", 
     info: "Entity, Event, Manager, Offer, Vehicle", 
     link: "Box Financiamento" 
   },
   Imóveis: { 
     name: "Financiamento de Imóveis", 
     offer_id: "4680825", 
-    entity: "PF | PJ", 
     category: "Imóveis", 
     info: "Entity, Event, Manager, Offer, RealEstate", 
     link: "Box Financiamento" 
@@ -82,7 +81,7 @@ const FLOW_MAP: Record<string, {
   AutoEquity: { 
     name: "Auto Equity", 
     offer_id: { staging: "4728101", production: "4728101" }, 
-    category: "Carros", 
+    category: "Carros & Motos", 
     product_id: "7", 
     info: "Entity", 
     link: "Banner" 
@@ -90,7 +89,7 @@ const FLOW_MAP: Record<string, {
   SeguroAuto: { 
     name: "Seguro Auto", 
     offer_id: { staging: "4728101", production: "4728101" }, 
-    category: "Carros", 
+    category: "Carros & Motos", 
     product_id: "9", 
     info: "Entity", 
     link: "Banner" 

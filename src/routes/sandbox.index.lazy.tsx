@@ -225,9 +225,12 @@ const SandboxHome = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {menuOptions.map((option, index) => {
-            const hasLinks = option.links && option.links.length > 0;
+            // Se o card está disabled, ele não deve renderizar links internos
+            const hasLinks = !option.disabled && option.links && option.links.length > 0;
             
-            // Alteração polimórfica para evitar botões aninhados semanticamente incorretos
+            // Renderização polimórfica controlada: 
+            // - 'div': Card com links (não pode ser botão global)
+            // - 'button': Card com clique direto ou Card Desabilitado (para aplicar opacity e not-allowed)
             const CardContainer = hasLinks ? "div" : "button";
 
             return (
@@ -239,14 +242,14 @@ const SandboxHome = () => {
                 })}
                 className={`group flex flex-col p-5 bg-white border-2 rounded-2xl transition-all duration-300 text-left 
                   ${
-                    option.disabled && !hasLinks
+                    option.disabled
                       ? "opacity-50 cursor-not-allowed border-slate-200"
                       : "border-primary/20 hover:border-primary hover:shadow-lg " + (hasLinks ? "" : "hover:translate-y-[-2px]")
                   }`}
               >
                 <div className="flex items-center gap-3 w-full">
                   <div
-                    className={`p-2 rounded-lg transition-colors ${option.disabled && !hasLinks ? "text-slate-400 bg-slate-100" : "text-primary bg-primary/5 group-hover:bg-primary/10"}`}
+                    className={`p-2 rounded-lg transition-colors ${option.disabled ? "text-slate-400 bg-slate-100" : "text-primary bg-primary/5 group-hover:bg-primary/10"}`}
                   >
                     {option.icon}
                   </div>
@@ -260,13 +263,13 @@ const SandboxHome = () => {
 
                 <div className="mt-4 w-full flex-grow flex flex-col justify-between">
                   <div>
-                    <p className="text-[10px] font-bold text-primary/80 uppercase tracking-widest mb-1.5">
+                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-1.5 ${option.disabled ? "text-slate-400" : "text-primary/80"}`}>
                       {option.subtitle}
                     </p>
                     <p className="text-xs text-slate-500 leading-snug">{option.description}</p>
                   </div>
 
-                  {/* Links internos de redirecionamento cirúrgico de sub-fluxos */}
+                  {/* Links internos escondidos quando disabled=true */}
                   {hasLinks && (
                     <div className="mt-5 pt-3 border-t border-slate-100 flex flex-col gap-2">
                       {option.links?.map((link, linkIdx) => (
