@@ -13,7 +13,7 @@
  */
 
 import { useState, useMemo, useEffect, useContext, useRef } from "react";
-import { useNavigate, createFileRoute } from "@tanstack/react-router";
+import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
 import { Loader2, CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 
@@ -118,7 +118,7 @@ function OfferDetailsSandboxPage() {
   return <OfferDetailsSandbox key={flow} flowKey={flow as any} />;
 }
 
-export const Route = createFileRoute("/sandbox/offer")({
+export const Route = createLazyFileRoute("/sandbox/offer")({
   validateSearch: (search: Record<string, unknown>) => ({
     flow: search.flow as string | undefined,
     return_uri: search.return_uri as string | undefined,

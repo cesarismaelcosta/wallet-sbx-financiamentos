@@ -12,7 +12,6 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SandboxOfferRouteImport } from './routes/sandbox.offer'
 import { Route as ApiLoginhistoryRouteImport } from './routes/api.loginhistory'
 
 const SegurosLazyRouteImport = createFileRoute('/seguros')()
@@ -25,6 +24,7 @@ const BackofficeLazyRouteImport = createFileRoute('/backoffice')()
 const SandboxIndexLazyRouteImport = createFileRoute('/sandbox/')()
 const BackofficeIndexLazyRouteImport = createFileRoute('/backoffice/')()
 const SegurosAutoLazyRouteImport = createFileRoute('/seguros/auto')()
+const SandboxOfferLazyRouteImport = createFileRoute('/sandbox/offer')()
 const SandboxConsultabsxLazyRouteImport = createFileRoute(
   '/sandbox/consultabsx',
 )()
@@ -113,6 +113,11 @@ const SegurosAutoLazyRoute = SegurosAutoLazyRouteImport.update({
   path: '/auto',
   getParentRoute: () => SegurosLazyRoute,
 } as any).lazy(() => import('./routes/seguros.auto.lazy').then((d) => d.Route))
+const SandboxOfferLazyRoute = SandboxOfferLazyRouteImport.update({
+  id: '/offer',
+  path: '/offer',
+  getParentRoute: () => SandboxLazyRoute,
+} as any).lazy(() => import('./routes/sandbox.offer.lazy').then((d) => d.Route))
 const SandboxConsultabsxLazyRoute = SandboxConsultabsxLazyRouteImport.update({
   id: '/consultabsx',
   path: '/consultabsx',
@@ -210,11 +215,6 @@ const AccountsSigninLazyRoute = AccountsSigninLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/accounts.signin.lazy').then((d) => d.Route),
 )
-const SandboxOfferRoute = SandboxOfferRouteImport.update({
-  id: '/offer',
-  path: '/offer',
-  getParentRoute: () => SandboxLazyRoute,
-} as any)
 const ApiLoginhistoryRoute = ApiLoginhistoryRouteImport.update({
   id: '/api/loginhistory',
   path: '/api/loginhistory',
@@ -229,7 +229,6 @@ export interface FileRoutesByFullPath {
   '/sandbox': typeof SandboxLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
-  '/sandbox/offer': typeof SandboxOfferRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
@@ -243,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/sandbox/consultabsx': typeof SandboxConsultabsxLazyRoute
+  '/sandbox/offer': typeof SandboxOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
   '/sandbox/': typeof SandboxIndexLazyRoute
@@ -253,7 +253,6 @@ export interface FileRoutesByTo {
   '/financiamentos': typeof FinanciamentosLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
-  '/sandbox/offer': typeof SandboxOfferRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
@@ -267,6 +266,7 @@ export interface FileRoutesByTo {
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/sandbox/consultabsx': typeof SandboxConsultabsxLazyRoute
+  '/sandbox/offer': typeof SandboxOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice': typeof BackofficeIndexLazyRoute
   '/sandbox': typeof SandboxIndexLazyRoute
@@ -280,7 +280,6 @@ export interface FileRoutesById {
   '/sandbox': typeof SandboxLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
-  '/sandbox/offer': typeof SandboxOfferRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
@@ -294,6 +293,7 @@ export interface FileRoutesById {
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/sandbox/consultabsx': typeof SandboxConsultabsxLazyRoute
+  '/sandbox/offer': typeof SandboxOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
   '/sandbox/': typeof SandboxIndexLazyRoute
@@ -308,7 +308,6 @@ export interface FileRouteTypes {
     | '/sandbox'
     | '/seguros'
     | '/api/loginhistory'
-    | '/sandbox/offer'
     | '/accounts/signin'
     | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
@@ -322,6 +321,7 @@ export interface FileRouteTypes {
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/sandbox/consultabsx'
+    | '/sandbox/offer'
     | '/seguros/auto'
     | '/backoffice/'
     | '/sandbox/'
@@ -332,7 +332,6 @@ export interface FileRouteTypes {
     | '/financiamentos'
     | '/seguros'
     | '/api/loginhistory'
-    | '/sandbox/offer'
     | '/accounts/signin'
     | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
@@ -346,6 +345,7 @@ export interface FileRouteTypes {
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/sandbox/consultabsx'
+    | '/sandbox/offer'
     | '/seguros/auto'
     | '/backoffice'
     | '/sandbox'
@@ -358,7 +358,6 @@ export interface FileRouteTypes {
     | '/sandbox'
     | '/seguros'
     | '/api/loginhistory'
-    | '/sandbox/offer'
     | '/accounts/signin'
     | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
@@ -372,6 +371,7 @@ export interface FileRouteTypes {
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/sandbox/consultabsx'
+    | '/sandbox/offer'
     | '/seguros/auto'
     | '/backoffice/'
     | '/sandbox/'
@@ -453,6 +453,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/seguros/auto'
       preLoaderRoute: typeof SegurosAutoLazyRouteImport
       parentRoute: typeof SegurosLazyRoute
+    }
+    '/sandbox/offer': {
+      id: '/sandbox/offer'
+      path: '/offer'
+      fullPath: '/sandbox/offer'
+      preLoaderRoute: typeof SandboxOfferLazyRouteImport
+      parentRoute: typeof SandboxLazyRoute
     }
     '/sandbox/consultabsx': {
       id: '/sandbox/consultabsx'
@@ -545,13 +552,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountsSigninLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sandbox/offer': {
-      id: '/sandbox/offer'
-      path: '/offer'
-      fullPath: '/sandbox/offer'
-      preLoaderRoute: typeof SandboxOfferRouteImport
-      parentRoute: typeof SandboxLazyRoute
-    }
     '/api/loginhistory': {
       id: '/api/loginhistory'
       path: '/api/loginhistory'
@@ -604,14 +604,14 @@ const FinanciamentosLazyRouteWithChildren =
   FinanciamentosLazyRoute._addFileChildren(FinanciamentosLazyRouteChildren)
 
 interface SandboxLazyRouteChildren {
-  SandboxOfferRoute: typeof SandboxOfferRoute
   SandboxConsultabsxLazyRoute: typeof SandboxConsultabsxLazyRoute
+  SandboxOfferLazyRoute: typeof SandboxOfferLazyRoute
   SandboxIndexLazyRoute: typeof SandboxIndexLazyRoute
 }
 
 const SandboxLazyRouteChildren: SandboxLazyRouteChildren = {
-  SandboxOfferRoute: SandboxOfferRoute,
   SandboxConsultabsxLazyRoute: SandboxConsultabsxLazyRoute,
+  SandboxOfferLazyRoute: SandboxOfferLazyRoute,
   SandboxIndexLazyRoute: SandboxIndexLazyRoute,
 }
 

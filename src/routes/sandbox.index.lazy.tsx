@@ -144,54 +144,59 @@ const SandboxHome = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col overflow-hidden relative">
       
       {/* HEADER: Central de Controle */}
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
+        <div className="mx-auto flex h-24 max-w-7xl items-center justify-between px-6">
           
-          <div className="flex items-center gap-4">
-            <WalletLogo size="md" withTagline />
-            <div className="h-6 w-px bg-slate-200 ml-2 hidden sm:block" />
-            <div className="flex flex-col hidden sm:flex text-left">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Jornadas de Financiamentos & Seguros
-              </span>
-              <span className="text-[9px] font-mono text-slate-400 mt-0.5">
-                SESSÃO ATIVA: {token ? token.slice(0, 8) + "..." : "N/A"}
-              </span>
+          {/* LADO ESQUERDO: Apenas ajuste da Logo */}
+          <div className="flex items-center gap-6 shrink-0">
+            <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+            <div className="hidden sm:block"><WalletLogo size="md" withTagline /></div>
+            
+            {/* Bloco da Sessão mantido */}
+            <div className="flex flex-col gap-1 border-l border-slate-200 pl-6">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Sessão Ativa
+                </span>
+                <div className="max-w-[200px]">
+                  <span className="text-[8px] font-mono text-slate-500 truncate block">
+                    {token || "N/A"}
+                  </span>
+                </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
-              
-              {/* BLOCO DE IDENTIFICAÇÃO COM A TAG DE AMBIENTE */}
-              <div className="flex flex-col items-end text-right hidden sm:flex">
-                <span className="text-[9px] font-mono text-slate-500">USER ID: {userId || "---"}</span>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase">Sandbox Hub</span>
-                  <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-sm ml-1 border ${
-                    ambiente === "staging" 
-                      ? "bg-red-50 text-red-500 border-red-100" 
-                      : "bg-emerald-50 text-emerald-600 border-emerald-100"
-                  }`}>
-                    {ambiente === "staging" ? "STAGE" : "PROD"}
-                  </span>
+          {/* LADO DIREITO: Usuário e Ações mantidos */}
+          <div className="flex items-center gap-6 border-l border-slate-200 pl-6 shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="flex flex-col items-end text-right">
+                  <span className="text-[12px] font-bold text-slate-800 uppercase">cismael</span>
+                  <span className="text-[10px] font-mono text-slate-500">USER ID: {userId || "---"}</span>
                 </div>
+                
+                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-sm border ${
+                  ambiente === "staging" 
+                    ? "bg-red-50 text-red-600 border-red-200" 
+                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                }`}>
+                  {ambiente === "staging" ? "STAGING" : "PRODUÇÃO"}
+                </span>
               </div>
 
-              <Link
-                to="/backoffice"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm hidden sm:block"
-              >
-                Backoffice
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold transition-all"
-              >
-                <LogOut className="w-3 h-3" />
-                <span className="hidden sm:inline">Sair</span>
-              </button>
-            </div>
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/backoffice"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm hidden sm:block"
+                >
+                  Backoffice
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold transition-all"
+                >
+                  <LogOut className="w-3 h-3" />
+                  <span className="hidden sm:inline">Sair</span>
+                </button>
+              </div>
           </div>
         </div>
       </header>
