@@ -243,10 +243,15 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     if (!activeOffer) return;
     setLoading(true);
 
+    // O 'token' do contexto é o interno. Precisamos do sbx_token real.
+    // Se o seu useFinancialAuth não expõe o sbx_token, use o localStorage diretamente.
+    const sbxTokenReal = localStorage.getItem('sbx_access_token');
+    console.log("[SANDBOX-OFFER] Delegando para o Gateway com sbx_token real:", sbxTokenReal);
+    
     // 1. Construção do Payload base (apenas o essencial)
     const searchPayload: any = {
       environment: ambiente,
-      sbx_token: token,
+      sbx_token: sbxTokenReal,
       offer_id: targetOfferId,
       product_id: currentFlow.product_id,
       return_uri: window.location.pathname + window.location.search,
@@ -270,7 +275,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     });
   };
 
-// =========================================================================
+  // =========================================================================
   // [VIEW 1]: Erro - Alinhado rigorosamente com financialGatewayEntry
   // =========================================================================
   if (fetchError) {

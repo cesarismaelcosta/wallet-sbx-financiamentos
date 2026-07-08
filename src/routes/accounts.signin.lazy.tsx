@@ -48,7 +48,7 @@ export function CustomLogin() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const target = params.get("redirect") || params.get("redirect_uri") || "/sandbox";
+    const target = params.get("redirect_uri");
     setRedirectUri(target);
   }, []);
 
