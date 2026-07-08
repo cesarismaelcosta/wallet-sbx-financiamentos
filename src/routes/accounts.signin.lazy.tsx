@@ -111,14 +111,13 @@ export function CustomLogin() {
           search: Object.fromEntries(url.searchParams.entries()), 
           replace: true 
         });
-        } else {
-          setIsLoading(false);
-        }
       } else {
-        setPasswordError("Usuário ou senha inválidos.");
         setIsLoading(false);
       }
-    };
+    } else {
+      setPasswordError("Usuário ou senha inválidos.");
+      setIsLoading(false);
+    }
   };
 
   const loginLabelText = tipoPessoa === "F" ? "E-mail, login ou CPF" : "CNPJ ou login";
