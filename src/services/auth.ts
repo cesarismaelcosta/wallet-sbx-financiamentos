@@ -43,7 +43,7 @@ export const autenticateWalletsbX = async (
     // ---------------------------------------------------------------------------
     if (response.ok) {
       const data = await response.json();
-      
+
       if (data.session_token) {
         // -----------------------------------------------------------------------
         // [SECURITY]: Cálculo e persistência de compensação de relógio (Clock Drift)
@@ -55,15 +55,18 @@ export const autenticateWalletsbX = async (
             const localTimeMs = Date.now();
             const timeDelta = serverTimeMs - localTimeMs;
             
+            // O Gateway busca por 'sbx_auth_token' no localStorage. 
+            // Se não gravar aqui, o Gateway te joga de volta pro login.
+            localStorage.setItem('sbx_auth_token', data.session_token);
             // Persiste o Delta para uso dos Guards (financiamentos.lazy, etc)
             localStorage.setItem('time_delta', timeDelta.toString());
             // Persiste o limite de validade absoluta (já com margem T-15m)
             localStorage.setItem('session_expires_at', data.expires_at.toString());
             
-            console.log(`⏱️ [AUTH Service] Clock Drift sincronizado. Delta: ${timeDelta}ms`);
+            console.log(`⏱️ [auth.ts] Clock Drift sincronizado. Delta: ${timeDelta}ms`);
           }
         } catch (err) {
-          console.warn("⚠️ [AUTH Service] Falha ao processar metadados temporais da sessão.", err);
+          console.warn("⚠️ [auth.ts] Falha ao processar metadados temporais da sessão.", err);
         }
 
         return { 

@@ -87,6 +87,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       session_token: jwt, // Agora entrega o JWT assinado, não o UUID cru
+      sbx_access_token: sbxData.access_token, // TOKEN ORIGINAL DA SBX (Para API externa)
       user_id: sbxData.userId,
       expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
       server_now_ms: agora.getTime()

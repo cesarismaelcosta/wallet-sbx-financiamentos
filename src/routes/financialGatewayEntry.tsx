@@ -16,7 +16,7 @@
  * 5. Anti-History Pollution: Garante navegação limpa usando redirecionamentos com 'replace'.
  */
 
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, isRedirect } from "@tanstack/react-router";
 import { exchangeAuthSBX } from "@/services/authSBX";
 import { fetchMyProfile } from "@/services/user";
 import { fetchOfferDetails } from "@/services/offer";
@@ -49,6 +49,9 @@ export const Route = createFileRoute("/financialGatewayEntry")({
   // [INTERCEPTOR / LOADER]: Execução pré-renderização (Bootstrapping)
   // =========================================================================
   loader: async ({ search, location }) => {
+    // Garantia de segurança contra undefined search params
+    const searchParams = search || {};
+    
     const { 
       superbid_token, 
       sbx_token, 
@@ -58,7 +61,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       return_to,
       environment, 
       ...utmParams 
-    } = search;
+    } = searchParams;
 
     const currentEnvironment = environment || "staging";
     let activeToken = sbx_token;
@@ -118,22 +121,28 @@ export const Route = createFileRoute("/financialGatewayEntry")({
 
       await orchestrateNavigation("CONSULT", payload);
       
+      // O loader finaliza sem renderizar componente
       return null;
 
     } catch (error: any) {
-      // [CONTROLE DE FLUXO]: Ignora redirects internos do TanStack
-      if (error && error.isRouteRedirect) throw error;
+      // [CONTROLE DE FLUXO]: Ignora redirecionamentos legítimos do TanStack
+      if (isRedirect(error)) throw error;
 
       console.error("[financialGatewayEntry Loader] Critical Failure:", error);
 
+      // [FIX]: Purgar tokens antes de redirecionar para evitar loop
+      localStorage.removeItem("sbx_auth_token");
+      localStorage.removeItem("sbx_access_token");
+
       // 4. TELEMETRIA
+      // Dispara o monitoramento antes da ação de fallback
       const errorMessage = error?.message || "Unknown error";
 
-      await logSystemError(search.superbid_token || sbx_token || "NO_TOKEN", {
+      await logSystemError(searchParams.superbid_token || sbx_token || "NO_TOKEN", {
         context: "FINANCIAL-GATEWAY-LOADER",
         message: errorMessage,
         details: { stack: error?.stack },
-        payload: { searchParams: search }
+        payload: { searchParams: searchParams }
       });
 
       // 5. RETORNO SEGURO À ORIGEM (Fallback Graceful)
@@ -149,6 +158,5 @@ export const Route = createFileRoute("/financialGatewayEntry")({
   // =========================================================================
   // [COMPONENTE FANTASMA]
   // =========================================================================
-  // O loader inviabiliza a montagem deste componente ao disparar redirects.
   component: () => null,
 });
