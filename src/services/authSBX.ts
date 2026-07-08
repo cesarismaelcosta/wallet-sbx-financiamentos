@@ -16,7 +16,7 @@
  * @param superbidToken - Token original provido pela Superbid.
  * @param environment - Ambiente de execução ("staging" | "production").
  */
-export const exchangeAuthSBX = async (superbidToken: string, environment: "staging" | "production") => {
+export const exchangeAuthSBX = async (sbx_access_token: string, environment: "staging" | "production") => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -28,7 +28,7 @@ export const exchangeAuthSBX = async (superbidToken: string, environment: "stagi
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ 
-        superbid_token: superbidToken, 
+        sbx_access_token: sbx_access_token, 
         environment 
       }),
     });
@@ -40,7 +40,7 @@ export const exchangeAuthSBX = async (superbidToken: string, environment: "stagi
 
     return await response.json();
   } catch (error) {
-    console.error("🚨 [authSBX.ts] Falha no Token Exchange:", error);
+    console.error("🚨 [authSBX.ts | exchangeAuthSBX] Falha no Token Exchange:", error);
     throw error;
   }
 };
@@ -48,35 +48,35 @@ export const exchangeAuthSBX = async (superbidToken: string, environment: "stagi
 /**
  * @function authenticateSBXToken
  * @description Valida token externo no endpoint /me da Superbid.
- * @param superbidToken - Token original para validação.
+ * @param sbx_access_token - Token original para validação.
  */
-export const authenticateSBXToken = async (superbidToken: string) => {
+export const authenticateSBXToken = async (sbx_access_token: string) => {
   try {
     // 1. VALIDAÇÃO EXTERNA: Bate no /me da Superbid usando APENAS o token deles
     const response = await fetch('https://api.superbid.net/v1/me', { 
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${superbidToken}`, 
+        'Authorization': `Bearer ${sbx_access_token}`, 
         'Content-Type': 'application/json'
       }
     });
 
     if (!response.ok) {
-      throw new Error(`[auth.ts] Token sbX inválido ou expirado (Status: ${response.status})`);
+      throw new Error(`[authSBX.ts | authenticateSBXToken] Token sbX inválido ou expirado (Status: ${response.status})`);
     }
 
     // 2. EXTRAÇÃO DE DADOS
-    const superbidUserData = await response.json();
+    const sbxUserData = await response.json();
 
     // 3. RETORNO PARA O GATEWAY
     return {
-      token: superbidToken, 
-      user: superbidUserData, 
+      sbx_access_token: sbx_access_token, 
+      sbx_user: sbxUserData, 
       isValid: true
     };
 
   } catch (error) {
-    console.error("🚨 [auth.ts] : Falha na validação do token externo:", error);
+    console.error("🚨 [authSBX.ts | authenticateSBXToken] : Falha na validação do token externo:", error);
     throw error;
   }
 };

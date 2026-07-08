@@ -55,9 +55,9 @@ export const autenticateWalletsbX = async (
             const localTimeMs = Date.now();
             const timeDelta = serverTimeMs - localTimeMs;
             
-            // O Gateway busca por 'sbx_auth_token' no localStorage. 
-            // Se não gravar aqui, o Gateway te joga de volta pro login.
-            localStorage.setItem('internal_jwt', data.session_token);
+            // Armazena informações críticas de sessão no localStorage para uso do Gateway e Guards
+            // Tokens próprio e sbx_access_token são armazenados para chamadas subsequentes
+            localStorage.setItem('session_token', data.session_token);
             localStorage.setItem('sbx_access_token', data.sbx_access_token);
             // Persiste o Delta para uso dos Guards (financiamentos.lazy, etc)
             localStorage.setItem('time_delta', timeDelta.toString());
@@ -72,8 +72,8 @@ export const autenticateWalletsbX = async (
 
         return { 
           success: true, 
-          token: data.session_token, // JWT Próprio (Cofre)
-          sbx_token: data.sbx_access_token,
+          session_token: data.session_token, // JWT Próprio (Cofre)
+          sbx_access_token: data.sbx_access_token,
           userId: data.user_id       // Identificador público do usuário
         };
       } else {

@@ -35,7 +35,6 @@ export const Route = createFileRoute("/financialGatewayEntry")({
   validateSearch: (search: Record<string, unknown>) => ({
     environment: search.environment as string | undefined,
     sbx_token: search.sbx_token as string | undefined,
-    superbid_token: search.superbid_token as string | undefined,
     offer_id: search.offer_id as string | undefined,
     product_id: search.product_id as string | undefined,
     return_uri: search.return_uri as string | undefined,
@@ -53,7 +52,6 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     const searchParams = search || {};
     
     const { 
-      superbid_token, 
       sbx_token, 
       offer_id, 
       product_id, 
@@ -69,14 +67,15 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     try {
       // 1. TRATAMENTO DE LOGIN & AUTH EXCHANGE
       // [SECURITY]: Troca do token externo pelo JWT interno via Edge Function
-      if (superbid_token) {
-        const exchangeResult = await exchangeAuthSBX(superbid_token, currentEnvironment as "staging" | "production");
+      if (sbx_token) {
+        const exchangeResult = await exchangeAuthSBX(sbx_token, currentEnvironment as "staging" | "production");
         
-        if (!exchangeResult.success || !exchangeResult.token) {
+        if (!exchangeResult.success || !exchangeResult.sbx_access_token) {
           throw new Error(`AUTH_EXCHANGE_FAILED: ${exchangeResult.message || "Unknown error"}`);
         }
-        activeToken = exchangeResult.token;
-        localStorage.setItem("sbx_auth_token", activeToken);
+        sessionToken = exchangeResult.session_token; // Alinhado ao nome real
+        localStorage.setItem('session_token', sessionToken); 
+        localStorage.setItem('sbx_access_token', exchangeResult.sbx_access_token);
       }
 
       // [GUARD CLAUSE]: Redireciona para login se o token for ausente
@@ -130,9 +129,9 @@ export const Route = createFileRoute("/financialGatewayEntry")({
 
       console.error("[financialGatewayEntry Loader] Critical Failure:", error);
 
-      // [FIX]: Purgar tokens antes de redirecionar para evitar loop
-      localStorage.removeItem("sbx_auth_token");
-      localStorage.removeItem("sbx_access_token");
+      // Purgar tokens antes de redirecionar para evitar loop
+      localStorage.removeItem('session_token');
+      localStorage.removeItem('sbx_access_token');
 
       // 4. TELEMETRIA
       // Dispara o monitoramento antes da ação de fallback
