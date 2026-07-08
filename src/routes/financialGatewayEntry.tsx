@@ -1,26 +1,32 @@
 /**
- * @fileoverview Gateway de Orquestração e Token Exchange (Rota: /financialGatewayEntry)
+ * @fileoverview Rota: financialGatewayEntry (Gateway de Entrada e Reidratação de Contexto)
  * * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
+ * Implementa o padrão "Entry Point Gateway" (DMZ). Atua como um "Porteiro" 
+ * protetor entre o ecossistema externo e o núcleo interno do Financial Hub.
  * Ponto de entrada invisível no nível de roteador (Router-Level Controller).
  * Não possui interface gráfica (UI). Executa interceptação síncrona/assíncrona
  * antes da renderização de tela para garantir segurança e integridade do histórico.
- * * [RESPONSABILIDADES]:
- * 1. Guard de Autenticação: Valida a presença de credenciais externas.
- * 2. Token Exchange: Troca o token Superbid pelo token interno (via sbx-auth-exchange).
- * 3. Validação de Regra de Negócio: Verifica elegibilidade da oferta antes de orquestrar.
- * 4. Telemetria e Alertas: Dispara logs de erro e e-mails de notificação em caso de falha.
+ * * * [RESPONSABILIDADES]:
+ * 1. Segurança: Intercepta a requisição, faz o Token Exchange e evita execuções duplicadas.
+ * 2. Reidratação (BFF): Busca perfil do usuário e dados consolidados da oferta.
+ * 3. Orquestração: Monta o SimulationPayload e delega decisão ao Core.
+ * 4. Resiliência: Trata expiração de oferta com degradação graciosa e fallback.
  * 5. Anti-History Pollution: Garante navegação limpa usando redirecionamentos com 'replace'.
  */
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { exchangeAuthSBX } from "@/services/authSBX";
+import { fetchMyProfile } from "@/services/user";
+import { fetchOfferDetails } from "@/services/offer";
+import { logSystemError } from "@/services/notification";
 import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator";
 
-// Dependências de Serviço Assíncronas
-import { exchangeAuthSBX } from "@/services/authSBX";
-import { fetchOfferDetails } from "@/services/offer";
-import { logSystemError, sendErrorEmailNotification } from "@/services/notification";
+// Tipagens de Domínio
+import type { 
+  UserProfile, Offer, Seller, Event, Manager, SimulationPayload 
+} from "@/features/financial-hub/shared/types";
 
 // =========================================================================
 // [CONTRATO DE ENTRADA]: Validação estrita via TanStack Router
@@ -28,99 +34,113 @@ import { logSystemError, sendErrorEmailNotification } from "@/services/notificat
 export const Route = createFileRoute("/financialGatewayEntry")({
   validateSearch: (search: Record<string, unknown>) => ({
     environment: search.environment as string | undefined,
+    sbx_token: search.sbx_token as string | undefined,
     superbid_token: search.superbid_token as string | undefined,
     offer_id: search.offer_id as string | undefined,
     product_id: search.product_id as string | undefined,
     return_uri: search.return_uri as string | undefined,
-    utm_source: search.utm_source as string | undefined,
-    utm_medium: search.utm_medium as string | undefined,
-    utm_campaign: search.utm_campaign as string | undefined,
+    return_to: search.return_to as string | undefined,
+    utm_source: search.utm_source as string | undefined,      
+    utm_medium: search.utm_medium as string | undefined,      
+    utm_campaign: search.utm_campaign as string | undefined, 
   }),
 
   // =========================================================================
-  // [INTERCEPTOR / LOADER]: Execução pré-renderização
+  // [INTERCEPTOR / LOADER]: Execução pré-renderização (Bootstrapping)
   // =========================================================================
   loader: async ({ search, location }) => {
-    const { superbid_token, offer_id, return_uri, environment, ...orchestratorParams } = search as any;
+    const { 
+      superbid_token, 
+      sbx_token, 
+      offer_id, 
+      product_id, 
+      return_uri, 
+      return_to,
+      environment, 
+      ...utmParams 
+    } = search;
+
+    const currentEnvironment = environment || "staging";
+    let activeToken = sbx_token;
 
     try {
-      // 1. TRATAMENTO DE LOGIN (Deep Linking e Preservação de Intenção)
-      if (!superbid_token) {
-        console.warn("🚨 [GATEWAY]: Token externo ausente. Redirecionando para login.");
-        throw redirect({
-          to: "/login",
-          search: { redirect_uri: location.href },
-          replace: true,
+      // 1. TRATAMENTO DE LOGIN & AUTH EXCHANGE
+      // [SECURITY]: Troca do token externo pelo JWT interno via Edge Function
+      if (superbid_token) {
+        const exchangeResult = await exchangeAuthSBX(superbid_token, currentEnvironment as "staging" | "production");
+        
+        if (!exchangeResult.success || !exchangeResult.token) {
+          throw new Error(`AUTH_EXCHANGE_FAILED: ${exchangeResult.message || "Unknown error"}`);
+        }
+        activeToken = exchangeResult.token;
+        localStorage.setItem("sbx_auth_token", activeToken);
+      }
+
+      // [GUARD CLAUSE]: Redireciona para login se o token for ausente
+      if (!activeToken) {
+        throw redirect({ 
+          to: '/accounts/signin',
+          search: { redirect: location.href }, 
+          replace: true 
         });
       }
 
-      // 2. TOKEN EXCHANGE (Valida upstream e emite JWT Próprio via Edge Function)
-      const authResult = await exchangeAuthSBX(
-        superbid_token, 
-        (environment as "staging" | "production") || "staging"
-      );
-      
-      if (!authResult || !authResult.success || !authResult.token) {
-        throw new Error(authResult?.message || "AUTH_EXCHANGE_FAILED");
-      }
+      // 2. REIDRATAÇÃO (BFF): Busca de dados consolidados
+      const userProfile = await fetchMyProfile(activeToken);
+      let offerData: any = null;
 
-      // Salva o token gerado para consumo global do sistema (uso no useFinancialAuth)
-      localStorage.setItem("sbx_auth_token", authResult.token);
-
-      // 3. VALIDAÇÃO DA OFERTA (Garante que a oferta existe)
-      let isOfferValid = false;
       if (offer_id) {
-        const offerData = await fetchOfferDetails(authResult.token, offer_id);
-        isOfferValid = !!(offerData && offerData.offer);
+        offerData = await fetchOfferDetails(activeToken, offer_id);
+        if (!offerData || !offerData.offer) {
+          throw new Error("OFFER_NOT_FOUND");
+        }
       }
 
-      if (offer_id && !isOfferValid) {
-        throw new Error("OFFER_NOT_FOUND");
-      }
+      // 3. ORQUESTRAÇÃO DE NEGÓCIO
+      // [CORE]: Montagem do payload conforme contrato original e delegação
+      const payload: SimulationPayload = {
+        action: "SIMULATE",
+        timestamp: new Date().toISOString(),
+        environment: currentEnvironment,
+        entity: userProfile as UserProfile,
+        product_id: product_id,
+        offer: offerData?.offer as Offer,
+        seller: offerData?.seller as Seller,
+        event: offerData?.event as Event,
+        manager: offerData?.manager as Manager,
+        interaction_context: {
+          utm_source: utmParams.utm_source,
+          utm_medium: utmParams.utm_medium,
+          utm_campaign: utmParams.utm_campaign,
+          origin_url: location.href,
+        },
+      };
 
-      // 4. ORQUESTRAÇÃO DE NEGÓCIO
-      // Delega a decisão de fluxo repassando o token validado
-      const destino = await orchestrateNavigation("SIMULATE", {
-        ...orchestratorParams,
-        environment,
-        offer_id,
-        sbx_token: authResult.token
-      });
-
-      // 5. REDIRECIONAMENTO DE SUCESSO (Substitui o gateway no histórico)
-      throw redirect({
-        to: destino as string,
-        replace: true,
-      });
+      await orchestrateNavigation("CONSULT", payload);
+      
+      return null;
 
     } catch (error: any) {
-      // [CONTROLE DE FLUXO INTERNO]: Ignorar erros de redirecionamento intencional do TanStack
+      // [CONTROLE DE FLUXO]: Ignora redirects internos do TanStack
       if (error && error.isRouteRedirect) throw error;
 
-      console.error("🚨 [FINANCIAL_GATEWAY_CRITICAL_ERROR]:", error);
-      
-      const errorMessage = error?.message || error?.error || "Falha crítica no Gateway de Entrada";
-      const isOfferError = errorMessage.includes("OFFER_NOT_FOUND");
+      console.error("[financialGatewayEntry Loader] Critical Failure:", error);
 
-      // 6. TELEMETRIA E NOTIFICAÇÃO
-      logSystemError(superbid_token || "NO_TOKEN", {
+      // 4. TELEMETRIA
+      const errorMessage = error?.message || "Unknown error";
+
+      await logSystemError(search.superbid_token || sbx_token || "NO_TOKEN", {
         context: "FINANCIAL-GATEWAY-LOADER",
         message: errorMessage,
-        payload: { searchParams: search, errorDetails: error?.stack },
+        details: { stack: error?.stack },
+        payload: { searchParams: search }
       });
 
-      // E-mail de contingência para a engenharia/suporte
-      sendErrorEmailNotification({
-        env: environment || "production",
-        userId: superbid_token ? "EXTERNAL_USER" : "UNAUTHENTICATED",
-        errorCode: isOfferError ? "OFFER_VALIDATION_FAILED" : "TOKEN_EXCHANGE_OR_SYSTEM_ERROR",
-        details: `Falha na rota gateway. Offer ID: ${offer_id || "N/A"}. Mensagem: ${errorMessage}`,
-      }).catch(err => console.error("Falha ao disparar e-mail de contingência:", err));
-
-      // 7. RETORNO SEGURO À ORIGEM
-      // Em caso de falha, devolve o usuário para o return_uri ou sandbox sem poluir o histórico
+      // 5. RETORNO SEGURO À ORIGEM (Fallback Graceful)
+      const fallbackUrl = (return_to || return_uri) || "/";
+      
       throw redirect({
-        to: return_uri || "/sandbox",
+        to: fallbackUrl as any,
         replace: true,
       });
     }
