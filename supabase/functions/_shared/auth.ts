@@ -12,7 +12,7 @@ import { verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
  * @returns {Promise<any>} Dados da sessão encontrada no banco.
  * @throws {Error} Se o token for inválido, ausente ou se a sessão não existir.
  */
-async function validateRequest(req: Request) {
+export async function validateRequest(req: Request) {
   // 1. Extração do token do header
   const token = req.headers.get("x-session-token");
   if (!token) {

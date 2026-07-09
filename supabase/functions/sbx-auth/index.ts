@@ -47,8 +47,17 @@ serve(async (req) => {
       body: details.toString()
     })
 
-    if (!sbxLoginResponse.ok) throw new Error("Credenciais inválidas");
-    const sbxData = await sbxLoginResponse.json()
+    // CAPTURA O QUE A SUPERBID REALMENTE DISSE
+    const sbxData = await sbxLoginResponse.text();
+    
+    if (!sbxLoginResponse.ok) {
+      console.error("[sbx-auth] ERRO REAL DA SBX:", {
+        status: sbxLoginResponse.status,
+        body: sbxData,
+        sentBody: details.toString() // Vê exatamente o que enviamos
+      });
+      throw new Error(`Credenciais inválidas ou erro na API: ${sbxLoginResponse.status}`);
+    }
 
     // Cálculo de expiração
     const agora = new Date()

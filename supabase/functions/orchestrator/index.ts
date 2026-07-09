@@ -381,7 +381,7 @@ serve(async (req: Request) => {
       await validateVisitOwnership(
           supabase, 
           auth, 
-          payload.visit_id
+          visitId
       );
 
       // Validação de Oferta (Condicional: Só valida se a offer_id existir)
@@ -435,7 +435,7 @@ serve(async (req: Request) => {
       const orchestratorConfigs = await resolveOrchestratorConfigs(
         supabase,
         visitOfferData.event_details?.event_id, 
-        visitOfferData.seller_details?.seller_id, // Correção de typo original 'seller_detaiLs'
+        visitOfferData.seller_details?.seller_id, // Correção de typo original 'seller_details'
         visitOfferData.category_id, 
         visit.product_id, 
         visitEntityData.document, 
