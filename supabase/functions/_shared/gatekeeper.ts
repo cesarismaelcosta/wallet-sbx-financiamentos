@@ -1,8 +1,28 @@
+/**
+ * @fileoverview Middleware de Autorização (Gatekeeper)
+ * @path supabase/functions/_shared/gatekeeper.ts
+ *
+ * =========================================================================
+ * GATEKEEPER DE SEGURANÇA (Zero-Trust Authorization)
+ * =========================================================================
+ * Centraliza a validação de acesso a recursos e a comunicação Upstream.
+ *
+ * [RESPONSABILIDADES]:
+ * 1. Validação Triangular: JWT vs Banco de Dados (Visita) vs Payload.
+ * 2. IDOR Protection: Impede acesso a recursos de terceiros.
+ * 3. Roteamento Dinâmico: Resolve staging/production direto da sessão.
+ * 4. WAF Bypass: Utiliza headers origin/referer para a API da Superbid.
+ */
+
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// =========================================================================
+// 1. VALIDAÇÃO DE PROPRIEDADE DA VISITA (OWNERSHIP)
+// =========================================================================
 
 /**
  * @function validateVisitOwnership
- * @description Realiza a Validação Triangular forçada.
+ * @description Realiza a Validação Triangular forçada (Sessão x Visita x Payload).
  * @param {SupabaseClient} supabase - Cliente do Supabase com Service Role.
  * @param {Object} auth - Objeto contendo { user_id, session_token }.
  * @param {string} visitId - ID da visita (o alvo).
@@ -11,11 +31,10 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
  */
 export async function validateVisitOwnership(
   supabase: SupabaseClient,
-  auth: { user_id: string, session_token: string }, // AJUSTADO PARA SNAKE_CASE
+  auth: { user_id: string, session_token: string },
   visitId: string,
   payloadEntityId?: string | null
 ) {
-  
   if (visitId) {
     console.log(`[GATEKEEPER-DEBUG] Recebi visitId: ${visitId}. Verificando banco...`);
   } else {
@@ -32,14 +51,13 @@ export async function validateVisitOwnership(
   if (visitError || !visit) throw new Error("VISIT_NOT_FOUND");
   const dbEntityId = visit.visit_entities?.[0]?.entity_id;
 
-  // AJUSTADO: Lendo session_token do objeto
   console.log(`[GATEKEEPER-DEBUG] Consulta sbx_sessions: ${auth.session_token}. Verificando banco...`);
 
   // 2. Busca o dono real através do session_token (Triangulação)
   const { data: session, error: sessError } = await supabase
     .from('sbx_sessions')
     .select('user_id')
-    .eq('session_token', auth.session_token) // AJUSTADO AQUI
+    .eq('session_token', auth.session_token)
     .single();
 
   if (sessError || !session?.user_id) throw new Error("UNAUTHORIZED");
@@ -58,6 +76,10 @@ export async function validateVisitOwnership(
   }
 }
 
+// =========================================================================
+// 2. VALIDAÇÃO DE INTEGRIDADE DA OFERTA (UPSTREAM)
+// =========================================================================
+
 /**
  * @function validateOfferIntegrity
  * @description Realiza a Triangulação + Validação de Relacionamento (DB) + Integridade Upstream.
@@ -69,7 +91,7 @@ export async function validateVisitOwnership(
  */
 export async function validateOfferIntegrity(
   supabase: SupabaseClient,
-  auth: { user_id: string, session_token: string }, // AJUSTADO PARA SNAKE_CASE
+  auth: { user_id: string, session_token: string },
   visitId: string,
   offerId: string
 ) {
@@ -85,36 +107,48 @@ export async function validateOfferIntegrity(
     throw new Error("INVALID_RELATIONSHIP: Oferta não pertence a esta visita.");
   }
 
-  // 2. Validação Upstream (Superbid)
+  // 2. Validação Upstream com Roteamento Dinâmico (Ambiente)
   const { data: session, error: sessError } = await supabase
     .from('sbx_sessions')
-    .select('sbx_access_token')
-    .eq('session_token', auth.session_token) // AJUSTADO AQUI
+    .select('sbx_access_token, environment')
+    .eq('session_token', auth.session_token)
     .single();
 
   if (sessError || !session?.sbx_access_token) {
-    throw new Error("SESSION_EXPIRED: Token SBX inválido.");
+    throw new Error("SESSION_EXPIRED: Token SBX inválido ou ausente.");
   }
 
-  // Limpa qualquer aspa perdida (%22) que venha da URL do front-end
+  // 3. Aplica o mapeamento dinâmico de URLs
+  const env = session.environment || "staging";
+  const offerBaseUrl = env === "production" 
+    ? "https://offer-query.superbid.net" 
+    : "https://offer-query.stage.superbid.net";
+
+  // Higienização de ID para evitar HTTP 400
   const cleanOfferId = String(offerId).replace(/[^0-9]/g, '');
+  const apiUrl = `${offerBaseUrl}/offers/?filter=id:[${cleanOfferId}]`;
 
-  // Usa %5B e %5D no lugar de [ ] para evitar HTTP 400 Bad Request
-  const apiUrl = `https://offer-query.superbid.net/offers/?filter=id:%5B${cleanOfferId}%5D`;
-
+  // 4. Executa a chamada com o WAF Bypass (Headers de Origin/Referer replicados)
   const response = await fetch(apiUrl, {
-    headers: { "Authorization": `Bearer ${session.sbx_access_token}`, "Accept": "application/json" }
+    method: "GET",
+    headers: { 
+      "Authorization": `Bearer ${session.sbx_access_token}`, 
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "Origin": "https://www.superbid.net",
+      "Referer": "https://www.superbid.net/"
+    }
   });
 
-  // Se a SBX recusar, vamos ver o motivo real.
+  // 5. Interceptação de Erros Reais (Fim da cegueira de log)
   if (!response.ok) {
     const errorBody = await response.text();
-    console.error(`[GATEKEEPER-DEBUG] Superbid recusou a conexão. Status: ${response.status}. Body:`, errorBody);
+    console.error(`[SUPERBID_REJECT] Env: ${env} | Status: ${response.status} | Detalhe: ${errorBody}`);
     throw new Error("UPSTREAM_CONNECTION_ERROR");
   }
 
   const data = await response.json();
   if (!data.offers?.[0] || data.offers[0].offerStatus !== "AVAILABLE") {
-    throw new Error("OFFER_UNAVAILABLE");
+    throw new Error("OFFER_UNAVAILABLE: O lote não consta como disponível na API.");
   }
 }
