@@ -418,6 +418,7 @@ serve(async (req: Request) => {
       }
 
       // D: Resolução de Regras e Parâmetros (Cascata Inversa)
+      const visitEntityData = visit.visit_entities?.[0] || {};
       const orchestratorConfigs = await resolveOrchestratorConfigs(
         supabase,
         visitOfferData.event_details?.event_id, 
