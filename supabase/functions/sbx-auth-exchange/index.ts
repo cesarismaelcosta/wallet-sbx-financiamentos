@@ -33,12 +33,19 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { superbid_token, environment = 'staging' } = await req.json();
+    // Lendo 'sbx_access_token' e 'environment' do JSON recebido do front-end
+    const { sbx_access_token, environment} = await req.json();
 
-    if (!superbid_token) {
-      throw new Error("AUTH_REQUIRED: Token externo (superbid_token) não fornecido.");
+    // Validando a presença do token sbx_access_token
+    if (!sbx_access_token) {
+      throw new Error("[sbx-auth-exchange] AUTH_REQUIRED: Token externo (sbx_access_token) não fornecido.");
     }
 
+    // Validação estrita do Ambiente (Fail-fast)
+    if (!environment || (environment !== 'production' && environment !== 'staging')) {
+      throw new Error("[sbx-auth-exchange] BAD_REQUEST: Ambiente (environment) não fornecido ou inválido. Exigido: 'production' ou 'staging'.");
+    }
+    
     const baseUrl = ENV_URLS[environment as keyof typeof ENV_URLS];
 
     // =========================================================================
@@ -47,19 +54,20 @@ serve(async (req) => {
     const verifyResponse = await fetch(`${baseUrl}/account/v2/user/me`, {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${superbid_token}`,
+        // AJUSTE 3: Passando o token para a API Upstream
+        "Authorization": `Bearer ${sbx_access_token}`,
         "Content-Type": "application/json"
       },
     });
 
     // Interceptação de Token do Parceiro Expirado / Revogado
     if (verifyResponse.status === 401) {
-      throw new Error("SESSION_UPSTREAM_EXPIRED: O token real da Superbid é inválido ou expirou.");
+      throw new Error("[sbx-auth-exchange] SESSION_UPSTREAM_EXPIRED: O token real da Superbid é inválido ou expirou.");
     }
     
     // Tratamento de indisponibilidade da API externa
     if (!verifyResponse.ok) {
-      throw new Error(`UPSTREAM_API_UNAVAILABLE (${verifyResponse.status})`);
+      throw new Error(`[sbx-auth-exchange] UPSTREAM_API_UNAVAILABLE (${verifyResponse.status})`);
     }
 
     const upstreamData = await verifyResponse.json();
@@ -67,7 +75,7 @@ serve(async (req) => {
     const userId = String(account?.id);
 
     if (!userId || userId === "undefined") {
-      throw new Error("USER_NOT_FOUND: Falha ao extrair identidade do upstream.");
+      throw new Error("[sbx-auth-exchange] USER_NOT_FOUND: Falha ao extrair identidade do upstream.");
     }
 
     // =========================================================================
@@ -88,7 +96,7 @@ serve(async (req) => {
       .from('sbx_sessions')
       .insert({ 
         user_id: userId, 
-        sbx_access_token: superbid_token, 
+        sbx_access_token: sbx_access_token, // AQUI: A variável agora bate com o nome da coluna naturalmente
         environment, 
         expires_at: nossaExpiracao.toISOString() 
       })
@@ -96,14 +104,14 @@ serve(async (req) => {
       .single();
 
     if (sessionError || !sessionData) {
-      throw new Error(`DATABASE_ERROR: Erro ao criar sessão -> ${sessionError?.message}`);
+      throw new Error(`[sbx-auth-exchange] DATABASE_ERROR: Erro ao criar sessão -> ${sessionError?.message}`);
     }
 
     // =========================================================================
     // 4. SEGURANÇA: ASSINATURA DO JWT PRÓPRIO (Baseado no sbx-auth)
     // =========================================================================
     const jwtSecret = Deno.env.get("JWT_SECRET");
-    if (!jwtSecret) throw new Error("INTERNAL_CONFIG_ERROR: JWT_SECRET não configurado.");
+    if (!jwtSecret) throw new Error("[sbx-auth-exchange] INTERNAL_CONFIG_ERROR: JWT_SECRET não configurado.");
 
     const key = await crypto.subtle.importKey(
       "raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
@@ -131,7 +139,7 @@ serve(async (req) => {
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err: any) {
-    console.error("[SBX-AUTH-EXCHANGE] Fatal Exception:", err.message);
+    console.error("[sbx-auth-exchange] Fatal Exception:", err.message);
     
     let status = 500;
     if (err.message.includes("AUTH") || err.message.includes("SESSION") || err.message.includes("EXPIRED")) {

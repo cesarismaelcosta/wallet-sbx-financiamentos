@@ -28,53 +28,61 @@ import type {
   UserProfile, Offer, Seller, Event, Manager, SimulationPayload 
 } from "@/features/financial-hub/shared/types";
 
+// Interface EXATAMENTE com os campos da URI
+interface SearchSchema {
+  environment?: string;
+  sbx_access_token?: string;
+  offer_id?: string;
+  product_id?: string;
+  return_uri?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+}
+
 // =========================================================================
 // [CONTRATO DE ENTRADA]: Validação estrita via TanStack Router
 // =========================================================================
-export const Route = createFileRoute('/financialGatewayEntry')({
-  validateSearch: (search: Record<string, unknown>): SearchSchema => {
-    console.log("🚀 [financialGatewayEntry.tsx] Validate Search:", search);
+export const Route = createFileRoute("/financialGatewayEntry")({
+  // 1. O validateSearch com a SINTAXE DE BLOCO CORRETA
+  validateSearch: (search: Record<string, unknown>) => {
+    console.log("🚀 [financialGatewayEntry] Validate Search:", search);
+
     return {
-      environment: search.environment as string,
-      sbx_access_token: search.sbx_access_token as string,
-      offer_id: search.offer_id as string,
-      product_id: search.product_id as string,
-      return_uri: search.return_uri as string,
-      utm_source: search.utm_source as string,
-      utm_medium: search.utm_medium as string,
-      utm_campaign: search.utm_campaign as string,
+      environment: search.environment as string | undefined,
+      sbx_access_token: search.sbx_access_token as string | undefined,
+      offer_id: search.offer_id as string | undefined,
+      product_id: search.product_id as string | undefined,
+      return_uri: search.return_uri as string | undefined,
+      utm_source: search.utm_source as string | undefined,      
+      utm_medium: search.utm_medium as string | undefined,      
+      utm_campaign: search.utm_campaign as string | undefined, 
     };
   },
 
-  // =========================================================================
-  // [INTERCEPTOR / LOADER]: Execução pré-renderização (Bootstrapping)
-  // =========================================================================
-  loader: async ({ search, location }) => {
-        
-    // 1. RASTREADOR DE ENTRADA
-    console.log("🚀 [financialGatewayEntry.tsx] Loader disparado. Search Params:", search);
+  // 2. BOA PRÁTICA TANSTACK: Declarar dependências do loader garante 
+  // que o roteador não injete o search como undefined durante transições de rota.
+  loaderDeps: ({ search }) => search,
 
-    // Garantia de segurança contra undefined search params
-    const searchParams = search && typeof search === 'object' ? search : {};
+  // 3. O Loader recebe os dados através de 'deps' (ou 'search', que agora está mapeado)
+  loader: async ({ deps, location }) => {
+    // Usamos o 'deps' que é garantido pelo loaderDeps baseado no validateSearch
+    console.log("🚀 [financialGatewayEntry] Loader disparado. Payload mapeado:", deps);
 
-    const { 
-      environment, 
-      sbx_access_token, 
-      offer_id, 
-      product_id, 
-      return_uri, 
-      ...utmParams 
-    } = searchParams;
+    if (!deps || !deps.sbx_access_token) {
+       console.error("🚨 [Gateway Loader] Falha crítica: Roteador perdeu o contexto.");
+       throw redirect({ to: '/accounts/signin', replace: true });
+    }
 
-    const currentEnvironment = environment || "staging";
-    let activeSBXAccessToken = sbx_access_token;
+    const currentEnvironment = deps.environment || "staging";
+    let activeSBXAccessToken = deps.sbx_access_token;
 
     try {
       // 1. TRATAMENTO DE LOGIN & AUTH EXCHANGE
       // [SECURITY]: Troca do token externo pelo JWT interno via Edge Function
-      if (sbx_access_token) {
-        console.log("🔐 [financialGatewayEntry Loader] Tentando exchange do token:", sbx_access_token.substring(0, 10) + "...")
-        const exchangeResult = await exchangeAuthSBX(sbx_access_token, currentEnvironment as "staging" | "production");
+      if (activeSBXAccessToken) {
+        console.log("🔐 [financialGatewayEntry Loader] Tentando exchange do token:", activeSBXAccessToken.substring(0, 10) + "...")
+        const exchangeResult = await exchangeAuthSBX(activeSBXAccessToken, currentEnvironment as "staging" | "production");
         
         console.log("✅ [financialGatewayEntry Loader] Resultado do Exchange:", exchangeResult);
 
