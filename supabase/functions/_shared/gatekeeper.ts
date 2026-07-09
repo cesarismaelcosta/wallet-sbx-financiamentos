@@ -96,11 +96,22 @@ export async function validateOfferIntegrity(
     throw new Error("SESSION_EXPIRED: Token SBX inválido.");
   }
 
-  const response = await fetch(`https://offer-query.superbid.net/offers/?filter=id:[${offerId}]`, {
+  // Limpa qualquer aspa perdida (%22) que venha da URL do front-end
+  const cleanOfferId = String(offerId).replace(/[^0-9]/g, '');
+
+  // Usa %5B e %5D no lugar de [ ] para evitar HTTP 400 Bad Request
+  const apiUrl = `https://offer-query.superbid.net/offers/?filter=id:%5B${cleanOfferId}%5D`;
+
+  const response = await fetch(apiUrl, {
     headers: { "Authorization": `Bearer ${session.sbx_access_token}`, "Accept": "application/json" }
   });
 
-  if (!response.ok) throw new Error("UPSTREAM_CONNECTION_ERROR");
+  // Se a SBX recusar, vamos ver o motivo real.
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error(`[GATEKEEPER-DEBUG] Superbid recusou a conexão. Status: ${response.status}. Body:`, errorBody);
+    throw new Error("UPSTREAM_CONNECTION_ERROR");
+  }
 
   const data = await response.json();
   if (!data.offers?.[0] || data.offers[0].offerStatus !== "AVAILABLE") {
