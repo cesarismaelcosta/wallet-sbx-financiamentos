@@ -27,6 +27,13 @@ export async function validateVisitOwnership(
   visitId: string,
   payloadEntityId?: string | null
 ) {
+  
+  if (visitId) {
+    console.log(`[GATEKEEPER-DEBUG] Recebi visitId: ${visitId}. Verificando banco...`);
+  } else {
+    console.log(`[GATEKEEPER-DEBUG] VisitId nulo/undefined. Fluxo de Criação (OK).`);
+  }
+
   // 1. Busca a visita e o dono (dbEntityId) no banco
   const { data: visit, error: visitError } = await supabase
     .from('visits')
@@ -37,6 +44,8 @@ export async function validateVisitOwnership(
   if (visitError || !visit) throw new Error("VISIT_NOT_FOUND");
   const dbEntityId = visit.visit_entities?.[0]?.entity_id;
 
+    console.log(`[GATEKEEPER-DEBUG] Consulta sbx_sessions: ${auth.sessionToken}. Verificando banco...`);
+
   // 2. Busca o dono real através do sessionToken (Triangulação)
   const { data: session, error: sessError } = await supabase
     .from('sbx_sessions')
@@ -44,6 +53,7 @@ export async function validateVisitOwnership(
     .eq('session_token', auth.sessionToken)
     .single();
 
+  console.log(`[GATEKEEPER-DEBUG] Consulta sbx_sessions: ${auth.sessionToken}. Verificando banco...`);
   if (sessError || !session?.user_id) throw new Error("UNAUTHORIZED");
   const sessionUserId = session.user_id;
 

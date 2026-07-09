@@ -137,7 +137,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       };
 
       console.log("🚀 [financialGatewayEntry Loader] Tudo OK. Delegando para o orquestrador.");
-      await orchestrateNavigation("CONSULT", payload);
+      await orchestrateNavigation("CONSULT", payload, session_token);
       
       // O loader finaliza sem renderizar componente
       return null;

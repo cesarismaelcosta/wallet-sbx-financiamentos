@@ -537,7 +537,7 @@ serve(async (req: Request) => {
       let finalUrl = `${destination.url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
       if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
 
-      debuglog("[POST] payload final de retorno:", { payload, visitId, visitUpdateId, simulationId });
+      debugLog("[POST] payload final de retorno:", { payload, visitId, visitUpdateId, simulationId });
 
       // Validação Triangular (Obrigatória para toda e qualquer visita)
       await validateVisitOwnership(

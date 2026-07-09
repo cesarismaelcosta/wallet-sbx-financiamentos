@@ -14,23 +14,10 @@
  */
 function getSessionToken(): string {
   // Busca especificamente a chave 'session_token' que está no seu Local Storage
-  const token = localStorage.getItem("session_token");
+  const sessionToken = localStorage.getItem("session_token");
   
-  if (token) return token;
+  if (sessionToken) return sessionToken;
 
-  // Fallback de segurança para o padrão nativo do Supabase (caso você mude a auth no futuro)
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
-      try {
-        const authData = JSON.parse(localStorage.getItem(key) || '{}');
-        if (authData.access_token) return authData.access_token;
-      } catch (e) {
-        console.warn("[Gateway] Erro ao fazer parse do token Supabase", e);
-      }
-    }
-  }
-  
   return "";
 }
 
@@ -41,7 +28,12 @@ function getSessionToken(): string {
  * @param method - 'GET' ou 'POST'.
  * @returns Promise com os dados da resposta (JSON).
  */
-export async function callOrchestrator(payload: any, method: "GET" | "POST" = "POST") {
+export async function callOrchestrator(
+  payload: any, 
+  method: "GET" | "POST", 
+  passedSessionToken?: string
+) {
+
   if (method !== "GET" && method !== "POST") {
     console.error("[DEBUG] Gateway chamado com método inválido:", method);
     console.trace("[DEBUG] Stack Trace de quem chamou:");
@@ -57,11 +49,12 @@ export async function callOrchestrator(payload: any, method: "GET" | "POST" = "P
 
   const productId = String(payload.product_id);
 
-  // 2. MODO REAL: Execução padrão via Edge Function (Orchestrator fixo)
+  // Execução padrão via Edge Function (Orchestrator fixo)
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orchestrator`;
 
-  // CAPTURA DO TOKEN PARA A TRAVA DE SEGURANÇA
-  const sessionToken = getSessionToken();
+  // Se `passedSessionToken` veio (do loader), usa ele.
+  // 2. Se não, chama a função getSessionToken() (que busca no localStorage)
+  const sessionToken = passedSessionToken || getSessionToken();
 
   const options: RequestInit = {
     method: method,
