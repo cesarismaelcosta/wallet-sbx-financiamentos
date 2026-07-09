@@ -74,7 +74,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
        throw redirect({ to: '/accounts/signin', replace: true });
     }
 
-    const currentEnvironment = deps.environment || "staging";
+    const currentEnvironment = deps.environment || "production";
     let activeSBXAccessToken = deps.sbx_access_token;
 
     try {
@@ -104,12 +104,12 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       }
 
       // 2. REIDRATAÇÃO (BFF): Busca de dados consolidados
-      const userProfile = await fetchMyProfile(activeSBXAccessToken);
+      const userProfile = await fetchMyProfile(session_token);
       let offerData: any = null;
 
-      if (offer_id) {
-        console.log("🔍 [financialGatewayEntry Loader] Buscando oferta:", offer_id);
-        offerData = await fetchOfferDetails(activeSBXAccessToken, offer_id);
+      if (deps.offer_id) {
+        console.log("🔍 [financialGatewayEntry Loader] Buscando oferta:", deps.offer_id);
+        offerData = await fetchOfferDetails(session_token, deps.offer_id);
         if (!offerData || !offerData.offer) {
           throw new Error("OFFER_NOT_FOUND");
         }
@@ -123,15 +123,15 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         timestamp: new Date().toISOString(),
         environment: currentEnvironment,
         entity: userProfile as UserProfile,
-        product_id: product_id,
+        product_id: product_id || "",
         offer: offerData?.offer as Offer,
         seller: offerData?.seller as Seller,
         event: offerData?.event as Event,
         manager: offerData?.manager as Manager,
         interaction_context: {
-          utm_source: utmParams.utm_source,
-          utm_medium: utmParams.utm_medium,
-          utm_campaign: utmParams.utm_campaign,
+          utm_source: deps.utm_source || "",
+          utm_medium: deps.utm_medium || "",
+          utm_campaign: deps.utm_campaign || "",
           origin_url: location.href,
         },
       };
@@ -168,7 +168,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
 
       // 4. TRATAMENTO DE NEGÓCIO: 404 / OFFER_NOT_FOUND
       if (errorMessage.includes("OFFER_NOT_FOUND") || status === 404) {
-        const targetURL = searchParams.return_uri;
+        const targetURL = deps.return_uri;
         if (targetURL) throw redirect({ to: targetURL as any, replace: true });
         throw new Error("OFFER_NOT_FOUND");
       }
