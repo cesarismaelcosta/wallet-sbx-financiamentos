@@ -118,7 +118,8 @@ serve(async (req) => {
         device_type: infra.device_type,
         operating_system: infra.operating_system,
         origin_details: infra.metadata // O JSONB recebe o restante dos metadados
-      });
+      })
+      .select();
 
     if (sessionError) {
       throw new Error(`[sbx-auth] DATABASE_ERROR: Erro ao criar sessão -> ${sessionError?.message}`);
