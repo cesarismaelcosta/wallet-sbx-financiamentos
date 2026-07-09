@@ -178,7 +178,7 @@ export function useOrchestratorHydration(visitId: string | null, visitUpdateId?:
       })
       .catch((err) => {
         console.error(`❌ [useOrchestrator.ts | useOrchestratorHydration] Erro crítico para visita [${visitId}]:`, err);
-        setError(err.message || "Falha na resolução do contrato no Orchestrator.");
+        setError(err.message || "[useOrchestrator.ts | useOrchestratorHydration] Falha na resolução do contrato no Orchestrator.");
       })
       .finally(() => setLoading(false));
 
@@ -241,7 +241,8 @@ export const orchestrateNavigation = async (
         window.history.replaceState({}, "", data.url);
       } else {
         // Se a rota for efetivamente nova, repassamos o controle para o navegador (Hard Redirect).
-        window.location.href = data.url;
+        window.location.replace(data.url);
+      }
       }
     } else {
       console.warn("⚠️ [useOrchestrator.ts | orchestrateNavigation] Backend processou o payload, mas reteve a URL de destino.");

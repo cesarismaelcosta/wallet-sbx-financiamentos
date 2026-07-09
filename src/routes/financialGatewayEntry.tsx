@@ -1,4 +1,4 @@
- * @fileoverview Rota: financialGatewayEntry (Gateway de Entrada e Reidratação de Contexto)
+/* * @fileoverview Rota: financialGatewayEntry (Gateway de Entrada e Reidratação de Contexto)
  * * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
@@ -132,7 +132,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
           utm_source: deps.utm_source || "",
           utm_medium: deps.utm_medium || "",
           utm_campaign: deps.utm_campaign || "",
-          origin_url: location.href,
+          origin_url: deps.return_uri,
         },
       };
 
