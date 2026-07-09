@@ -408,7 +408,7 @@ serve(async (req: Request) => {
 
       // Validação de Oferta (Condicional: Só valida se a offer_id existir)
       const visitOfferData = visit.visit_offers?.[0] || {};
-      if (visitOffer?.offer_id) {
+      if (visitOfferData?.offer_id) {
           await validateOfferIntegrity(
               supabase, 
               auth, 
