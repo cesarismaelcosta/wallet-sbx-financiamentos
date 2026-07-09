@@ -14,8 +14,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateRequest } from "../_shared/auth.ts";
+import { captureInfrastructure } from "../_shared/infra.ts";
 import { sql } from "../_shared/db.ts";
-import { captureInfrastructure } from "../_shared/infra";
 import { validateVisitOwnership, validateOfferIntegrity } from "../_shared/gatekeeper.ts";
 import { persistVisitData } from "./persist-data.ts";
 

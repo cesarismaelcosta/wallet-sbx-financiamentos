@@ -12,6 +12,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts"
+import { captureInfrastructure } from "../_shared/infra.ts";
+import { OriginDetails } from "../_shared/types.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*', 
@@ -74,15 +76,26 @@ serve(async (req) => {
 
     // Gravação no Supabase
     const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
+    const infra = await captureInfrastructure(req);
+
     const { data, error } = await supabaseAdmin
       .from('sbx_sessions')
       .insert({ 
         session_token: sessionToken, 
-        user_id: sbxData.userId, 
-        sbx_access_token: sbxData.access_token, 
+        user_id: userId, 
+        sbx_access_token: sbx_access_token, 
         environment, 
-        expires_at: nossaExpiracao.toISOString() 
-      })
+        expires_at: nossaExpiracao.toISOString(),
+        // Mapeamento dos novos campos
+        ip_address: infra.ip_address,
+        country: infra.country,
+        state: infra.state,
+        city: infra.city,
+        user_agent: infra.user_agent,
+        device_type: infra.device_type,
+        operating_system: infra.operating_system,
+        origin_details: infra.metadata // O JSONB recebe o restante dos metadados
+      });
 
     // Diagnóstico detalhado de erro de banco (Garante visibilidade)
     if (error) {
