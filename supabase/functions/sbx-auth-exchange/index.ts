@@ -96,7 +96,7 @@ serve(async (req) => {
       .from('sbx_sessions')
       .insert({ 
         user_id: userId, 
-        sbx_access_token: sbx_access_token, // AQUI: A variável agora bate com o nome da coluna naturalmente
+        sbx_access_token: sbx_access_token, 
         environment, 
         expires_at: nossaExpiracao.toISOString() 
       })
