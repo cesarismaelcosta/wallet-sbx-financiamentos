@@ -377,24 +377,6 @@ serve(async (req: Request) => {
 
       if (!visitId) throw new Error("O parâmetro 'visit_id' é obrigatório.");
 
-      // Validação Triangular (Obrigatória para toda e qualquer visita)
-      await validateVisitOwnership(
-          supabase, 
-          auth, 
-          visitId
-      );
-
-      // Validação de Oferta (Condicional: Só valida se a offer_id existir)
-      const visitOffer = visit.visit_offers?.[0];
-      if (visitOffer?.offer_id) {
-          await validateOfferIntegrity(
-              supabase, 
-              auth, 
-              visitId, 
-              visitOffer.offer_id
-          );
-      }
-
       // A: Busca de Simulação Prévia (Se Existir)
       let simulationData = null;
       if (simulationId) {
@@ -415,21 +397,25 @@ serve(async (req: Request) => {
 
       debugLog("VISIT no GET:", visit);
 
-      // C: TRAVA DE SEGURANÇA (GATEKEEPER)
-      // Bloqueia leituras anônimas ou tentativas de acesso a visitas de terceiros (Anti-Scraping / Anti-Leak).
-      const sessionToken = req.headers.get("x-session-token");
-      if (!sessionToken) {
-        return new Response(JSON.stringify({ code: "AUTH_REQUIRED" }), { status: 401, headers: corsHeaders });
-      }
-      const sessionUserId = JSON.parse(atob(sessionToken.split('.')[1])).sub;
-      const visitEntityData = visit.visit_entities?.[0] || {};
-      
-      if (visitEntityData.entity_id && visitEntityData.entity_id !== String(sessionUserId)) {
-        console.warn(`[SECURITY] Usuário ${sessionUserId} tentou acessar visita de terceiros: ${visitId}`);
-        return new Response(JSON.stringify({ code: "FORBIDDEN_ACCESS" }), { status: 403, headers: corsHeaders });
-      }
-
       if (visitError || !visit) throw new Error("Visita não encontrada ou expirada.");
+
+      // Validação Triangular (Obrigatória para toda e qualquer visita)
+      await validateVisitOwnership(
+          supabase, 
+          auth, 
+          visitId
+      );
+
+      // Validação de Oferta (Condicional: Só valida se a offer_id existir)
+      const visitOfferData = visit.visit_offers?.[0] || {};
+      if (visitOffer?.offer_id) {
+          await validateOfferIntegrity(
+              supabase, 
+              auth, 
+              visitId, 
+              visitOfferData.offer_id
+          );
+      }
 
       // D: Resolução de Regras e Parâmetros (Cascata Inversa)
       const visitOfferData = visit.visit_offers?.[0] || {};
