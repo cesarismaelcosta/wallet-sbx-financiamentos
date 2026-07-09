@@ -33,9 +33,9 @@ export async function validateRequest(req: Request) {
     );
 
     // 3. Verificação e decodificação do payload
-    // A função verify lançará erro se a assinatura for inválida ou o token expirado
-    const { payload } = await verify(token, key);
-    const sessionId = payload.jti as string; // 'jti' é o UUID que geramos na criação
+    // AQUI ESTAVA O ERRO: Sem as chaves { }, recebemos o objeto direto.
+    const payload = await verify(token, key);
+    const sessionId = payload.jti as string; // Agora 'jti' existe!
 
     console.log(`[DEBUG] JTI extraído do JWT: ${sessionId}`);
 

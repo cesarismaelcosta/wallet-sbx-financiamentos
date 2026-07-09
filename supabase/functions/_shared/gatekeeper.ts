@@ -1,29 +1,17 @@
-/**
- * @fileoverview Middleware de Autorização (Gatekeeper)
- * @path supabase/functions/_shared/gatekeeper.ts
- * * =========================================================================
- * GATEKEEPER DE SEGURANÇA (Zero-Trust Authorization)
- * * =========================================================================
- * Centraliza a validação de acesso a recursos.
- * * [RESPONSABILIDADES]:
- * 1. Validação Triangular: JWT vs Banco de Dados (Visita) vs Payload.
- * 2. IDOR Protection: Impede acesso a recursos de terceiros.
- */
-
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
  * @function validateVisitOwnership
  * @description Realiza a Validação Triangular forçada.
- * * @param {SupabaseClient} supabase - Cliente do Supabase com Service Role.
- * @param {Object} auth - Objeto contendo { userId, sessionToken }.
+ * @param {SupabaseClient} supabase - Cliente do Supabase com Service Role.
+ * @param {Object} auth - Objeto contendo { user_id, session_token }.
  * @param {string} visitId - ID da visita (o alvo).
  * @param {string} payloadEntityId - ID enviado no payload para validação.
  * @throws {Error} - Lança FORBIDDEN_ACCESS se houver divergência.
  */
 export async function validateVisitOwnership(
   supabase: SupabaseClient,
-  auth: { userId: string, sessionToken: string },
+  auth: { user_id: string, session_token: string }, // AJUSTADO PARA SNAKE_CASE
   visitId: string,
   payloadEntityId?: string | null
 ) {
@@ -44,16 +32,16 @@ export async function validateVisitOwnership(
   if (visitError || !visit) throw new Error("VISIT_NOT_FOUND");
   const dbEntityId = visit.visit_entities?.[0]?.entity_id;
 
-    console.log(`[GATEKEEPER-DEBUG] Consulta sbx_sessions: ${auth.sessionToken}. Verificando banco...`);
+  // AJUSTADO: Lendo session_token do objeto
+  console.log(`[GATEKEEPER-DEBUG] Consulta sbx_sessions: ${auth.session_token}. Verificando banco...`);
 
-  // 2. Busca o dono real através do sessionToken (Triangulação)
+  // 2. Busca o dono real através do session_token (Triangulação)
   const { data: session, error: sessError } = await supabase
     .from('sbx_sessions')
     .select('user_id')
-    .eq('session_token', auth.sessionToken)
+    .eq('session_token', auth.session_token) // AJUSTADO AQUI
     .single();
 
-  console.log(`[GATEKEEPER-DEBUG] Consulta sbx_sessions: ${auth.sessionToken}. Verificando banco...`);
   if (sessError || !session?.user_id) throw new Error("UNAUTHORIZED");
   const sessionUserId = session.user_id;
 
@@ -70,20 +58,18 @@ export async function validateVisitOwnership(
   }
 }
 
-
-
 /**
  * @function validateOfferIntegrity
  * @description Realiza a Triangulação + Validação de Relacionamento (DB) + Integridade Upstream.
- * * @param {SupabaseClient} supabase - Cliente do Supabase.
- * @param {Object} auth - Objeto { userId, sessionToken }.
+ * @param {SupabaseClient} supabase - Cliente do Supabase.
+ * @param {Object} auth - Objeto { user_id, session_token }.
  * @param {string} visitId - ID da visita (alvo).
  * @param {string} offerId - ID da oferta a ser validada.
  * @throws {Error} - Lança exceção se a relação for inválida ou oferta indisponível.
  */
 export async function validateOfferIntegrity(
   supabase: SupabaseClient,
-  auth: { userId: string, sessionToken: string },
+  auth: { user_id: string, session_token: string }, // AJUSTADO PARA SNAKE_CASE
   visitId: string,
   offerId: string
 ) {
@@ -103,7 +89,7 @@ export async function validateOfferIntegrity(
   const { data: session, error: sessError } = await supabase
     .from('sbx_sessions')
     .select('sbx_access_token')
-    .eq('session_token', auth.sessionToken)
+    .eq('session_token', auth.session_token) // AJUSTADO AQUI
     .single();
 
   if (sessError || !session?.sbx_access_token) {
