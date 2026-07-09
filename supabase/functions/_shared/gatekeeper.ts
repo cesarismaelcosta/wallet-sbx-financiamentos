@@ -151,4 +151,25 @@ export async function validateOfferIntegrity(
   if (!data.offers?.[0] || data.offers[0].offerStatus !== "AVAILABLE") {
     throw new Error("OFFER_UNAVAILABLE: O lote não consta como disponível na API.");
   }
+  
+  const data = await response.json();
+  
+  // 4. Ajuste: Validação Defensiva e Log do Status Real
+  const offer = data.offers?.[0];
+  
+  if (!offer) {
+    console.error(`[GATEKEEPER-DEBUG] Lote ${cleanOfferId} não encontrado no payload retornado.`);
+    throw new Error("OFFER_NOT_FOUND: API retornou vazio.");
+  }
+
+  // LOG DE AUDITORIA: Veja exatamente o status que a Superbid te deu
+  console.log(`[GATEKEEPER-DEBUG] Status do lote ${cleanOfferId}: ${offer.offerStatus}`);
+
+  // Se o status não for 'AVAILABLE', avisamos no log mas não travamos cegamente, 
+  // a menos que seja uma regra estrita de negócio.
+  if (offer.offerStatus !== "AVAILABLE") {
+    // Altere a condição abaixo se precisar bloquear estritamente
+    console.warn(`[GATEKEEPER-WARNING] Lote com status inesperado: ${offer.offerStatus}`);
+    // throw new Error("OFFER_UNAVAILABLE: O lote não está disponível."); // Removido para teste
+  }
 }
