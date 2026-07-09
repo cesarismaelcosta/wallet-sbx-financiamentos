@@ -243,7 +243,6 @@ export const orchestrateNavigation = async (
         // Se a rota for efetivamente nova, repassamos o controle para o navegador (Hard Redirect).
         window.location.replace(data.url);
       }
-      }
     } else {
       console.warn("⚠️ [useOrchestrator.ts | orchestrateNavigation] Backend processou o payload, mas reteve a URL de destino.");
     }
