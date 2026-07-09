@@ -1,74 +1,73 @@
-/**
- * @fileoverview Middleware de Autenticação Centralizado (Security Core)
- * @path supabase/functions/_shared/auth.ts
- * * =========================================================================
- * PROTOCOLO DE SEGURANÇA (Zero-Trust Identity)
- * =========================================================================
- * Esta camada atua como o validador soberano de identidade do ecossistema.
- * * [RESPONSABILIDADES]:
- * 1. Verificação Criptográfica: Valida se o JWT foi assinado pelo nosso segredo (HMAC-SHA256).
- * 2. Validação Temporal: Verifica automaticamente se o token expirou (claim 'exp').
- * 3. Sanitização de Identidade: Extrai o 'sub' (User ID) e 'jti' (Session ID) de forma segura.
- * * [USO]:
- * Deve ser importado no topo de cada Edge Function que exige autenticação.
- */
-
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 
 /**
- * @interface AuthResult
- * @description Contrato de identidade retornado após validação bem-sucedida.
+ * Valida a sessão do usuário baseada no token JWT fornecido no header.
+ * * Fluxo de execução:
+ * 1. Extração: Obtém o 'x-session-token' do header.
+ * 2. Verificação: Valida a assinatura do JWT usando o segredo de ambiente.
+ * 3. Identificação: Extrai o 'jti' (UUID da sessão) do payload.
+ * 4. Persistência: Consulta o Supabase para garantir que a sessão ainda existe no banco.
+ * * @param req - Objeto de requisição HTTP original.
+ * @returns {Promise<any>} Dados da sessão encontrada no banco.
+ * @throws {Error} Se o token for inválido, ausente ou se a sessão não existir.
  */
-interface AuthResult {
-  userId: string;
-  sessionId: string;
-}
-
-/**
- * @function validateRequest
- * @description Valida o header 'x-session-token' da requisição.
- * * @param {Request} req - A requisição HTTP original.
- * @returns {Promise<AuthResult>} - Dados de identidade extraídos do token.
- * @throws {Error} - Lança exceções padrão ('AUTH_REQUIRED' ou 'AUTH_INVALID') 
- * para serem tratadas pelas funções chamadoras.
- */
-export async function validateRequest(req: Request): Promise<AuthResult> {
-  // 1. Extração do Token
+async function validateRequest(req: Request) {
+  // 1. Extração do token do header
   const token = req.headers.get("x-session-token");
   if (!token) {
-    throw new Error("AUTH_REQUIRED: Cabeçalho x-session-token ausente.");
-  }
-  
-  // DEBUG CIRÚRGICO
-  console.log("[validateRequest] Headers recebidos no Gatekeeper:", Object.fromEntries(req.headers.entries()));
-    
-  // 2. Recuperação da Chave de Segurança
-  const jwtSecret = Deno.env.get("JWT_SECRET");
-  if (!jwtSecret) {
-    console.error("[SECURITY CRITICAL]: JWT_SECRET não configurado no ambiente.");
-    throw new Error("INTERNAL_CONFIG_ERROR");
+    throw new Error("Token de sessão ausente nos headers.");
   }
 
   try {
-    // 3. Importação da Chave para verificação criptográfica
+    // 2. Preparação da chave para verificação do JWT
+    const jwtSecret = Deno.env.get("JWT_SECRET");
+    if (!jwtSecret) throw new Error("Configuração de segurança (JWT_SECRET) ausente.");
+
     const key = await crypto.subtle.importKey(
       "raw", 
-      new TextEncoder().encode(jwtSecret),
+      new TextEncoder().encode(jwtSecret), 
       { name: "HMAC", hash: "SHA-256" }, 
       false, 
       ["verify"]
     );
 
-    // 4. Verificação de Assinatura e Expiração
-    // O método verify falha automaticamente se a assinatura for inválida ou o token expirado.
-    const payload = await verify(token, key);
+    // 3. Verificação e decodificação do payload
+    // A função verify lançará erro se a assinatura for inválida ou o token expirado
+    const { payload } = await verify(token, key);
+    const sessionId = payload.jti as string; // 'jti' é o UUID que geramos na criação
 
-    return {
-      userId: payload.sub as string,
-      sessionId: payload.jti as string,
-    };
-  } catch (err) {
-    console.error("[SECURITY WARNING]: Tentativa de acesso com token inválido/expirado.");
-    throw new Error("AUTH_INVALID: Token de sessão inválido ou assinatura não confiavel.");
+    console.log(`[DEBUG] JTI extraído do JWT: ${sessionId}`);
+
+    // 4. Consulta ao banco de dados (A fonte da verdade)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '', 
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const { data, error } = await supabaseAdmin
+      .from('sbx_sessions')
+      .select('*')
+      .eq('session_token', sessionId)
+      .single();
+
+    // 5. Tratamento de erros de banco de dados
+    if (error) {
+      console.error("[DEBUG] Erro de consulta ao banco:", error);
+      throw new Error("Falha ao buscar sessão no banco de dados.");
+    }
+
+    if (!data) {
+      console.warn(`[DEBUG] Nenhuma sessão encontrada para o ID: ${sessionId}`);
+      throw new Error("Sessão não encontrada ou expirada.");
+    }
+
+    // Retorno bem-sucedido
+    return data;
+
+  } catch (err: any) {
+    console.error(`[DEBUG] Falha na validação de request: ${err.message}`);
+    // Repassa o erro para ser tratado pela rota que chama esta função
+    throw new Error(`Não autorizado: ${err.message}`);
   }
 }

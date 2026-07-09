@@ -56,13 +56,20 @@ serve(async (req) => {
     const margemSegurancaMs = 15 * 60 * 1000
     const nossaExpiracao = new Date(agora.getTime() + (expiraEmSegundos * 1000) - margemSegurancaMs)
 
+    // Gera o UUID no Deno antes de qualquer coisa
+    const sessionToken = crypto.randomUUID();
+
     // Gravação no Supabase
     const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
     const { data, error } = await supabaseAdmin
       .from('sbx_sessions')
-      .insert({ user_id: sbxData.userId, sbx_access_token: sbxData.access_token, environment, expires_at: nossaExpiracao.toISOString() })
-      .select('session_token')
-      .single()
+      .insert({ 
+        session_token: sessionToken, 
+        user_id: sbxData.userId, 
+        sbx_access_token: sbxData.access_token, 
+        environment, 
+        expires_at: nossaExpiracao.toISOString() 
+      })
 
     if (error) throw new Error("Erro ao criar sessão");
 
@@ -78,7 +85,7 @@ serve(async (req) => {
       { alg: "HS256", typ: "JWT" },
       { 
         sub: sbxData.userId, 
-        jti: data.session_token, // O UUID original como referência interna
+        jti: sessionToken, // O UUID original como referência interna
         exp: getNumericDate(nossaExpiracao.getTime() / 1000) 
       },
       key
