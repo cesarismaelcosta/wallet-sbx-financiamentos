@@ -38,7 +38,10 @@ export async function validateRequest(req: Request): Promise<AuthResult> {
   if (!token) {
     throw new Error("AUTH_REQUIRED: Cabeçalho x-session-token ausente.");
   }
-
+  
+  // DEBUG CIRÚRGICO
+  console.log("[validateRequest] Headers recebidos no Gatekeeper:", Object.fromEntries(req.headers.entries()));
+    
   // 2. Recuperação da Chave de Segurança
   const jwtSecret = Deno.env.get("JWT_SECRET");
   if (!jwtSecret) {
