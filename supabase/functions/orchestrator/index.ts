@@ -385,12 +385,13 @@ serve(async (req: Request) => {
       );
 
       // Validação de Oferta (Condicional: Só valida se a offer_id existir)
-      if (payload.offer?.offer_id) {
+      const visitOffer = visit.visit_offers?.[0];
+      if (visitOffer?.offer_id) {
           await validateOfferIntegrity(
               supabase, 
               auth, 
-              payload.visit_id, 
-              payload.offer.offer_id
+              visitId, 
+              visitOffer.offer_id
           );
       }
 
