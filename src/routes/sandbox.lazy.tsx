@@ -126,7 +126,7 @@ export function SandboxLayout() {
           <button
             onClick={() => {
                localStorage.setItem("sbx_environment", envPreLogin);
-               navigate({ to: '/accounts/signin', search: { redirect: location.pathname } });
+               navigate({ to: '/accounts/signin', search: { redirect_uri: location.pathname } });
             }}
             className="w-full h-12 bg-[#B400FF] hover:bg-[#9a00db] text-white font-bold rounded-full transition-colors"
           >

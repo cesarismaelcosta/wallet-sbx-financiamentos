@@ -92,30 +92,19 @@ export function CustomLogin() {
 
     setIsLoading(true);
 
-    const env = localStorage.getItem("sbx_environment") as "staging" | "production" || "production";
-    const response = await autenticateWalletsbX(login, password, env);
+    try {
+      const env = localStorage.getItem("sbx_environment") as "staging" | "production" || "production";
+      const response = await autenticateWalletsbX(login, password, env);
 
-    if (response?.success) {
-      setSession(response.session_token, response.userId);
-
-      // Se tem redirectUri, processa a limpeza e navega.
-      // Se NÃO tem, encerra o loading e para aqui.
-      if (redirectUri) {
-        const url = new URL(redirectUri, window.location.origin);
-        
-        // Sobrescreve o sbx_access_token com o novo e válido que veio da autenticação
-        url.searchParams.set('sbx_access_token', response.sbx_access_token);
-
-        navigate({ 
-          to: url.pathname as any, 
-          search: Object.fromEntries(url.searchParams.entries()), 
-          replace: true 
-        });
+      if (response?.success) {
+        // Apenas atualiza a sessão. O useEffect vai detectar o token e navegar.
+        setSession(response.session_token, response.userId);
       } else {
+        setPasswordError("Usuário ou senha inválidos.");
         setIsLoading(false);
       }
-    } else {
-      setPasswordError("Usuário ou senha inválidos.");
+    } catch (err) {
+      setGeneralError("Erro de comunicação com o servidor.");
       setIsLoading(false);
     }
   };

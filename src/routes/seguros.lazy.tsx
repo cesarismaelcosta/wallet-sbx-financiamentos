@@ -31,7 +31,7 @@ const SegurosGuard = () => {
     if (!token && location.pathname !== '/accounts/signin') {
       navigate({ 
         to: '/accounts/signin',
-        search: { redirect: location.pathname }
+        search: { redirect_uri: location.pathname }
       });
       return;
     }

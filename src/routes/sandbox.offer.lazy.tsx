@@ -248,18 +248,17 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     const sbxAcessToken = localStorage.getItem('sbx_access_token');
     console.log("[sandbox.offer | OfferDetailsSandbox] Delegando para o Gateway com sbx_access_token real:", sbxAcessToken);
 
-    // 1. Construção do Payload base (apenas o essencial)
+    // 1. Construção do Payload base (Sem destruir IDs)
     const searchPayload: any = {
       environment: ambiente,
       sbx_access_token: sbxAcessToken,
-      offer_id: targetOfferId,
-      product_id: currentFlow.product_id,
+      offer_id: encodeURIComponent(String(targetOfferId)),
+      product_id: encodeURIComponent(String(currentFlow.product_id || '')),
       return_uri: window.location.pathname + window.location.search,
       utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
       utm_medium: "referral",
       utm_campaign: `flow_${flowKey?.toLowerCase()}`,
     };
-
     // 2. Adição condicional: Só enviamos category_id se NÃO for Banner
     // Isso evita que o backend tente validar categorias para fluxos que não possuem categoria
     if (currentFlow.link !== "Banner") {
