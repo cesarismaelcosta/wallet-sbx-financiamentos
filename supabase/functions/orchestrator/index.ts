@@ -13,6 +13,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateRequest } from "../_shared/auth.ts";
+import { validateVisitOwnership, validateOfferIntegrity } from "../_shared/gatekeeper.ts";
 import { persistVisitData } from "./persist-data.ts";
 import { sql } from "../_shared/db.ts";
 import {
@@ -350,6 +352,20 @@ serve(async (req: Request) => {
   });
 
   // =========================================================================
+  // SEGURANÇA: Validação de Identidade (Ponto central)
+  // Como o GET e o POST exigem autenticação, validamos aqui no início.
+  // =========================================================================
+  let auth;
+  try {
+     auth = await validateRequest(req);
+  } catch (err: any) {
+     return new Response(JSON.stringify({ error: err.message }), { 
+        status: 401, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+     });
+  }
+
+  // =========================================================================
   // PIPELINE DE LEITURA (GET): Hidratação do Front-End
   // =========================================================================
   if (req.method === "GET") {
@@ -360,6 +376,23 @@ serve(async (req: Request) => {
       const simulationId = url.searchParams.get("simulation_id");
 
       if (!visitId) throw new Error("O parâmetro 'visit_id' é obrigatório.");
+
+      // Validação Triangular (Obrigatória para toda e qualquer visita)
+      await validateVisitOwnership(
+          supabase, 
+          auth, 
+          payload.visit_id
+      );
+
+      // Validação de Oferta (Condicional: Só valida se a offer_id existir)
+      if (payload.offer?.offer_id) {
+          await validateOfferIntegrity(
+              supabase, 
+              auth, 
+              payload.visit_id, 
+              payload.offer.offer_id
+          );
+      }
 
       // A: Busca de Simulação Prévia (Se Existir)
       let simulationData = null;
@@ -463,21 +496,27 @@ serve(async (req: Request) => {
     try {
       const payload: OrchestratorPayload = await req.json();
 
-      // A: INJEÇÃO DE IDENTIDADE (Security Context)
-      // Captura silenciosamente o dono do token para assinar o rastreio da visita.
-      const sessionToken = req.headers.get("x-session-token");
-      if (sessionToken) {
-        try {
-          const sessionUserId = JSON.parse(atob(sessionToken.split('.')[1])).sub;
-          if (payload.entity) payload.entity.entity_id = String(sessionUserId);
-        } catch (e) {
-          debugLog("Aviso: Falha ao decodificar token JWT no POST");
-        }
-      }
-
       // B: Captura de Contexto Nativo (Device/Geo)
       const infra = await captureInfrastructure(req);
       const { category_id, product_id, action } = await validatePayload(supabase, payload);
+
+      // Validação Triangular (Obrigatória para toda e qualquer visita)
+      await validateVisitOwnership(
+          supabase, 
+          auth, 
+          payload.visit_id, 
+          payload.entity_id
+      );
+
+      // Validação de Oferta (Condicional: Só valida se a offer_id existir)
+      if (payload.offer?.offer_id) {
+          await validateOfferIntegrity(
+              supabase, 
+              auth, 
+              payload.visit_id, 
+              payload.offer.offer_id
+          );
+      }
 
       // C: Motor de Decisão (Onde o usuário vai pousar?)
       const destination = await resolveDestination(

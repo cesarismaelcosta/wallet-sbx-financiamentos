@@ -86,35 +86,6 @@ export function SiteHeader() {
               </a>
             ))}
           </nav>
-
-          {/* 🚀 STATE DEBUGGER 
-            Visível apenas em telas grandes (lg) para não amassar a navegação em dispositivos menores.
-            Os IDs são truncados (.split('-')[0]) para exibir apenas o primeiro bloco numérico (Ex: 5f3a2b1...).
-          */}
-          {context?.visit_id && (
-            <div className="hidden lg:flex items-center gap-4 border-l border-slate-300 pl-6 ml-2">
-              <div className="flex flex-col text-right">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Visit</span>
-                <span className="text-xs font-mono font-medium text-emerald-600">
-                  {context.visit_id.split('-')[0]}
-                </span>
-              </div>
-              
-              <div className="flex flex-col text-right">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Update</span>
-                <span className="text-xs font-mono font-medium text-amber-600">
-                  {context.visit_update_id ? context.visit_update_id.split('-')[0] : 'N/A'}
-                </span>
-              </div>
-
-              <div className="flex flex-col text-right">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Sim</span>
-                <span className="text-xs font-mono font-medium text-sky-600">
-                  {context.simulation_id ? context.simulation_id.split('-')[0] : 'N/A'}
-                </span>
-              </div>
-            </div>
-          )}
         </div>
 
       </div>
