@@ -12,7 +12,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts"
-import { captureInfrastructure } from "../_shared/infra.ts";
+import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { OriginDetails } from "../_shared/types.ts";
 
 const corsHeaders = {
@@ -82,8 +82,8 @@ serve(async (req) => {
       .from('sbx_sessions')
       .insert({ 
         session_token: sessionToken, 
-        user_id: userId, 
-        sbx_access_token: sbx_access_token, 
+        user_id: sbxData.userId, 
+        sbx_access_token: sbxData.access_token, 
         environment, 
         expires_at: nossaExpiracao.toISOString(),
         // Mapeamento dos novos campos
