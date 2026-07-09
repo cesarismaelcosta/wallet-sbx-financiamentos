@@ -1,4 +1,3 @@
-/**
  * @fileoverview Rota: financialGatewayEntry (Gateway de Entrada e Reidratação de Contexto)
  * * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
@@ -76,6 +75,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
 
     const currentEnvironment = deps.environment || "production";
     let activeSBXAccessToken = deps.sbx_access_token;
+    let session_token: string | null = null;
 
     try {
       // 1. TRATAMENTO DE LOGIN & AUTH EXCHANGE
@@ -89,9 +89,9 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         if (!exchangeResult.success || !exchangeResult.session_token) {
           throw new Error(`AUTH_EXCHANGE_FAILED: ${exchangeResult.message || "Unknown error"}`);
         }
-        const sessionToken = exchangeResult.session_token; 
-        localStorage.setItem('session_token', sessionToken); 
-        localStorage.setItem('sbx_access_token', deps.sbx_access_token);
+        session_token = exchangeResult.session_token; 
+        localStorage.setItem('session_token', session_token); 
+        localStorage.setItem('sbx_access_token', activeSBXAccessToken);
       }
 
       // [GUARD CLAUSE]: Redireciona para login se o token for ausente
@@ -123,7 +123,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         timestamp: new Date().toISOString(),
         environment: currentEnvironment,
         entity: userProfile as UserProfile,
-        product_id: product_id || "",
+        product_id: deps.product_id || "",
         offer: offerData?.offer as Offer,
         seller: offerData?.seller as Seller,
         event: offerData?.event as Event,
