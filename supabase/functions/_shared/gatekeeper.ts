@@ -83,11 +83,20 @@ export async function validateVisitOwnership(
 /**
  * @function validateOfferIntegrity
  * @description Realiza a Triangulação + Validação de Relacionamento (DB) + Integridade Upstream.
- * @param {SupabaseClient} supabase - Cliente do Supabase.
- * @param {Object} auth - Objeto { user_id, session_token }.
+ *              Esta função é o Gatekeeper central para validar que a oferta solicitada
+ *              pertence à visita e está disponível na API da Superbid.
+ * 
+ * [RESPONSABILIDADES]:
+ * 1. Ownership Check: Valida se a oferta pertence à visita no Supabase.
+ * 2. Session Integrity: Valida token da sessão (SBX).
+ * 3. Upstream Request: Proxy para API da Superbid replicando headers de origem.
+ * 4. Contract Validation: Garante que o retorno da API não seja vazio.
+ *
+ * @param {SupabaseClient} supabase - Cliente do Supabase (Service Role).
+ * @param {Object} auth - Objeto contendo { user_id, session_token }.
  * @param {string} visitId - ID da visita (alvo).
  * @param {string} offerId - ID da oferta a ser validada.
- * @throws {Error} - Lança exceção se a relação for inválida ou oferta indisponível.
+ * @throws {Error} - Lança exceção se a relação for inválida, sessão expirada ou oferta indisponível.
  */
 export async function validateOfferIntegrity(
   supabase: SupabaseClient,
@@ -95,7 +104,7 @@ export async function validateOfferIntegrity(
   visitId: string,
   offerId: string
 ) {
-  // 1. Validação Lógica (A oferta pertence à visita no banco?)
+  // 1. Validação de Relacionamento (DB)
   const { data: link, error: linkError } = await supabase
     .from('visit_offers')
     .select('id')
@@ -107,7 +116,7 @@ export async function validateOfferIntegrity(
     throw new Error("INVALID_RELATIONSHIP: Oferta não pertence a esta visita.");
   }
 
-  // 2. Validação Upstream com Roteamento Dinâmico (Ambiente)
+  // 2. Validação de Sessão (Upstream Token)
   const { data: session, error: sessError } = await supabase
     .from('sbx_sessions')
     .select('sbx_access_token, environment')
@@ -118,17 +127,18 @@ export async function validateOfferIntegrity(
     throw new Error("SESSION_EXPIRED: Token SBX inválido ou ausente.");
   }
 
-  // 3. Aplica o mapeamento dinâmico de URLs
+  // 3. Roteamento de Ambiente
   const env = session.environment || "staging";
   const offerBaseUrl = env === "production" 
     ? "https://offer-query.superbid.net" 
     : "https://offer-query.stage.superbid.net";
 
-  // Higienização de ID para evitar HTTP 400
+  // 4. Construção da URL (Sintaxe idêntica ao sbx-offer funcional)
+  // Utilizamos colchetes brutos [ ] pois o parser da Superbid exige isso para os arrays
   const cleanOfferId = String(offerId).replace(/[^0-9]/g, '');
   const apiUrl = `${offerBaseUrl}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${cleanOfferId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
 
-  // 4. Executa a chamada com o WAF Bypass (Headers de Origin/Referer replicados)
+  // 5. Execução (WAF Bypass Headers)
   const response = await fetch(apiUrl, {
     method: "GET",
     headers: { 
@@ -140,35 +150,22 @@ export async function validateOfferIntegrity(
     }
   });
 
-  // 5. Interceptação de Erros Reais (Fim da cegueira de log)
-  if (!response.ok) {
-    const errorBody = await response.text();
-    console.error(`[SUPERBID_REJECT] Env: ${env} | Status: ${response.status} | Detalhe: ${errorBody}`);
-    throw new Error("UPSTREAM_CONNECTION_ERROR");
-  }
-
-  // 5. Interceptação de Erros e Parsing
-  const data = await response.json(); // Lemos uma única vez aqui
+  // 6. Parsers e Validação de Resposta
+  const apiData = await response.json(); // Leitura única, sem colisão de variável
   
   if (!response.ok) {
-    console.error(`[SUPERBID_REJECT] Env: ${env} | Status: ${response.status} | Detalhe: ${JSON.stringify(data)}`);
+    console.error(`[SUPERBID_REJECT] Env: ${env} | Status: ${response.status} | Detalhe: ${JSON.stringify(apiData)}`);
     throw new Error("UPSTREAM_CONNECTION_ERROR");
   }
 
-  // 6. Validação Defensiva (Única, sem redundância)
-  const offer = data.offers?.[0];
+  // 7. Extração de Oferta (Payload Contract)
+  const offer = apiData.offers?.[0];
   
   if (!offer) {
-    console.error(`[GATEKEEPER-DEBUG] Lote ${cleanOfferId} não encontrado no payload.`);
+    console.error(`[GATEKEEPER-DEBUG] Lote ${cleanOfferId} não retornado pela API.`);
     throw new Error("OFFER_NOT_FOUND: API retornou vazio.");
   }
 
-  // 7. Log de Auditoria e Validação de Status
-  console.log(`[GATEKEEPER-DEBUG] Status do lote ${cleanOfferId}: ${offer.offerStatus}`);
-
-  if (offer.offerStatus !== "AVAILABLE") {
-    console.warn(`[GATEKEEPER-WARNING] Lote encontrado, mas com status: ${offer.offerStatus}`);
-    // Se quiser bloquear, descomente a linha abaixo:
-    // throw new Error("OFFER_UNAVAILABLE: O lote não está disponível.");
-  }
-}   
+  // 8. Log de Auditoria
+  console.log(`[GATEKEEPER-DEBUG] Sucesso. Lote ${cleanOfferId} encontrado. Status: ${offer.offerStatus}`);
+}
