@@ -184,6 +184,14 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         });
       }
 
+      // 7. SE o erro for VISIT_NOT_FOUND, redireciona o usuário para um estado inicial
+      if (error.message === 'VISIT_NOT_FOUND') {
+        const targetURL = deps.return_uri;
+        if (targetURL) throw redirect({ to: targetURL as any, replace: true });
+        console.warn("Visita inválida. Resetando para fluxo de início.");
+        throw new Error("VISIT_NOT_FOUND'");        
+      }
+
       // 6. ERROS DE REDE (307, 500, etc): 
       // Apenas abortamos a operação. O localStorage NÃO é limpo.
       // Isso impede o loop infinito.

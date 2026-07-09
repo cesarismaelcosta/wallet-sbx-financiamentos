@@ -537,12 +537,14 @@ serve(async (req: Request) => {
       let finalUrl = `${destination.url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
       if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
 
+      debuglog("[POST] payload final de retorno:", { payload, visitId, visitUpdateId, simulationId });
+
       // Validação Triangular (Obrigatória para toda e qualquer visita)
       await validateVisitOwnership(
           supabase, 
           auth, 
-          payload.visit_id, 
-          payload.entity_id
+          visitId, 
+          payload.entity.entity_id
       );
 
       // Validação de Oferta (Condicional: Só valida se a offer_id existir)
@@ -550,7 +552,7 @@ serve(async (req: Request) => {
           await validateOfferIntegrity(
               supabase, 
               auth, 
-              payload.visit_id, 
+              visitId, 
               payload.offer.offer_id
           );
       }
