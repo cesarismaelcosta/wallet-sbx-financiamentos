@@ -147,29 +147,28 @@ export async function validateOfferIntegrity(
     throw new Error("UPSTREAM_CONNECTION_ERROR");
   }
 
-  const data = await response.json();
-  if (!data.offers?.[0] || data.offers[0].offerStatus !== "AVAILABLE") {
-    throw new Error("OFFER_UNAVAILABLE: O lote não consta como disponível na API.");
+  // 5. Interceptação de Erros e Parsing
+  const data = await response.json(); // Lemos uma única vez aqui
+  
+  if (!response.ok) {
+    console.error(`[SUPERBID_REJECT] Env: ${env} | Status: ${response.status} | Detalhe: ${JSON.stringify(data)}`);
+    throw new Error("UPSTREAM_CONNECTION_ERROR");
   }
-  
-  const data = await response.json();
-  
-  // 4. Ajuste: Validação Defensiva e Log do Status Real
+
+  // 6. Validação Defensiva (Única, sem redundância)
   const offer = data.offers?.[0];
   
   if (!offer) {
-    console.error(`[GATEKEEPER-DEBUG] Lote ${cleanOfferId} não encontrado no payload retornado.`);
+    console.error(`[GATEKEEPER-DEBUG] Lote ${cleanOfferId} não encontrado no payload.`);
     throw new Error("OFFER_NOT_FOUND: API retornou vazio.");
   }
 
-  // LOG DE AUDITORIA: Veja exatamente o status que a Superbid te deu
+  // 7. Log de Auditoria e Validação de Status
   console.log(`[GATEKEEPER-DEBUG] Status do lote ${cleanOfferId}: ${offer.offerStatus}`);
 
-  // Se o status não for 'AVAILABLE', avisamos no log mas não travamos cegamente, 
-  // a menos que seja uma regra estrita de negócio.
   if (offer.offerStatus !== "AVAILABLE") {
-    // Altere a condição abaixo se precisar bloquear estritamente
-    console.warn(`[GATEKEEPER-WARNING] Lote com status inesperado: ${offer.offerStatus}`);
-    // throw new Error("OFFER_UNAVAILABLE: O lote não está disponível."); // Removido para teste
+    console.warn(`[GATEKEEPER-WARNING] Lote encontrado, mas com status: ${offer.offerStatus}`);
+    // Se quiser bloquear, descomente a linha abaixo:
+    // throw new Error("OFFER_UNAVAILABLE: O lote não está disponível.");
   }
-}
+}   
