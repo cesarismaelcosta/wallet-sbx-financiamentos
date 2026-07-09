@@ -97,7 +97,7 @@ serve(async (req) => {
         origin_details: infra.metadata // O JSONB recebe o restante dos metadados
       });
 
-    if (sessionError || !sessionData) {
+    if (sessionError) {
       throw new Error(`[sbx-auth] DATABASE_ERROR: Erro ao criar sessão -> ${sessionError?.message}`);
     }
 

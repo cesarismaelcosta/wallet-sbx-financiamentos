@@ -120,8 +120,12 @@ serve(async (req) => {
         origin_details: infra.metadata // O JSONB recebe o restante dos metadados
       });
 
-    if (sessionError || !sessionData) {
-      throw new Error(`[sbx-auth-exchange] DATABASE_ERROR: Erro ao criar sessão -> ${sessionError?.message}`);
+    if (sessionError) {
+      throw new Error(`[sbx-auth] DATABASE_ERROR: Erro ao criar sessão -> ${sessionError?.message}`);
+    }
+
+    if (!sessionData) {
+      throw new Error("DATABASE_ERROR: Sessão criada mas nenhum dado foi retornado.");
     }
 
     // =========================================================================
@@ -167,8 +171,11 @@ serve(async (req) => {
 
     const errorResponse = status === 401 ? err.message : "INTERNAL_SERVER_ERROR";
 
-    return new Response(JSON.stringify({ success: false, message: errorResponse }), { 
-      status, 
+  return new Response(JSON.stringify({ 
+    success: false, 
+    message: err.message 
+    }), { 
+      status: status, 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     });
   }
