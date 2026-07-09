@@ -31,17 +31,20 @@ import type {
 // =========================================================================
 // [CONTRATO DE ENTRADA]: Validação estrita via TanStack Router
 // =========================================================================
-export const Route = createFileRoute("/financialGatewayEntry")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    environment: search.environment as string | undefined,
-    sbx_access_token: search.sbx_access_token as string | undefined,
-    offer_id: search.offer_id as string | undefined,
-    product_id: search.product_id as string | undefined,
-    return_uri: search.return_uri as string | undefined,
-    utm_source: search.utm_source as string | undefined,      
-    utm_medium: search.utm_medium as string | undefined,      
-    utm_campaign: search.utm_campaign as string | undefined, 
-  }),
+export const Route = createFileRoute('/financialGatewayEntry')({
+  validateSearch: (search: Record<string, unknown>): SearchSchema => {
+    console.log("🚀 [financialGatewayEntry.tsx] Validate Search:", search);
+    return {
+      environment: search.environment as string,
+      sbx_access_token: search.sbx_access_token as string,
+      offer_id: search.offer_id as string,
+      product_id: search.product_id as string,
+      return_uri: search.return_uri as string,
+      utm_source: search.utm_source as string,
+      utm_medium: search.utm_medium as string,
+      utm_campaign: search.utm_campaign as string,
+    };
+  },
 
   // =========================================================================
   // [INTERCEPTOR / LOADER]: Execução pré-renderização (Bootstrapping)
@@ -49,7 +52,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
   loader: async ({ search, location }) => {
         
     // 1. RASTREADOR DE ENTRADA
-    console.log("🚀 [GATEWAY] Loader disparado. Search Params:", search);
+    console.log("🚀 [financialGatewayEntry.tsx] Loader disparado. Search Params:", search);
 
     // Garantia de segurança contra undefined search params
     const searchParams = search && typeof search === 'object' ? search : {};
@@ -132,55 +135,50 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       return null;
 
     } catch (error: any) {
-      // 1. RASTREADOR DE ERRO (Mantive exatamente seus logs originais)
-      console.error("🚨 [financialGatewayEntry Loader] CRITICAL FAILURE. Erro capturado:", error);
-      console.error("🚨 [financialGatewayEntry Loader] Stack trace:", error.stack);
-
-      // Ignora redirecionamentos legítimos do TanStack
-      if (isRedirect(error)) throw error;
-
-      console.error("🛑 [financialGatewayEntry Loader] Critical Failure:", error);
-
-      // Identificação técnica (Adicionado suporte a objeto Response)
+      // 1. Identificação do Erro
       const isResponse = error instanceof Response;
       const status = isResponse ? error.status : 0;
       const errorMessage = error?.message || (isResponse ? `HTTP_${status}` : "Unknown error");
-      const isOfferNotFound = errorMessage.includes("OFFER_NOT_FOUND") || errorMessage.includes("404") || status === 404;
-      
-      // 2. TELEMETRIA (Movida para cá: enviada antes de qualquer throw, garantindo que o log chegue)
-      await logSystemError(searchParams.superbid_token || activeSBXAccessToken || "NO_TOKEN", {
-        context: "FINANCIAL-GATEWAY-LOADER",
-        message: errorMessage,
-        details: { stack: error?.stack, status }, // Status adicionado para debug
-        payload: { searchParams: searchParams }
-      });
 
-      // 3. ERRO DE NEGÓCIO (Sua lógica original de 404 preservada)
-      if (isOfferNotFound) {
+      console.error("🚨 [financialGatewayEntry Loader] CRITICAL FAILURE. Erro:", errorMessage);
+      console.error("🚨 [financialGatewayEntry Loader] Stack trace:", error?.stack);
+
+      // 2. Se for Redirect do TanStack, deixa passar
+      if (isRedirect(error)) throw error;
+
+      // 3. LOGAGEM: Enviamos o log ANTES de qualquer throw
+      try {
+        await logSystemError(activeSBXAccessToken || "NO_TOKEN", {
+          context: "FINANCIAL-GATEWAY-LOADER",
+          message: errorMessage,
+          details: { status, stack: error?.stack },
+          payload: { searchParams }
+        });
+      } catch (logErr) {
+        console.error("Falha ao enviar log:", logErr);
+      }
+
+      // 4. TRATAMENTO DE NEGÓCIO: 404 / OFFER_NOT_FOUND
+      if (errorMessage.includes("OFFER_NOT_FOUND") || status === 404) {
         const targetURL = searchParams.return_uri;
-        if (targetURL) {
-          throw redirect({ to: targetURL as any, replace: true });
-        }
+        if (targetURL) throw redirect({ to: targetURL as any, replace: true });
         throw new Error("OFFER_NOT_FOUND");
       }
 
-      // 4. ERRO DE AUTENTICAÇÃO (A trava contra o Loop Infinito)
-      // SÓ limpamos a sessão se for erro real de auth (401/403). 
-      // Se for 307, 500 ou erro de rede, o sistema apenas para (lança erro) 
-      // mas mantém o localStorage, impedindo o loop.
+      // 5. TRATAMENTO DE AUTH: Só limpa se for 401/403
       if (status === 401 || status === 403 || errorMessage.includes("AUTH")) {
         localStorage.removeItem('session_token');
         localStorage.removeItem('sbx_access_token');
-
-        throw redirect({
-          to: '/accounts/signin',
-          search: { redirect_uri: location.href },
-          replace: true,
+        throw redirect({ 
+          to: '/accounts/signin', 
+          search: { redirect_uri: location.href }, 
+          replace: true 
         });
       }
 
-      // 5. ERRO GENÉRICO (Se chegou aqui, não é redirect, não é 404 e não é auth)
-      // Apenas explode o erro para o sistema, mantendo a sessão do usuário intacta.
+      // 6. ERROS DE REDE (307, 500, etc): 
+      // Apenas abortamos a operação. O localStorage NÃO é limpo.
+      // Isso impede o loop infinito.
       throw new Error(errorMessage);
     }
   },

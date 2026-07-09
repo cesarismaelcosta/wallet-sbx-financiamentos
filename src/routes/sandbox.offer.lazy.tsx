@@ -268,6 +268,12 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       }
     }
 
+    // LOG DE RASTREAMENTO: Inserido imediatamente antes do redirecionamento
+    console.log("🚀 [SANDBOX-DEBUG] Payload enviado para o Gateway:", {
+      to: "/financialGatewayEntry",
+      searchPayload
+    });
+
     navigate({
       to: "/financialGatewayEntry",
       search: searchPayload
