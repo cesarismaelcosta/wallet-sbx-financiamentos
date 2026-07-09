@@ -347,13 +347,40 @@ serve(async (req: Request) => {
 
       // Validação de Oferta (Condicional: Só valida se a offer_id existir)
       const visitOfferData = visit.visit_offers?.[0] || {};
-      if (visitOfferData?.offer_id) {
-          await validateOfferIntegrity(
+      try {
+          const validatedOffer = await validateOfferIntegrity(
               supabase, 
               auth, 
               visitId, 
               visitOfferData.offer_id
           );
+          
+          // Atualiza o valor da oferta no snapshot da visita para refletir a integridade
+          visitOfferData.offer_value = validatedOffer.offer_value;
+      } catch (err: any) {
+          debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
+
+          // Mapeamento de erros técnicos para mensagens de interface
+          let userMessage = "Ocorreu um erro ao carregar a oferta.";
+
+          if (err.message.includes("OFFER_NOT_FOUND")) {
+              userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
+          } else if (err.message.includes("INVALID_RELATIONSHIP")) {
+              userMessage = "Você não tem permissão para acessar esta oferta.";
+          } else if (err.message.includes("SESSION_EXPIRED")) {
+              userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+          } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
+              userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+          }
+
+          // Criamos um novo erro com a mensagem amigável para o TanStack Router
+          const errorForUI = new Error(userMessage);
+          
+          // Opcional: injetamos o código original para log/debug no front se precisar
+          (errorForUI as any).originalCode = err.message; 
+          
+          // Lançamos para o TanStack Router capturar no `errorComponent` da sua rota
+          throw errorForUI; 
       }
 
       // D: Resolução de Regras e Parâmetros (Cascata Inversa)
@@ -367,6 +394,7 @@ serve(async (req: Request) => {
         visitEntityData.document, 
       );
 
+      
       if (!orchestratorConfigs) {
         throw new Error(`[resolveOrchestratorConfigs]: Configurações não localizadas para o perfil e contexto informados.`);
       }
@@ -474,13 +502,37 @@ serve(async (req: Request) => {
       );
 
       // Validação de Oferta (Condicional: Só valida se a offer_id existir)
-      if (payload.offer?.offer_id) {
-          await validateOfferIntegrity(
+      try {
+          const validatedOffer = await validateOfferIntegrity(
               supabase, 
               auth, 
               visitId, 
               payload.offer.offer_id
           );
+      } catch (err: any) {
+          debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
+
+          // Mapeamento de erros técnicos para mensagens de interface
+          let userMessage = "Ocorreu um erro ao carregar a oferta.";
+
+          if (err.message.includes("OFFER_NOT_FOUND")) {
+              userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
+          } else if (err.message.includes("INVALID_RELATIONSHIP")) {
+              userMessage = "Você não tem permissão para acessar esta oferta.";
+          } else if (err.message.includes("SESSION_EXPIRED")) {
+              userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+          } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
+              userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+          }
+
+          // Criamos um novo erro com a mensagem amigável para o TanStack Router
+          const errorForUI = new Error(userMessage);
+          
+          // Opcional: injetamos o código original para log/debug no front se precisar
+          (errorForUI as any).originalCode = err.message; 
+          
+          // Lançamos para o TanStack Router capturar no `errorComponent` da sua rota
+          throw errorForUI; 
       }
 
       return new Response(

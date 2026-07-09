@@ -16,6 +16,25 @@
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+
+/**
+ * ============================================================================
+ * CONFIGURAÇÕES GLOBAIS E SEGURANÇA
+ * ============================================================================
+ */
+const DEBUG_MODE = true;
+
+/**
+ * @function debugLog
+ * @description Centraliza os logs do pipeline. Em produção, DEBUG_MODE deve ser false
+ * para evitar exposição de PII (Personally Identifiable Information) nos logs da Edge Function.
+ */
+const debugLog = (message: string, data?: any) => {
+  if (DEBUG_MODE) {
+    debugLog(`[GATEKEEPER-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
+  }
+};
+
 // =========================================================================
 // 1. VALIDAÇÃO DE PROPRIEDADE DA VISITA (OWNERSHIP)
 // =========================================================================
@@ -36,9 +55,9 @@ export async function validateVisitOwnership(
   payloadEntityId?: string | null
 ) {
   if (visitId) {
-    console.log(`[GATEKEEPER-DEBUG] Recebi visitId: ${visitId}. Verificando banco...`);
+    debugLog(`[GATEKEEPER-DEBUG] Recebi visitId: ${visitId}. Verificando banco...`);
   } else {
-    console.log(`[GATEKEEPER-DEBUG] VisitId nulo/undefined. Fluxo de Criação (OK).`);
+    debugLog(`[GATEKEEPER-DEBUG] VisitId nulo/undefined. Fluxo de Criação (OK).`);
   }
 
   // 1. Busca a visita e o dono (dbEntityId) no banco
@@ -51,7 +70,7 @@ export async function validateVisitOwnership(
   if (visitError || !visit) throw new Error("VISIT_NOT_FOUND");
   const dbEntityId = visit.visit_entities?.[0]?.entity_id;
 
-  console.log(`[GATEKEEPER-DEBUG] Consulta sbx_sessions: ${auth.session_token}. Verificando banco...`);
+  debugLog(`[GATEKEEPER-DEBUG] Consulta sbx_sessions: ${auth.session_token}. Verificando banco...`);
 
   // 2. Busca o dono real através do session_token (Triangulação)
   const { data: session, error: sessError } = await supabase
@@ -103,7 +122,7 @@ export async function validateOfferIntegrity(
   auth: { user_id: string, session_token: string },
   visitId: string,
   offerId: string
-) {
+): Promise<any> {
   // 1. Validação de Relacionamento (DB)
   const { data: link, error: linkError } = await supabase
     .from('visit_offers')
@@ -162,10 +181,57 @@ export async function validateOfferIntegrity(
   const offer = apiData.offers?.[0];
   
   if (!offer) {
-    console.error(`[GATEKEEPER-DEBUG] Lote ${cleanOfferId} não retornado pela API.`);
+    debugLog(`[GATEKEEPER-DEBUG] Lote ${cleanOfferId} não retornado pela API.`);
     throw new Error("OFFER_NOT_FOUND: API retornou vazio.");
   }
 
+  const offerResult = {
+    offer: {
+      offer_id: String(offer.id),
+      lot_number: offer.lotNumber || 1,
+      offer_description: offer.product?.shortDesc || offer.offerDescription?.offerDescription || "",
+      offer_detailed_description: offer.offerDescription?.offerDescription || "",
+      offer_value: offer.price || 0,
+      category_id: offer.product?.productType?.id || 0,
+      category: offer.product?.productType?.description || "",
+      offer_status: offer.offerStatus || "",
+      sale_status: offer.saleStatus || "",
+      end_date: offer.endDate || "",
+      photos: offer.product?.galleryJson?.map((p: any) => ({
+        highlight: p.highlight || false,
+        link: p.link,
+        thumbnail: p.thumbnailUrl,
+        file_name: p.originalFileName,
+        type: p.type || "photo",
+        content_type: p.contentType || "image/jpeg"
+      })) || []
+    },
+    manager: {
+      manager_id: offer.manager?.id || 0,
+      manager_name: offer.manager?.name || "N/A"
+    },
+    event: {
+      event_id: String(offer.auction?.id || ""),
+      event_description: `${offer.auction?.desc || ""}`,
+      event_start_date: offer.auction?.beginDate || "",
+      event_end_date: offer.auction?.endDate || "",
+      modality_id: eventData.modalityId ?? null,
+      status_id: eventData.statusId ?? null,
+      event_short_description: offer.auction?.desc || "",
+      event_full_description: "",
+      event_image_url: ""
+    },
+    seller: {
+      seller_id: String(offer.seller?.id || ""),
+      legal_name: offer.seller?.name || "N/A",
+      trade_name: offer.seller?.company?.[0]?.fantasyName || "N/A",
+      economic_group: offer.seller?.company?.[0]?.fantasyName || "N/A"
+    }
+  };
+
+  // Retornando o payload completo e hidratado
+  return offerResult;
+  
   // 8. Log de Auditoria
-  console.log(`[GATEKEEPER-DEBUG] Sucesso. Lote ${cleanOfferId} encontrado. Status: ${offer.offerStatus}`);
+  debugLog(`[GATEKEEPER-DEBUG] Sucesso. Lote ${cleanOfferId} encontrado. Status: ${offer.offerStatus}`);
 }
