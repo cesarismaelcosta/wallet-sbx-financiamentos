@@ -86,12 +86,12 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         
         console.log("✅ [financialGatewayEntry Loader] Resultado do Exchange:", exchangeResult);
 
-        if (!exchangeResult.success || !exchangeResult.sbx_access_token) {
+        if (!exchangeResult.success || !exchangeResult.session_token) {
           throw new Error(`AUTH_EXCHANGE_FAILED: ${exchangeResult.message || "Unknown error"}`);
         }
-        const sessionToken = exchangeResult.session_token; // Alinhado ao nome real
+        const sessionToken = exchangeResult.session_token; 
         localStorage.setItem('session_token', sessionToken); 
-        localStorage.setItem('sbx_access_token', exchangeResult.sbx_access_token);
+        localStorage.setItem('sbx_access_token', deps.sbx_access_token);
       }
 
       // [GUARD CLAUSE]: Redireciona para login se o token for ausente
@@ -160,7 +160,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
           context: "FINANCIAL-GATEWAY-LOADER",
           message: errorMessage,
           details: { status, stack: error?.stack },
-          payload: { searchParams }
+          payload: { searchParams: deps }
         });
       } catch (logErr) {
         console.error("Falha ao enviar log:", logErr);
