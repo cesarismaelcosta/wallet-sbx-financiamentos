@@ -94,11 +94,14 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Gera o UUID no Deno antes de qualquer coisa
+    const sessionToken = crypto.randomUUID();
+
     // Busca informações de infraestrutura do request (IP, User-Agent, etc.)
     const infra = await captureInfrastructure(req);
 
     // Salva a sessão no Supabase com os detalhes do usuário e metadados de infraestrutura
-    const { data, error } = await supabaseAdmin
+    const { data: sessionData, error: sessionError } = await supabaseAdmin
       .from('sbx_sessions')
       .insert({ 
         session_token: sessionToken, 
@@ -135,7 +138,7 @@ serve(async (req) => {
       { alg: "HS256", typ: "JWT" },
       { 
         sub: userId, 
-        jti: sessionData.session_token, // UUID original como referência interna
+        jti: sessionToken, // UUID original como referência interna
         exp: getNumericDate(nossaExpiracao.getTime() / 1000) 
       },
       key

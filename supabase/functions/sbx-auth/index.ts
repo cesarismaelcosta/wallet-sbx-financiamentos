@@ -78,7 +78,7 @@ serve(async (req) => {
     const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
     const infra = await captureInfrastructure(req);
 
-    const { data, error } = await supabaseAdmin
+    const { data: sessionData, error: sessionError } = await supabaseAdmin
       .from('sbx_sessions')
       .insert({ 
         session_token: sessionToken, 
@@ -97,10 +97,8 @@ serve(async (req) => {
         origin_details: infra.metadata // O JSONB recebe o restante dos metadados
       });
 
-    // Diagnóstico detalhado de erro de banco (Garante visibilidade)
-    if (error) {
-      console.error("[ERRO REAL DO BANCO]:", JSON.stringify(error, null, 2));
-      throw new Error(`Erro ao criar sessão: ${error.message}`);
+    if (sessionError || !sessionData) {
+      throw new Error(`[sbx-auth] DATABASE_ERROR: Erro ao criar sessão -> ${sessionError?.message}`);
     }
 
     // -----------------------------------------------------------------------
