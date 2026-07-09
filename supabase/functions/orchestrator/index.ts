@@ -500,24 +500,6 @@ serve(async (req: Request) => {
       const infra = await captureInfrastructure(req);
       const { category_id, product_id, action } = await validatePayload(supabase, payload);
 
-      // Validação Triangular (Obrigatória para toda e qualquer visita)
-      await validateVisitOwnership(
-          supabase, 
-          auth, 
-          payload.visit_id, 
-          payload.entity_id
-      );
-
-      // Validação de Oferta (Condicional: Só valida se a offer_id existir)
-      if (payload.offer?.offer_id) {
-          await validateOfferIntegrity(
-              supabase, 
-              auth, 
-              payload.visit_id, 
-              payload.offer.offer_id
-          );
-      }
-
       // C: Motor de Decisão (Onde o usuário vai pousar?)
       const destination = await resolveDestination(
         supabase,
@@ -554,6 +536,24 @@ serve(async (req: Request) => {
       const simulationId = payload.simulation_id || null;
       let finalUrl = `${destination.url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
       if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
+
+      // Validação Triangular (Obrigatória para toda e qualquer visita)
+      await validateVisitOwnership(
+          supabase, 
+          auth, 
+          payload.visit_id, 
+          payload.entity_id
+      );
+
+      // Validação de Oferta (Condicional: Só valida se a offer_id existir)
+      if (payload.offer?.offer_id) {
+          await validateOfferIntegrity(
+              supabase, 
+              auth, 
+              payload.visit_id, 
+              payload.offer.offer_id
+          );
+      }
 
       return new Response(
         JSON.stringify({
