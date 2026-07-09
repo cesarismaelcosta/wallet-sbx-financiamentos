@@ -92,16 +92,28 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { data: sessionData, error: sessionError } = await supabaseAdmin
+    // Busca informações de infraestrutura do request (IP, User-Agent, etc.)
+    const infra = await captureInfrastructure(req);
+
+    // Salva a sessão no Supabase com os detalhes do usuário e metadados de infraestrutura
+    const { data, error } = await supabaseAdmin
       .from('sbx_sessions')
       .insert({ 
+        session_token: sessionToken, 
         user_id: userId, 
         sbx_access_token: sbx_access_token, 
         environment, 
-        expires_at: nossaExpiracao.toISOString() 
-      })
-      .select('session_token')
-      .single();
+        expires_at: nossaExpiracao.toISOString(),
+        // Mapeamento dos novos campos
+        ip_address: infra.ip_address,
+        country: infra.country,
+        state: infra.state,
+        city: infra.city,
+        user_agent: infra.user_agent,
+        device_type: infra.device_type,
+        operating_system: infra.operating_system,
+        origin_details: infra.metadata // O JSONB recebe o restante dos metadados
+      });
 
     if (sessionError || !sessionData) {
       throw new Error(`[sbx-auth-exchange] DATABASE_ERROR: Erro ao criar sessão -> ${sessionError?.message}`);
