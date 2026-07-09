@@ -32,7 +32,7 @@ serve(async (req) => {
   try {
     const { username, password, environment = 'staging' } = await req.json()
 
-    // ... (Lógica de autenticação OAuth2 com a SBX permanece inalterada)
+    // ... (Lógica de autenticação OAuth2 com a SBX)
     const sbxBaseUrl = ENV_URLS[environment as keyof typeof ENV_URLS]
     const details = new URLSearchParams()
     details.append("username", username)
@@ -47,17 +47,21 @@ serve(async (req) => {
       body: details.toString()
     })
 
-    // CAPTURA O QUE A SUPERBID REALMENTE DISSE
-    const sbxData = await sbxLoginResponse.text();
+    // CAPTURA O QUE A SUPERBID REALMENTE DISSE (Em formato de texto)
+    const rawResponse = await sbxLoginResponse.text();
     
     if (!sbxLoginResponse.ok) {
       console.error("[sbx-auth] ERRO REAL DA SBX:", {
         status: sbxLoginResponse.status,
-        body: sbxData,
+        body: rawResponse,
         sentBody: details.toString() // Vê exatamente o que enviamos
       });
       throw new Error(`Credenciais inválidas ou erro na API: ${sbxLoginResponse.status}`);
     }
+
+    // CORREÇÃO CRÍTICA APLICADA: Transforma a string de texto de volta em um Objeto JSON válido
+    // Sem isso, sbxData.userId e sbxData.access_token retornavam 'undefined' e quebravam o banco.
+    const sbxData = JSON.parse(rawResponse);
 
     // Cálculo de expiração
     const agora = new Date()
@@ -80,7 +84,11 @@ serve(async (req) => {
         expires_at: nossaExpiracao.toISOString() 
       })
 
-    if (error) throw new Error("Erro ao criar sessão");
+    // Diagnóstico detalhado de erro de banco (Garante visibilidade)
+    if (error) {
+      console.error("[ERRO REAL DO BANCO]:", JSON.stringify(error, null, 2));
+      throw new Error(`Erro ao criar sessão: ${error.message}`);
+    }
 
     // -----------------------------------------------------------------------
     // [SECURITY]: Assinatura do JWT Próprio
@@ -109,7 +117,7 @@ serve(async (req) => {
       server_now_ms: agora.getTime()
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-  } catch (err) {
+  } catch (err: any) {
     console.error("Erro:", err)
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
