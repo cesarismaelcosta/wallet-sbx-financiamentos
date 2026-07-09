@@ -126,7 +126,7 @@ export async function validateOfferIntegrity(
 
   // Higienização de ID para evitar HTTP 400
   const cleanOfferId = String(offerId).replace(/[^0-9]/g, '');
-  const apiUrl = `${offerBaseUrl}/offers/?filter=id:[${cleanOfferId}]`;
+  const apiUrl = `${offerBaseUrl}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${cleanOfferId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
 
   // 4. Executa a chamada com o WAF Bypass (Headers de Origin/Referer replicados)
   const response = await fetch(apiUrl, {
