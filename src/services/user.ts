@@ -67,7 +67,12 @@ export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfi
     // -----------------------------------------------------------------------
     // Ao invés de delegar a limpeza de estado apenas para o componente pai (que pode falhar ou vazar dados),
     // gritamos para o FinancialAuthContext matar a sessão globalmente e forçar o redirecionamento limpo.
-    window.dispatchEvent(new CustomEvent('session_expired'));
+    
+    // [CORE UPDATE - SSR SAFEGUARD]: Só dispara o evento na janela se estivermos no navegador.
+    // Durante o SSR, o throw Error abaixo será capturado pelo loader, que forçará o redirecionamento via backend.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('session_expired'));
+    }
 
     // [CRITICAL FIX]: Interrompe a guerra de rotas e a execução do componente local.
     // O throw garante que o `await fetchMyProfile` no componente pare aqui e não tente setar um estado com erro.
