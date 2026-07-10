@@ -31,7 +31,7 @@ const DEBUG_MODE = true;
  */
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
-    debugLog(`[GATEKEEPER-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
+    console.log(`[GATEKEEPER-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
   }
 };
 
@@ -84,13 +84,13 @@ export async function validateVisitOwnership(
 
   // 3. Validação Obrigatória: Token vs Banco (Ownership)
   if (String(dbEntityId) !== String(sessionUserId)) {
-    console.error(`[SECURITY ALERT] DIVERGÊNCIA: Token(${sessionUserId}) vs DB(${dbEntityId})`);
+    debugLog(`[SECURITY ALERT] DIVERGÊNCIA: Token(${sessionUserId}) vs DB(${dbEntityId})`);
     throw new Error("FORBIDDEN_ACCESS");
   }
 
   // 4. Validação Condicional: Payload vs Banco (Só roda se o payload existir)
   if (payloadEntityId && String(dbEntityId) !== String(payloadEntityId)) {
-    console.error(`[SECURITY ALERT] DIVERGÊNCIA: Payload(${payloadEntityId}) vs DB(${dbEntityId})`);
+    debugLog(`[SECURITY ALERT] DIVERGÊNCIA: Payload(${payloadEntityId}) vs DB(${dbEntityId})`);
     throw new Error("INVALID_PAYLOAD: Divergência de identidade no payload.");
   }
 }
@@ -173,7 +173,7 @@ export async function validateOfferIntegrity(
   const apiData = await response.json(); // Leitura única, sem colisão de variável
   
   if (!response.ok) {
-    console.error(`[SUPERBID_REJECT] Env: ${env} | Status: ${response.status} | Detalhe: ${JSON.stringify(apiData)}`);
+    debugLog(`[SUPERBID_REJECT] Env: ${env} | Status: ${response.status} | Detalhe: ${JSON.stringify(apiData)}`);
     throw new Error("UPSTREAM_CONNECTION_ERROR");
   }
 
@@ -208,18 +208,14 @@ export async function validateOfferIntegrity(
     },
     manager: {
       manager_id: offer.manager?.id || 0,
-      manager_name: offer.manager?.name || "N/A"
+      manager_name: offer.manager?.name || ""
     },
     event: {
       event_id: String(offer.auction?.id || ""),
       event_description: `${offer.auction?.desc || ""}`,
       event_start_date: offer.auction?.beginDate || "",
       event_end_date: offer.auction?.endDate || "",
-      modality_id: eventData.modalityId ?? null,
-      status_id: eventData.statusId ?? null,
       event_short_description: offer.auction?.desc || "",
-      event_full_description: "",
-      event_image_url: ""
     },
     seller: {
       seller_id: String(offer.seller?.id || ""),

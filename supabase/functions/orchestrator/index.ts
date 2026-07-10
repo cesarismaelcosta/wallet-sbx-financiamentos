@@ -356,7 +356,7 @@ serve(async (req: Request) => {
           );
           
           // Atualiza o valor da oferta no snapshot da visita para refletir a integridade
-          visitOfferData.offer_value = validatedOffer.offer_value;
+          visitOfferData.offer_value = validatedOffer.offer.offer_value;
       } catch (err: any) {
           debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
 
@@ -494,6 +494,7 @@ serve(async (req: Request) => {
       debugLog("[POST] payload final de retorno:", { payload, visitId, visitUpdateId, simulationId });
 
       // Validação Triangular (Obrigatória para toda e qualquer visita)
+      debugLog("🚨 [validateVisitOwnership] Validando visita:", visitId);
       await validateVisitOwnership(
           supabase, 
           auth, 
@@ -502,6 +503,7 @@ serve(async (req: Request) => {
       );
 
       // Validação de Oferta (Condicional: Só valida se a offer_id existir)
+      debugLog("🚨 [validateOfferIntegrity] Validando visita:", visitId);
       try {
           const validatedOffer = await validateOfferIntegrity(
               supabase, 
@@ -546,11 +548,15 @@ serve(async (req: Request) => {
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-    } catch (error: any) {
-      debugLog(`[Orquestrador POST Error]: ${error.message}`);
-      return new Response(JSON.stringify({ error: error.message, details: "Erro interno no processamento do pipeline" }), 
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+  } catch (error: any) {
+    debugLog(`[Orquestrador POST Error REAL]: ${error.message}`); 
+    return new Response(JSON.stringify({ 
+        error: "Falha na validação", 
+        details: error.message 
+    }), { 
+        status: 400, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    });
   }
 
   // Falha de Método HTTP
