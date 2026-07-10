@@ -1,12 +1,12 @@
 /**
  * @fileoverview Edge Function: sbx-loader (Unified Gateway Initializer)
- * Consolida Auth Exchange, User Profile e Offer Details em uma única chamada atômica.
  * 
- * ARQUITETURA PARA RETORNO NA ENTRADA NO GATEWAY:
- * 1. [SECURITY]: Validação de token externo e criação de sessão interna.
- * 2. [HYDRO]: Mapeamento completo de dados (Perfil + Oferta + Evento + Seller).
- * 3. [RESILIENCE]: Dispatcher centralizado de erros semânticos (401, 404, 502).
- * 4. [SSR-COMPAT]: Injeção de Cookie HTTP-Only para persistência entre SSR e Client.
+ * * =========================================================================
+ * [ARQUITETURA DE GATEWAY UNIFICADO]
+ * =========================================================================
+ * Esta função atua como um Backend For Frontend (BFF) atômico, consolidando a 
+ * validação de autenticação (Auth Exchange), a hidratação de perfil do usuário 
+ * e os detalhes da oferta (via catálogo Superbid) em um único ciclo de request-response.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -27,25 +27,22 @@ const ENV_URLS = {
 };
 
 serve(async (req) => {
-  // Preflight CORS (Handshake obrigatório para browsers)
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    // Extração de parâmetros da requisição
     const { sbx_access_token, environment, offer_id } = await req.json();
 
     if (!sbx_access_token || !environment) throw new Error("BAD_REQUEST: Credenciais ou ambiente ausentes.");
     const urls = ENV_URLS[environment as keyof typeof ENV_URLS];
 
     // =========================================================================
-    // 1. VALIDAÇÃO UPSTREAM (Autenticação na API de Origem)
+    // 1. VALIDAÇÃO UPSTREAM (Perfil do Usuário)
     // =========================================================================
     const userRes = await fetch(`${urls.api}/account/v2/user/me`, {
       method: "GET",
       headers: { "Authorization": `Bearer ${sbx_access_token}` }
     });
-
-    // Se o token upstream expirou, forçamos o protocolo de amnésia no frontend (401)
+    
     if (userRes.status === 401) throw new Error("SESSION_UPSTREAM_EXPIRED: O token real da Superbid expirou.");
     if (!userRes.ok) throw new Error(`UPSTREAM_USER_ERROR (${userRes.status}): Falha na API de Usuário.`);
     
@@ -86,10 +83,8 @@ serve(async (req) => {
     let offerPayload: BFFOfferDetails | null = null;
     
     if (offer_id) {
-       // [CORREÇÃO CRÍTICA]: Sanitização de input. Remove aspas (%22) ou caracteres invisíveis 
-       // que quebram o parser do backend da Superbid.
+       // [CORREÇÃO APLICADA]: Limpa caracteres invisíveis ou aspas duplas do URI (%22)
        const cleanOfferId = String(offer_id).replace(/[^0-9]/g, '');
-
        console.log(`[sbx-loader] Buscando oferta sanitizada: ${cleanOfferId}`);
 
        const offerRes = await fetch(`${urls.offer}/offers/?filter=id:[${cleanOfferId}]&pageSize=1`, {
@@ -120,7 +115,6 @@ serve(async (req) => {
        
        const eventData = eventRes.ok ? (await eventRes.json()).events?.[0] : {};
 
-       // Mapeamento completo do contrato de Oferta
        offerPayload = {
          offer: {
            offer_id: String(rawOffer.id),
@@ -167,7 +161,7 @@ serve(async (req) => {
     }
 
     // =========================================================================
-    // 4. PERSISTÊNCIA DE SESSÃO E JWT (Assinatura Atômica)
+    // 4. PERSISTÊNCIA E SEGURANÇA
     // =========================================================================
     const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const sessionToken = crypto.randomUUID();
@@ -188,9 +182,6 @@ serve(async (req) => {
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     const jwt = await create({ alg: "HS256", typ: "JWT" }, { sub: userId, jti: sessionToken, exp: getNumericDate(expiraEm.getTime() / 1000) }, key);
 
-    // =========================================================================
-    // 5. RETORNO CONSOLIDADO (Contrato Preservado)
-    // =========================================================================
     return new Response(JSON.stringify({
       success: true,
       session_token: jwt,
@@ -216,10 +207,10 @@ serve(async (req) => {
     console.error("[sbx-loader] Erro capturado:", err.message);
     
     let status = 500;
-    if (err.message.includes("SESSION_UPSTREAM_EXPIRED")) status = 401; // Dispara Protocolo de Amnésia
-    else if (err.message.includes("BAD_REQUEST")) status = 400; // Requisição malformada
-    else if (err.message.includes("OFFER_NOT_FOUND")) status = 404; // Oferta inexistente
-    else if (err.message.includes("UPSTREAM")) status = 502; // Bad Gateway (Falha no parceiro)
+    if (err.message.includes("SESSION_UPSTREAM_EXPIRED")) status = 401;
+    else if (err.message.includes("BAD_REQUEST")) status = 400;
+    else if (err.message.includes("OFFER_NOT_FOUND")) status = 404;
+    else if (err.message.includes("UPSTREAM")) status = 502;
 
     return new Response(JSON.stringify({ success: false, message: err.message }), { status, headers: corsHeaders });
   }
