@@ -12,6 +12,7 @@
  * 1. Segurança: Intercepta a requisição, faz o Token Exchange no backend.
  * 2. SSR-Safe: O loader NÃO toca no localStorage e NÃO executa navegações em janela (window).
  * 3. Client Sync: O componente fantasma hidrata o storage e DELEGA a orquestração via useEffect.
+ * 4. Lazy Import [NOVO]: Isola módulos dependentes do DOM (Orquestrador) via Importação Dinâmica.
  */
 
 import { createFileRoute, redirect, isRedirect } from "@tanstack/react-router";
@@ -20,7 +21,10 @@ import { exchangeAuthSBX } from "@/services/authSBX";
 import { fetchMyProfile } from "@/services/user";
 import { fetchOfferDetails } from "@/services/offer";
 import { logSystemError } from "@/services/notification";
-import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator";
+
+// [REMOVIDO PARA BLINDAGEM SSR]: 
+// import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator";
+// O módulo foi retirado do topo para evitar que o servidor avalie dependências de 'window' prematuramente.
 
 // Tipagens de Domínio
 import type { 
@@ -211,38 +215,36 @@ export const Route = createFileRoute("/financialGatewayEntry")({
   // [COMPONENTE FANTASMA]: A Ponte Híbrida para a SPA
   // =========================================================================
   component: function FinancialGatewayComponent() {
-    // Busca os artefatos retornados pela função loader acima
     const data = Route.useLoaderData() as { 
       session_token: string | null; 
       sbx_access_token: string | undefined; 
-      payload: SimulationPayload; // Novo dado recebido do servidor
+      payload: SimulationPayload; 
     };
 
     useEffect(() => {
-      // 1. Sincronização Segura de Storage
+      // 1. Sincronização Segura de Storage (Apenas no cliente)
       if (data?.session_token) {
-        console.log("🔄 [Gateway Bridge] Sincronizando session_token na SPA");
         localStorage.setItem('session_token', data.session_token);
       }
-      
       if (data?.sbx_access_token) {
-        console.log("🔄 [Gateway Bridge] Sincronizando sbx_access_token na SPA");
         localStorage.setItem('sbx_access_token', data.sbx_access_token);
       }
 
-      // 2. [CORE UPDATE]: Execução da Orquestração
-      // Como estamos dentro do useEffect, temos garantia absoluta de que 
-      // o objeto 'window' existe e estamos no navegador do usuário.
-      if (data?.payload && data?.session_token) {
-        console.log("🚀 [Gateway Bridge] Acionando orquestrador de navegação client-side...");
+      // 2. [CORE UPDATE - SSR SAFE]: Orquestração protegida
+      // Usamos uma checagem explícita de ambiente antes de qualquer import dinâmico
+      if (typeof window !== "undefined" && data?.payload && data?.session_token) {
+        console.log("🚀 [Gateway Bridge] Iniciando navegação client-side...");
         
-        orchestrateNavigation("CONSULT", data.payload, data.session_token).catch(err => {
-          console.error("🚨 [Gateway Bridge] Falha no orquestrador:", err);
-        });
+        import("@/features/financial-hub/core/hooks/useOrchestrator")
+          .then((module) => {
+            // Chamamos a função apenas após o módulo carregar no navegador
+            module.orchestrateNavigation("CONSULT", data.payload, data.session_token as string)
+              .catch(err => console.error("🚨 [Gateway Bridge] Falha no orquestrador:", err));
+          })
+          .catch(err => console.error("🚨 [Gateway Bridge] Falha ao carregar módulo:", err));
       }
     }, [data]);
 
-    // O Gateway continua sendo invisível, apenas gerenciando estado e tráfego.
     return null;
   },
 });
