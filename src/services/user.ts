@@ -39,12 +39,26 @@ export interface BFFUserProfile {
 /**
  * Busca o perfil do usuário no servidor.
  * @param sessionToken O JWT Próprio de sessão gerado pelo nosso backend.
+ * @param environment [NOVO] Opcional. Força o ambiente (production/stage) contornando o localStorage durante o SSR.
  */
-export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfile> => {
+export const fetchMyProfile = async (sessionToken: string, environment?: string): Promise<BFFUserProfile> => {
   // [STATE]: Resgate de variáveis de ambiente e preferências de armazenamento local
-  // [SSR SAFEGUARD]: Só acessa o localStorage se estiver rodando no navegador
+  // ====================================================================================
+  // [SSR SAFEGUARD & CROSS-DOMAIN SYNC]: A Injeção do Parâmetro 'environment'
+  // ====================================================================================
+  // Por que precisamos do 'environment' aqui se já usávamos o localStorage?
+  // 1. O Servidor é Cego: Durante o carregamento inicial (SSR / F5) ou ao receber uma 
+  //    chamada real do mundo externo (Portal Superbid), o código roda no Node.js. Lá, o 
+  //    `window` e o `localStorage` não existem.
+  // 2. A Prevenção do Falso 401: Sem o `environment`, o servidor cairia no fallback e assumiria "stage". 
+  //    Se a URL pedisse "production", enviaríamos o token de Produção apontando para Stage, 
+  //    causando um erro 401 (SESSION_EXPIRED) falso.
+  // 3. O Fluxo: Se o 'environment' for fornecido (injetado pelo Loader do Router que leu a URL), 
+  //    ele assume prioridade máxima. Caso contrário (navegação interna via SPA), ele 
+  //    continua usando o localStorage perfeitamente.
   const isBrowser = typeof window !== 'undefined';
-  const storedAmbiente = isBrowser ? (localStorage.getItem("sbx_environment") || "stage") : "stage";
+  const storedAmbiente = environment || (isBrowser ? (localStorage.getItem("sbx_environment") || "stage") : "stage");
+  
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -55,7 +69,7 @@ export const fetchMyProfile = async (sessionToken: string): Promise<BFFUserProfi
       "Authorization": `Bearer ${supabaseAnonKey}`,
       "apikey": supabaseAnonKey,
       "x-session-token": sessionToken,
-      "x-sbx-env": storedAmbiente,
+      "x-sbx-env": storedAmbiente, // Garante alinhamento total entre o Router e a API
       "Content-Type": "application/json",
       "Accept": "application/json"
     },

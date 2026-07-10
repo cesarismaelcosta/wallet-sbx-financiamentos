@@ -41,7 +41,7 @@ import type {
 
 // Interface EXATAMENTE com os campos da URI
 interface SearchSchema {
-  environment?: string;
+  environment?: "staging" | "production";
   sbx_access_token?: string;
   offer_id?: string;
   product_id?: string;
@@ -60,7 +60,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     console.log("🚀 [financialGatewayEntry] Validate Search:", search);
 
     return {
-      environment: search.environment as string | undefined,
+      environment: search.environment as "staging" | "production" | undefined,
       sbx_access_token: search.sbx_access_token as string | undefined,
       offer_id: search.offer_id as string | undefined,
       product_id: search.product_id as string | undefined,
@@ -102,7 +102,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       // Só faz o exchange se um NOVO token da SBX veio na URL
       if (activeSBXAccessToken) {
         console.log("🔐 [financialGatewayEntry Loader] Tentando exchange do token:", activeSBXAccessToken.substring(0, 10) + "...")
-        const exchangeResult = await exchangeAuthSBX(activeSBXAccessToken, currentEnvironment as "staging" | "production");
+        const exchangeResult = await exchangeAuthSBX(activeSBXAccessToken, currentEnvironment);
         
         console.log("✅ [financialGatewayEntry Loader] Resultado do Exchange:", exchangeResult);
 

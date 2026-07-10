@@ -69,12 +69,21 @@ export interface BFFOfferDetails {
  * Busca os detalhes de uma oferta específica no servidor.
  * @param sessionToken O JWT Próprio de sessão gerado pelo backend.
  * @param offerId O ID do lote/oferta na Superbid.
+ * @param environment [NOVO] Opcional. Força o ambiente (production/stage) contornando o localStorage durante o SSR.
  */
-export const fetchOfferDetails = async (sessionToken: string, offerId: string): Promise<BFFOfferDetails> => {
+export const fetchOfferDetails = async (sessionToken: string, offerId: string, environment?: "staging" | "production"): Promise<BFFOfferDetails> => {
   // [STATE]: Resgate de variáveis de ambiente e preferências de armazenamento local
-  // [SSR SAFEGUARD]: Só acessa o localStorage se estiver rodando no navegador
+  // ====================================================================================
+  // [SSR SAFEGUARD & CROSS-DOMAIN SYNC]: A Injeção do Parâmetro 'environment'
+  // ====================================================================================
+  // 1. O Servidor é Cego: No Node.js (SSR), o `window` e o `localStorage` não existem.
+  // 2. O Risco de Colapso (401 Falso): Sem o 'environment', o servidor usa o fallback "stage". 
+  //    Se o token for de Produção, a incompatibilidade gera um SESSION_EXPIRED falso.
+  // 3. O Fluxo Unificado: Ao receber o 'environment' do loader, a API garante que o Header 
+  //    'x-sbx-env' esteja perfeitamente sincronizado com a origem da requisição.
   const isBrowser = typeof window !== 'undefined';
-  const storedAmbiente = isBrowser ? (localStorage.getItem("sbx_environment") || "stage") : "stage";
+  const storedAmbiente = environment || (isBrowser ? (localStorage.getItem("sbx_environment") || "stage") : "stage");
+  
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ldzutiojmcawhwdhojlo.supabase.co';
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -97,7 +106,7 @@ export const fetchOfferDetails = async (sessionToken: string, offerId: string): 
       "Authorization": `Bearer ${supabaseAnonKey}`,
       "apikey": supabaseAnonKey,
       "x-session-token": sessionToken,
-      "x-sbx-env": storedAmbiente,
+      "x-sbx-env": storedAmbiente, // Garante alinhamento total entre o Router e a API
       "Content-Type": "application/json",
       "Accept": "application/json"
     }
@@ -111,6 +120,7 @@ export const fetchOfferDetails = async (sessionToken: string, offerId: string): 
       // -----------------------------------------------------------------------
       // [SECURITY]: Gatilho do Protocolo de Amnésia
       // -----------------------------------------------------------------------
+      // [CORE UPDATE - SSR SAFEGUARD]: Só dispara o evento se estivermos no Client-Side.
       if (isBrowser) {
         window.dispatchEvent(new CustomEvent('session_expired'));
       }
