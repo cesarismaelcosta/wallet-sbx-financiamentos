@@ -15,6 +15,15 @@ import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { BFFUserProfile, BFFOfferDetails } from "../_shared/types.ts";
 
+const DEBUG_MODE = true;
+
+const debugLog = (message: string, data?: any) => {
+  if (DEBUG_MODE) {
+    console.log(`[SBX-LOADER] ${message}`, data ? JSON.stringify(data) : "");
+  }
+};
+
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -77,7 +86,7 @@ serve(async (req) => {
       metadata: { processedAt: new Date().toISOString(), originIp: "proxy" }
     };
 
-// =========================================================================
+    // =========================================================================
     // 3. BUSCA E MAPEAMENTO DE OFERTA
     // =========================================================================
     let offerPayload: BFFOfferDetails | null = null;
@@ -85,7 +94,7 @@ serve(async (req) => {
     if (offer_id) {
        // Sanitiza o ID
        const cleanOfferId = String(offer_id).replace(/[^0-9]/g, '');
-       console.log(`[sbx-loader] Buscando oferta sanitizada: ${cleanOfferId}`);
+       debugLog(`Buscando oferta sanitizada: ${cleanOfferId}`);
 
        // [AQUI ESTAVA O ERRO 500]: Copiando a URL idêntica do sbx-offer que funciona
        const offerUrl = `${urls.offer}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${cleanOfferId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
@@ -183,7 +192,7 @@ serve(async (req) => {
     const agora = new Date();
     const expiraEm = new Date(agora.getTime() + (14400 * 1000));
 
-    await supabaseAdmin.from('sbx_sessions').insert({ 
+    const { error: insertError } = await supabaseAdmin.from('sbx_sessions').insert({ 
         session_token: sessionToken, 
         user_id: userId, 
         sbx_access_token, 
@@ -191,6 +200,16 @@ serve(async (req) => {
         expires_at: expiraEm.toISOString(), 
         ...infra 
     });
+
+    if (insertError) {
+        debugLog("[CRITICAL] Falha catastrófica ao persistir sessão:", {
+            error: insertError,
+            context: { sessionToken, userId }
+        });
+        
+        // Interrompe imediatamente. Não deixe a função prosseguir e retornar sucesso.
+        throw new Error(`[sbx-loader] DB_INSERT_FAILURE: ${insertError.message}`);
+    }
 
     const jwtSecret = Deno.env.get("JWT_SECRET")!;
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);

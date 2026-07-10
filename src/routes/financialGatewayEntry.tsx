@@ -69,7 +69,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` // <- BASTA ADICIONAR ESTA LINHA
+          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` 
         },
         body: JSON.stringify({
           sbx_access_token: deps.sbx_access_token,
@@ -79,14 +79,17 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       });
 
       const sbxData = await sbxResponse.json();
-
+      
       if (!sbxResponse.ok) {
         throw new Error(sbxData.message || `HTTP_SBX_${sbxResponse.status}`);
       }
 
+      // 🐛 [DEBUG CRÍTICO]: Inspecionando o retorno exato da Edge Function
+      console.log("🐛 [financialGatewayEntry] sbxData RAW:\n", JSON.stringify(sbxData, null, 2));
+
       // Montagem do Contrato
       const payload: SimulationPayload = {
-        action: "SIMULATE",
+        action: "CONSULT",
         timestamp: new Date().toISOString(),
         environment: currentEnvironment,
         entity: sbxData.rehydration_payload.user_profile as UserProfile,
@@ -115,8 +118,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
           "x-session-token": sbxData.session_token // Usa o token recém-criado
         },
         body: JSON.stringify({
-           ...payload,
-           step: "EXECUTE_SIMULATION" // Comando que o orchestrator espera
+           ...payload
         }),
       });
 
@@ -139,27 +141,27 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     } catch (error: any) {
       console.error("🚨 [financialGatewayEntry] Falha no fluxo server-side:", error.message);
 
+      // 1. NOTIFICAÇÃO (Email/Log): Dispara o erro em background para a engenharia
       await logSystemError(deps.sbx_access_token || "NO_TOKEN", {
         context: "FINANCIAL-GATEWAY-LOADER",
         message: error.message,
         payload: { searchParams: deps }
       });
 
+      // Se já for um comando de redirecionamento interno do TanStack, deixa fluir
       if (isRedirect(error)) throw error;
 
-      // Tratamento Preservado: Amnésia
-      if (error.message.includes("401") || error.message.includes("SESSION_UPSTREAM_EXPIRED")) {
+      // 2. REGRA RESTRITA DE LOGIN: Só exige login se a Superbid (sbx-loader) disser que o token expirou
+      if (error.message.includes("HTTP_SBX_401") || error.message.includes("SESSION_UPSTREAM_EXPIRED")) {
         throw redirect({ to: '/accounts/signin', search: { redirect_uri: location.href }, replace: true });
       }
       
-      // Tratamento Preservado: Oferta Não Encontrada
-      if (error.message.includes("OFFER_NOT_FOUND") || error.message.includes("404")) {
-        const targetURL = deps.return_uri;
-        if (targetURL) throw redirect({ to: targetURL as any, replace: true });
-        throw new Error("OFFER_NOT_FOUND");
-      }
-
-      throw new Error(error.message);
+      // 3. FAIL-SAFE (Tudo o resto): Orquestrador falhou, Oferta 404, Erro 500... 
+      // Devolve o usuário para a origem silenciosamente.
+      const targetURL = deps.return_uri || "/";
+      console.warn(`⚠️ Abortando gateway. Erro mapeado. Ejetando usuário de volta para: ${targetURL}`);
+      
+      throw redirect({ to: targetURL as any, replace: true });
     }
   },
   
