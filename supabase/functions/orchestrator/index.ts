@@ -548,15 +548,16 @@ serve(async (req: Request) => {
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-  } catch (error: any) {
-    debugLog(`[Orquestrador POST Error REAL]: ${error.message}`); 
-    return new Response(JSON.stringify({ 
-        error: "Falha na validação", 
-        details: error.message 
-    }), { 
-        status: 400, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-    });
+    } catch (error: any) {
+      debugLog(`[Orquestrador POST Error REAL]: ${error.message}`); // Log técnico
+      return new Response(JSON.stringify({ 
+          error: "Falha na validação", 
+          details: error.message // ISSO vai te mostrar se é um SQL Error, ReferenceError, etc.
+      }), { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
+    }
   }
 
   // Falha de Método HTTP
