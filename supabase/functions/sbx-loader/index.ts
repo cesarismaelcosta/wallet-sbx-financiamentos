@@ -81,29 +81,43 @@ serve(async (req) => {
     };
 
     // =========================================================================
-    // 3. BUSCA E MAPEAMENTO DE OFERTA (Se offer_id presente)
+    // 3. BUSCA E MAPEAMENTO DE OFERTA
     // =========================================================================
     let offerPayload: BFFOfferDetails | null = null;
     
     if (offer_id) {
-       const offerRes = await fetch(`${urls.offer}/offers/?filter=id:[${offer_id}]`, {
-         headers: { "Authorization": `Bearer ${sbx_access_token}` }
+       // [CORREÇÃO CRÍTICA]: Sanitização de input. Remove aspas (%22) ou caracteres invisíveis 
+       // que quebram o parser do backend da Superbid.
+       const cleanOfferId = String(offer_id).replace(/[^0-9]/g, '');
+
+       console.log(`[sbx-loader] Buscando oferta sanitizada: ${cleanOfferId}`);
+
+       const offerRes = await fetch(`${urls.offer}/offers/?filter=id:[${cleanOfferId}]&pageSize=1`, {
+         method: "GET",
+         headers: { 
+           "Authorization": `Bearer ${sbx_access_token}`,
+           "Content-Type": "application/json",
+           "Accept": "application/json"
+         }
        });
 
-       // Tratamento de erro de autenticação na oferta
        if (offerRes.status === 401) throw new Error("SESSION_UPSTREAM_EXPIRED: O token real da Superbid expirou.");
        if (!offerRes.ok) throw new Error(`UPSTREAM_OFFER_ERROR (${offerRes.status}): Erro na API de ofertas.`);
        
        const offerData = await offerRes.json();
        const rawOffer = offerData.offers?.[0];
        
-       // Erro de Negócio: Oferta esperada mas não localizada
        if (!rawOffer) throw new Error("OFFER_NOT_FOUND: Oferta solicitada não localizada.");
 
-       // Busca Evento relacionado via Auction ID
        const eventRes = await fetch(`${urls.event}/events/v2/?filter=id:${rawOffer.auction?.id || ""}&pageSize=1`, {
-          headers: { "Authorization": `Bearer ${sbx_access_token}` }
+          method: "GET",
+          headers: { 
+            "Authorization": `Bearer ${sbx_access_token}`,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          }
        });
+       
        const eventData = eventRes.ok ? (await eventRes.json()).events?.[0] : {};
 
        // Mapeamento completo do contrato de Oferta

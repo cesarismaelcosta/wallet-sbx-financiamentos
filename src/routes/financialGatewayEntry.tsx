@@ -67,7 +67,10 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       // =====================================================================
       const sbxResponse = await fetch(`${supabaseUrl}/functions/v1/sbx-loader`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` // <- BASTA ADICIONAR ESTA LINHA
+        },
         body: JSON.stringify({
           sbx_access_token: deps.sbx_access_token,
           environment: currentEnvironment,
