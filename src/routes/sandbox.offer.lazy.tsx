@@ -6,10 +6,11 @@
  * Visualização de detalhes de uma oferta (ativo) na Sandbox.
  * Atua apenas como "vitrine". A responsabilidade de orquestração foi 
  * delegada para o Gateway (/financialEntry).
- * * [RESPONSABILIDADES]:
+ * * [RESPONSABILIDADES DA REFATORAÇÃO (SSR-Safe)]:
  * 1. Interface: Renderização do layout original (tabelas, carrossel, sem filtros).
  * 2. Visualização (BFF): Busca os dados da oferta apenas para exibição em tela.
  * 3. Delegação: Redireciona o usuário para o DMZ Gateway com os "documentos" (IDs e Token).
+ * 4. [SECURITY]: Eliminação de inicialização síncrona de LocalStorage para prevenir crashes no Servidor.
  */
 
 import { useState, useMemo, useEffect, useContext, useRef } from "react";
@@ -146,13 +147,21 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   const [loading, setLoading] = useState(false);
   const [activeOffer, setActiveOffer] = useState<any>(null);
   
-  // [AMBIENTE]: Inicialização imediata síncrona para evitar race-condition no fetch inicial
-  const [ambiente, setAmbiente] = useState<"staging" | "production">(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem("sbx_environment") as "staging" | "production") || "production";
+  // =========================================================================
+  // [AMBIENTE & HIDRATAÇÃO]: Proteção contra Erros de SSR
+  // =========================================================================
+  // 1. Inicialização Síncrona Segura: Assume "production" por padrão para evitar divergência
+  // estrutural entre a renderização do Servidor (Node) e a do Cliente (React DOM).
+  const [ambiente, setAmbiente] = useState<"staging" | "production">("production");
+
+  // 2. Hidratação Assíncrona: Executa exclusivamente no navegador após a montagem.
+  // Permite a leitura segura do 'localStorage' sem causar crashes no servidor.
+  useEffect(() => {
+    const savedEnv = localStorage.getItem("sbx_environment") as "staging" | "production";
+    if (savedEnv) {
+      setAmbiente(savedEnv);
     }
-    return "production";
-  });
+  }, []);
   
   // [CONTROLE DE FALLBACK]: Estados de resiliência espelhados do Gateway
   const [fetchError, setFetchError] = useState<'TECHNICAL_INSTABILITY' | null>(null);
@@ -164,7 +173,9 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   // [REDIRECIONAMENTO DINÂMICO]: Captura a URL de retorno preservando a origem
   const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sandbox";
 
-  // [FETCH VISUAL]: Busca dados com proteção rígida de concorrência baseada no ID resolvido
+  // =========================================================================
+  // [FETCH VISUAL]: Busca dados com proteção rígida de concorrência
+  // =========================================================================
   useEffect(() => {
     // [GUARD CLAUSE]: Aborta imediatamente se já inicializado, buscando ou se houver erro terminal
     if (hasInitialized.current || isFetching.current || fetchError || !targetOfferId || !token) return;
@@ -239,12 +250,14 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   // =========================================================================
   // [HANDLERS]: Ação de Delegação para o Gateway
   // =========================================================================
+  // Handler seguro para SSR: Funções atreladas a interações de usuário (Click)
+  // nunca executam no servidor, portanto podem ler o localStorage livremente.
   const handleSimulacao = () => {
     if (!activeOffer) return;
     setLoading(true);
 
     // O 'token' do contexto é o interno. Precisamos do sbx_token real.
-    // Se o seu useFinancialAuth não expõe o sbx_token, use o localStorage diretamente.
+    // Leitura 100% segura aqui (Execução exclusiva no Client-Side)
     const sbxAcessToken = localStorage.getItem('sbx_access_token');
     console.log("[sandbox.offer | OfferDetailsSandbox] Delegando para o Gateway com sbx_access_token real:", sbxAcessToken);
 
@@ -259,10 +272,9 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       utm_medium: "referral",
       utm_campaign: `flow_${flowKey?.toLowerCase()}`,
     };
+    
     // 2. Adição condicional: Só enviamos category_id se NÃO for Banner
-    // Isso evita que o backend tente validar categorias para fluxos que não possuem categoria
     if (currentFlow.link !== "Banner") {
-      // Supondo que você queira passar o category_id caso exista na activeOffer
       if (activeOffer?.offer?.category_id) {
         searchPayload.category_id = activeOffer.offer.category_id;
       }

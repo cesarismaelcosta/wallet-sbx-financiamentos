@@ -4,13 +4,14 @@
  * [ARQUITETURA & CONTROLE DE AMBIENTE]
  * =========================================================================
  * Ponto de entrada do ambiente de homologação e testes do Financial Hub.
- * * [Responsabilidades]:
- * 1. Navegação Baseada em Fluxos: Mapeia as jornadas via links diretos ou cliques.
- * 2. Visualização de Ambiente: Exibe o ambiente atual (Stage/Prod) em modo read-only.
- * 3. Gestão de Sessão: Exibe os dados do utilizador logado e permite o logout limpo.
+ * * [RESPONSABILIDADES DA REFATORAÇÃO (SSR-Safe)]:
+ * 1. Prevenção de ReferenceError: Isolamento de APIs do navegador (localStorage).
+ * 2. Prevenção de Hydration Mismatch: Inicialização neutra de estado entre Servidor e Cliente.
+ * 3. Navegação Baseada em Fluxos: Mapeia as jornadas via links diretos ou cliques.
+ * 4. Gestão de Sessão: Exibe os dados do utilizador logado e permite o logout limpo.
  */
 
-import React, { useState, JSX } from "react";
+import React, { useState, useEffect, JSX } from "react";
 import { createLazyFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { CreditCard, Car, Home, UserSquare2, TrendingUp, ShieldCheck, ChevronRight, Loader2, LogOut } from "lucide-react";
@@ -38,17 +39,31 @@ const SandboxHome = () => {
   const { logout, userId, token } = useFinancialAuth();
   
   // =========================================================================
-  // [STATE]: Controle de loading e Leitura do Ambiente (Read-Only)
+  // [STATE]: Controle de loading e Leitura do Ambiente (SSR-Safe)
   // =========================================================================
   const [loading, setLoading] = useState(false);
   
-  const [ambiente] = useState<"staging" | "production">(
-    () => (localStorage.getItem("sbx_environment") as "staging" | "production") || "production"
-  );
+  // [SECURITY CORE]: Inicialização Neutra (Anti-Hydration Mismatch)
+  // O servidor Node.js e a primeira renderização do navegador DEVEM ser idênticas.
+  // Assumimos "production" como padrão neutro. O 'typeof window' foi removido
+  // pois causava divergência de árvores DOM entre servidor e cliente.
+  const [ambiente, setAmbiente] = useState<"staging" | "production">("production");
+
+  // [SECURITY CORE]: Hidratação Assíncrona no Cliente
+  // O useEffect GARANTE que este bloco de código só rodará no Navegador (Client-side),
+  // onde o objeto 'window' e o 'localStorage' estão disponíveis e são seguros para leitura.
+  useEffect(() => {
+    const savedEnv = localStorage.getItem("sbx_environment") as "staging" | "production";
+    if (savedEnv) {
+      setAmbiente(savedEnv); // Atualiza a UI de forma limpa e segura
+    }
+  }, []);
 
   // =========================================================================
   // [HANDLERS]: Ações do Usuário e Navegação
   // =========================================================================
+  // Seguros para SSR: Handlers atrelados a eventos de clique (onClick)
+  // só existem e são executados no navegador do usuário.
   const handleLogout = async () => {
     localStorage.removeItem("sbx_environment");
     await logout();
@@ -147,12 +162,10 @@ const SandboxHome = () => {
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
         <div className="mx-auto flex h-24 max-w-7xl items-center justify-between px-6">
           
-          {/* LADO ESQUERDO: Apenas ajuste da Logo */}
           <div className="flex items-center gap-6 shrink-0">
             <div className="h-6 w-px bg-slate-200 hidden sm:block" />
             <div className="hidden sm:block"><WalletLogo size="md" withTagline /></div>
             
-            {/* Bloco da Sessão mantido */}
             <div className="flex flex-col gap-1 border-l border-slate-200 pl-6">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   Sessão Ativa
@@ -165,7 +178,6 @@ const SandboxHome = () => {
             </div>
           </div>
           
-          {/* LADO DIREITO: Usuário e Ações mantidos */}
           <div className="flex items-center gap-6 border-l border-slate-200 pl-6 shrink-0">
               <div className="flex items-center gap-4">
                 <div className="flex flex-col items-end text-right">
@@ -173,6 +185,7 @@ const SandboxHome = () => {
                   <span className="text-[10px] font-mono text-slate-500">USER ID: {userId || "---"}</span>
                 </div>
                 
+                {/* O valor de 'ambiente' está 100% seguro pois foi hidratado no useEffect */}
                 <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-sm border ${
                   ambiente === "staging" 
                     ? "bg-red-50 text-red-600 border-red-200" 
