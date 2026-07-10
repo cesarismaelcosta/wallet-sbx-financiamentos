@@ -85,7 +85,6 @@ serve(async (req) => {
     // 3. ESTADO: CÁLCULO DE TTL E GRAVAÇÃO (Baseado no sbx-auth)
     // =========================================================================
     const agora = new Date();
-    // 4 horas de TTL padrão para a sessão trocada
     const expiraEmSegundos = 14400; 
     const margemSegurancaMs = 15 * 60 * 1000;
     const nossaExpiracao = new Date(agora.getTime() + (expiraEmSegundos * 1000) - margemSegurancaMs);
