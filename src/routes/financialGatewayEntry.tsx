@@ -10,8 +10,8 @@
  * antes da renderização de tela para garantir segurança e integridade do histórico.
  * * * [RESPONSABILIDADES DA REFATORAÇÃO SSR]:
  * 1. Segurança: Intercepta a requisição, faz o Token Exchange no backend.
- * 2. SSR-Safe: O loader NÃO toca no localStorage, apenas transita os dados.
- * 3. Client Sync: O componente fantasma hidrata o localStorage no navegador.
+ * 2. SSR-Safe: O loader NÃO toca no localStorage e NÃO executa navegações em janela (window).
+ * 3. Client Sync: O componente fantasma hidrata o storage e DELEGA a orquestração via useEffect.
  */
 
 import { createFileRoute, redirect, isRedirect } from "@tanstack/react-router";
@@ -124,7 +124,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         console.log("🎉 [financialGatewayEntry Loader] Oferta carregada com sucesso.");
       }
 
-      // 3. ORQUESTRAÇÃO DE NEGÓCIO
+      // 3. MONTAGEM DE NEGÓCIO (DATA PREPARATION)
       const payload: SimulationPayload = {
         action: "SIMULATE",
         timestamp: new Date().toISOString(),
@@ -143,13 +143,14 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         },
       };
 
-      console.log("🚀 [financialGatewayEntry Loader] Tudo OK. Delegando para o orquestrador.");
-      await orchestrateNavigation("CONSULT", payload, session_token);
+      console.log("🚀 [financialGatewayEntry Loader] Tudo OK. Payload construído. Delegando execução para o Client-Side.");
       
-      // [NOVO RETORNO]: Em vez de null, retornamos os tokens para hidratar a SPA
+      // [CORE UPDATE - SSR SAFE]: O orquestrador de navegação NÃO PODE ser chamado aqui.
+      // Retornamos os tokens e o payload completo para a SPA hidratar e navegar com segurança.
       return { 
         session_token, 
-        sbx_access_token: activeSBXAccessToken 
+        sbx_access_token: activeSBXAccessToken,
+        payload // Injetado para travessia segura
       };
 
     } catch (error: any) {
@@ -214,11 +215,11 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     const data = Route.useLoaderData() as { 
       session_token: string | null; 
       sbx_access_token: string | undefined; 
+      payload: SimulationPayload; // Novo dado recebido do servidor
     };
 
     useEffect(() => {
-      // Este bloco roda EXCLUSIVAMENTE no navegador (Client-Side).
-      // Aqui o 'window' e o 'localStorage' existem e são 100% seguros de acessar.
+      // 1. Sincronização Segura de Storage
       if (data?.session_token) {
         console.log("🔄 [Gateway Bridge] Sincronizando session_token na SPA");
         localStorage.setItem('session_token', data.session_token);
@@ -227,6 +228,17 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       if (data?.sbx_access_token) {
         console.log("🔄 [Gateway Bridge] Sincronizando sbx_access_token na SPA");
         localStorage.setItem('sbx_access_token', data.sbx_access_token);
+      }
+
+      // 2. [CORE UPDATE]: Execução da Orquestração
+      // Como estamos dentro do useEffect, temos garantia absoluta de que 
+      // o objeto 'window' existe e estamos no navegador do usuário.
+      if (data?.payload && data?.session_token) {
+        console.log("🚀 [Gateway Bridge] Acionando orquestrador de navegação client-side...");
+        
+        orchestrateNavigation("CONSULT", data.payload, data.session_token).catch(err => {
+          console.error("🚨 [Gateway Bridge] Falha no orquestrador:", err);
+        });
       }
     }, [data]);
 
