@@ -77,39 +77,53 @@ serve(async (req) => {
       metadata: { processedAt: new Date().toISOString(), originIp: "proxy" }
     };
 
-    // =========================================================================
+// =========================================================================
     // 3. BUSCA E MAPEAMENTO DE OFERTA
     // =========================================================================
     let offerPayload: BFFOfferDetails | null = null;
     
     if (offer_id) {
-       // [CORREÇÃO APLICADA]: Limpa caracteres invisíveis ou aspas duplas do URI (%22)
+       // Sanitiza o ID
        const cleanOfferId = String(offer_id).replace(/[^0-9]/g, '');
        console.log(`[sbx-loader] Buscando oferta sanitizada: ${cleanOfferId}`);
 
-       const offerRes = await fetch(`${urls.offer}/offers/?filter=id:[${cleanOfferId}]&pageSize=1`, {
+       // [AQUI ESTAVA O ERRO 500]: Copiando a URL idêntica do sbx-offer que funciona
+       const offerUrl = `${urls.offer}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${cleanOfferId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
+
+       const offerRes = await fetch(offerUrl, {
          method: "GET",
          headers: { 
            "Authorization": `Bearer ${sbx_access_token}`,
+           "Accept": "application/json",
            "Content-Type": "application/json",
-           "Accept": "application/json"
+           // Copiando os headers de segurança do sbx-offer
+           "Origin": "https://www.superbid.net",
+           "Referer": "https://www.superbid.net/"
          }
        });
 
        if (offerRes.status === 401) throw new Error("SESSION_UPSTREAM_EXPIRED: O token real da Superbid expirou.");
-       if (!offerRes.ok) throw new Error(`UPSTREAM_OFFER_ERROR (${offerRes.status}): Erro na API de ofertas.`);
+       if (!offerRes.ok) {
+           const errText = await offerRes.text();
+           throw new Error(`UPSTREAM_OFFER_ERROR (${offerRes.status}): ${errText}`);
+       }
        
        const offerData = await offerRes.json();
        const rawOffer = offerData.offers?.[0];
        
        if (!rawOffer) throw new Error("OFFER_NOT_FOUND: Oferta solicitada não localizada.");
 
-       const eventRes = await fetch(`${urls.event}/events/v2/?filter=id:${rawOffer.auction?.id || ""}&pageSize=1`, {
+       // Clonando a lógica da URL de eventos também
+       const eventUrl = `${urls.event}/events/v2/?portalId=[2,15]&locale=pt_BR&timeZoneId=America%2FSao_Paulo&filter=id:${rawOffer.auction?.id || ""}&pageSize=1`;
+
+       const eventRes = await fetch(eventUrl, {
           method: "GET",
           headers: { 
             "Authorization": `Bearer ${sbx_access_token}`,
+            "Accept": "application/json",
             "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Origin": "https://www.superbid.net",
+            "Referer": "https://www.superbid.net/"
           }
        });
        
