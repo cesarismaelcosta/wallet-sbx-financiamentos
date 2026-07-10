@@ -188,18 +188,29 @@ serve(async (req) => {
     // =========================================================================
     const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const sessionToken = crypto.randomUUID();
-    const infra = await captureInfrastructure(req);
     const agora = new Date();
     const expiraEm = new Date(agora.getTime() + (14400 * 1000));
 
-    const { error: insertError } = await supabaseAdmin.from('sbx_sessions').insert({ 
+    const infra = await captureInfrastructure(req);
+    const { insertData: sessionData, error: insertError } = await supabaseAdmin
+      .from('sbx_sessions')
+      .insert({ 
         session_token: sessionToken, 
-        user_id: userId, 
-        sbx_access_token, 
-        environment,
-        expires_at: expiraEm.toISOString(), 
-        ...infra 
-    });
+        user_id: sbxData.userId, 
+        sbx_access_token: sbxData.access_token, 
+        environment, 
+        expires_at: nossaExpiracao.toISOString(),
+        // Mapeamento dos novos campos
+        ip_address: infra.ip_address,
+        country: infra.country,
+        state: infra.state,
+        city: infra.city,
+        user_agent: infra.user_agent,
+        device_type: infra.device_type,
+        operating_system: infra.operating_system,
+        origin_details: infra.metadata // O JSONB recebe o restante dos metadados
+      })
+      .select();
 
     if (insertError) {
         debugLog("[CRITICAL] Falha catastrófica ao persistir sessão:", {
