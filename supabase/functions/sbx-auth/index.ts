@@ -50,6 +50,7 @@ serve(async (req) => {
       body: details.toString()
     })
 
+
     // CAPTURA O QUE A SUPERBID REALMENTE DISSE (Em formato de texto)
     const rawResponse = await sbxLoginResponse.text();
     
@@ -65,6 +66,7 @@ serve(async (req) => {
     // CORREÇÃO CRÍTICA APLICADA: Transforma a string de texto de volta em um Objeto JSON válido
     // Sem isso, sbxData.userId e sbxData.access_token retornavam 'undefined' e quebravam o banco.
     const sbxData = JSON.parse(rawResponse);
+    console.log("DEBUG [sbx-auth] - Resposta da API:", JSON.stringify(sbxData, null, 2));
 
     // Cálculo de expiração
     const agora = new Date()

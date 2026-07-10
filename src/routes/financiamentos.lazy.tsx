@@ -40,7 +40,7 @@ const FinanciamentosGuard = () => {
     if (!token && location.pathname !== '/accounts/signin') {
       navigate({ 
         to: '/accounts/signin',
-        search: { redirect_uri: location.pathname }
+        search: { redirect_uri: location.pathname + location.search}
       });
       return;
     }

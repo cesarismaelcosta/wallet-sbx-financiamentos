@@ -188,19 +188,20 @@ serve(async (req) => {
     // =========================================================================
     const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const sessionToken = crypto.randomUUID();
-    const agora = new Date();
-    const expiraEm = new Date(agora.getTime() + (14400 * 1000));
+    const agora = new Date()
+    const expiraEmSegundos = 14400; 
+    const margemSegurancaMs = 15 * 60 * 1000;
+    const nossaExpiracao = new Date(agora.getTime() + (expiraEmSegundos * 1000) - margemSegurancaMs)
 
     const infra = await captureInfrastructure(req);
-    const { insertData: sessionData, error: insertError } = await supabaseAdmin
+    const { insertData: sessionData, insertError: insertError } = await supabaseAdmin
       .from('sbx_sessions')
       .insert({ 
         session_token: sessionToken, 
-        user_id: sbxData.userId, 
-        sbx_access_token: sbxData.access_token, 
+        user_id: userId, 
+        sbx_access_token: sbx_access_token, 
         environment, 
         expires_at: nossaExpiracao.toISOString(),
-        // Mapeamento dos novos campos
         ip_address: infra.ip_address,
         country: infra.country,
         state: infra.state,
@@ -208,10 +209,10 @@ serve(async (req) => {
         user_agent: infra.user_agent,
         device_type: infra.device_type,
         operating_system: infra.operating_system,
-        origin_details: infra.metadata // O JSONB recebe o restante dos metadados
+        origin_details: infra.metadata
       })
       .select();
-
+      
     if (insertError) {
         debugLog("[CRITICAL] Falha catastrófica ao persistir sessão:", {
             error: insertError,
@@ -224,13 +225,13 @@ serve(async (req) => {
 
     const jwtSecret = Deno.env.get("JWT_SECRET")!;
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-    const jwt = await create({ alg: "HS256", typ: "JWT" }, { sub: userId, jti: sessionToken, exp: getNumericDate(expiraEm.getTime() / 1000) }, key);
+    const jwt = await create({ alg: "HS256", typ: "JWT" }, { sub: userId, jti: sessionToken, exp: getNumericDate(nossaExpiracao.getTime() / 1000) }, key);
 
     return new Response(JSON.stringify({
       success: true,
       session_token: jwt,
       user_id: userId,
-      expires_at: Math.floor(expiraEm.getTime() / 1000),
+      expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
       server_now_ms: agora.getTime(),
       rehydration_payload: {
         user_profile: userProfile,
