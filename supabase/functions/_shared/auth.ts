@@ -2,9 +2,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 
 /**
- * Valida a sessão do usuário baseada no token JWT fornecido no header.
+ * Valida a sessão do usuário baseada no token JWT fornecido no request.
  * * Fluxo de execução:
- * 1. Extração: Obtém o 'x-session-token' do header.
+ * 1. Extração [HÍBRIDA]: Tenta obter o 'x-session-token' do header. Se falhar, tenta o cabeçalho 'Cookie'.
  * 2. Verificação: Valida a assinatura do JWT usando o segredo de ambiente.
  * 3. Identificação: Extrai o 'jti' (UUID da sessão) do payload.
  * 4. Persistência: Consulta o Supabase para garantir que a sessão ainda existe no banco.
@@ -13,10 +13,19 @@ import { verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
  * @throws {Error} Se o token for inválido, ausente ou se a sessão não existir.
  */
 export async function validateRequest(req: Request) {
-  // 1. Extração do token do header
-  const token = req.headers.get("x-session-token");
+  // 1. Extração Estratégica Híbrida (Header -> Fallback para Cookie)
+  let token = req.headers.get("x-session-token");
+
   if (!token) {
-    throw new Error("Token de sessão ausente nos headers.");
+    const cookieHeader = req.headers.get("Cookie");
+    token = cookieHeader
+      ?.split('; ')
+      .find(row => row.startsWith('session_token='))
+      ?.split('=')[1] || null;
+  }
+
+  if (!token) {
+    throw new Error("Token de sessão ausente nos headers e nos cookies.");
   }
 
   try {
@@ -33,7 +42,7 @@ export async function validateRequest(req: Request) {
     );
 
     // 3. Verificação e decodificação do payload
-    // AQUI ESTAVA O ERRO: Sem as chaves { }, recebemos o objeto direto.
+    // AQUI ESTAVA O ERRO (Corrigido): Sem as chaves { }, recebemos o objeto direto.
     const payload = await verify(token, key);
     const sessionId = payload.jti as string; // Agora 'jti' existe!
 

@@ -1,4 +1,5 @@
-/* * @fileoverview Rota: financialGatewayEntry (Gateway de Entrada e Reidratação de Contexto)
+/**
+ * @fileoverview Rota: financialGatewayEntry (Gateway de Entrada e Reidratação de Contexto)
  * * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
@@ -7,15 +8,14 @@
  * Ponto de entrada invisível no nível de roteador (Router-Level Controller).
  * Não possui interface gráfica (UI). Executa interceptação síncrona/assíncrona
  * antes da renderização de tela para garantir segurança e integridade do histórico.
- * * * [RESPONSABILIDADES]:
- * 1. Segurança: Intercepta a requisição, faz o Token Exchange e evita execuções duplicadas.
- * 2. Reidratação (BFF): Busca perfil do usuário e dados consolidados da oferta.
- * 3. Orquestração: Monta o SimulationPayload e delega decisão ao Core.
- * 4. Resiliência: Trata expiração de oferta com degradação graciosa e fallback.
- * 5. Anti-History Pollution: Garante navegação limpa usando redirecionamentos com 'replace'.
+ * * * [RESPONSABILIDADES DA REFATORAÇÃO SSR]:
+ * 1. Segurança: Intercepta a requisição, faz o Token Exchange no backend.
+ * 2. SSR-Safe: O loader NÃO toca no localStorage, apenas transita os dados.
+ * 3. Client Sync: O componente fantasma hidrata o localStorage no navegador.
  */
 
 import { createFileRoute, redirect, isRedirect } from "@tanstack/react-router";
+import { useEffect } from "react"; // [NOVO] Necessário para a sincronização Client-Side
 import { exchangeAuthSBX } from "@/services/authSBX";
 import { fetchMyProfile } from "@/services/user";
 import { fetchOfferDetails } from "@/services/offer";
@@ -59,27 +59,35 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     };
   },
 
-  // 2. BOA PRÁTICA TANSTACK: Declarar dependências do loader garante 
-  // que o roteador não injete o search como undefined durante transições de rota.
+  // 2. BOA PRÁTICA TANSTACK: Declarar dependências do loader
   loaderDeps: ({ search }) => search,
 
-  // 3. O Loader recebe os dados através de 'deps' (ou 'search', que agora está mapeado)
-  loader: async ({ deps, location }) => {
-    // Usamos o 'deps' que é garantido pelo loaderDeps baseado no validateSearch
+  // 3. O Loader recebe os dados através de 'deps' e 'request' para ler o Cookie
+  loader: async ({ deps, location, request }) => {
     console.log("🚀 [financialGatewayEntry] Loader disparado. Payload mapeado:", deps);
 
-    if (!deps || !deps.sbx_access_token) {
-       console.error("🚨 [Gateway Loader] Falha crítica: Roteador perdeu o contexto.");
+    // [AJUSTE ESTRATÉGICO]: Tenta ler o cookie caso a página sofra um F5 (Refresh) sem os tokens na URL
+    const cookieHeader = request?.headers?.get("Cookie") || "";
+    const cookieToken = cookieHeader
+      ?.split('; ')
+      .find(row => row.startsWith('session_token='))
+      ?.split('=')[1] || null;
+
+    // Se não há token na URL E não há cookie, o usuário não tem contexto
+    if (!deps?.sbx_access_token && !cookieToken) {
+       console.error("🚨 [Gateway Loader] Falha crítica: Roteador perdeu o contexto e não há sessão ativa.");
        throw redirect({ to: '/accounts/signin', replace: true });
     }
 
     const currentEnvironment = deps.environment || "production";
     let activeSBXAccessToken = deps.sbx_access_token;
-    let session_token: string | null = null;
+    
+    // Inicia a sessão com o token do cookie (se existir). Será sobrescrito se houver exchange.
+    let session_token: string | null = cookieToken;
 
     try {
       // 1. TRATAMENTO DE LOGIN & AUTH EXCHANGE
-      // [SECURITY]: Troca do token externo pelo JWT interno via Edge Function
+      // Só faz o exchange se um NOVO token da SBX veio na URL
       if (activeSBXAccessToken) {
         console.log("🔐 [financialGatewayEntry Loader] Tentando exchange do token:", activeSBXAccessToken.substring(0, 10) + "...")
         const exchangeResult = await exchangeAuthSBX(activeSBXAccessToken, currentEnvironment as "staging" | "production");
@@ -89,13 +97,13 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         if (!exchangeResult.success || !exchangeResult.session_token) {
           throw new Error(`AUTH_EXCHANGE_FAILED: ${exchangeResult.message || "Unknown error"}`);
         }
+        
         session_token = exchangeResult.session_token; 
-        localStorage.setItem('session_token', session_token); 
-        localStorage.setItem('sbx_access_token', activeSBXAccessToken);
+        // [CRÍTICO]: localStorage.setItem removido daqui. Será feito no componente.
       }
 
-      // [GUARD CLAUSE]: Redireciona para login se o token for ausente
-      if (!activeSBXAccessToken) {
+      // [GUARD CLAUSE DE SEGURANÇA FINAL]
+      if (!session_token) {
         throw redirect({ 
           to: '/accounts/signin',
           search: { redirect_uri: location.href }, 
@@ -117,7 +125,6 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       }
 
       // 3. ORQUESTRAÇÃO DE NEGÓCIO
-      // [CORE]: Montagem do payload conforme contrato original e delegação
       const payload: SimulationPayload = {
         action: "SIMULATE",
         timestamp: new Date().toISOString(),
@@ -139,8 +146,11 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       console.log("🚀 [financialGatewayEntry Loader] Tudo OK. Delegando para o orquestrador.");
       await orchestrateNavigation("CONSULT", payload, session_token);
       
-      // O loader finaliza sem renderizar componente
-      return null;
+      // [NOVO RETORNO]: Em vez de null, retornamos os tokens para hidratar a SPA
+      return { 
+        session_token, 
+        sbx_access_token: activeSBXAccessToken 
+      };
 
     } catch (error: any) {
       // 1. Identificação do Erro
@@ -149,7 +159,6 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       const errorMessage = error?.message || (isResponse ? `HTTP_${status}` : "Unknown error");
 
       console.error("🚨 [financialGatewayEntry Loader] CRITICAL FAILURE. Erro:", errorMessage);
-      console.error("🚨 [financialGatewayEntry Loader] Stack trace:", error?.stack);
 
       // 2. Se for Redirect do TanStack, deixa passar
       if (isRedirect(error)) throw error;
@@ -173,10 +182,10 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         throw new Error("OFFER_NOT_FOUND");
       }
 
-      // 5. TRATAMENTO DE AUTH: Só limpa se for 401/403
+      // 5. TRATAMENTO DE AUTH: Erros de segurança
       if (status === 401 || status === 403 || errorMessage.includes("AUTH")) {
-        localStorage.removeItem('session_token');
-        localStorage.removeItem('sbx_access_token');
+        // [CRÍTICO]: localStorage.removeItem removido daqui. O servidor não pode apagar o cache.
+        // A página de login (/accounts/signin) deve ter a lógica de limpar o storage ao carregar.
         throw redirect({ 
           to: '/accounts/signin', 
           search: { redirect_uri: location.href }, 
@@ -193,14 +202,35 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       }
 
       // 6. ERROS DE REDE (307, 500, etc): 
-      // Apenas abortamos a operação. O localStorage NÃO é limpo.
-      // Isso impede o loop infinito.
       throw new Error(errorMessage);
     }
   },
   
   // =========================================================================
-  // [COMPONENTE FANTASMA]
+  // [COMPONENTE FANTASMA]: A Ponte Híbrida para a SPA
   // =========================================================================
-  component: () => null,
+  component: function FinancialGatewayComponent() {
+    // Busca os artefatos retornados pela função loader acima
+    const data = Route.useLoaderData() as { 
+      session_token: string | null; 
+      sbx_access_token: string | undefined; 
+    };
+
+    useEffect(() => {
+      // Este bloco roda EXCLUSIVAMENTE no navegador (Client-Side).
+      // Aqui o 'window' e o 'localStorage' existem e são 100% seguros de acessar.
+      if (data?.session_token) {
+        console.log("🔄 [Gateway Bridge] Sincronizando session_token na SPA");
+        localStorage.setItem('session_token', data.session_token);
+      }
+      
+      if (data?.sbx_access_token) {
+        console.log("🔄 [Gateway Bridge] Sincronizando sbx_access_token na SPA");
+        localStorage.setItem('sbx_access_token', data.sbx_access_token);
+      }
+    }, [data]);
+
+    // O Gateway continua sendo invisível, apenas gerenciando estado e tráfego.
+    return null;
+  },
 });

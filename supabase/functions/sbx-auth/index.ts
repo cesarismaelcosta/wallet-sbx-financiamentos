@@ -6,7 +6,8 @@
  * 2. A requisição OAuth2 usando client_id e portalid ocultos no servidor.
  * 3. O cálculo dinâmico da expiração do token (com margem de segurança de 15 min).
  * 4. A gravação segura da sessão no banco de dados.
- * 5. [NEW] A assinatura do JWT Próprio para Segurança Passiva do Front-end.
+ * 5. A assinatura do JWT Próprio para Segurança Passiva do Front-end.
+ * 6. [UPDATE]: Injeção dinâmica de Cookie (HttpOnly) baseada em ambiente.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
@@ -124,6 +125,12 @@ serve(async (req) => {
       key
     );
 
+    // [CORE UPDATE]: Transporte de Ponte para SSR
+    const isProd = Deno.env.get("ENVIRONMENT") === "production";
+    const cookieHeader = `session_token=${jwt}; Path=/; HttpOnly; SameSite=Lax${
+      isProd ? "; Domain=.seudominio.com.br; Secure" : ""
+    }`;
+
     return new Response(JSON.stringify({
       success: true,
       session_token: jwt, // Agora entrega o JWT assinado, não o UUID cru
@@ -131,7 +138,14 @@ serve(async (req) => {
       user_id: sbxData.userId,
       expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
       server_now_ms: agora.getTime()
-    }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }), { 
+      status: 200, 
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/json',
+        'Set-Cookie': cookieHeader 
+      } 
+    })
 
   } catch (err: any) {
     console.error("Erro:", err)

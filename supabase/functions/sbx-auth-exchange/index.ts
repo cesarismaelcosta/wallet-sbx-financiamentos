@@ -4,11 +4,12 @@
  * Esta função atua como um proxy de federação (Token Exchange).
  * Ela recebe um token externo (Superbid), valida no upstream (como o sbx-user),
  * e se for válido, gera a sessão interna e assina o JWT (como o sbx-auth).
- * * * [RESPONSABILIDADES]:
+ * * [RESPONSABILIDADES]:
  * 1. Validação Upstream: Bate no /account/v2/user/me para garantir que o token externo é quente.
  * 2. Prevenção: Intercepta tokens parceiros expirados (401) e nega a troca.
  * 3. Sessão Intermediária: Grava na tabela `sbx_sessions` para controle de estado.
  * 4. Assinatura Local: Gera o JWT HMAC-SHA256 para o frontend consumir de forma segura.
+ * 5. [UPDATE]: Injeção dinâmica de Cookie para habilitar o fluxo SSR do Gateway.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -149,6 +150,12 @@ serve(async (req) => {
       key
     );
 
+    // [CORE UPDATE]: Transporte de Ponte para SSR
+    const isProd = Deno.env.get("ENVIRONMENT") === "production";
+    const cookieHeader = `session_token=${jwt}; Path=/; HttpOnly; SameSite=Lax${
+      isProd ? "; Domain=.seudominio.com.br; Secure" : ""
+    }`;
+
     // =========================================================================
     // 5. RETORNO PARA O FRONTEND
     // =========================================================================
@@ -158,7 +165,14 @@ serve(async (req) => {
       user_id: userId,
       expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
       server_now_ms: agora.getTime()
-    }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }), { 
+      status: 200, 
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/json',
+        'Set-Cookie': cookieHeader 
+      } 
+    });
 
   } catch (err: any) {
     console.error("[sbx-auth-exchange] Fatal Exception:", err.message);
@@ -170,11 +184,9 @@ serve(async (req) => {
       status = 502;
     }
 
-    const errorResponse = status === 401 ? err.message : "INTERNAL_SERVER_ERROR";
-
-  return new Response(JSON.stringify({ 
-    success: false, 
-    message: err.message 
+    return new Response(JSON.stringify({ 
+      success: false, 
+      message: err.message 
     }), { 
       status: status, 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
