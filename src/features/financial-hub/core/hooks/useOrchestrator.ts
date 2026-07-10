@@ -201,12 +201,19 @@ export const orchestrateNavigation = async (
   Payload: any = {},
 ): Promise<void> => {
   
-  // 1. Snapshot da Origem: Lê os rastros de onde o usuário está EXATAMENTE agora.
+  // 1. GUARDA DE SEGURANÇA SSR:
+  // Se não estivermos no navegador, não fazemos nada. (importante para nosso loader de SSR)
+  if (typeof window === "undefined") {
+    console.warn(`⚠️ [orchestrateNavigation] Tentativa de navegar no servidor para a ação: ${action}. Abortando.`);
+    return;
+  }
+
+  // 2. Snapshot da Origem: Lê os rastros de onde o usuário está EXATAMENTE agora.
   const urlParams = new URLSearchParams(window.location.search);
   const currentVisitId = urlParams.get("visit_id");
   const currentUpdateId = urlParams.get("visit_update_id");
 
-  // 2. Montagem do Payload Master
+  // 3. Montagem do Payload Master
   const orchestratorPayload = {
     action: action,
     origin_url: Payload.origin_url || window.location.href,
@@ -225,10 +232,10 @@ export const orchestrateNavigation = async (
   console.log("🚀 [useOrchestrator.ts | orchestrateNavigation] Payload enviado para análise de roteamento:", JSON.stringify(orchestratorPayload, null, 2));
 
   try {
-    // 3. Transmissão Segura
+    // 4. Transmissão Segura
     const data = await callOrchestrator(orchestratorPayload, "POST");
 
-    // 4. Lógica de Redirecionamento Baseada em Estado (SPA Optimization)
+    // 5. Lógica de Redirecionamento Baseada em Estado (SPA Optimization)
     if (data?.url) {
       const currentPath = window.location.href.split('?')[0];
       const targetPath = data.url.split('?')[0];

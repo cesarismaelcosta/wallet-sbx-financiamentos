@@ -13,6 +13,9 @@
  * 2. SSR-Safe: O loader NÃO toca no localStorage e NÃO executa navegações em janela (window).
  * 3. Client Sync: O componente fantasma hidrata o storage e DELEGA a orquestração via useEffect.
  * 4. Lazy Import [NOVO]: Isola módulos dependentes do DOM (Orquestrador) via Importação Dinâmica.
+ *    -> [APROFUNDAMENTO SSR]: No ecossistema Node/Deno, imports estáticos no topo do arquivo 
+ *       forçam o servidor a baixar e compilar toda a árvore de dependências (Fase de Avaliação)
+ *       antes do Roteador iniciar. O 'Lazy Import' esconde esse arquivo do servidor.
  */
 
 import { createFileRoute, redirect, isRedirect } from "@tanstack/react-router";
@@ -22,11 +25,16 @@ import { fetchMyProfile } from "@/services/user";
 import { fetchOfferDetails } from "@/services/offer";
 import { logSystemError } from "@/services/notification";
 
-// [REMOVIDO PARA BLINDAGEM SSR]: 
+// =========================================================================
+// [BLINDAGEM SSR - IMPORT ESTÁTICO REMOVIDO]
+// =========================================================================
 // import { orchestrateNavigation } from "@/features/financial-hub/core/hooks/useOrchestrator";
-// O módulo foi retirado do topo para evitar que o servidor avalie dependências de 'window' prematuramente.
+// MOTIVO DA REMOÇÃO: Impedir o Efeito Cascata de Avaliação. 
+// O módulo foi retirado do escopo global para evitar que o servidor Node.js leia e 
+// avalie referências de 'window' prematuramente durante o F5, erradicando o Erro 500.
 
-// Tipagens de Domínio
+// Tipagens de Domínio 
+// (Seguro para SSR: 'import type' é removido pelo TypeScript no build e não gera código JS)
 import type { 
   UserProfile, Offer, Seller, Event, Manager, SimulationPayload 
 } from "@/features/financial-hub/shared/types";
@@ -230,14 +238,14 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         localStorage.setItem('sbx_access_token', data.sbx_access_token);
       }
 
-      // 2. [CORE UPDATE - SSR SAFE]: Orquestração protegida
-      // Usamos uma checagem explícita de ambiente antes de qualquer import dinâmico
+      // 2. [CORE UPDATE - SSR SAFE]: Orquestração protegida por Lazy Loading
+      // A checagem dupla (window + dados) antecede o download do script sob demanda.
       if (typeof window !== "undefined" && data?.payload && data?.session_token) {
         console.log("🚀 [Gateway Bridge] Iniciando navegação client-side...");
         
         import("@/features/financial-hub/core/hooks/useOrchestrator")
           .then((module) => {
-            // Chamamos a função apenas após o módulo carregar no navegador
+            // Chamamos a função apenas após o módulo carregar isoladamente no navegador
             module.orchestrateNavigation("CONSULT", data.payload, data.session_token as string)
               .catch(err => console.error("🚨 [Gateway Bridge] Falha no orquestrador:", err));
           })
