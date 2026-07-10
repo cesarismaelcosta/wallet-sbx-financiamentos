@@ -59,7 +59,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     }
 
     const currentEnvironment = deps.environment || "production";
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 
     try {
       // =====================================================================
