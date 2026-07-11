@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
     // [DOMÍNIO]: Processamento e Renderização Visual do Alerta
     // -----------------------------------------------------------------------
     // CORREÇÃO: Variável nomeada como templateResult para alinhar com o insert
-    const templateResult = generateSystemErrorEmailHtml(context, message, details);
+    const templateResult = generateSystemErrorEmailHtml(payload.context, payload.message, payload.raw_payload);
     
     // -----------------------------------------------------------------------
     // [PERSISTÊNCIA]: Ingestão na Fila Quente (Notification Outbox)
