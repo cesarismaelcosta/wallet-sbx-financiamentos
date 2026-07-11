@@ -206,7 +206,7 @@ serve(async (req) => {
           country: rawOffer.product?.location?.country || "Brasil"
         },
         // Inclusão condicional
-        ...(vehicleData && { vehicle: vehicleData }),
+        ...(vehicleData && { vehicle_details: vehicleData }),
         photos: rawOffer.product?.galleryJson?.map((p: any) => ({
             highlight: p.highlight || false,
             link: p.link,
