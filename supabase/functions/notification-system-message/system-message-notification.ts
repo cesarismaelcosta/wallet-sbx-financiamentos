@@ -32,13 +32,16 @@ export function generateSystemErrorEmailHtml(
   
   const logoSrc = "cid:logo-wallet";
 
-  // Serialização robusta para evitar objetos vazios ({})
-  let formattedDetails = '{}';
-  if (details) {
+  // Serialização robusta para capturar o payload completo
+  let formattedPayload = '{}';
+  if (payload) {
     try {
-      formattedDetails = typeof details === 'string' ? details : JSON.stringify(details, null, 2);
+      // Se o payload já for string, usa ela; se for objeto, faz o stringify do TUDO
+      formattedPayload = typeof payload === 'string' 
+        ? payload 
+        : JSON.stringify(payload, null, 2); 
     } catch (e) {
-      formattedDetails = String(details);
+      formattedPayload = String(payload);
     }
   }
 
@@ -61,12 +64,11 @@ export function generateSystemErrorEmailHtml(
             <!-- CORPO: Alerta e Detalhes -->
             <tr>
               <td style="padding: 40px 32px;">
-                <h3 style="margin: 0 0 16px 0; color: #ef4444; font-size: 18px;">⚠️ Alerta [${context}]</h3>
                 <p style="font-size: 16px; line-height: 1.6; color: #334155;">
                   O sistema identificou uma instabilidade no contexto: <b>${context}</b>
                 </p>
                 
-                <div style="background: #fef2f2; padding: 16px; border-radius: 8px; border-left: 4px solid #ef4444; font-family: monospace; font-size: 13px; color: #991b1b; white-space: pre-wrap; margin-bottom: 24px;">
+                <div style="background: #ffffff; padding: 16px; border-radius: 4px; border-left: 4px solid #ef4444; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444; font-family: monospace; font-size: 13px; color: #1e293b; white-space: pre-wrap; margin-bottom: 24px;">
                   ${message}
                 </div>
                 

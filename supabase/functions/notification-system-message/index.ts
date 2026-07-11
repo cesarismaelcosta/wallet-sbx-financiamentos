@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
       template_slug: 'system-error-alert',
       recipient_type: 'INTERNAL',
       recipient: 'cesarismaelcosta@gmail.com',
-      subject: `[FINANCIAL-GATEWAY ERROR] ${context}`,
+      subject: `Alerta de Erro no Gateway de Financiamentos e Seguros: ${context} ⚠️`,
       rendered_content: templateResult.html, 
       attachments: templateResult.attachments, 
       visit_id: visit_id || null,

@@ -81,7 +81,15 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       const sbxData = await sbxResponse.json();
       
       if (!sbxResponse.ok) {
-        throw new Error(sbxData.message || `HTTP_SBX_${sbxResponse.status}`);
+        // Cria o erro padrão do JS (que captura o stack trace)
+        const error = new Error(sbxData.message || `HTTP_SBX_${sbxResponse.status}`);
+        
+        // Adiciona as suas propriedades customizadas nele
+        (error as any).type = "SBX_LOADER_FAIL";
+        (error as any).status = sbxResponse.status;
+        (error as any).details = sbxData;
+        
+        throw error;
       }
 
       // 🐛 [DEBUG CRÍTICO]: Inspecionando o retorno exato da Edge Function
@@ -91,6 +99,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       const payload: SimulationPayload = {
         action: "CONSULT",
         timestamp: new Date().toISOString(),
+        origin_url: deps.return_uri,
         environment: currentEnvironment,
         entity: sbxData.rehydration_payload.user_profile as UserProfile,
         product_id: deps.product_id || "",
@@ -105,6 +114,9 @@ export const Route = createFileRoute("/financialGatewayEntry")({
           origin_url: deps.return_uri,
         },
       };
+
+      // 🛑 [TESTE DE FALHA]: Categoria inexistente
+      payload.offer.category = "888888888888888888888888888888888888888888888888888888888"; // Força erro de categoria inexistente para teste
 
       // =====================================================================
       // FASE 2: ORQUESTRAÇÃO NA EDGE (Substitui o Lazy Import)
@@ -125,7 +137,10 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       const orchestratorData = await orchestratorResponse.json();
 
       if (!orchestratorResponse.ok) {
-         throw new Error(orchestratorData.message || `HTTP_ORCH_${orchestratorResponse.status}`);
+         const error = new Error(orchestratorData.message || `HTTP_ORCH_${orchestratorResponse.status}`);
+         (error as any).status = orchestratorResponse.status;
+         (error as any).details = orchestratorData;
+         throw error;
       }
 
       // =====================================================================
@@ -139,29 +154,30 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       };
 
     } catch (error: any) {
-      console.error("🚨 [financialGatewayEntry] Falha no fluxo server-side:", error.message);
+      // 1. O logSystemError não se importa se veio de SBX ou ORCH
+      // Ele vai ler o error.details (que agora sempre existe) e o error.message
+      const sessionToken = deps.sbx_access_token;
+      const msg = error.message || "";
+      const errorContext = msg.includes("HTTP_ORCH") ? "ORCHESTRATOR_FAIL" : "SBX_LOADER_FAIL";
 
-      // 1. NOTIFICAÇÃO (Email/Log): Dispara o erro em background para a engenharia
-      await logSystemError(deps.sbx_access_token || "NO_TOKEN", {
-        context: "FINANCIAL-GATEWAY-LOADER",
-        message: error.message,
-        payload: { searchParams: deps }
+      await logSystemError(sessionToken, {
+        context: "financialGatewayEntry",
+        message: `Sistema encontrou uma falha ao ser chamado de ${deps.return_uri} : ${errorContext}`,
+        details: error.details || {},
+        payload: {
+          api_details: error.details || "Sem detalhes adicionais",
+          searchParams: deps
+        }
       });
 
-      // Se já for um comando de redirecionamento interno do TanStack, deixa fluir
-      if (isRedirect(error)) throw error;
-
-      // 2. REGRA RESTRITA DE LOGIN: Só exige login se a Superbid (sbx-loader) disser que o token expirou
+      // 2. Sua lógica de controle continua funcionando 100%
+      // O .includes() olha para o message, que está preservado em ambos
       if (error.message.includes("HTTP_SBX_401") || error.message.includes("SESSION_UPSTREAM_EXPIRED")) {
-        throw redirect({ to: '/accounts/signin', search: { redirect_uri: location.href }, replace: true });
+          return { status: "ERROR_LOGIN", redirect_url: `/accounts/signin` };
       }
-      
-      // 3. FAIL-SAFE (Tudo o resto): Orquestrador falhou, Oferta 404, Erro 500... 
-      // Devolve o usuário para a origem silenciosamente.
-      const targetURL = deps.return_uri || "/";
-      console.warn(`⚠️ Abortando gateway. Erro mapeado. Ejetando usuário de volta para: ${targetURL}`);
-      
-      throw redirect({ to: targetURL as any, replace: true });
+
+      // 3. Fail-safe padrão para o que não é login
+      return { status: "ERROR_FAIL_SAFE", redirect_url: deps.return_uri || "/" };
     }
   },
   
@@ -170,26 +186,26 @@ export const Route = createFileRoute("/financialGatewayEntry")({
   // =========================================================================
   component: function FinancialGatewayComponent() {
     const data = Route.useLoaderData();
-    const navigate = useNavigate(); // Hook do TanStack Router para navegação imperativa
+    const navigate = useNavigate();
 
     useEffect(() => {
-      // 1. [SYNC]: Sincronização segura no cliente (Mantido conforme exigido)
+      // 🛑 [TRATAMENTO UNIFICADO DE ERROS]: Login, Orquestrador ou Oferta
+      // Se o loader devolveu uma URL de redirecionamento de erro, o browser executa imediatamente
+      if (data?.redirect_url) {
+        console.warn(`🛑 [Gateway Bridge] Forçando saída por erro (${data.status}) para:`, data.redirect_url);
+        window.location.replace(data.redirect_url);
+        return;
+      }
+
+      // ✅ [FLUXO DE SUCESSO]: Só executa se não caiu em nenhum erro acima
       if (data?.session_token) localStorage.setItem('session_token', data.session_token);
       if (data?.sbx_access_token) localStorage.setItem('sbx_access_token', data.sbx_access_token);
 
-      // 2. [EXECUÇÃO DA ORQUESTRAÇÃO]: O servidor já calculou a rota. O cliente apenas obedece.
-      if (data?.orchestration_result) {
-        console.log("🚀 [Gateway Bridge] Executando comando do Orchestrator Edge:", data.orchestration_result);
-        
-        // Exemplo: Se a Edge retornar { action: "REDIRECT", to: "/simulator" }
-        // Adapte a chave (ex: 'to', 'redirectUrl', 'nextStep') conforme o contrato real da sua Edge Function
-        const destinationPath = data.orchestration_result.to || data.orchestration_result.redirectUrl;
-
-        if (destinationPath) {
-           navigate({ to: destinationPath, replace: true });
-        } else {
-           console.warn("⚠️ Orchestrator não devolveu um caminho de redirecionamento válido.", data.orchestration_result);
-        }
+      if (data?.orchestration_result?.url) {
+        console.log("🚀 [Gateway Bridge] Executando comando do Orchestrator Edge para:", data.orchestration_result.url);
+        window.location.replace(data.orchestration_result.url);
+      } else {
+        console.warn("⚠️ Orchestrator não devolveu um caminho de redirecionamento válido.");
       }
     }, [data, navigate]);
 
