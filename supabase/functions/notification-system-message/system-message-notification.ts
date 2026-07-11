@@ -92,7 +92,7 @@ export function generateSystemErrorEmailHtml(data: SystemErrorPayload): EmailTem
                 <!-- Box de Mensagem (Brand Color) -->
                 <div style="
                   background: ${surface}; 
-                  padding: 16px; 
+                  padding: 16px 20px;          /* Padding superior/inferior 16px, lateral 20px */ 
                   border-radius: 4px; 
                   border: 1px solid ${line}; 
                   border-left: 4px solid ${brand_color}; 
@@ -101,7 +101,7 @@ export function generateSystemErrorEmailHtml(data: SystemErrorPayload): EmailTem
                   color: ${ink}; 
                   white-space: pre-wrap; 
                   margin-bottom: 24px;
-                  text-align: left;           /* Força o texto para a esquerda */
+                  text-align: left !important;/* Força o texto para a esquerda */
                   width: 100%;                /* Garante que o box ocupe a largura disponível */
                   box-sizing: border-box;     /* Impede que o padding aumente a largura total */
                 ">
