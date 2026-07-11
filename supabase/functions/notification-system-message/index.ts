@@ -77,8 +77,8 @@ Deno.serve(async (req) => {
     const payload = await req.json();
     const { 
       context, 
+      subject, 
       message, 
-      details, 
       raw_payload, 
       visit_id, 
       visit_update_id, 
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       simulation_update_id 
     } = payload;
     
-    // Validação estrita dos nós obrigatórios do contrato do log
+   // Validação estrita dos nós obrigatórios do contrato do log
     if (!context || !message) {
       throw new Error("Parâmetros contratuais obrigatórios ('context' e 'message') ausentes.");
     }
@@ -105,19 +105,18 @@ Deno.serve(async (req) => {
     const { error: insertError } = await supabase.from('notification_outbox').insert({
       context_type: 'SYSTEM_ERROR',
       channel: 'email',
-      template_slug: 'system-error-alert',
+      template_slug: 'system-message-notification',
       recipient_type: 'INTERNAL',
       recipient: 'cesarismaelcosta@gmail.com',
-      subject: `Alerta de Erro no Gateway de Financiamentos e Seguros: ${context} ⚠️`,
+      subject: payload.subject || `Alerta de Erro no Gateway de Financiamentos e Seguros ⚠️`,
       rendered_content: templateResult.html, 
       attachments: templateResult.attachments, 
       visit_id: visit_id || null,
       visit_update_id: visit_update_id || null,
       simulation_id: simulation_id || null,
       simulation_update_id: simulation_update_id || null,
-      raw_payload: raw_payload || {
-        context,
-        details,
+      raw_payload: payload.raw_payload || {
+        message,
         timestamp: new Date().toISOString()
       },
       status: 'pending'

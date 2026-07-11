@@ -21,7 +21,7 @@ import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { UserDataContext } from "./sandbox.lazy";
 import { fetchOfferDetails } from "@/services/offer";
-import { logSystemError } from "@/services/notification";
+import { logSystemError } from "@/services/systemNotification";
 
 // =========================================================================
 // [FORMATTERS]: Utilitários de Apresentação

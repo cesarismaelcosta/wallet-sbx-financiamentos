@@ -21,7 +21,7 @@
 
 import { createFileRoute, redirect, isRedirect, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { logSystemError } from "@/services/notification";
+import { logSystemError } from "@/services/systemNotification";
 import type { UserProfile, Offer, Seller, Event, Manager, SimulationPayload } from "@/features/financial-hub/shared/types";
 
 interface SearchSchema {
@@ -162,8 +162,8 @@ export const Route = createFileRoute("/financialGatewayEntry")({
 
       await logSystemError(sessionToken, {
         context: "financialGatewayEntry",
-        message: `Sistema encontrou uma falha ao ser chamado de ${deps.return_uri} : ${errorContext}`,
-        details: error.details || {},
+        subject: `Alerta de Erro no Gateway de Financiamentos e Seguros: ${context} ⚠️`,
+        message: `Sistema encontrou uma falha ao ser chamado de ${deps.return_uri} : ${msg}`,
         payload: {
           api_details: error.details || "Sem detalhes adicionais",
           searchParams: deps
