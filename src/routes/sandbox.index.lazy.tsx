@@ -296,12 +296,12 @@ const SandboxHome = () => {
 
       {/* OVERLAY DE LOADING */}
       {loading && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm">
-          <Loader2 className="h-10 w-10 animate-spin mb-4 text-primary" />
-          <p className="text-sm text-slate-500 font-medium animate-pulse">
-            A preparar o ambiente de simulação...
+        <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+          <p className="text-slate-500 font-medium text-sm">
+            Preparando o ambiente de simulação...
           </p>
-        </div>
+        </div>        
       )}
     </div>
   );

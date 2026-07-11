@@ -9,7 +9,6 @@ import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack
 import { FinancialHubLayout } from "@/features/financial-hub/components/layout/FinancialHubLayout";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
-import { Loader2 } from "lucide-react";
 import { jwtDecode } from "jwt-decode"; 
 
 /**
@@ -62,9 +61,12 @@ const SegurosGuard = () => {
   // [COMPLIANCE]: Estado de carregamento seguro.
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+        <p className="text-slate-500 font-medium text-sm">
+          Carregando informações...
+        </p>
+      </div> 
     );
   }
 

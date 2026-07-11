@@ -47,10 +47,30 @@ export function CustomLogin() {
   const [redirectUri, setRedirectUri] = useState<string | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const target = params.get("redirect_uri");
-    setRedirectUri(target);
-  }, []);
+    // Adicionei a dependência 'token' garantindo que só navegue se tivermos o novo token
+    if (token && redirectUri) {
+      
+      // 1. Criamos um objeto URL para manipular facilmente os parâmetros
+      // Se for um link relativo (ex: /financialGateway...), usamos a origem atual como base
+      const base = redirectUri.startsWith('http') ? '' : window.location.origin;
+      const urlObject = new URL(redirectUri, base || undefined);
+
+      // 2. Injetamos o token recém-validado no parâmetro exigido pelo financialGatewayEntry
+      urlObject.searchParams.set("sbx_access_token", token);
+
+      // 3. Reconstruímos a string de redirecionamento final
+      const finalUri = redirectUri.startsWith('http') 
+        ? urlObject.toString() 
+        : `${urlObject.pathname}${urlObject.search}`; // Mantém relativo se originalmente era relativo
+
+      // 4. Executamos a navegação com a URL enriquecida
+      if (redirectUri.startsWith('http')) {
+        window.location.href = finalUri;
+      } else {
+        navigate({ to: finalUri as any, replace: true });
+      }
+    }
+  }, [token, redirectUri, navigate]);
 
   useEffect(() => {
     if (token && redirectUri) {

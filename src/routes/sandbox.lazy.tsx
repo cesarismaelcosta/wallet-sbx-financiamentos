@@ -85,8 +85,10 @@ export function SandboxLayout() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-        <p className="text-slate-500 font-medium">Sincronizando estado...</p>
-      </div>
+        <p className="text-slate-500 font-medium text-sm">
+          Validando seus dados na Wallet sbX...
+        </p>
+      </div>      
     );
   }
 
@@ -149,7 +151,9 @@ export function SandboxLayout() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-        <p className="text-slate-500 font-medium">Validando seus dados na Wallet sbX...</p>
+        <p className="text-slate-500 font-medium text-sm">
+          Validando seus dados na Wallet sbX...
+        </p>
       </div>
     );
   }

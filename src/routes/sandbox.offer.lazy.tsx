@@ -328,9 +328,11 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   // =========================================================================
   if (loading || (!activeOffer && !fetchError)) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Inter']">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-[#B300FF] mb-4"></div>
-        <p className="text-slate-500 font-medium text-sm">Carregando detalhes da oferta...</p>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+        <p className="text-slate-500 font-medium text-sm">
+          Carregando detalhes da oferta...
+        </p>
       </div>
     );
   }

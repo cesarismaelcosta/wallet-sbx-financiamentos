@@ -20,7 +20,8 @@
  */
 
 import { createFileRoute, redirect, isRedirect, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useState, useEffect } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { logSystemError } from "@/services/systemNotification";
 import type { UserProfile, Offer, Seller, Event, Manager, SimulationPayload } from "@/features/financial-hub/shared/types";
 
@@ -60,6 +61,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
 
     const currentEnvironment = deps.environment || "production";
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+    let generatedSessionToken: string | undefined = undefined;
 
     try {
       // =====================================================================
@@ -79,7 +81,8 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       });
 
       const sbxData = await sbxResponse.json();
-      
+      generatedSessionToken = sbxData.session_token;
+
       if (!sbxResponse.ok) {
         // Cria o erro padrão do JS (que captura o stack trace)
         const error = new Error(sbxData.message || `HTTP_SBX_${sbxResponse.status}`);
@@ -138,6 +141,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
 
       if (!orchestratorResponse.ok) {
          const error = new Error(orchestratorData.message || `HTTP_ORCH_${orchestratorResponse.status}`);
+         (error as any).type = "ORCHESTRATOR_FAIL";
          (error as any).status = orchestratorResponse.status;
          (error as any).details = orchestratorData;
          throw error;
@@ -154,12 +158,15 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       };
 
     } catch (error: any) {
-      // 1. O logSystemError não se importa se veio de SBX ou ORCH
-      // Ele vai ler o error.details (que agora sempre existe) e o error.message
-      const sessionToken = deps.sbx_access_token;
+      // 1. Definição do Escopo de Erro
+      // - sessionToken: Se a falha ocorreu na Fase 1 (sbx-loader), será undefined. Se ocorreu na Fase 2 (orchestrator), terá o JWT válido.
+      // - errorContext: Prioriza a propriedade injetada no throw (ex: SBX_LOADER_FAIL). Faz fallback para busca na string da mensagem.
+      const sessionToken = generatedSessionToken;
       const msg = error.message || "";
-      const errorContext = msg.includes("HTTP_ORCH") ? "ORCHESTRATOR_FAIL" : "SBX_LOADER_FAIL";
+      const errorContext = error.type || (msg.includes("HTTP_ORCH") ? "ORCHESTRATOR_FAIL" : "SBX_LOADER_FAIL");
 
+      // 2. Registro do Incidente (Isolado de Regras de UI)
+      // O payload recebe `deps`, garantindo que o token externo (sbx_access_token) e dados da URL originais sejam registrados para rastreio.
       await logSystemError(sessionToken, {
         context: "financialGatewayEntry",
         subject: `Alerta de Erro no Gateway de Financiamentos e Seguros: ${errorContext} ⚠️`,
@@ -170,13 +177,18 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         }
       });
 
-      // 2. Sua lógica de controle continua funcionando 100%
-      // O .includes() olha para o message, que está preservado em ambos
+      // 3. Regras de Redirecionamento e Fail-safe
+      // Erro de Autenticação: Intercepta HTTP 401 ou a flag específica do sbx-loader forçando renovação da sessão.
       if (error.message.includes("HTTP_SBX_401") || error.message.includes("SESSION_UPSTREAM_EXPIRED")) {
-          return { status: "ERROR_LOGIN", redirect_url: `/accounts/signin` };
-      }
+          // Captura a URL atual em que o Gateway estava (que contém todos os deps como offer_id)
+          const currentUrl = encodeURIComponent(location.href);
+          
+          return { 
+            status: "ERROR_LOGIN", 
+            redirect_url: `/accounts/signin?redirect_uri=${currentUrl}` 
+          };
 
-      // 3. Fail-safe padrão para o que não é login
+      // 4. Erro de Sistema: Qualquer outra quebra devolve o usuário para a página de origem da simulação após aguardar no componente UI.
       return { status: "ERROR_FAIL_SAFE", redirect_url: deps.return_uri || "/" };
     }
   },
@@ -188,27 +200,73 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     const data = Route.useLoaderData();
     const navigate = useNavigate();
 
+    // Estado para controlar se o fluxo de dados falhou
+    const [isError, setIsError] = useState(false);
+    // Estado para o contador regressivo de erro
+    const [countdown, setCountdown] = useState(5);
+
+    console.log("🚀 [financialGatewayEntry] Component renderizado. Data:", data, "isError:", isError);
+
     useEffect(() => {
-      // 🛑 [TRATAMENTO UNIFICADO DE ERROS]: Login, Orquestrador ou Oferta
-      // Se o loader devolveu uma URL de redirecionamento de erro, o browser executa imediatamente
+      // 1. [TRATAMENTO DE SUCESSO]: Processamento imediato se houver redirecionamento
       if (data?.redirect_url) {
-        console.warn(`🛑 [Gateway Bridge] Forçando saída por erro (${data.status}) para:`, data.redirect_url);
         window.location.replace(data.redirect_url);
         return;
       }
 
-      // ✅ [FLUXO DE SUCESSO]: Só executa se não caiu em nenhum erro acima
-      if (data?.session_token) localStorage.setItem('session_token', data.session_token);
-      if (data?.sbx_access_token) localStorage.setItem('sbx_access_token', data.sbx_access_token);
-
       if (data?.orchestration_result?.url) {
-        console.log("🚀 [Gateway Bridge] Executando comando do Orchestrator Edge para:", data.orchestration_result.url);
         window.location.replace(data.orchestration_result.url);
-      } else {
-        console.warn("⚠️ Orchestrator não devolveu um caminho de redirecionamento válido.");
+        return;
+      }
+
+      // 2. [DETECÇÃO DE ERRO]: Se os dados foram carregados (loader finalizou) 
+      // mas não contêm URL de destino, marcamos como falha.
+      if (data) {
+        console.warn("⚠️ [financialGatewayEntry] Nenhuma instrução de redirecionamento encontrada.");
+        setIsError(true);
       }
     }, [data, navigate]);
 
-    return null;
+    // 3. [CONTADOR REGRESSIVO]: Lógica de timeout para retorno automático
+    useEffect(() => {
+      if (isError && countdown > 0) {
+        const timer = setTimeout(() => setCountdown(prev => prev - 1), 1000);
+        return () => clearTimeout(timer);
+      }
+      
+      // Auto-retorno ao zerar o contador
+      if (isError && countdown === 0) {
+        navigate(-1);
+      }
+    }, [isError, countdown, navigate]);
+
+    // --- UI DE ERRO (Padronizada) ---
+    if (isError) {
+       console.warn("⚠️ [financialGatewayEntry] Entrando na contagem de 5s.");
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+          <p className="text-slate-500 font-medium text-sm">Falha ao carregar simulação...</p>
+          <p className="text-slate-500 font-medium text-sm mb-4">Retornando em {countdown}s...</p>
+          
+          <button 
+            onClick={() => navigate(-1)}
+            className="flex items-center text-primary font-semibold text-sm hover:opacity-80 transition-opacity"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            retornar agora
+          </button>
+        </div>
+      );
+    }
+
+    // --- UI DE CARREGAMENTO (Padronizada) ---
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+        <p className="text-slate-500 font-medium text-sm">
+          Carregando informações...
+        </p>
+      </div>
+    );
   },
 });
