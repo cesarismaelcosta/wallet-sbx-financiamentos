@@ -199,6 +199,12 @@ serve(async (req) => {
         offer_status: rawOffer.offerStatus || "",
         sale_status: rawOffer.saleStatus || "",
         end_date: rawOffer.endDate || "",
+        location: {
+          neighborhood: rawOffer.product?.location?.neighborhood || "Não informado",
+          city: rawOffer.product?.location?.city || "Não informado",
+          state: rawOffer.product?.location?.state || "Não informado",
+          country: rawOffer.product?.location?.country || "Brasil"
+        },
         // Inclusão condicional
         ...(vehicleData && { vehicle: vehicleData }),
         photos: rawOffer.product?.galleryJson?.map((p: any) => ({

@@ -114,11 +114,12 @@ serve(async (req) => {
     const data = await response.json();
     const account = data.userAccounts?.[0];
     const mainAddress = account?.addresses?.[0];
-    
+
     const enrichedData = {
       entity_id: String(account?.id),
       name: account?.basicInfo?.fullName || "N/A",
-      document: account?.documents?.find((d: any) => d.typeName === "cpf")?.number || "",
+      document: account?.documents?.find((doc: any) => doc.typeName === "cpf")?.number || "",
+      document_rg: account?.documents?.find((doc: any) => doc.typeName === 'rg')?.number || "",
       email: account?.basicInfo?.email?.address || "",
       phone: account?.phones?.find((p: any) => p.type === 3)?.fullPhoneNumber || "",
       birth_date: account?.birthDate?.split('T')[0] || "",

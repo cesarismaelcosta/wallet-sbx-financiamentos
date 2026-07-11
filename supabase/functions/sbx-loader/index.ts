@@ -66,7 +66,8 @@ serve(async (req) => {
     const userProfile: BFFUserProfile = {
       entity_id: userId,
       name: account?.basicInfo?.fullName || "N/A",
-      document: account?.documents?.find((d: any) => d.typeName === "cpf")?.number || "",
+      document: account?.documents?.find((doc: any) => doc.typeName === "cpf")?.number || "",
+            document_rg: account?.documents?.find((doc: any) => doc.typeName === 'rg')?.number || "",
       email: account?.basicInfo?.email?.address || "",
       phone: account?.phones?.find((p: any) => p.type === 3)?.fullPhoneNumber || "",
       birth_date: account?.birthDate?.split('T')[0] || "",
@@ -138,6 +139,25 @@ serve(async (req) => {
        
        const eventData = eventRes.ok ? (await eventRes.json()).events?.[0] : {};
 
+      // Identifica a categoria e cria objetos especializados se for o caso
+      const productTypeId = rawOffer.product?.productType?.id;
+      const isVehicleCategory = [10, 11].includes(productTypeId);
+
+      // Extrai apenas se for veículo
+      let vehicleData: Vehicle | undefined;
+
+      if (isVehicleCategory) {
+          const groups = rawOffer.product?.template?.groups || [];
+          const getGroupProp = (groupId: string, propId: string) => 
+              groups.find((g: any) => g.id === groupId)?.properties.find((p: any) => p.id === propId)?.value;
+
+          vehicleData = {
+              manufacture_year: Number(getGroupProp('identificacao', 'anofabricacao')) || 0,
+              model_year: Number(getGroupProp('identificacao', 'anomodelo')) || 0,
+              fipe_code: getGroupProp('financiamento', 'codigofipe') || "",
+          };
+      }
+
        offerPayload = {
          offer: {
            offer_id: String(rawOffer.id),
@@ -147,9 +167,19 @@ serve(async (req) => {
            offer_value: rawOffer.price || 0,
            category_id: rawOffer.product?.productType?.id || 0,
            category: rawOffer.product?.productType?.description || "",
+           sub_category_id: rawOffer.product?.subCategory?.id || "",
+           sub_category: rawOffer.product?.subCategory?.description || "",
            offer_status: rawOffer.offerStatus || "",
            sale_status: rawOffer.saleStatus || "",
            end_date: rawOffer.endDate || "",
+           location: {
+             neighborhood: rawOffer.product?.location?.neighborhood || "Não informado",
+             city: rawOffer.product?.location?.city || "Não informado",
+             state: rawOffer.product?.location?.state || "Não informado",
+             country: rawOffer.product?.location?.country || "Brasil"
+           },           
+           // Inclusão condicional
+           ...(vehicleData && { vehicle: vehicleData }),           
            photos: rawOffer.product?.galleryJson?.map((p: any) => ({
              highlight: p.highlight || false,
              link: p.link,

@@ -11,7 +11,7 @@
  * 3. Ciclo de Vida Reativo: Blindagem do useEffect para reagir apenas à sessão oficial.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useContext } from "react";
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile, type BFFUserProfile } from "@/services/user";
@@ -49,6 +49,7 @@ export function OfferDetailsNewSandbox() {
   const { token } = useFinancialAuth();
   const { offer: offerParam } = Route.useSearch();
   const navigate = Route.useNavigate(); // Adicione isso
+  const [fotoAtiva, setFotoAtiva] = useState(0);
   const DEFAULT_OFFER = "4753216";
 
   // 1. FORÇAR URL: Se não houver offer, redireciona para a mesma rota com o ID padrão
@@ -113,6 +114,17 @@ export function OfferDetailsNewSandbox() {
     loadData();
   }, [token]); // O efeito reage EXCLUSIVAMENTE a mudanças no JWT assinado.
 
+  
+  // =========================================================================
+  // Imagens da oferta
+  // =========================================================================
+  const imagens = useMemo(() => {
+    if (!offerData?.offer?.photos) return [];
+    return [...offerData.offer.photos]
+      .sort((a, b) => (a.highlight === b.highlight ? 0 : a.highlight ? -1 : 1))
+      .map((p: any) => p.link);
+  }, [offerData]);
+  
   // =========================================================================
   // [VIEW 1]: Estado de Carregamento
   // =========================================================================
@@ -134,9 +146,35 @@ export function OfferDetailsNewSandbox() {
       )}
       
       <div className="space-y-6">
-        {/* SESSÃO: PERFIL DO USUÁRIO (BFF) */}
-        <section className="bg-white p-6 rounded shadow border-l-4 border-blue-500">
-          <h2 className="text-xs font-black uppercase text-blue-500 mb-2">Perfil Completo</h2>
+        
+        {/* 1. SESSÃO: DETALHES DA OFERTA (Agora no topo - Cor: #B300FF) */}
+        <section className="bg-white p-6 rounded shadow border-l-4 border-[#B300FF]">
+          <h2 className="text-xs font-black uppercase text-[#B300FF] mb-2">Oferta Relacionada</h2>
+          {offerData ? (
+            <div className="text-sm">
+              <p className="font-bold mb-4">{offerData.offer.offer_description}</p>
+              
+              {/* Quadro das Fotos (Integrado) */}
+              {imagens.length > 0 && (
+                <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-4">
+                  <img src={imagens[fotoAtiva]} className="w-full h-full object-contain" alt="Ativo" />
+                  <button onClick={() => setFotoAtiva(p => (p - 1 + imagens.length) % imagens.length)} className="absolute left-2 top-1/2 bg-black/50 text-white p-2">‹</button>
+                  <button onClick={() => setFotoAtiva(p => (p + 1) % imagens.length)} className="absolute right-2 top-1/2 bg-black/50 text-white p-2">›</button>
+                </div>
+              )}
+
+              <pre className="font-mono text-[10px] bg-gray-50 p-3 rounded border overflow-x-auto">
+                {JSON.stringify(offerData, null, 2)}
+              </pre>
+            </div>
+          ) : (
+            <p className="text-gray-400 italic">Carregando oferta...</p>
+          )}
+        </section>
+
+        {/* 2. SESSÃO: PERFIL DO USUÁRIO (Abaixo da oferta) */}
+        <section className="bg-white p-6 rounded shadow border-l-4 border-[#B300FF]">
+          <h2 className="text-xs font-black uppercase text-[#B300FF] mb-2">Perfil Completo</h2>
           {userData ? (
             <pre className="font-mono text-[10px] bg-gray-50 p-3 rounded border overflow-x-auto text-gray-800">
               {JSON.stringify(userData, null, 2)}
@@ -146,20 +184,6 @@ export function OfferDetailsNewSandbox() {
           )}
         </section>
 
-        {/* SESSÃO: DETALHES DA OFERTA (UPSTREAM) */}
-        <section className="bg-white p-6 rounded shadow border-l-4 border-green-500">
-          <h2 className="text-xs font-black uppercase text-green-500 mb-2">Oferta Relacionada</h2>
-          {offerData ? (
-            <div className="text-sm">
-              <p className="font-bold mb-4">{offerData.offer.offer_description}</p>
-              <pre className="font-mono text-[10px] bg-gray-50 p-3 rounded border overflow-x-auto">
-                {JSON.stringify(offerData, null, 2)}
-              </pre>
-            </div>
-          ) : (
-            <p className="text-gray-400 italic">Sem dados de oferta disponíveis.</p>
-          )}
-        </section>
       </div>
     </div>
   );

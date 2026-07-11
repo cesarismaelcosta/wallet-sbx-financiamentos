@@ -6,7 +6,7 @@
 
 import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import React, { useState } from "react";
-import { Eye, EyeOff } from "lucide-react"; 
+import { Eye, EyeOff, Loader2 } from "lucide-react"; 
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
@@ -82,6 +82,11 @@ export function CustomLogin() {
         // 1. Atualiza a sessão no contexto global
         setSession(response.session_token, response.userId);
 
+        // 2. ATUALIZA O STORAGE COM OS TOKENS NOVOS
+        // Isso garante que, ao chegar na redirect_uri, o token correto já esteja disponível
+        localStorage.setItem("sbx_access_token", response.sbx_access_token);
+        localStorage.setItem("session_token", response.session_token);
+
         // 2. Fluxo de Redirecionamento Manual
         // Lê a URL destino diretamente do parâmetro de busca sem automação prévia
         const redirectUri = (search as any).redirect_uri;
@@ -90,7 +95,11 @@ export function CustomLogin() {
           // Constrói a URL de destino injetando o novo token de sessão obtido na autenticação
           const base = redirectUri.startsWith('http') ? '' : window.location.origin;
           const urlObject = new URL(redirectUri, base || undefined);
+          
+          // [AJUSTE PONTUAL]: Trocamos o valor antigo pelo novo.
+          // O .set() substitui automaticamente se a chave já existir.
           urlObject.searchParams.set("sbx_access_token", response.sbx_access_token);
+          urlObject.searchParams.set("session_token", response.session_token);
           
           const finalUri = redirectUri.startsWith('http') 
             ? urlObject.toString() 
@@ -136,23 +145,25 @@ export function CustomLogin() {
           <div className="flex w-full border-b border-gray-200 mb-2">
             <button
               type="button"
+              disabled={isLoading}
               onClick={() => { setTipoPessoa("F"); setLogin(""); setLoginError(""); setPasswordError(""); }}
               className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none focus:outline-none ${
                 tipoPessoa === "F" 
                 ? "text-gray-900 border-gray-900" 
                 : "text-gray-400 border-transparent hover:text-gray-600"
-              }`}
+              } disabled:opacity-50 ${isLoading ? "cursor-wait" : "cursor-pointer"}`}
             >
               Pessoa Física
             </button>
             <button
               type="button"
+              disabled={isLoading}
               onClick={() => { setTipoPessoa("J"); setLogin(""); setLoginError(""); setPasswordError(""); }}
               className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none focus:outline-none ${
                 tipoPessoa === "J" 
                 ? "text-gray-900 border-gray-900" 
                 : "text-gray-400 border-transparent hover:text-gray-600"
-              }`}
+              } disabled:opacity-50 ${isLoading ? "cursor-wait" : "cursor-pointer"}`}
             >
               Pessoa Jurídica
             </button>
@@ -168,6 +179,7 @@ export function CustomLogin() {
           <div className="flex flex-col gap-1.5">
             <input
               type="text"
+              disabled={isLoading}
               value={login}
               onChange={(e) => {
                 const rawValue = e.target.value;
@@ -181,7 +193,7 @@ export function CustomLogin() {
               }}
               className={`w-full h-12 border rounded-full px-5 text-sm outline-none transition-all ${
                 loginError ? "border-[#C13535] focus:ring-1 focus:ring-[#C13535]" : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
-              }`}
+              } disabled:bg-gray-50 disabled:text-gray-500 ${isLoading ? "cursor-wait" : "cursor-text"}`}
               placeholder={loginLabelText}
             />
             {loginError && <span className="text-[#C13535] text-[11px] pl-5 font-medium mt-1">{loginError}</span>}
@@ -191,11 +203,12 @@ export function CustomLogin() {
           <div className="relative flex flex-col gap-1.5">
             <input
               type={showPassword ? "text" : "password"}
+              disabled={isLoading}
               value={password}
               onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(""); }}
               className={`w-full h-12 border rounded-full pl-5 pr-12 text-sm outline-none transition-all ${
                 passwordError ? "border-[#C13535] focus:ring-1 focus:ring-[#C13535]" : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
-              }`}
+              } disabled:bg-gray-50 disabled:text-gray-500 ${isLoading ? "cursor-wait" : "cursor-text"}`}
               placeholder="Senha"
             />
             <button
@@ -211,9 +224,18 @@ export function CustomLogin() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full h-12 bg-[#B400FF] hover:bg-[#9a00db] text-white font-semibold rounded-full transition-colors disabled:opacity-70 mt-2"
+            className={`w-full h-12 bg-[#B400FF] text-white font-semibold rounded-full transition-all duration-300 flex items-center justify-center gap-2 ${
+              isLoading ? "animate-pulse" : "hover:bg-[#9a00db]"
+            }`}
           >
-            {isLoading ? "Validando..." : "Entrar"}
+            {isLoading ? (
+              <>
+                <Loader2 className="animate-spin" size={20} />
+                Validando...
+              </>
+            ) : (
+              "Entrar"
+            )}
           </button>
         </form>
       </div>
