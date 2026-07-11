@@ -73,7 +73,7 @@ export function generateSystemErrorEmailHtml(data: SystemErrorPayload): EmailTem
     <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 20px 10px;">
       <tr>
         <td align="center">
-          <table width="100%" style="max-width: 95%;; background-color:${surface}; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+          <table width="100%" style="max-width: 95%; background-color:${surface}; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
             
             <!-- HEADER -->
             <tr>
