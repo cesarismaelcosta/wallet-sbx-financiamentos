@@ -1,17 +1,18 @@
 /**
- * @fileoverview Componente: CustomLogin (Rota: /accounts/signin)
- * @description Interface de autenticação local com validação estrita.
+ * @fileoverview Componente de Login Customizado (Rota: /accounts/signin)
+ * @description Interface de autenticação que centraliza a lógica de navegação 
+ * estritamente no clique do usuário para evitar loops de redirecionamento.
  */
 
-import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
-import React, { useState, useEffect } from "react";
+import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react"; 
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 
 // =========================================================================
-// [HELPERS]: Validação e Formatação de Documentos (Mantidos)
+// [HELPERS]: Validação e Formatação de Documentos
 // =========================================================================
 const isCPF = (str: string) => /^\d{11}$/.test(str.replace(/\D/g, ''));
 const isCNPJ = (str: string) => /^\d{14}$/.test(str.replace(/\D/g, ''));
@@ -27,15 +28,19 @@ export const Route = createLazyFileRoute('/accounts/signin')({
 });
 
 export function CustomLogin() {
-  const { setSession, token } = useFinancialAuth();
+  // Contexto de autenticação apenas para gerenciar a sessão global
+  const { setSession } = useFinancialAuth();
   const navigate = useNavigate();
   
+  // Hook para capturar parâmetros da URL (redirect_uri)
+  const search = useSearch({ from: '/accounts/signin' });
+  
+  // Estados de UI e Controle de Formulário
   const [tipoPessoa, setTipoPessoa] = useState<"F" | "J">("F");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
   const [loginError, setLoginError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
@@ -44,68 +49,25 @@ export function CustomLogin() {
     typeof window !== "undefined" ? localStorage.getItem("sbx_environment") || "production" : "production"
   );
 
-  const [redirectUri, setRedirectUri] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Adicionei a dependência 'token' garantindo que só navegue se tivermos o novo token
-    if (token && redirectUri) {
-      
-      // 1. Criamos um objeto URL para manipular facilmente os parâmetros
-      // Se for um link relativo (ex: /financialGateway...), usamos a origem atual como base
-      const base = redirectUri.startsWith('http') ? '' : window.location.origin;
-      const urlObject = new URL(redirectUri, base || undefined);
-
-      // 2. Injetamos o token recém-validado no parâmetro exigido pelo financialGatewayEntry
-      urlObject.searchParams.set("sbx_access_token", token);
-
-      // 3. Reconstruímos a string de redirecionamento final
-      const finalUri = redirectUri.startsWith('http') 
-        ? urlObject.toString() 
-        : `${urlObject.pathname}${urlObject.search}`; // Mantém relativo se originalmente era relativo
-
-      // 4. Executamos a navegação com a URL enriquecida
-      if (redirectUri.startsWith('http')) {
-        window.location.href = finalUri;
-      } else {
-        navigate({ to: finalUri as any, replace: true });
-      }
-    }
-  }, [token, redirectUri, navigate]);
-
-  useEffect(() => {
-    if (token && redirectUri) {
-      if (redirectUri.startsWith('http')) {
-        window.location.href = redirectUri;
-      } else {
-        navigate({ to: redirectUri as any, replace: true });
-      }
-    }
-  }, [token, redirectUri, navigate]);
-
+  /**
+   * [FUNÇÃO]: handleRealLogin
+   * [MOTIVO]: Centraliza a navegação aqui para evitar redirecionamentos automáticos.
+   * [SEGURANÇA]: A navegação só ocorre se a API de autenticação retornar sucesso,
+   * eliminando a possibilidade de loops causados por useEffects que disparam no carregamento.
+   */
   const handleRealLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(""); setPasswordError(""); setGeneralError("");
 
+    // Validações básicas de UI
     let hasError = false;
-
-    if (!login.trim()) {
-      setLoginError(tipoPessoa === "F" ? "O e-mail ou login devem ser informados" : "O CNPJ ou login devem ser informados");
-      hasError = true;
-    }
-    if (!password.trim()) {
-      setPasswordError("A senha deve ser informada");
-      hasError = true;
-    }
+    if (!login.trim()) { setLoginError(tipoPessoa === "F" ? "O e-mail ou login devem ser informados" : "O CNPJ ou login devem ser informados"); hasError = true; }
+    if (!password.trim()) { setPasswordError("A senha deve ser informada"); hasError = true; }
     
     const cleanLogin = login.replace(/\D/g, '');
     if (cleanLogin.length > 0) {
-      if (tipoPessoa === "F" && cleanLogin.length === 11 && !isCPF(cleanLogin)) {
-        setLoginError("CPF inválido");
-        hasError = true;
-      } else if (tipoPessoa === "J" && cleanLogin.length === 14 && !isCNPJ(cleanLogin)) {
-        setLoginError("CNPJ inválido");
-        hasError = true;
-      }
+      if (tipoPessoa === "F" && cleanLogin.length === 11 && !isCPF(cleanLogin)) { setLoginError("CPF inválido"); hasError = true; } 
+      else if (tipoPessoa === "J" && cleanLogin.length === 14 && !isCNPJ(cleanLogin)) { setLoginError("CNPJ inválido"); hasError = true; }
     }
 
     if (hasError) return;
@@ -117,8 +79,33 @@ export function CustomLogin() {
       const response = await autenticateWalletsbX(login, password, env);
 
       if (response?.success) {
-        // Apenas atualiza a sessão. O useEffect vai detectar o token e navegar.
+        // 1. Atualiza a sessão no contexto global
         setSession(response.session_token, response.userId);
+
+        // 2. Fluxo de Redirecionamento Manual
+        // Lê a URL destino diretamente do parâmetro de busca sem automação prévia
+        const redirectUri = (search as any).redirect_uri;
+        
+        if (redirectUri) {
+          // Constrói a URL de destino injetando o novo token de sessão obtido na autenticação
+          const base = redirectUri.startsWith('http') ? '' : window.location.origin;
+          const urlObject = new URL(redirectUri, base || undefined);
+          urlObject.searchParams.set("sbx_access_token", response.sbx_access_token);
+          
+          const finalUri = redirectUri.startsWith('http') 
+            ? urlObject.toString() 
+            : `${urlObject.pathname}${urlObject.search}`;
+
+          // Realiza a navegação após garantir que o token foi gerado
+          if (redirectUri.startsWith('http')) {
+            window.location.href = finalUri;
+          } else {
+            navigate({ to: finalUri as any, replace: true });
+          }
+        } else {
+          // Fallback seguro se não houver parâmetro de retorno
+          navigate({ to: "/", replace: true });
+        }
       } else {
         setPasswordError("Usuário ou senha inválidos.");
         setIsLoading(false);
@@ -145,7 +132,7 @@ export function CustomLogin() {
         </div>
 
         <form onSubmit={handleRealLogin} className="flex flex-col gap-5" noValidate>
-          {/* [UI/UX]: Tab Switcher Minimalista (Com outline-none para remover o quadrado) */}
+          {/* Alternador de Tipo de Pessoa */}
           <div className="flex w-full border-b border-gray-200 mb-2">
             <button
               type="button"
@@ -177,6 +164,7 @@ export function CustomLogin() {
             </div>
           )}
 
+          {/* Campo de Login */}
           <div className="flex flex-col gap-1.5">
             <input
               type="text"
@@ -199,6 +187,7 @@ export function CustomLogin() {
             {loginError && <span className="text-[#C13535] text-[11px] pl-5 font-medium mt-1">{loginError}</span>}
           </div>
 
+          {/* Campo de Senha */}
           <div className="relative flex flex-col gap-1.5">
             <input
               type={showPassword ? "text" : "password"}
@@ -228,5 +217,6 @@ export function CustomLogin() {
           </button>
         </form>
       </div>
-    </div>);
+    </div>
+  );
 }

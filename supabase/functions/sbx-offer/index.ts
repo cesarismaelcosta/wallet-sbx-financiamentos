@@ -17,7 +17,7 @@ import { verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 // IMPORTAÇÃO DE TIPOS COMPARTILHADOS
 // (Ajuste o caminho relativo até a pasta 'src' e mantenha a extensão '.ts')
 // ============================================================================
-import type { Offer, Manager, Event, Seller } from "../../../src/features/financial-hub/components/shared/types.ts";
+import type { Offer, Manager, Event, Seller, Vehicle } from "../../../src/features/financial-hub/components/shared/types.ts";
 
 const DEBUG_MODE = true;
 
@@ -164,6 +164,26 @@ serve(async (req) => {
     // =========================================================================
     // 6. MAPEAMENTO DO PAYLOAD (BFF Contract com Type Safety)
     // =========================================================================
+
+    // 1. Identifica a categoria e cria objetos especializados se for o caso
+    const productTypeId = rawOffer.product?.productType?.id;
+    const isVehicleCategory = [10, 11].includes(productTypeId);
+
+    // 2. Extrai apenas se for veículo
+    let vehicleData: Vehicle | undefined;
+
+    if (isVehicleCategory) {
+        const groups = rawOffer.product?.template?.groups || [];
+        const getGroupProp = (groupId: string, propId: string) => 
+            groups.find((g: any) => g.id === groupId)?.properties.find((p: any) => p.id === propId)?.value;
+
+        vehicleData = {
+            manufacture_year: Number(getGroupProp('identificacao', 'anofabricacao')) || 0,
+            model_year: Number(getGroupProp('identificacao', 'anomodelo')) || 0,
+            fipe_code: getGroupProp('financiamento', 'codigofipe') || "",
+        };
+    }
+
     const payloadResult: { offer: Offer; manager: Manager; event: Event; seller: Seller } = {
       offer: {
         offer_id: String(rawOffer.id),
@@ -173,10 +193,14 @@ serve(async (req) => {
         offer_value: rawOffer.price || 0,
         category_id: rawOffer.product?.productType?.id || 0,
         category: rawOffer.product?.productType?.description || "",
+        sub_category_id: rawOffer.product?.subCategory?.id || "",
+        sub_category: rawOffer.product?.subCategory?.description || "",
         lot_number: rawOffer.lotNumber || "",
         offer_status: rawOffer.offerStatus || "",
         sale_status: rawOffer.saleStatus || "",
         end_date: rawOffer.endDate || "",
+        // Inclusão condicional
+        ...(vehicleData && { vehicle: vehicleData }),
         photos: rawOffer.product?.galleryJson?.map((p: any) => ({
             highlight: p.highlight || false,
             link: p.link,

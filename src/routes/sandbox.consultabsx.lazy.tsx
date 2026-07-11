@@ -22,6 +22,9 @@ import { Offer, Manager, Event, Seller } from "../_shared/types";
 // [ROTEAMENTO]: Registro TanStack Router (Lazy Loading)
 // =========================================================================
 export const Route = createLazyFileRoute("/sandbox/consultabsx")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    offer: search.offer as string | undefined,
+  }),
   component: OfferDetailsNewSandbox,
 });
 
@@ -44,7 +47,23 @@ export function OfferDetailsNewSandbox() {
   // forçamos o contrato da interface. O 'token' extraído aqui é, arquiteturalmente,
   // o 'session_token' (JWT interno assinado pela nossa Edge Function).
   const { token } = useFinancialAuth();
-  
+  const { offer: offerParam } = Route.useSearch();
+  const navigate = Route.useNavigate(); // Adicione isso
+  const DEFAULT_OFFER = "4753216";
+
+  // 1. FORÇAR URL: Se não houver offer, redireciona para a mesma rota com o ID padrão
+  useEffect(() => {
+    if (!offerParam) {
+      navigate({
+        to: "/sandbox/consultabsx",
+        search: { offer: DEFAULT_OFFER },
+        replace: true, // Importante: não polui o histórico
+      });
+    }
+  }, [offerParam, navigate]);
+
+  const offerId = offerParam || DEFAULT_OFFER;
+
   // =========================================================================
   // [STATE]: Gerenciamento de Estado UI e Dados
   // =========================================================================
@@ -52,9 +71,6 @@ export function OfferDetailsNewSandbox() {
   const [userData, setUserData] = useState<BFFUserProfile | null>(null);
   const [offerData, setOfferData] = useState<OfferDataPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Mock de ID de Oferta para o ambiente de testes
-  const offerId = "4739764";
 
   // =========================================================================
   // [EFFECTS]: Ciclo de Vida e Chamadas de Rede (BFF)

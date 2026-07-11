@@ -83,14 +83,38 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       const sbxData = await sbxResponse.json();
       generatedSessionToken = sbxData.session_token;
 
+      // Adiciona propriedades customizadas no erro
       if (!sbxResponse.ok) {
-        // Cria o erro padrão do JS (que captura o stack trace)
         const error = new Error(sbxData.message || `HTTP_SBX_${sbxResponse.status}`);
-        
-        // Adiciona as suas propriedades customizadas nele
-        (error as any).type = "SBX_LOADER_FAIL";
+        const msg = error.message;
+
+        // Classificação estrita baseada nos disparos do código fonte:
+        if (msg.includes("UPSTREAM_USER_ERROR")) {
+          (error as any).type = "SBX_LOADER_FAIL_USER";
+        } 
+        else if (msg.includes("SESSION_UPSTREAM_EXPIRED")) {
+          (error as any).type = "SBX_LOADER_FAIL_TOKEN";
+        } 
+        else if (msg.includes("OFFER_NOT_FOUND")) {
+          (error as any).type = "SBX_LOADER_FAIL_OFFER_NOT_FOUND";
+        } 
+        else if (msg.includes("UPSTREAM_OFFER_ERROR")) {
+          (error as any).type = "SBX_LOADER_FAIL_OFFER";
+        } 
+        else if (msg.includes("BAD_REQUEST")) {
+          (error as any).type = "SBX_LOADER_FAIL_BAD_REQUEST";
+        } 
+        else if (msg.includes("DB_INSERT_FAILURE")) {
+          (error as any).type = "SBX_LOADER_FAIL_DATABASE";
+        } 
+        else {
+          (error as any).type = "SBX_LOADER_FAIL_GENERIC";
+        }
+
         (error as any).status = sbxResponse.status;
         (error as any).details = sbxData;
+        
+        console.error(`🛑 [SBX-LOADER] (${(error as any).type}):`, error.message);
         
         throw error;
       }
@@ -118,9 +142,6 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         },
       };
 
-      // 🛑 [TESTE DE FALHA]: Categoria inexistente
-      payload.offer.category = "888888888888888888888888888888888888888888888888888888888"; // Força erro de categoria inexistente para teste
-
       // =====================================================================
       // FASE 2: ORQUESTRAÇÃO NA EDGE (Substitui o Lazy Import)
       // =====================================================================
@@ -140,11 +161,33 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       const orchestratorData = await orchestratorResponse.json();
 
       if (!orchestratorResponse.ok) {
-         const error = new Error(orchestratorData.message || `HTTP_ORCH_${orchestratorResponse.status}`);
-         (error as any).type = "ORCHESTRATOR_FAIL";
-         (error as any).status = orchestratorResponse.status;
-         (error as any).details = orchestratorData;
-         throw error;
+        const error = new Error(orchestratorData.message || `HTTP_ORCH_${orchestratorResponse.status}`);
+        const msg = (orchestratorData.message || "").toUpperCase();
+
+        // Classificação direta dentro do seu IF original
+        if (msg.includes("VALIDATION")) {
+          (error as any).type = "ORCHESTRATOR_FAIL_VALIDATION";
+        } 
+        else if (msg.includes("TARGET_URL") || msg.includes("OBRIGATÓRIA")) {
+          (error as any).type = "ORCHESTRATOR_FAIL_INVALID_TARGET_URL";
+        } 
+        else if (msg.includes("CONFIGURAÇÃO") || msg.includes("DESTINO")) {
+          (error as any).type = "ORCHESTRATOR_FAIL_CONFIG";
+        } 
+        else if (msg.includes("VISITA")) {
+          (error as any).type = "ORCHESTRATOR_FAIL_VISIT_INVALID";
+        } 
+        else if (msg.includes("OFFER")) {
+          (error as any).type = "ORCHESTRATOR_FAIL_OFFER";
+        } 
+        else {
+          (error as any).type = "ORCHESTRATOR_FAIL_GENERIC";
+        }
+
+        (error as any).status = orchestratorResponse.status;
+        (error as any).details = orchestratorData;
+        
+        throw error;
       }
 
       // =====================================================================
@@ -158,6 +201,13 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       };
 
     } catch (error: any) {
+      // AQUI VOCÊ VAI VER O QUE REALMENTE ESTÁ VINDO
+      console.log("🚀 [DEBUG] Objeto de Erro Completo:", {
+          message: error.message,
+          type: error.type,
+          fullObject: error // Isso vai mostrar se o 'type' realmente existe no objeto
+      });
+      
       // 1. Definição do Escopo de Erro
       // - sessionToken: Se a falha ocorreu na Fase 1 (sbx-loader), será undefined. Se ocorreu na Fase 2 (orchestrator), terá o JWT válido.
       // - errorContext: Prioriza a propriedade injetada no throw (ex: SBX_LOADER_FAIL). Faz fallback para busca na string da mensagem.
@@ -178,18 +228,19 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       });
 
       // 3. Regras de Redirecionamento e Fail-safe
-      // Erro de Autenticação: Intercepta HTTP 401 ou a flag específica do sbx-loader forçando renovação da sessão.
-      if (error.message.includes("HTTP_SBX_401") || error.message.includes("SESSION_UPSTREAM_EXPIRED")) {
-          // Captura a URL atual em que o Gateway estava (que contém todos os deps como offer_id)
-          const currentUrl = encodeURIComponent(location.href);
-          
-          return { 
-            status: "ERROR_LOGIN", 
-            redirect_url: `/accounts/signin?redirect_uri=${currentUrl}` 
-          };
+      // Erro de Autenticação: Intercepta o novo type de TOKEN ou o legado de mensagens.
+      if (error.type === "SBX_LOADER_FAIL_TOKEN" || error.type === "SBX_LOADER_FAIL_USER") {
+        // Captura a URL atual em que o Gateway estava (que contém todos os deps como offer_id)
+        const currentUrl = encodeURIComponent(location.href);
+        
+        return { 
+          status: "ERROR_LOGIN", 
+          redirect_url: `/accounts/signin?redirect_uri=${currentUrl}` 
+        };
+      }''
 
       // 4. Erro de Sistema: Qualquer outra quebra devolve o usuário para a página de origem da simulação após aguardar no componente UI.
-      return { status: "ERROR_FAIL_SAFE", redirect_url: deps.return_uri || "/" };
+      return { status: "ERROR_OTHER", redirect_url: deps.return_uri || request.headers.get("Referer") };
     }
   },
   
@@ -203,29 +254,54 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     // Estado para controlar se o fluxo de dados falhou
     const [isError, setIsError] = useState(false);
     // Estado para o contador regressivo de erro
-    const [countdown, setCountdown] = useState(5);
+    const [countdown, setCountdown] = useState(10);
 
     console.log("🚀 [financialGatewayEntry] Component renderizado. Data:", data, "isError:", isError);
 
     useEffect(() => {
-      // 1. [TRATAMENTO DE SUCESSO]: Processamento imediato se houver redirecionamento
-      if (data?.redirect_url) {
-        window.location.replace(data.redirect_url);
+      if (!data) return;
+
+      // 1. PERSISTÊNCIA ATÔMICA: O que veio do sbx-loader deve ser salvo IMEDIATAMENTE.
+      // Não importa o que o orchestrator diz, se temos os tokens, salvamos.
+      if (data.session_token && data.sbx_access_token) {
+          localStorage.setItem("sbx_access_token", data.sbx_access_token);
+          localStorage.setItem("session_token", data.session_token);
+      }
+
+      // 2. FLUXO DE SEGURANÇA (Auth Error ou falta de tokens)
+      const isAuthError = data.status === "ERROR_LOGIN";
+      const isTokenMissing = !data.session_token || !data.sbx_access_token;
+
+      if (isAuthError || isTokenMissing) {
+        console.error("🚨 [FinancialGateway] Falha de sessão ou integridade:", data);
+        // 1. Tenta usar o redirect_url que veio do servidor
+        // 2. Se não veio, constrói o retorno usando a URL atual
+        const target = data.redirect_url || `/accounts/signin?redirect_uri=${currentUrl}`;
+        window.location.replace(target);
+        return;
+      }
+  
+      // 3. FLUXO DE ERRO (FAIL_SAFE)
+      if (data.status === "ERROR_OTHER") {
+        console.warn("⚠️ [FinancialGateway] Falha crítica detectada.");
+        setIsError(true);
         return;
       }
 
+      // 3. FLUXO DE ORQUESTRAÇÃO (Direcionamento de Negócio)
+      // definição do orchestrador
       if (data?.orchestration_result?.url) {
         window.location.replace(data.orchestration_result.url);
         return;
       }
 
-      // 2. [DETECÇÃO DE ERRO]: Se os dados foram carregados (loader finalizou) 
-      // mas não contêm URL de destino, marcamos como falha.
-      if (data) {
-        console.warn("⚠️ [financialGatewayEntry] Nenhuma instrução de redirecionamento encontrada.");
+      // 4. FLUXO DE ERRO (FAIL_SAFE)
+      if (data.status === "ERROR_OTHER") {
+        console.warn("⚠️ [FinancialGateway] Falha crítica detectada.");
         setIsError(true);
+        return;
       }
-    }, [data, navigate]);
+    }, [data]);
 
     // 3. [CONTADOR REGRESSIVO]: Lógica de timeout para retorno automático
     useEffect(() => {
@@ -236,20 +312,24 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       
       // Auto-retorno ao zerar o contador
       if (isError && countdown === 0) {
-        navigate(-1);
+        const target = data.redirect_url;
+        window.location.replace(data.redirect_url);
       }
-    }, [isError, countdown, navigate]);
+    }, [isError, countdown]);
 
-    // --- UI DE ERRO (Padronizada) ---
+    // --- UI DE ERRO (Padronizada com aviso e espera de 5s) ---
     if (isError) {
-       console.warn("⚠️ [financialGatewayEntry] Entrando na contagem de 5s.");
       return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+          
+          {/* SPINNER AQUI, girando enquanto conta os segundos definidos em const [countdown, setCountdown] = useState(10); */}
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-6"></div>
+
           <p className="text-slate-500 font-medium text-sm">Falha ao carregar simulação...</p>
           <p className="text-slate-500 font-medium text-sm mb-4">Retornando em {countdown}s...</p>
           
           <button 
-            onClick={() => navigate(-1)}
+            onClick={() => window.history.back()}
             className="flex items-center text-primary font-semibold text-sm hover:opacity-80 transition-opacity"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />

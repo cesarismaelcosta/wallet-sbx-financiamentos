@@ -78,6 +78,7 @@ const FinanciamentosGuard = () => {
           Carregando informações...
         </p>
       </div> 
+    );
   }
 
   // [COMPLIANCE]: Fail-safe de segurança caso não haja token
