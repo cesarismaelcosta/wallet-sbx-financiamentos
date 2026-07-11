@@ -162,7 +162,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
 
       await logSystemError(sessionToken, {
         context: "financialGatewayEntry",
-        subject: `Alerta de Erro no Gateway de Financiamentos e Seguros: ${context} ⚠️`,
+        subject: `Alerta de Erro no Gateway de Financiamentos e Seguros: ${errorContext} ⚠️`,
         message: `Sistema encontrou uma falha ao ser chamado de ${deps.return_uri} : ${msg}`,
         payload: {
           api_details: error.details || "Sem detalhes adicionais",

@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     } = payload;
     
    // Validação estrita dos nós obrigatórios do contrato do log
-    if (!context || !message) {
+    if (!payload.context || !payload.message) {
       throw new Error("Parâmetros contratuais obrigatórios ('context' e 'message') ausentes.");
     }
 
