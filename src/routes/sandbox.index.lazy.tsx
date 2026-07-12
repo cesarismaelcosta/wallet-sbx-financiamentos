@@ -5,9 +5,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { createLazyFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Building, UserPlus } from 'lucide-react';
-import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
+import { Loader2, LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Building, UserPlus } from 'lucide-react';
 import { WalletLogo } from "@/components/brand/WalletLogo";
+import { Button } from "@/components/ui/button";
+import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 
 export const Route = createLazyFileRoute('/sandbox/')({
     component: SandboxHome,
@@ -61,6 +62,7 @@ export function SandboxHome() {
     
     const [isScrolled, setIsScrolled] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [activeKey, setActiveKey] = useState<string | null>(null);
 
     useEffect(() => {
         const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -72,13 +74,20 @@ export function SandboxHome() {
     // [HANDLERS]: Lógica Inteligente de Roteamento
     // =========================================================================
     const handleProductClick = async (configKey: keyof typeof flowsConfig) => {
+        // [AJUSTE 1]: Define o botão que foi clicado para o componente saber qual mostrar o spinner
         setLoading(true);
+        setActiveKey(configKey); 
+
+        // [AJUSTE 2]: Pausa mínima de 200ms para o React renderizar o Loader na tela antes de navegar
+        await new Promise(resolve => setTimeout(resolve, 200));
+
         const config = flowsConfig[configKey];
 
         // Trava de segurança (Mantida)
         if (!config) {
             console.error(`🚨 Erro Crítico: A chave "${String(configKey)}" não existe no flowsConfig!`);
             setLoading(false);
+            setActiveKey(null); // Reset caso falhe aqui
             return;
         }
 
@@ -118,6 +127,10 @@ export function SandboxHome() {
         } catch (error) {
             console.error("Erro na navegação:", error);
             setLoading(false);
+            setActiveKey(null);
+        } finally {
+            // Garante que o loading é desfeito se algo falhar ou a navegação demorar
+            setLoading(false); 
         }
     };
 
@@ -132,8 +145,13 @@ export function SandboxHome() {
         isSingle: boolean = false
     ) => {
         const config = flowsConfig[configKey];
-        const baseClasses = `flex items-center justify-center gap-2 px-6 py-3 font-medium rounded-xl transition-all ${isSingle ? 'w-auto' : 'flex-1'}`;
         
+        // Identifica se ESTE botão específico é o que está carregando
+        const isCurrentLoading = loading && activeKey === configKey;
+        
+        const baseClasses = `flex items-center justify-center gap-2 px-6 py-3 font-medium rounded-xl transition-all ${isSingle ? 'w-auto' : 'flex-1'}`;
+
+        // Se estiver desabilitado por configuração
         if (config.disabled) {
             return (
                 <button disabled className={`${baseClasses} bg-slate-50 border border-slate-200 text-slate-400 cursor-not-allowed opacity-60`}>
@@ -145,11 +163,20 @@ export function SandboxHome() {
 
         return (
             <button 
+                // 1. O DISABLED AQUI MATA O HOVER E O CLIQUE
+                disabled={loading} 
                 onClick={() => handleProductClick(configKey)}
-                className={`${baseClasses} bg-white border border-purple-600 text-purple-600 hover:bg-purple-50`}
+                className={`${baseClasses} bg-white border border-purple-600 text-purple-600 ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-50'}`}
             >
-                <Icon className="w-5 h-5" strokeWidth={1.5} />
-                <span className="font-jakarta tracking-tight">{label}</span>
+                {/* 2. A TROCA DO ÍCONE */}
+                {isCurrentLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" strokeWidth={1.5} />
+                ) : (
+                    <Icon className="w-5 h-5" strokeWidth={1.5} />
+                )}
+                <span className="font-jakarta tracking-tight">
+                    {isCurrentLoading ? "Aguarde..." : label}
+                </span>
             </button>
         );
     };
@@ -462,39 +489,26 @@ export function SandboxHome() {
                 </div>
             </section>
 
-            {/* FOOTER */}
-            <footer className="bg-slate-900 text-white pt-12 pb-8">
-                <div className="max-w-7xl mx-auto px-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-8 pb-8 border-b border-gray-800">
-                        <div className="md:col-span-2 space-y-3">
-                            <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-purple-500 to-purple-400 bg-clip-text text-transparent">
-                                sbX<span className="text-white font-medium">Wallet</span>
-                            </span>
-                            <p className="text-gray-400 text-xs max-w-sm leading-relaxed">
-                                Soluções financeiras de inteligência da Superbid. Parcele lances, financie aquisições de veículos ou imóveis e ative seu capital.
-                            </p>
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-xs uppercase tracking-wider text-purple-400 mb-3">Portfólio</h4>
-                            <ul className="space-y-2 text-xs text-gray-400">
-                                <li><a href="#seguranca" className="hover:text-white transition-colors">Conta sbXPAY</a></li>
-                                <li><a href="#cartao" className="hover:text-white transition-colors">Parcelamento em 18x</a></li>
-                                <li><a href="#veiculos" className="hover:text-white transition-colors">Financiamento Auto</a></li>
-                                <li><a href="#imoveis" className="hover:text-white transition-colors">Financiamento Imóveis</a></li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-xs uppercase tracking-wider text-purple-400 mb-3">Crédito & Proteção</h4>
-                            <ul className="space-y-2 text-xs text-gray-400">
-                                <li><a href="#investidores" className="hover:text-white transition-colors">CGI sbX</a></li>
-                                <li><a href="#floorplan" className="hover:text-white transition-colors">Floor Plan</a></li>
-                                <li><a href="#seguros" className="hover:text-white transition-colors">Seguros Ativos</a></li>
-                            </ul>
-                        </div>
+            {/* FOOTER - Logo aumentada */}
+            <footer className="w-full py-10 mt-auto bg-black border-t border-gray-800">
+                <div className="container mx-auto px-6 flex flex-col items-center gap-4 text-center">
+                    
+                    {/* Container maior (h-16 w-16) com o mesmo corte nas bordas */}
+                    <div className="h-20 w-20 rounded-md bg-black overflow-hidden flex items-center justify-center">
+                        <img 
+                            src="/assets/home/sbxpay_p.png" 
+                            alt="sbXPAY" 
+                            className="h-full w-full object-cover scale-105"
+                        />
                     </div>
-                    <div className="pt-6 text-[10px] text-gray-500 leading-relaxed text-center md:text-left">
-                        <p>A sbX Wallet é desenvolvida em conformidade com as regulações de contas pagamento sob governança do Banco Central do Brasil.</p>
-                        <p className="mt-2">&copy; 2026 sbX Wallet. Todos os direitos reservados.</p>
+
+                    <div className="flex flex-col gap-1 max-w-xl text-[11px] text-gray-400">
+                        <p className="font-medium text-white">
+                            &copy; 2026 sbXPAY. Todos os direitos reservados.
+                        </p>
+                        <p className="leading-relaxed">
+                            sbXPAY Instituição de Pagamento Ltda. é uma instituição autorizada e regulada pelo Banco Central do Brasil.
+                        </p>
                     </div>
                 </div>
             </footer>

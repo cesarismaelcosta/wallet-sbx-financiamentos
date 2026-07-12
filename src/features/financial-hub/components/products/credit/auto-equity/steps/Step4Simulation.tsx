@@ -101,6 +101,7 @@ export function Step4Simulation() {
           <div className="slider-fix">
             <Slider 
               value={[amount]} 
+              disabled={loading}
               min={5000} max={100000} step={1000} 
               onValueChange={([v]) => setAmount(v)} 
             />
@@ -110,7 +111,7 @@ export function Step4Simulation() {
 
       <div className="space-y-2">
         <Label>Motivo do empréstimo</Label>
-        <Select value={purpose} onValueChange={setPurpose}>
+        <Select value={purpose} onValueChange={setPurpose} disabled={loading}>
           <SelectTrigger 
             className={`transition-all duration-300 
               ${purpose 
@@ -150,7 +151,8 @@ export function Step4Simulation() {
           type="button" 
           variant="ghost" 
           onClick={back}
-          className="text-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/10 hover:text-[var(--brand-primary)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+          disabled={loading} // Bloqueia o "Voltar" durante o loading
+          className="..."
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> 
           Voltar

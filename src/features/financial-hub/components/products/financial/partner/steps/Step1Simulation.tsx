@@ -37,11 +37,11 @@ export function Step1Simulation() {
   }, [state?.data?.offer, state?.data?.rules]);
 
   const areConsentsValid = useMemo(() => {
-    const configs = state.data?.consentConfigs || [];
+    const configs = state.data?.consent_configs || [];
     return configs
       .filter((opt: any) => opt.is_required)
       .every((opt: any) => acceptedConsents[opt.id] === true);
-  }, [state.data?.consentConfigs, acceptedConsents]);
+  }, [state.data?.consent_configs, acceptedConsents]);
 
   const isSimulating = useRef(false);
 
@@ -61,7 +61,7 @@ export function Step1Simulation() {
           down_payment_percentage: localPercentualEntrada,
           cet_rate: state.data.taxa || 0,
         },
-        consents: state.data.consentConfigs
+        consents: state.data.consent_configs
           ?.filter((c: any) => acceptedConsents[c.id])
           .map((c: any) => ({
             consent_id: c.id,
@@ -92,7 +92,7 @@ export function Step1Simulation() {
     return <div className="flex items-center justify-center h-64"><span className="text-slate-400">Carregando...</span></div>;
   }
 
-  const { rules, consentConfigs, offer } = state.data;
+  const { rules, consent_configs, offer } = state.data;
   const tetoMaximo = offer?.vehicle_details?.fipe_value ?? (offer?.offer_value * (1 + (rules?.max_offer_cap_percent ?? 20) / 100));
 
   return (
@@ -190,7 +190,7 @@ export function Step1Simulation() {
       
       <div className={`transition-opacity duration-200 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}>
         <DynamicConsents 
-          configs={consentConfigs} 
+          configs={consent_configs} 
           value={acceptedConsents} 
           onChange={setAcceptedConsents} 
         />

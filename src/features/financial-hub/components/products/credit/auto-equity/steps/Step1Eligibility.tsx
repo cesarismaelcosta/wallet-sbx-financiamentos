@@ -101,8 +101,6 @@ useEffect(() => {
       const result = await callSimulation(payload, 'CHECK_ELIGIBILITY');
       const statusId = result.consults?.[0]?.status_id;
 
-      console.log("result", result)
-
       // Validação do retorno do backend
       if (!result.success) {
         setErrorMsg("Erro técnico na consulta. Tente novamente.");
@@ -188,12 +186,6 @@ useEffect(() => {
           onChange={setAcceptedConsents} 
         />
       </div>      
-
-      {/* Botão de Submissão */}
-      
-      {/* --- COLOQUE ESTE LOG AQUI --- */}
-      {console.log("DEBUG_STATUS_BOTAO:", { loading, areConsentsValid })}
-      {/* ---------------------------- */}
 
       {/* Botão de Submissão */}
       <Button 
