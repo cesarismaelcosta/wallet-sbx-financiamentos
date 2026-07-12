@@ -170,6 +170,12 @@ export function useOrchestratorHydration(visitId: string | null, visitUpdateId?:
     lastFetchedHash.current = currentHash;
     setLoading(true);
 
+    console.group(`[useOrchestrator.ts | useOrchestratorHydration] Hydratação de página:`);
+    console.log("visit_id Enviado para Orquestração:", visitId);
+    console.log("visit_update_id Recebido:", visitUpdateId);
+    console.log("visit_update_id Parametro da URL:", urlParams.get("visit_update_id"));
+    console.groupEnd();
+
     // 5. Execução do Pipeline de Leitura
     callOrchestrator({ visit_id: visitId, visit_update_id: effectiveUpdateId }, "GET")
       .then((data) => {

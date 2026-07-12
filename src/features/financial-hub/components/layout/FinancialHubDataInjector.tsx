@@ -39,7 +39,7 @@ export function FinancialHubDataInjector({ children}: { children: React.ReactNod
     async function hydrate() {
       try {
         hasInitialized.current = true; // Marca como iniciado antes do fetch
-        
+        console.log("cahamando orchestrator GET em FinancialDataHubInjector:", visitId)
         const data = await callOrchestrator({ visit_id: visitId }, "GET");
 
         // Hidratação única

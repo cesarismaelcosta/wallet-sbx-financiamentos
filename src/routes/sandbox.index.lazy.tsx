@@ -500,11 +500,12 @@ export function SandboxHome() {
             </footer>
 
             {/* OVERLAY DE LOADING */}
+            {/* OVERLAY DE LOADING */}
             {loading && (
-                <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
-                    <p className="font-jakarta text-slate-500 font-medium text-sm">
-                        Preparando o ambiente de simulação...
+                <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+                    <p className="text-slate-500 font-medium text-sm">
+                      Preparando o ambiente de simulação...
                     </p>
                 </div>        
             )}

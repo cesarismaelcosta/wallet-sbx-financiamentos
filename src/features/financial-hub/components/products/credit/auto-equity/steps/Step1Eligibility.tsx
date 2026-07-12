@@ -31,24 +31,43 @@ export function Step1Eligibility() {
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
 
+  // Funções para formatar os dados ao carregar a tela
+  const formatCpf = (value: string) => {
+    return value
+      .replace(/\D/g, '')
+      .replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  };
+
+  const formatPhone = (value: string) => {
+    const clean = value.replace(/\D/g, ''); 
+    // Padrão solicitado: (55) 21 888888888
+    // Regex: 2 dígitos, 2 dígitos, resto
+    return clean.replace(/(\d{2})(\d{2})(\d+)/, '($1) $2 $3');
+  };
+
   // Inicialização do formulário
   const form = useForm<EligibilityData>({
     resolver: zodResolver(eligibilitySchema),
     defaultValues: { fullName: "", cpf: "", birthDate: "", phone: "", email: "" },
   });
 
+  console.log("DEBUG_ERROS_ZOD:", form.formState.errors);
+  console.log("DETALHE_ERRO_ZOD:", JSON.stringify(form.formState.errors, null, 2));
+
   // Preenchimento automático dos dados recebidos do orquestrador
-  useEffect(() => {
-    if (entity) {
-      form.reset({
-        fullName: entity.name || "",
-        cpf: entity.document || "",
-        birthDate: entity.birth_date || "",
-        phone: entity.phone || "",
-        email: entity.email || "",
-      });
-    }
-  }, [entity, form]);
+useEffect(() => {
+  if (entity) {
+    const cpfFormatado = (entity.document || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    const phoneFormatado = (entity.phone || "").replace(/(\d{2})(\d{2})(\d+)/, '($1) $2 $3');
+
+    // Usa setValue para injetar o valor diretamente no campo
+    form.setValue("fullName", entity.name || "", { shouldValidate: true });
+    form.setValue("cpf", cpfFormatado, { shouldValidate: true });
+    form.setValue("phone", phoneFormatado, { shouldValidate: true });
+    form.setValue("birthDate", entity.birth_date || "", { shouldValidate: true });
+    form.setValue("email", entity.email || "", { shouldValidate: true });
+  }
+}, [entity, form]);
 
   // Validação de obrigatoriedade dos consentimentos (LGPD)
   const areConsentsValid = useMemo(() => {
@@ -139,26 +158,28 @@ export function Step1Eligibility() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground">CPF</p>
-            <p className="text-sm font-medium text-foreground">{entity?.document}</p>
+            {/* Agora lê o valor processado do formulário */}
+            <p className="text-sm font-medium text-foreground">{form.watch("cpf") || entity?.document}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Data de nascimento</p>
-            <p className="text-sm font-medium text-foreground">{entity?.birth_date?.split("-").reverse().join("/")}</p>
+            <p className="text-sm font-medium text-foreground">{form.watch("birthDate") || entity?.birth_date}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground">Celular</p>
-            <p className="text-sm font-medium text-foreground">{entity?.phone || "-"}</p>
+            {/* Agora lê o valor processado do formulário */}
+            <p className="text-sm font-medium text-foreground">{form.watch("phone") || entity?.phone}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">E-mail</p>
-            <p className="text-sm font-medium text-foreground">{entity?.email || "-"}</p>
+            <p className="text-sm font-medium text-foreground">{form.watch("email") || entity?.email}</p>
           </div>
         </div>
       </div>
-      
+
       {/* Consentimentos dinâmicos */}
       <div className={`transition-opacity duration-200 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}>
         <DynamicConsents 
@@ -167,7 +188,13 @@ export function Step1Eligibility() {
           onChange={setAcceptedConsents} 
         />
       </div>      
+
+      {/* Botão de Submissão */}
       
+      {/* --- COLOQUE ESTE LOG AQUI --- */}
+      {console.log("DEBUG_STATUS_BOTAO:", { loading, areConsentsValid })}
+      {/* ---------------------------- */}
+
       {/* Botão de Submissão */}
       <Button 
         type="submit" 

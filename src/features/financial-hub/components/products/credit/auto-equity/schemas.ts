@@ -19,7 +19,7 @@ export const eligibilitySchema = z.object({
   fullName: z.string().trim().min(3, "Informe seu nome completo").max(120),
   cpf: z.string().trim().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, "Use o formato 000.000.000-00"),
   birthDate: z.string().min(10, "Data inválida"), // Adicionado aqui
-  phone: z.string().trim().regex(/^\(\d{2}\)\s\d{4,5}-\d{4}$/, "Use o formato (11) 99999-9999"),
+  phone: z.string().trim().regex(/^\(\d{2}\)\s\d{2}\s\d{8,9}$/, "Use o formato (XX) XX XXXXXXXXX").transform((val) => val.replace(/\D/g, "")),
   email: z.string().trim().email("E-mail inválido").max(160),
   acceptScr: z.boolean().optional(),
 });

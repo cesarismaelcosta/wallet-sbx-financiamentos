@@ -57,7 +57,7 @@ export function useNavigation() {
     };
 
     if (import.meta.env.DEV) {
-      console.group(`[DEBUG] Navigation Event: ${intent.action_description}`);
+      console.group(`[useNavigation.ts | useNavigation] Navigation Event: ${intent.action_description}`);
       console.log("Estado Atual do Wizard:", state.data);
       console.log("Payload Enviado para Orquestração:", payload);
       console.log("Intent Recebida:", intent);
@@ -66,15 +66,20 @@ export function useNavigation() {
 
     try {
       // 2. Dispara a orquestração (Obrigatório para rastreio)
-      await callOrchestrator(payload);
+      await callOrchestrator(payload, "POST");
       
       // 3. Executa a navegação usando o target configurado
       if (externalUrl) {
         window.open(externalUrl, intent.target);
       }
     } catch (error) {
-      console.error(`[Navigation Error] Falha ao orquestrar ${intent.action_description}:`, error);
-      // Aqui você poderia disparar um Toast de erro se necessário
+      // 1. Log Estruturado: O erro agora é um objeto, então não tente concatenar ele em strings
+      console.error("[useNavigation.ts | handleRedirect] Falha na orquestração:", {
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        response: error.response // Esta chave agora existe e contém o JSON do servidor
+      });
     } finally {
       // Se for WhatsApp (abriu nova aba), desbloqueia imediatamente
       // Se for página interna, deixa o loading até a navegação terminar
