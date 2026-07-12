@@ -19,7 +19,7 @@ import { callOrchestrator, callSimulation } from "@/features/financial-hub/core/
 import { SimulacaoWizardData } from "../simulacao.types";
 
 export function Step1Simulation() {
-  const [acceptedConsents, setacceptedConsents] = useState<Record<string, boolean>>({});
+  const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const { state, updateData, update } = useWizard<SimulacaoWizardData>();
 
@@ -37,11 +37,11 @@ export function Step1Simulation() {
   }, [state?.data?.offer, state?.data?.rules]);
 
   const areConsentsValid = useMemo(() => {
-    const configs = state.data?.consent_configs || [];
+    const configs = state.data?.consentConfigs || [];
     return configs
       .filter((opt: any) => opt.is_required)
       .every((opt: any) => acceptedConsents[opt.id] === true);
-  }, [state.data?.consent_configs, acceptedConsents]);
+  }, [state.data?.consentConfigs, acceptedConsents]);
 
   const isSimulating = useRef(false);
 
@@ -61,7 +61,7 @@ export function Step1Simulation() {
           down_payment_percentage: localPercentualEntrada,
           cet_rate: state.data.taxa || 0,
         },
-        consents: state.data.consent_configs
+        consents: state.data.consentConfigs
           ?.filter((c: any) => acceptedConsents[c.id])
           .map((c: any) => ({
             consent_id: c.id,
@@ -92,11 +92,12 @@ export function Step1Simulation() {
     return <div className="flex items-center justify-center h-64"><span className="text-slate-400">Carregando...</span></div>;
   }
 
-  const { rules, consent_configs, offer } = state.data;
+  const { rules, consentConfigs, offer } = state.data;
   const tetoMaximo = offer?.vehicle_details?.fipe_value ?? (offer?.offer_value * (1 + (rules?.max_offer_cap_percent ?? 20) / 100));
 
   return (
     <div className="space-y-5 max-w-xl mx-auto lg:mx-0">
+      {/* HEADER: texto estático e descrição da oferta */}
       <div className="mb-4 space-y-0.5">
         <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
           Consulte nossas condições
@@ -106,8 +107,13 @@ export function Step1Simulation() {
         </p>
       </div>
 
+      {/* Container: p-8 dá um respiro maior em relação às bordas */}
       <div className="bg-slate-50 border border-border rounded-lg p-7 space-y-4">
+
+        {/* Grid: gap-8 garante que os dois campos não fiquem colados horizontalmente */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+
+          {/* Valor do lance */}
           <div className="space-y-1">
             <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Valor do lance</Label>
             <Input 
@@ -132,6 +138,7 @@ export function Step1Simulation() {
             </div>
           </div>
 
+          {/* Entrada */}
           <div className="space-y-1">
             <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Entrada</Label>
             <Input 
@@ -161,17 +168,18 @@ export function Step1Simulation() {
         <div className="space-y-3">
           <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Parcelas</Label>
           <RadioGroup
+            disabled={loading}
             value={localParcelas ? String(localParcelas) : ""}
             onValueChange={(v) => { 
               const val = Number(v);
               setLocalParcelas(val);
             }}
-            className="flex flex-wrap gap-3"
+            className="grid grid-cols-4 gap-2"
           >
             {(state.data?.rules?.installment_options || []).map((p: number) => (
-              <div key={p} className="flex-1">
-                <RadioGroupItem value={String(p)} id={`p-${p}`} className="peer sr-only" />
-                <Label htmlFor={`p-${p}`} className="flex items-center justify-center p-2 border border-slate-200 rounded-xl cursor-pointer bg-white hover:bg-slate-50 peer-data-[state=checked]:border-[var(--brand-primary)] peer-data-[state=checked]:bg-white transition-all shadow-sm">
+              <div key={p}>
+                <RadioGroupItem value={String(p)} id={`p-${p}`} className="peer sr-only" disabled={loading} />
+                <Label htmlFor={`p-${p}`} className={`flex items-center justify-center p-2 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 peer-data-[state=checked]:border-[var(--brand-primary)] peer-data-[state=checked]:bg-white transition-all shadow-sm ${loading ? "!cursor-wait opacity-50" : "cursor-pointer"}`}>
                   <span className="font-bold text-xs text-black">{p}x</span>
                 </Label>
               </div>
@@ -180,13 +188,19 @@ export function Step1Simulation() {
         </div>
       </div>
       
-      <DynamicConsents configs={consent_configs} value={acceptedConsents} onChange={setacceptedConsents} />
+      <div className={`transition-opacity duration-200 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}>
+        <DynamicConsents 
+          configs={consentConfigs} 
+          value={acceptedConsents} 
+          onChange={setAcceptedConsents} 
+        />
+      </div>
 
       <button 
         type="button"
         onClick={handleSimular} 
         disabled={!areConsentsValid || !localParcelas || loading}
-        className="w-full h-12 rounded-xl text-white shadow-sm transition-all active:scale-[0.98] bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 flex items-center justify-center gap-2"
+        className="w-full h-12 rounded-xl text-white shadow-sm transition-all active:scale-[0.98] bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 disabled:opacity-50 disabled:!cursor-wait focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 flex items-center justify-center gap-2"
       >
         {loading ? (
           <span className="flex items-center justify-center gap-2 animate-pulse">
@@ -199,3 +213,4 @@ export function Step1Simulation() {
     </div>
   );
 }
+      

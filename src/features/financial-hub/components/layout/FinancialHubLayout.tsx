@@ -86,10 +86,12 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
                 Cobre a tela inteira abaixo do header enquanto isOrchestratorHydrating for true.
                 --------------------------------------------------------------------------- */}
               {isOrchestratorHydrating && (
-                <div className="absolute inset-0 top-[80px] z-50 flex flex-col items-center justify-center bg-white">
+                <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-                  <p className="text-slate-500 font-medium">Preparando a sua simulação...</p>
-                </div>
+                  <p className="text-slate-500 font-medium text-sm">
+                    Preparando sua simulação...
+                  </p>
+                </div>                 
               )}
 
               {/* ---------------------------------------------------------------------------

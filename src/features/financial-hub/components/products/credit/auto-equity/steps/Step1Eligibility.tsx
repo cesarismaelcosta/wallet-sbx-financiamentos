@@ -160,7 +160,13 @@ export function Step1Eligibility() {
       </div>
       
       {/* Consentimentos dinâmicos */}
-      <DynamicConsents configs={consentConfigs} value={acceptedConsents} onChange={setAcceptedConsents}/>
+      <div className={`transition-opacity duration-200 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}>
+        <DynamicConsents 
+          configs={consentConfigs} 
+          value={acceptedConsents} 
+          onChange={setAcceptedConsents} 
+        />
+      </div>      
       
       {/* Botão de Submissão */}
       <Button 

@@ -88,9 +88,13 @@ export function Step1PartnersPanel() {
 
     <div className="flex flex-col gap-y-2"> 
   
-        {/* Container do Consentimento - Espaçamento ajustado para não colar */}
-        <div className="mb-1">
-          <DynamicConsents configs={consent_configs} value={acceptedConsents} onChange={setacceptedConsents} />
+        {/* Container do Consentimento - Protegido durante loading */}
+        <div className={`mb-1 transition-opacity duration-200 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}>
+          <DynamicConsents 
+            configs={consent_configs} 
+            value={acceptedConsents} 
+            onChange={setacceptedConsents} 
+          />
         </div>
         
         {/* Botão Principal */}

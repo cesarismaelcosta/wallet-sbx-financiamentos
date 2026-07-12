@@ -347,40 +347,41 @@ serve(async (req: Request) => {
 
       // Validação de Oferta (Condicional: Só valida se a offer_id existir)
       const visitOfferData = visit.visit_offers?.[0] || {};
-      try {
-          const validatedOffer = await validateOfferIntegrity(
-              supabase, 
-              auth, 
-              visitId, 
-              visitOfferData.offer_id
-          );
-          
-          // Atualiza o valor da oferta no snapshot da visita para refletir a integridade
-          visitOfferData.offer_value = validatedOffer.offer.offer_value;
-      } catch (err: any) {
-          debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
+      const offerId = visitOfferData.offer_id;
 
-          // Mapeamento de erros técnicos para mensagens de interface
-          let userMessage = "Ocorreu um erro ao carregar a oferta.";
+      if (offerId) {
+          debugLog("🚨 [GET] Validando integridade da oferta:", offerId);
+          try {
+              const validatedOffer = await validateOfferIntegrity(
+                  supabase, 
+                  auth, 
+                  visitId, 
+                  offerId
+              );
+              // Só toca no objeto se a validação passar
+              visitOfferData.offer_value = validatedOffer.offer.offer_value;
+          } catch (err: any) {
+              // SUA LÓGICA ORIGINAL PRESERVADA (O mesmo catch de antes)
+              debugLog("🚨 [validateOfferIntegrity] Falha na validação no GET:", err.message);
+              
+              let userMessage = "Ocorreu um erro ao carregar a oferta.";
+              if (err.message.includes("OFFER_NOT_FOUND")) {
+                  userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
+              } else if (err.message.includes("INVALID_RELATIONSHIP")) {
+                  userMessage = "Você não tem permissão para acessar esta oferta.";
+              } else if (err.message.includes("SESSION_EXPIRED")) {
+                  userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+              } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
+                  userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+              }
 
-          if (err.message.includes("OFFER_NOT_FOUND")) {
-              userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
-          } else if (err.message.includes("INVALID_RELATIONSHIP")) {
-              userMessage = "Você não tem permissão para acessar esta oferta.";
-          } else if (err.message.includes("SESSION_EXPIRED")) {
-              userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-          } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
-              userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+              const errorForUI = new Error(userMessage);
+              (errorForUI as any).originalCode = err.message; 
+              throw errorForUI; 
           }
-
-          // Criamos um novo erro com a mensagem amigável para o TanStack Router
-          const errorForUI = new Error(userMessage);
-          
-          // Opcional: injetamos o código original para log/debug no front se precisar
-          (errorForUI as any).originalCode = err.message; 
-          
-          // Lançamos para o TanStack Router capturar no `errorComponent` da sua rota
-          throw errorForUI; 
+      } else {
+          // Se não tem offerId, o fluxo ignora a validação e segue feliz
+          debugLog("ℹ️ Nenhuma oferta vinculada a esta visita. Pulando validação.");
       }
 
       // D: Resolução de Regras e Parâmetros (Cascata Inversa)
@@ -504,37 +505,41 @@ serve(async (req: Request) => {
 
       // Validação de Oferta (Condicional: Só valida se a offer_id existir)
       debugLog("🚨 [validateOfferIntegrity] Validando visita:", visitId);
-      try {
-          const validatedOffer = await validateOfferIntegrity(
-              supabase, 
-              auth, 
-              visitId, 
-              payload.offer.offer_id
-          );
-      } catch (err: any) {
-          debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
+      const offerId = payload.offer?.offer_id;
 
-          // Mapeamento de erros técnicos para mensagens de interface
-          let userMessage = "Ocorreu um erro ao carregar a oferta.";
+      if (offerId) {
+          debugLog("🚨 [validateOfferIntegrity] Validando integridade da oferta:", offerId);
+          try {
+              await validateOfferIntegrity(
+                  supabase, 
+                  auth, 
+                  visitId, 
+                  offerId
+              );
+              debugLog("✅ Oferta validada com sucesso.");
+          } catch (err: any) {
+              debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
 
-          if (err.message.includes("OFFER_NOT_FOUND")) {
-              userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
-          } else if (err.message.includes("INVALID_RELATIONSHIP")) {
-              userMessage = "Você não tem permissão para acessar esta oferta.";
-          } else if (err.message.includes("SESSION_EXPIRED")) {
-              userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-          } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
-              userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+              // Mapeamento de erros técnicos para mensagens de interface (Sua lógica original preservada)
+              let userMessage = "Ocorreu um erro ao carregar a oferta.";
+
+              if (err.message.includes("OFFER_NOT_FOUND")) {
+                  userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
+              } else if (err.message.includes("INVALID_RELATIONSHIP")) {
+                  userMessage = "Você não tem permissão para acessar esta oferta.";
+              } else if (err.message.includes("SESSION_EXPIRED")) {
+                  userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+              } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
+                  userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+              }
+
+              const errorForUI = new Error(userMessage);
+              (errorForUI as any).originalCode = err.message; 
+              
+              throw errorForUI; 
           }
-
-          // Criamos um novo erro com a mensagem amigável para o TanStack Router
-          const errorForUI = new Error(userMessage);
-          
-          // Opcional: injetamos o código original para log/debug no front se precisar
-          (errorForUI as any).originalCode = err.message; 
-          
-          // Lançamos para o TanStack Router capturar no `errorComponent` da sua rota
-          throw errorForUI; 
+      } else {
+          debugLog("ℹ️ Nenhum offer_id fornecido. Pulando validação de integridade.");
       }
 
       return new Response(
