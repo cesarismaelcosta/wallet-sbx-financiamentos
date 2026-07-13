@@ -23,7 +23,7 @@ export const Route = createLazyFileRoute("/sandbox")({
 export const UserDataContext = createContext<any>(null);
 
 export function SandboxLayout() {
-  const { token, isLoading, logout } = useFinancialAuth();
+  const { sessionToken, isLoading, logout } = useFinancialAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -41,11 +41,11 @@ export function SandboxLayout() {
 
   // 2. [GATEKEEPER]: Validação Contínua
   useEffect(() => {
-    if (isLoading || !token) return;
+    if (isLoading || !sessionToken) return;
 
     // [SECURITY]: Validação Local Passiva
     try {
-      const decoded = jwtDecode<{ exp?: number }>(token);
+      const decoded = jwtDecode<{ exp?: number }>(sessionToken);
       const timeDelta = parseInt(localStorage.getItem('time_delta') || '0', 10);
       const syncedCurrentTimeInSeconds = Math.floor((Date.now() + timeDelta) / 1000);
 
@@ -61,7 +61,7 @@ export function SandboxLayout() {
     let isMounted = true;
     async function validate() {
       try {
-        const profile = await fetchMyProfile(token!);
+        const profile = await fetchMyProfile(sessionToken);
         if (isMounted) {
           setUserData(profile);
           setIsVerifying(false);
@@ -76,7 +76,7 @@ export function SandboxLayout() {
 
     validate();
     return () => { isMounted = false; };
-  }, [isLoading, token, logout]);
+  }, [isLoading, sessionToken, logout]);
 
   // =========================================================================
   // [UI/UX - CENA 1]: Auth Context inicializando
@@ -95,7 +95,7 @@ export function SandboxLayout() {
   // =========================================================================
   // [UI/UX - CENA 2]: Pre-Login Gate (Sem Sessão)
   // =========================================================================
-  if (!token) {
+  if (!sessionToken) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-['Plus_Jakarta_Sans']">
         <div className="w-full max-w-[400px] bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
