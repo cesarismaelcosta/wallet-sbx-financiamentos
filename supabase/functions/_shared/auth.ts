@@ -54,6 +54,7 @@ export async function validateRequest(req: Request) {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    const now = new Date().toISOString();
     const { data, error } = await supabaseAdmin
       .from('session_tokens')
       .select('*')
