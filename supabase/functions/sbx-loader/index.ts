@@ -51,19 +51,20 @@ serve(async (req) => {
     // =========================================================================
     // [SECURITY]: HYBRID AUTH INTERCEPTOR (JWT)
     // =========================================================================
-    // Verifica se é o nosso JWT (tem 3 partes separadas por ponto)
     const isInternalJWT = auth_token.split('.').length === 3;
 
     if (isInternalJWT) {
-      debugLog(`JWT interno detectado. Iniciando resolução Híbrida (Modo Sandbox)...`);
+      debugLog("PASSO 1: JWT interno detectado.");
       
       try {
-        // 1. Abre o Payload do JWT para extrair o UUID da sessão (jti)
-        const base64Payload = auth_token.split('.')[1];
-        const decodedPayload = JSON.parse(atob(base64Payload));
-        const sessionUUID = decodedPayload.jti; // Esse sim é o UUID que está no banco!
-
-        debugLog(`JWT interno: `, sessionUUID);
+        // Tentativa de abrir o JWT
+        const base64Url = auth_token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const pad = base64.length % 4 === 0 ? '' : '='.repeat(4 - (base64.length % 4));
+        const decodedPayload = JSON.parse(atob(base64 + pad));
+        const sessionUUID = decodedPayload.jti; 
+        
+        debugLog(`PASSO 2: JWT Aberto! Buscando UUID: ${sessionUUID}`);
 
         const supabaseAdmin = createClient(
           Deno.env.get('SUPABASE_URL')!, 
@@ -72,24 +73,33 @@ serve(async (req) => {
 
         const now = new Date().toISOString(); 
 
+        debugLog("PASSO 3: Indo no banco de dados...");
         const { data: sessionData, error: sessionError } = await supabaseAdmin
-          .from('sbx_sessions') // <-- ATENÇÃO: A sua tabela no banco chama sbx_sessions, não session_tokens!
+          // 👇 ALERTA: CONFIRME SE AQUI É session_tokens OU sbx_sessions NO SEU BANCO! 👇
+          .from('session_tokens') 
           .select('sbx_access_token, environment')
-          .eq('session_token', sessionUUID) // <-- Usa o UUID que tiramos de dentro do JWT
+          .eq('session_token', sessionUUID) 
           .gt('expires_at', now)
           .single();
 
-        if (sessionError || !sessionData) {
-            throw new Error("Sessão não encontrada ou expirada no banco.");
+        if (sessionError) {
+            // Se o banco reclamar (ex: tabela não existe), vai cair aqui!
+            debugLog("ERRO NO BANCO DE DADOS:", sessionError);
+            throw new Error(`DB_ERROR: ${sessionError.message}`);
         }
 
-        // [A TROCA]: Sobrescreve a variável com a chave verdadeira da Superbid!
+        if (!sessionData) {
+            throw new Error("UUID não encontrado ou expirado (expires_at).");
+        }
+
+        // A Troca Mágica
         sbx_access_token = sessionData.sbx_access_token;
         
-        debugLog("Token JWT traduzido com sucesso. Chave real da Superbid injetada.");
+        debugLog("PASSO 4: Token JWT traduzido com sucesso!");
       } catch (err: any) {
-         debugLog(`Falha na tradução Híbrida: ${err.message}`);
-         throw new Error("SESSION_UPSTREAM_EXPIRED: Sessão Sandbox inválida ou expirada.");
+         // AGORA VAMOS VER O ERRO DE VERDADE!
+         console.error("[ERRO FATAL NO INTERCEPTOR]:", err.message);
+         throw new Error(`SESSION_UPSTREAM_EXPIRED: Detalhe: ${err.message}`);
       }
     }
     
