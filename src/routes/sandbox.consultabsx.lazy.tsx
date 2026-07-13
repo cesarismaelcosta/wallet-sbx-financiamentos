@@ -6,8 +6,8 @@
  * Página de Sandbox isolada para testes de integração do Motor de Ofertas.
  * Execução sequencial estrita: Autenticação -> Perfil (BFF) -> Oferta.
  * * [RESPONSABILIDADES DA REFATORAÇÃO (COERÊNCIA DE CONTRATO)]:
- * 1. Higienização de Estado: Desestruturação explícita do 'token' do contexto.
- * 2. Segurança de Tipagem: Eliminação do fallback inseguro 'auth.accessToken'.
+ * 1. Higienização de Estado: Desestruturação explícita do 'sessionToken' do contexto.
+ * 2. Segurança de Tipagem: Eliminação do fallback inseguro 'auth.accesssessionToken'.
  * 3. Ciclo de Vida Reativo: Blindagem do useEffect para reagir apenas à sessão oficial.
  */
 
@@ -43,10 +43,10 @@ interface OfferDataPayload {
 // =========================================================================
 export function OfferDetailsNewSandbox() {
   // 1. [SECURITY CORE]: Extração Desestruturada de Identidade
-  // Ao invés de importar o objeto 'auth' inteiro e usar condicionais (auth.token || auth.accessToken),
-  // forçamos o contrato da interface. O 'token' extraído aqui é, arquiteturalmente,
-  // o 'session_token' (JWT interno assinado pela nossa Edge Function).
-  const { token } = useFinancialAuth();
+  // Ao invés de importar o objeto 'auth' inteiro e usar condicionais (auth.sessionToken || auth.accesssessionToken),
+  // forçamos o contrato da interface. O 'sessionToken' extraído aqui é, arquiteturalmente,
+  // o 'session_sessionToken' (JWT interno assinado pela nossa Edge Function).
+  const { sessionToken } = useFinancialAuth();
   const { offer: offerParam } = Route.useSearch();
   const navigate = Route.useNavigate(); // Adicione isso
   const [fotoAtiva, setFotoAtiva] = useState(0);
@@ -84,7 +84,7 @@ export function OfferDetailsNewSandbox() {
       // 2. [GUARD CLAUSE]: Prevenção de chamadas anônimas
       // Se não há JWT assinado, aborta a renderização de dados imediatamente.
       // Isso protege as APIs upstream contra requisições malformadas (401).
-      if (!token) {
+      if (!sessionToken) {
         setError("Usuário não autenticado.");
         setLoading(false);
         return;
@@ -92,14 +92,16 @@ export function OfferDetailsNewSandbox() {
 
       setLoading(true);
       
+      console.log("sessionToken:", sessionToken)
+
       try {
         // 3. [ORQUESTRAÇÃO SEQUENCIAL]
         // Passo A: Identificação do usuário
-        const user = await fetchMyProfile(token);
+        const user = await fetchMyProfile(sessionToken);
         setUserData(user);
         
         // Passo B: Resgate dos metadados da oferta e vendedor
-        const offer = await fetchOfferDetails(token, offerId);
+        const offer = await fetchOfferDetails(sessionToken, offerId);
         setOfferData(offer);
 
       } catch (err: any) {
@@ -112,7 +114,7 @@ export function OfferDetailsNewSandbox() {
     };
 
     loadData();
-  }, [token]); // O efeito reage EXCLUSIVAMENTE a mudanças no JWT assinado.
+  }, [sessionToken]); // O efeito reage EXCLUSIVAMENTE a mudanças no JWT assinado.
 
   
   // =========================================================================

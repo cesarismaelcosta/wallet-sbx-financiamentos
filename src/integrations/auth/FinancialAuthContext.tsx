@@ -15,7 +15,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 interface FinancialAuthContextType {
-  token: string | null; // Nosso session_token (JWT Próprio do App)
+  sessionToken: string | null; // Nosso session_token (JWT Próprio do App)
   userId: string | null;
   isLoading: boolean;
   setSession: (token: string, userId?: string) => void; 
@@ -25,7 +25,7 @@ interface FinancialAuthContextType {
 const FinancialAuthContext = createContext<FinancialAuthContextType | undefined>(undefined);
 
 export function FinancialAuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   
   // Começa como true para evitar renderizar rotas protegidas antes de ler o storage
@@ -46,7 +46,7 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
       // Ao removermos o redirecionamento forçado que existia aqui, o React re-renderiza 
       // a árvore instantaneamente. Os Gatekeepers de cada rota (ex: SandboxLayout)
       // vão interceptar a falta de token e rotear o usuário da forma correta.
-      setToken(null);
+      setSessionToken(null);
       setUserId(null);
     };
 
@@ -87,7 +87,7 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   // Função para logar (salva no state e no storage simultaneamente)
   const setSession = (newToken: string, newUserId?: string) => {
     localStorage.setItem("session_token", newToken);
-    setToken(newToken);
+    setSessionToken(newToken);
     
     if (newUserId) {
       localStorage.setItem("user_id", newUserId);
@@ -105,12 +105,12 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
 
     // 2. Reseta o estado para null 
     // (Isso dispara os hooks nos Layouts, sem forçar navegação de URL)
-    setToken(null);
+    setSessionToken(null);
     setUserId(null);
   };
 
   return (
-    <FinancialAuthContext.Provider value={{ token, userId, isLoading, setSession, logout }}>
+    <FinancialAuthContext.Provider value={{ sessionToken, userId, isLoading, setSession, logout }}>
       {children}
     </FinancialAuthContext.Provider>
   );

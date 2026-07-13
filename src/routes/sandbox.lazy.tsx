@@ -58,6 +58,8 @@ export function SandboxLayout() {
       return;
     }
 
+    console.log("sessionToken:", sessionToken)
+    
     let isMounted = true;
     async function validate() {
       try {
