@@ -72,10 +72,12 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     
+    const now = new Date().toISOString();
     const { data: session, error: sessionError } = await supabaseAdmin
       .from('session_tokens')
       .select('sbx_access_token, expires_at')
       .eq('session_token', sessionId)
+      .gt('expires_at', now)
       .single();
 
     if (sessionError || !session) {
