@@ -49,15 +49,22 @@ serve(async (req) => {
     let sbx_access_token = auth_token;
 
     // =========================================================================
-    // [SECURITY]: HYBRID AUTH INTERCEPTOR (UUID / Token Opaco)
+    // [SECURITY]: HYBRID AUTH INTERCEPTOR (JWT)
     // =========================================================================
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const isInternalUUID = uuidRegex.test(auth_token);
+    // Verifica se é o nosso JWT (tem 3 partes separadas por ponto)
+    const isInternalJWT = auth_token.split('.').length === 3;
 
-    if (isInternalUUID) {
-      debugLog(`UUID interno detectado (${auth_token}). Iniciando resolução Híbrida (Modo Sandbox)...`);
+    if (isInternalJWT) {
+      debugLog(`JWT interno detectado. Iniciando resolução Híbrida (Modo Sandbox)...`);
       
       try {
+        // 1. Abre o Payload do JWT para extrair o UUID da sessão (jti)
+        const base64Payload = auth_token.split('.')[1];
+        const decodedPayload = JSON.parse(atob(base64Payload));
+        const sessionUUID = decodedPayload.jti; // Esse sim é o UUID que está no banco!
+
+        debugLog(`JWT interno: `, sessionUUID);
+
         const supabaseAdmin = createClient(
           Deno.env.get('SUPABASE_URL')!, 
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -66,9 +73,9 @@ serve(async (req) => {
         const now = new Date().toISOString(); 
 
         const { data: sessionData, error: sessionError } = await supabaseAdmin
-          .from('session_tokens') // <-- Nome novo da tabela!
+          .from('sbx_sessions') // <-- ATENÇÃO: A sua tabela no banco chama sbx_sessions, não session_tokens!
           .select('sbx_access_token, environment')
-          .eq('session_token', auth_token) // Procura pelo nosso UUID
+          .eq('session_token', sessionUUID) // <-- Usa o UUID que tiramos de dentro do JWT
           .gt('expires_at', now)
           .single();
 
@@ -76,22 +83,21 @@ serve(async (req) => {
             throw new Error("Sessão não encontrada ou expirada no banco.");
         }
 
-        // [A TROCA]: Sobrescreve a variável com a chave verdadeira que estava escondida!
+        // [A TROCA]: Sobrescreve a variável com a chave verdadeira da Superbid!
         sbx_access_token = sessionData.sbx_access_token;
         
-        // Mantém o ambiente fiel à sessão original
-        environment = sessionData.environment; 
-        
-        debugLog("Token UUID traduzido com sucesso. Chave real da Superbid injetada.");
+        debugLog("Token JWT traduzido com sucesso. Chave real da Superbid injetada.");
       } catch (err: any) {
-          debugLog(`Falha na tradução Híbrida: ${err.message}`);
-          throw new Error("SESSION_UPSTREAM_EXPIRED: Sessão Sandbox inválida ou expirada.");
+         debugLog(`Falha na tradução Híbrida: ${err.message}`);
+         throw new Error("SESSION_UPSTREAM_EXPIRED: Sessão Sandbox inválida ou expirada.");
       }
     }
     
     // =========================================================================
     // 1. VALIDAÇÃO UPSTREAM (Perfil do Usuário)
     // =========================================================================
+    debugLog("sbx_access_token", sbx_access_token);
+
     const userRes = await fetch(`${urls.api}/account/v2/user/me`, {
       method: "GET",
       headers: { "Authorization": `Bearer ${sbx_access_token}` }
