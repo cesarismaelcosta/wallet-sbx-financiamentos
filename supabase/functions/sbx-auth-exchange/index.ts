@@ -7,7 +7,7 @@
  * * [RESPONSABILIDADES]:
  * 1. Validação Upstream: Bate no /account/v2/user/me para garantir que o token externo é quente.
  * 2. Prevenção: Intercepta tokens parceiros expirados (401) e nega a troca.
- * 3. Sessão Intermediária: Grava na tabela `sbx_sessions` para controle de estado.
+ * 3. Sessão Intermediária: Grava na tabela `session_tokens` para controle de estado.
  * 4. Assinatura Local: Gera o JWT HMAC-SHA256 para o frontend consumir de forma segura.
  * 5. [UPDATE]: Injeção dinâmica de Cookie para habilitar o fluxo SSR do Gateway.
  */
@@ -102,7 +102,7 @@ serve(async (req) => {
 
     // Salva a sessão no Supabase com os detalhes do usuário e metadados de infraestrutura
     const { data: sessionData, error: sessionError } = await supabaseAdmin
-      .from('sbx_sessions')
+      .from('session_tokens')
       .insert({ 
         session_token: sessionToken, 
         user_id: userId, 

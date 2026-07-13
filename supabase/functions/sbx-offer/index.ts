@@ -64,7 +64,7 @@ serve(async (req) => {
     
     // Busca a sessão no banco para capturar o token real da Superbid
     const { data: session } = await supabaseAdmin
-        .from('sbx_sessions')
+        .from('session_tokens')
         .select('sbx_access_token')
         .eq('session_token', payload.jti)
         .single();

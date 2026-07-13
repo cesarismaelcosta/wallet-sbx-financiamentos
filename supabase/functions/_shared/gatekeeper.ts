@@ -70,11 +70,11 @@ export async function validateVisitOwnership(
   if (visitError || !visit) throw new Error("VISIT_NOT_FOUND");
   const dbEntityId = visit.visit_entities?.[0]?.entity_id;
 
-  debugLog(`[GATEKEEPER-DEBUG] Consulta sbx_sessions: ${auth.session_token}. Verificando banco...`);
+  debugLog(`[GATEKEEPER-DEBUG] Consulta session_tokens: ${auth.session_token}. Verificando banco...`);
 
   // 2. Busca o dono real através do session_token (Triangulação)
   const { data: session, error: sessError } = await supabase
-    .from('sbx_sessions')
+    .from('session_tokens')
     .select('user_id')
     .eq('session_token', auth.session_token)
     .single();
@@ -137,7 +137,7 @@ export async function validateOfferIntegrity(
 
   // 2. Validação de Sessão (Upstream Token)
   const { data: session, error: sessError } = await supabase
-    .from('sbx_sessions')
+    .from('session_tokens')
     .select('sbx_access_token, environment')
     .eq('session_token', auth.session_token)
     .single();

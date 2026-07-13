@@ -39,11 +39,56 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { sbx_access_token, environment, offer_id } = await req.json();
+    const { auth_token, environment, offer_id } = await req.json();
 
-    if (!sbx_access_token || !environment) throw new Error("BAD_REQUEST: Credenciais ou ambiente ausentes.");
+    if (!auth_token || !environment) throw new Error("BAD_REQUEST: Credenciais ou ambiente ausentes.");
     const urls = ENV_URLS[environment as keyof typeof ENV_URLS];
 
+    // A partir daqui, declaramos a variável que vai segurar a chave real da Superbid.
+    // Por padrão, assumimos que o token que chegou (auth_token) já é o da Superbid (fluxo vindo da sbX).
+    let sbx_access_token = auth_token;
+
+    // =========================================================================
+    // [SECURITY]: HYBRID AUTH INTERCEPTOR (UUID / Token Opaco)
+    // =========================================================================
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isInternalUUID = uuidRegex.test(auth_token);
+
+    if (isInternalUUID) {
+      debugLog(`UUID interno detectado (${auth_token}). Iniciando resolução Híbrida (Modo Sandbox)...`);
+      
+      try {
+        const supabaseAdmin = createClient(
+          Deno.env.get('SUPABASE_URL')!, 
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        );
+
+        const now = new Date().toISOString(); 
+
+        const { data: sessionData, error: sessionError } = await supabaseAdmin
+          .from('session_tokens') // <-- Nome novo da tabela!
+          .select('sbx_access_token, environment')
+          .eq('session_token', auth_token) // Procura pelo nosso UUID
+          .gt('expires_at', now)
+          .single();
+
+        if (sessionError || !sessionData) {
+            throw new Error("Sessão não encontrada ou expirada no banco.");
+        }
+
+        // [A TROCA]: Sobrescreve a variável com a chave verdadeira que estava escondida!
+        sbx_access_token = sessionData.sbx_access_token;
+        
+        // Mantém o ambiente fiel à sessão original
+        environment = sessionData.environment; 
+        
+        debugLog("Token UUID traduzido com sucesso. Chave real da Superbid injetada.");
+      } catch (err: any) {
+          debugLog(`Falha na tradução Híbrida: ${err.message}`);
+          throw new Error("SESSION_UPSTREAM_EXPIRED: Sessão Sandbox inválida ou expirada.");
+      }
+    }
+    
     // =========================================================================
     // 1. VALIDAÇÃO UPSTREAM (Perfil do Usuário)
     // =========================================================================
@@ -225,7 +270,7 @@ serve(async (req) => {
 
     const infra = await captureInfrastructure(req);
     const { insertData: sessionData, insertError: insertError } = await supabaseAdmin
-      .from('sbx_sessions')
+      .from('session_tokens')
       .insert({ 
         session_token: sessionToken, 
         user_id: userId, 

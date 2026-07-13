@@ -95,12 +95,13 @@ export function SandboxHome() {
             if ('isDirect' in config && config.isDirect) {
                 // [DELEGAÇÃO DIRETA]: O Orchestrator não deve validar offer_id aqui
                 const sbxAcessToken = localStorage.getItem('sbx_access_token') || "";
+                const sessionToken = localStorage.getItem('session_token') || "";
                 const ambiente = localStorage.getItem('sbx_environment') || "production";
                 
                 // Payload limpo: Sem offer_id
                 const searchPayload: any = {
                     environment: ambiente,
-                    sbx_access_token: sbxAcessToken,
+                    auth_token: sessionToken,
                     product_id: encodeURIComponent(config.productId),
                     return_uri: window.location.pathname + window.location.search,
                     utm_source: "landing",
@@ -498,7 +499,7 @@ export function SandboxHome() {
                         <img 
                             src="/assets/home/sbxpay_p.png" 
                             alt="sbXPAY" 
-                            className="h-full w-full object-cover scale-105"
+                            className="h-full w-full object-cover scale-110"
                         />
                     </div>
 

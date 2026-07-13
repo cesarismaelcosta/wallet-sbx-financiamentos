@@ -82,7 +82,7 @@ serve(async (req) => {
     const infra = await captureInfrastructure(req);
 
     const { data: sessionData, error: sessionError } = await supabaseAdmin
-      .from('sbx_sessions')
+      .from('session_tokens')
       .insert({ 
         session_token: sessionToken, 
         user_id: sbxData.userId, 

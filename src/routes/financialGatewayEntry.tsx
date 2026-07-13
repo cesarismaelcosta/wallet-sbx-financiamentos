@@ -27,7 +27,7 @@ import type { UserProfile, Offer, Seller, Event, Manager, SimulationPayload } fr
 
 interface SearchSchema {
   environment?: "staging" | "production";
-  sbx_access_token?: string;
+  auth_token?: string;
   offer_id?: string;
   product_id?: string;
   return_uri?: string;
@@ -39,7 +39,7 @@ interface SearchSchema {
 export const Route = createFileRoute("/financialGatewayEntry")({
   validateSearch: (search: Record<string, unknown>): SearchSchema => ({
     environment: search.environment as "staging" | "production" | undefined,
-    sbx_access_token: search.sbx_access_token as string | undefined,
+    auth_token: search.auth_token as string | undefined,
     offer_id: search.offer_id as string | undefined,
     product_id: search.product_id as string | undefined,
     return_uri: search.return_uri as string | undefined,
@@ -55,7 +55,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     const cookieHeader = request?.headers?.get("Cookie") || "";
     const cookieToken = cookieHeader.split('; ').find(row => row.startsWith('session_token='))?.split('=')[1] || null;
 
-    if (!deps?.sbx_access_token && !cookieToken) {
+    if (!deps?.auth_token && !cookieToken) {
        throw redirect({ to: '/accounts/signin', replace: true });
     }
 
@@ -74,7 +74,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
           "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` 
         },
         body: JSON.stringify({
-          sbx_access_token: deps.sbx_access_token,
+          auth_token: deps.auth_token,
           environment: currentEnvironment,
           offer_id: deps.offer_id
         }),
@@ -196,7 +196,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       // O Loader devolve tudo pronto. O frontend só precisa salvar o token e navegar.
       return { 
         session_token: sbxData.session_token, 
-        sbx_access_token: deps.sbx_access_token,
+        auth_token: deps.auth_token,
         orchestration_result: orchestratorData // O Comando retornado pela Edge
       };
 
@@ -216,7 +216,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       const errorContext = error.type || (msg.includes("HTTP_ORCH") ? "ORCHESTRATOR_FAIL" : "SBX_LOADER_FAIL");
 
       // 2. Registro do Incidente (Isolado de Regras de UI)
-      // O payload recebe `deps`, garantindo que o token externo (sbx_access_token) e dados da URL originais sejam registrados para rastreio.
+      // O payload recebe `deps`, garantindo que o token externo (auth_token) e dados da URL originais sejam registrados para rastreio.
       await logSystemError(sessionToken, {
         context: "financialGatewayEntry",
         subject: `Alerta de Erro no Gateway de Financiamentos e Seguros: ${errorContext} ⚠️`,
@@ -263,14 +263,14 @@ export const Route = createFileRoute("/financialGatewayEntry")({
 
       // 1. PERSISTÊNCIA ATÔMICA: O que veio do sbx-loader deve ser salvo IMEDIATAMENTE.
       // Não importa o que o orchestrator diz, se temos os tokens, salvamos.
-      if (data.session_token && data.sbx_access_token) {
-          localStorage.setItem("sbx_access_token", data.sbx_access_token);
+      if (data.session_token && data.auth_token) {
+          localStorage.setItem("auth_token", data.auth_token);
           localStorage.setItem("session_token", data.session_token);
       }
 
       // 2. FLUXO DE SEGURANÇA (Auth Error ou falta de tokens)
       const isAuthError = data.status === "ERROR_LOGIN";
-      const isTokenMissing = !data.session_token || !data.sbx_access_token;
+      const isTokenMissing = !data.session_token || !data.auth_token;
 
       if (isAuthError || isTokenMissing) {
         console.error("🚨 [FinancialGateway] Falha de sessão ou integridade:", data);

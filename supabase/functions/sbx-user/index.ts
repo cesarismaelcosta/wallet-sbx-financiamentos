@@ -7,7 +7,7 @@
  * o token upstream oculto e realiza o proxy seguro para a API da Superbid.
  * * [RESPONSABILIDADES]:
  * 1. Identidade: Verifica a assinatura HMAC-SHA256 e as claims de expiração do JWT.
- * 2. Estado: Valida o ciclo de vida e revogação da sessão via tabela `sbx_sessions`.
+ * 2. Estado: Valida o ciclo de vida e revogação da sessão via tabela `session_tokens`.
  * 3. Integração Upstream: Realiza a chamada à API da Superbid injetando o Bearer token real.
  * 4. Resiliência End-to-End: Intercepta tokens de parceiros expirados (401) e propaga o erro
  * para disparar o Protocolo de Amnésia global no Frontend.
@@ -73,7 +73,7 @@ serve(async (req) => {
     );
     
     const { data: session, error: sessionError } = await supabaseAdmin
-      .from('sbx_sessions')
+      .from('session_tokens')
       .select('sbx_access_token, expires_at')
       .eq('session_token', sessionId)
       .single();

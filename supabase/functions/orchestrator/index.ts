@@ -291,7 +291,7 @@ serve(async (req: Request) => {
   });
 
   // =========================================================================
-  // SEGURANÇA: Validação de Identidade (Ponto central)
+  // SEGURANÇA: Validação de Identidade pelo token opaco próprio
   // Como o GET e o POST exigem autenticação, validamos aqui no início.
   // =========================================================================
   let auth;

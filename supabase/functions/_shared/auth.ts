@@ -55,9 +55,10 @@ export async function validateRequest(req: Request) {
     );
 
     const { data, error } = await supabaseAdmin
-      .from('sbx_sessions')
+      .from('session_tokens')
       .select('*')
       .eq('session_token', sessionId)
+      .gt('expires_at', now)
       .single();
 
     // 5. Tratamento de erros de banco de dados

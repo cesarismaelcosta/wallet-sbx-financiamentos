@@ -259,12 +259,13 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     // O 'token' do contexto é o interno. Precisamos do sbx_token real.
     // Leitura 100% segura aqui (Execução exclusiva no Client-Side)
     const sbxAcessToken = localStorage.getItem('sbx_access_token');
+    const sessionToken = localStorage.getItem('session_token');
     console.log("[sandbox.offer | OfferDetailsSandbox] Delegando para o Gateway com sbx_access_token real:", sbxAcessToken);
 
     // 1. Construção do Payload base (Sem destruir IDs)
     const searchPayload: any = {
       environment: ambiente,
-      sbx_access_token: sbxAcessToken,
+      auth_token: sessionToken,
       offer_id: encodeURIComponent(String(targetOfferId)),
       product_id: encodeURIComponent(String(currentFlow.product_id || '')),
       return_uri: window.location.pathname + window.location.search,
