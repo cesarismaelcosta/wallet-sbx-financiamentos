@@ -75,7 +75,6 @@ serve(async (req) => {
 
         debugLog("PASSO 3: Indo no banco de dados...");
         const { data: sessionData, error: sessionError } = await supabaseAdmin
-          // 👇 ALERTA: CONFIRME SE AQUI É session_tokens OU sbx_sessions NO SEU BANCO! 👇
           .from('session_tokens') 
           .select('sbx_access_token, environment')
           .eq('session_token', sessionUUID) 
