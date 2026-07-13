@@ -92,6 +92,7 @@ serve(async (req) => {
     // =========================================================================
     // 4. INTEGRAÇÃO: CHAMADA UPSTREAM (Superbid API)
     // =========================================================================
+    debugLog("sbx_access_token ao acessar /me:", session.sbx_access_token)
     const response = await fetch(`${baseUrl}/account/v2/user/me`, {
       method: "GET",
       headers: {

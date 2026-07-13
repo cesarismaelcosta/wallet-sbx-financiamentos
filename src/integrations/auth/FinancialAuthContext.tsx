@@ -73,7 +73,7 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     });
 
     if (storedToken) {
-      setToken(storedToken);
+      setSessionToken(storedToken);
       setUserId(storedUserId);
     }
     
