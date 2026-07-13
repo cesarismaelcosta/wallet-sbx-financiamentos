@@ -55,9 +55,9 @@ export async function validateVisitOwnership(
   payloadEntityId?: string | null
 ) {
   if (visitId) {
-    debugLog(`[GATEKEEPER-DEBUG] Recebi visitId: ${visitId}. Verificando banco...`);
+    debugLog(`Recebi visitId: ${visitId}. Verificando banco...`);
   } else {
-    debugLog(`[GATEKEEPER-DEBUG] VisitId nulo/undefined. Fluxo de Criação (OK).`);
+    debugLog(`VisitId nulo/undefined. Fluxo de Criação (OK).`);
   }
 
   // 1. Busca a visita e o dono (dbEntityId) no banco
@@ -70,13 +70,15 @@ export async function validateVisitOwnership(
   if (visitError || !visit) throw new Error("VISIT_NOT_FOUND");
   const dbEntityId = visit.visit_entities?.[0]?.entity_id;
 
-  debugLog(`[GATEKEEPER-DEBUG] Consulta session_tokens: ${auth.session_token}. Verificando banco...`);
+  debugLog(`[validateVisitOwnership] Consulta session_tokens: ${auth.session_token}. Verificando banco...`);
 
   // 2. Busca o dono real através do session_token (Triangulação)
+  const now = new Date().toISOString();
   const { data: session, error: sessError } = await supabase
     .from('session_tokens')
     .select('user_id')
     .eq('session_token', auth.session_token)
+    .gt('expires_at', now)
     .single();
 
   if (sessError || !session?.user_id) throw new Error("UNAUTHORIZED");
@@ -84,14 +86,14 @@ export async function validateVisitOwnership(
 
   // 3. Validação Obrigatória: Token vs Banco (Ownership)
   if (String(dbEntityId) !== String(sessionUserId)) {
-    debugLog(`[SECURITY ALERT] DIVERGÊNCIA: Token(${sessionUserId}) vs DB(${dbEntityId})`);
+    debugLog(`[validateVisitOwnership]  DIVERGÊNCIA: Token(${sessionUserId}) vs DB(${dbEntityId})`);
     throw new Error("FORBIDDEN_ACCESS");
   }
 
   // 4. Validação Condicional: Payload vs Banco (Só roda se o payload existir)
   if (payloadEntityId && String(dbEntityId) !== String(payloadEntityId)) {
-    debugLog(`[SECURITY ALERT] DIVERGÊNCIA: Payload(${payloadEntityId}) vs DB(${dbEntityId})`);
-    throw new Error("INVALID_PAYLOAD: Divergência de identidade no payload.");
+    debugLog(`[validateVisitOwnership]  DIVERGÊNCIA: Payload(${payloadEntityId}) vs DB(${dbEntityId})`);
+    throw new Error("[validateVisitOwnership] INVALID_PAYLOAD: Divergência de identidade no payload.");
   }
 }
 
@@ -136,10 +138,12 @@ export async function validateOfferIntegrity(
   }
 
   // 2. Validação de Sessão (Upstream Token)
+  const now = new Date().toISOString();
   const { data: session, error: sessError } = await supabase
     .from('session_tokens')
     .select('sbx_access_token, environment')
     .eq('session_token', auth.session_token)
+    .gt('expires_at', now)
     .single();
 
   if (sessError || !session?.sbx_access_token) {
@@ -152,10 +156,23 @@ export async function validateOfferIntegrity(
     ? "https://offer-query.superbid.net" 
     : "https://offer-query.stage.superbid.net";
 
-  // 4. Construção da URL (Sintaxe idêntica ao sbx-offer funcional)
-  // Utilizamos colchetes brutos [ ] pois o parser da Superbid exige isso para os arrays
-  const cleanOfferId = String(offerId).replace(/[^0-9]/g, '');
-  const apiUrl = `${offerBaseUrl}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${cleanOfferId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
+    // 4. Construção da URL (Sintaxe idêntica ao sbx-offer funcional)
+    // Utilizamos colchetes brutos [ ] pois o parser da Superbid exige isso para os arrays
+    const cleanOfferId = String(offerId).replace(/[^0-9]/g, '');
+    const params = new URLSearchParams({
+      portalId: "[2,15]",
+      locale: "pt_BR",
+      timeZoneId: "America/Sao_Paulo",
+      searchType: "opened",
+      filter: `id:[${cleanOfferId}]`,
+      pageNumber: "1",
+      pageSize: "15",
+      orderBy: "price:desc",
+      requestOrigin: "marketplace",
+      preOrderBy: "orderByFirstOpenedOffersAndSecondHasPhoto"
+    });
+
+    const apiUrl = `${offerBaseUrl}/offers/?${params.toString()}`;
 
   // 5. Execução (WAF Bypass Headers)
   const response = await fetch(apiUrl, {
@@ -181,8 +198,8 @@ export async function validateOfferIntegrity(
   const offer = apiData.offers?.[0];
   
   if (!offer) {
-    debugLog(`[GATEKEEPER-DEBUG] Lote ${cleanOfferId} não retornado pela API.`);
-    throw new Error("OFFER_NOT_FOUND: API retornou vazio.");
+    debugLog(`[validateOfferIntegrity] Lote ${cleanOfferId} não retornado pela API.`);
+    throw new Error("[validateOfferIntegrity] OFFER_NOT_FOUND: API retornou vazio.");
   }
 
   const offerResult = {
@@ -197,14 +214,14 @@ export async function validateOfferIntegrity(
       offer_status: offer.offerStatus || "",
       sale_status: offer.saleStatus || "",
       end_date: offer.endDate || "",
-      photos: offer.product?.galleryJson?.map((p: any) => ({
+      photos: (Array.isArray(offer.product?.galleryJson) ? offer.product.galleryJson : []).map((p: any) => ({
         highlight: p.highlight || false,
         link: p.link,
         thumbnail: p.thumbnailUrl,
         file_name: p.originalFileName,
-        type: p.type || "photo",
+        type: p.type,
         content_type: p.contentType || "image/jpeg"
-      })) || []
+      }))
     },
     manager: {
       manager_id: offer.manager?.id || 0,
@@ -229,5 +246,5 @@ export async function validateOfferIntegrity(
   return offerResult;
   
   // 8. Log de Auditoria
-  debugLog(`[GATEKEEPER-DEBUG] Sucesso. Lote ${cleanOfferId} encontrado. Status: ${offer.offerStatus}`);
+  debugLog(`[validateOfferIntegrity] Sucesso. Lote ${cleanOfferId} encontrado. Status: ${offer.offerStatus}`);
 }

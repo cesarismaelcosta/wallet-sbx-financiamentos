@@ -58,7 +58,6 @@ export const autenticateWalletsbX = async (
             // Armazena informações críticas de sessão no localStorage para uso do Gateway e Guards
             // Tokens próprio e sbx_access_token são armazenados para chamadas subsequentes
             localStorage.setItem('session_token', data.session_token);
-            localStorage.setItem('sbx_access_token', data.sbx_access_token);
             // Persiste o Delta para uso dos Guards (financiamentos.lazy, etc)
             localStorage.setItem('time_delta', timeDelta.toString());
             // Persiste o limite de validade absoluta (já com margem T-15m)
@@ -72,9 +71,8 @@ export const autenticateWalletsbX = async (
 
         return { 
           success: true, 
-          session_token: data.session_token, // JWT Próprio (Cofre)
-          sbx_access_token: data.sbx_access_token,
-          userId: data.user_id       // Identificador público do usuário
+          session_token: data.session_token,  // JWT Próprio (Cofre)
+          userId: data.user_id                // Identificador público do usuário
         };
       } else {
         console.error("Proxy validado (200), mas sem token na resposta:", data);

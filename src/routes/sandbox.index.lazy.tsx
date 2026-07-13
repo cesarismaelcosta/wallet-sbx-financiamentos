@@ -94,7 +94,6 @@ export function SandboxHome() {
         try {
             if ('isDirect' in config && config.isDirect) {
                 // [DELEGAÇÃO DIRETA]: O Orchestrator não deve validar offer_id aqui
-                const sbxAcessToken = localStorage.getItem('sbx_access_token') || "";
                 const sessionToken = localStorage.getItem('session_token') || "";
                 const ambiente = localStorage.getItem('sbx_environment') || "production";
                 

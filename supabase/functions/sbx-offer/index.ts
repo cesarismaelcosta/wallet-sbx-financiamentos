@@ -208,13 +208,13 @@ serve(async (req) => {
         // Inclusão condicional
         ...(vehicleData && { vehicle_details: vehicleData }),
         photos: rawOffer.product?.galleryJson?.map((p: any) => ({
-            highlight: p.highlight || false,
-            link: p.link,
-            thumbnail: p.thumbnailUrl,
-            file_name: p.originalFileName,
-            type: p.type || "photo",
-            content_type: p.contentType || "image/jpeg"
-          })) || []
+          highlight: p.highlight || false,
+          link: p.link,
+          thumbnail: p.thumbnailUrl,
+          file_name: p.originalFileName,
+          type: p.type || "photo",
+          content_type: p.contentType || "image/jpeg"
+        })) || []
       },
       manager: {
         manager_id: rawOffer.manager?.id || 0,

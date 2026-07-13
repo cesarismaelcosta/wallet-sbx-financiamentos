@@ -84,7 +84,6 @@ export function CustomLogin() {
 
         // 2. ATUALIZA O STORAGE COM OS TOKENS NOVOS
         // Isso garante que, ao chegar na redirect_uri, o token correto já esteja disponível
-        localStorage.setItem("sbx_access_token", response.sbx_access_token);
         localStorage.setItem("session_token", response.session_token);
 
         // 2. Fluxo de Redirecionamento Manual
@@ -98,8 +97,7 @@ export function CustomLogin() {
           
           // [AJUSTE PONTUAL]: Trocamos o valor antigo pelo novo.
           // O .set() substitui automaticamente se a chave já existir.
-          urlObject.searchParams.set("sbx_access_token", response.sbx_access_token);
-          urlObject.searchParams.set("session_token", response.session_token);
+          urlObject.searchParams.set("auth_token", response.sbx_access_token);
           
           const finalUri = redirectUri.startsWith('http') 
             ? urlObject.toString() 

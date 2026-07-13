@@ -57,7 +57,7 @@ export async function validateRequest(req: Request) {
     const now = new Date().toISOString();
     const { data, error } = await supabaseAdmin
       .from('session_tokens')
-      .select('*')
+      .select('session_token, user_id, environment, expires_at')
       .eq('session_token', sessionId)
       .gt('expires_at', now)
       .single();

@@ -3,7 +3,6 @@
  * @description Contexto de autenticação exclusivo para o Sandbox/Financial Hub.
  * Lê, gerencia e propaga o session_token e user_id para toda a aplicação.
  * * [ARQUITETURA DE SEGURANÇA - BFF & JWT PRÓPRIO]:
- * - O token real da Superbid (sbx_access_token) fica retido no backend (Edge Function).
  * - O frontend opera exclusivamente com um JWT Próprio (session_token), assinado pelo 
  * nosso backend. Este JWT próprio embute a validade sincronizada com a Superbid.
  * * [RESPONSABILIDADES]:
