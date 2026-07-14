@@ -47,10 +47,13 @@ export function OfferDetailsNewSandbox() {
   // forçamos o contrato da interface. O 'sessionToken' extraído aqui é, arquiteturalmente,
   // o 'session_sessionToken' (JWT interno assinado pela nossa Edge Function).
   const { sessionToken } = useFinancialAuth();
-  const { offer: offerParam } = Route.useSearch();
-  const navigate = Route.useNavigate(); // Adicione isso
   const [fotoAtiva, setFotoAtiva] = useState(0);
+    const navigate = Route.useNavigate(); 
+  const { offer: offerParam } = Route.useSearch();
   const DEFAULT_OFFER = "4753216";
+
+  // Define o ID de forma estática, sem forçar navegação
+  const offerId = offerParam || DEFAULT_OFFER;
 
   // 1. FORÇAR URL: Se não houver offer, redireciona para a mesma rota com o ID padrão
   useEffect(() => {
@@ -62,8 +65,6 @@ export function OfferDetailsNewSandbox() {
       });
     }
   }, [offerParam, navigate]);
-
-  const offerId = offerParam || DEFAULT_OFFER;
 
   // =========================================================================
   // [STATE]: Gerenciamento de Estado UI e Dados
@@ -91,8 +92,6 @@ export function OfferDetailsNewSandbox() {
       }
 
       setLoading(true);
-      
-      console.log("sessionToken:", sessionToken)
 
       try {
         // 3. [ORQUESTRAÇÃO SEQUENCIAL]

@@ -97,7 +97,7 @@ export function CustomLogin() {
           
           // [AJUSTE PONTUAL]: Trocamos o valor antigo pelo novo.
           // O .set() substitui automaticamente se a chave já existir.
-          urlObject.searchParams.set("auth_token", response.sbx_access_token);
+          urlObject.searchParams.set("auth_token", response.session_token);
           
           const finalUri = redirectUri.startsWith('http') 
             ? urlObject.toString() 
