@@ -1,12 +1,14 @@
 /**
  * @fileoverview Edge Function: sbx-loader (Unified Gateway Initializer)
  * 
- * * =========================================================================
- * [ARQUITETURA DE GATEWAY UNIFICADO]
  * =========================================================================
- * Esta função atua como um Backend For Frontend (BFF) atômico, consolidando a 
- * validação de autenticação (Auth Exchange), a hidratação de perfil do usuário 
- * e os detalhes da oferta (via catálogo Superbid) em um único ciclo de request-response.
+ * [ARQUITETURA DE GATEWAY UNIFICADO & AUTH EXCHANGE]
+ * =========================================================================
+ * Atua como um Backend For Frontend (BFF). Suas responsabilidades são:
+ * 1. Auth Exchange: Receber um token bruto da Superbid, validá-lo e trocá-lo 
+ *    por um JWT interno (ou validar um JWT interno já existente).
+ * 2. BFF Hydration: Buscar dados do usuário, evento e oferta nas APIs da 
+ *    Superbid (upstream) e consolidar em um payload único e limpo para o Front-end.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -17,12 +19,14 @@ import { BFFUserProfile, BFFOfferDetails } from "../_shared/types.ts";
 
 const DEBUG_MODE = true;
 
+/**
+ * Função utilitária para rastreamento de execução no painel do Supabase.
+ */
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
     console.log(`[SBX-LOADER] ${message}`, data ? JSON.stringify(data) : "");
   }
 };
-
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,63 +40,88 @@ const ENV_URLS = {
 };
 
 serve(async (req) => {
+  // Tratamento padrão de preflight (CORS) para requisições do navegador
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
     const { auth_token, environment, offer_id } = await req.json();
 
-    if (!auth_token || !environment) throw new Error("BAD_REQUEST: Credenciais ou ambiente ausentes.");
+    if (!auth_token || !environment) {
+        throw new Error("BAD_REQUEST: Credenciais ou ambiente ausentes.");
+    }
     const urls = ENV_URLS[environment as keyof typeof ENV_URLS];
 
-    // A partir daqui, declaramos a variável que vai segurar a chave real da Superbid.
-    // Por padrão, assumimos que o token que chegou (auth_token) já é o da Superbid (fluxo vindo da sbX).
-    let sbx_access_token = auth_token;
-
     // =========================================================================
-    // [SECURITY]: STRICT JWT VALIDATOR
+    // DUAL-MODE AUTH
     // =========================================================================
-    const parts = auth_token.split('.');
-    
-    // Se não tiver 3 partes, não aceite. É um token corrompido ou inválido.
-    if (parts.length !== 3) {
-      console.error("[SECURITY ALERT]: Token malformado recebido:", auth_token);
-      throw new Error("SESSION_UPSTREAM_EXPIRED: Formato de token inválido (Não é um JWT).");
-    }
+    // O sistema lida com dois cenários:
+    // A) O usuário veio da sbX e recebemos o access_token da sbX.
+    // B) O usuário já passou pelo app ou logou aqui e trouxe o nosso JWT (Sessão interna).
+    let sbx_access_token = auth_token;                  // Assumimos inicialmente que é o token bruto
+    const isJwt = auth_token.split('.').length === 3;   // Identificador simples de formato JWT
+    let currentSessionToken = null;
 
-    // Agora, se chegou aqui, é garantido que é um JWT.
-    // Se a assinatura estiver errada, o 'verify' vai estourar na sua cara.
-    debugLog("PASSO 1: JWT detectado. Validando assinatura...");
-    
-    try {
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL')!, 
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    if (isJwt) {
+      debugLog("PASSO 1: JWT detectado. Validando assinatura local...");
+      try {
+        // Valida criptograficamente se fomos nós que emitimos este JWT
         const jwtSecret = Deno.env.get("JWT_SECRET")!;
-        const key = await crypto.subtle.importKey(
-          "raw", 
-          new TextEncoder().encode(jwtSecret), 
-          { name: "HMAC", hash: "SHA-256" }, 
-          false, 
-          ["verify"]
-        );
-
+        const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
         const payload = await verify(auth_token, key);
-        const sessionUUID = payload.jti as string;
-        
-        // ... resto da sua lógica de banco de dados
-    } catch (err: any) {
-        throw new Error(`SESSION_UPSTREAM_EXPIRED: Assinatura inválida. Detalhe: ${err.message}`);
+        currentSessionToken = payload.jti as string; // Extrai o UUID da sessão
+
+        // Busca o acess_token real da sbX armazenado no nosso banco de dados
+        const now = new Date().toISOString(); 
+        const { data: sessionData, error: sessionError } = await supabaseAdmin
+          .from('session_tokens') 
+          .select('sbx_access_token')
+          .eq('session_token', currentSessionToken) 
+          .gt('expires_at', now) // Garante que a sessão ainda está válida
+          .single();
+
+        if (sessionError || !sessionData) {
+            throw new Error("UUID de sessão não encontrado ou expirado no banco.");
+        }
+
+        // Substitui o nosso JWT pelo token real da Superbid para fazer o fetch na API deles
+        sbx_access_token = sessionData.sbx_access_token;
+        debugLog("PASSO 2: JWT Traduzido. Token upstream recuperado do banco de dados.");
+
+      } catch (err: any) {
+        throw new Error(`SESSION_UPSTREAM_EXPIRED: Assinatura JWT inválida ou sessão inexistente. Detalhe: ${err.message}`);
+      }
+    } else {
+      debugLog("PASSO 1: Token Bruto (Raw) detectado. Iniciando Handshake direto com a SBX...");
+      // Se caiu aqui, sbx_access_token mantém o valor original enviado pelo Front-end
     }
     
     // =========================================================================
-    // 1. VALIDAÇÃO UPSTREAM (Perfil do Usuário)
+    // VALIDAÇÃO UPSTREAM COM LEITURA REAL DE ERRO
     // =========================================================================
-    debugLog("sbx_access_token", sbx_access_token);
-
+    // Usamos o token (seja o que veio do banco, seja o enviado em auth_token) para validar na sbX
     const userRes = await fetch(`${urls.api}/account/v2/user/me`, {
       method: "GET",
       headers: { "Authorization": `Bearer ${sbx_access_token}` }
     });
     
-    if (userRes.status === 401) throw new Error("SESSION_UPSTREAM_EXPIRED: O token real da Superbid expirou.");
-    if (!userRes.ok) throw new Error(`UPSTREAM_USER_ERROR (${userRes.status}): Falha na API de Usuário.`);
+    // Se a sbX rejeitar, nós *lemos o corpo da resposta* para saber o motivo exato.
+    // Isso evita o erro cego "500" e facilita o debug de tokens expirados no servidor deles.
+    if (!userRes.ok) {
+        const errorBody = await userRes.text();
+        debugLog(`[FALHA SUPERBID] Status: ${userRes.status} | Body:`, errorBody);
+        
+        if (userRes.status === 401) {
+            throw new Error("SESSION_UPSTREAM_EXPIRED: O token real da Superbid expirou na origem.");
+        }
+        
+        // Repassa a string exata do erro da Superbid para os nossos logs/frontend
+        throw new Error(`UPSTREAM_USER_ERROR (${userRes.status}): ${errorBody}`);
+    }
     
     const userData = await userRes.json();
     const account = userData.userAccounts?.[0];
@@ -102,11 +131,12 @@ serve(async (req) => {
     // =========================================================================
     // 2. HIDRATAÇÃO DE PERFIL (BFF Mapping)
     // =========================================================================
+    // Limpa a estrutura complexa da Superbid para o formato enxuto que o Front-end precisa
     const userProfile: BFFUserProfile = {
       entity_id: userId,
       name: account?.basicInfo?.fullName || "N/A",
       document: account?.documents?.find((doc: any) => doc.typeName === "cpf")?.number || "",
-            document_rg: account?.documents?.find((doc: any) => doc.typeName === 'rg')?.number || "",
+      document_rg: account?.documents?.find((doc: any) => doc.typeName === 'rg')?.number || "",
       email: account?.basicInfo?.email?.address || "",
       phone: account?.phones?.find((p: any) => p.type === 3)?.fullPhoneNumber || "",
       birth_date: account?.birthDate?.split('T')[0] || "",
@@ -132,11 +162,7 @@ serve(async (req) => {
     let offerPayload: BFFOfferDetails | null = null;
     
     if (offer_id) {
-       // Sanitiza o ID
        const cleanOfferId = String(offer_id).replace(/[^0-9]/g, '');
-       debugLog(`Buscando oferta sanitizada: ${cleanOfferId}`);
-
-       // [AQUI ESTAVA O ERRO 500]: Copiando a URL idêntica do sbx-offer que funciona
        const offerUrl = `${urls.offer}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${cleanOfferId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
 
        const offerRes = await fetch(offerUrl, {
@@ -145,26 +171,20 @@ serve(async (req) => {
            "Authorization": `Bearer ${sbx_access_token}`,
            "Accept": "application/json",
            "Content-Type": "application/json",
-           // Copiando os headers de segurança do sbx-offer
            "Origin": "https://www.superbid.net",
            "Referer": "https://www.superbid.net/"
          }
        });
 
-       if (offerRes.status === 401) throw new Error("SESSION_UPSTREAM_EXPIRED: O token real da Superbid expirou.");
-       if (!offerRes.ok) {
-           const errText = await offerRes.text();
-           throw new Error(`UPSTREAM_OFFER_ERROR (${offerRes.status}): ${errText}`);
-       }
+       if (offerRes.status === 401) throw new Error("SESSION_UPSTREAM_EXPIRED: Token Superbid expirado durante busca de ofertas.");
+       if (!offerRes.ok) throw new Error(`UPSTREAM_OFFER_ERROR (${offerRes.status}): ${await offerRes.text()}`);
        
        const offerData = await offerRes.json();
        const rawOffer = offerData.offers?.[0];
        
-       if (!rawOffer) throw new Error("OFFER_NOT_FOUND: Oferta solicitada não localizada.");
+       if (!rawOffer) throw new Error("OFFER_NOT_FOUND: Oferta não localizada no catálogo.");
 
-       // Clonando a lógica da URL de eventos também
        const eventUrl = `${urls.event}/events/v2/?portalId=[2,15]&locale=pt_BR&timeZoneId=America%2FSao_Paulo&filter=id:${rawOffer.auction?.id || ""}&pageSize=1`;
-
        const eventRes = await fetch(eventUrl, {
           method: "GET",
           headers: { 
@@ -177,26 +197,25 @@ serve(async (req) => {
        });
        
        const eventData = eventRes.ok ? (await eventRes.json()).events?.[0] : {};
+       
+       // Tratamento específico para veículos (identifica atributos extras)
+       const productTypeId = rawOffer.product?.productType?.id;
+       const isVehicleCategory = [10, 11].includes(productTypeId);
+       let vehicleData: any = undefined;
 
-      // Identifica a categoria e cria objetos especializados se for o caso
-      const productTypeId = rawOffer.product?.productType?.id;
-      const isVehicleCategory = [10, 11].includes(productTypeId);
+       if (isVehicleCategory) {
+           const groups = rawOffer.product?.template?.groups || [];
+           const getGroupProp = (groupId: string, propId: string) => 
+               groups.find((g: any) => g.id === groupId)?.properties.find((p: any) => p.id === propId)?.value;
+           
+           vehicleData = {
+               manufacture_year: Number(getGroupProp('identificacao', 'anofabricacao')) || 0,
+               model_year: Number(getGroupProp('identificacao', 'anomodelo')) || 0,
+               fipe_code: getGroupProp('financiamento', 'codigofipe') || "",
+           };
+       }
 
-      // Extrai apenas se for veículo
-      let vehicleData: Vehicle | undefined;
-
-      if (isVehicleCategory) {
-          const groups = rawOffer.product?.template?.groups || [];
-          const getGroupProp = (groupId: string, propId: string) => 
-              groups.find((g: any) => g.id === groupId)?.properties.find((p: any) => p.id === propId)?.value;
-
-          vehicleData = {
-              manufacture_year: Number(getGroupProp('identificacao', 'anofabricacao')) || 0,
-              model_year: Number(getGroupProp('identificacao', 'anomodelo')) || 0,
-              fipe_code: getGroupProp('financiamento', 'codigofipe') || "",
-          };
-      }
-
+       // Montagem final do payload da oferta
        offerPayload = {
          offer: {
            offer_id: String(rawOffer.id),
@@ -217,8 +236,7 @@ serve(async (req) => {
              state: rawOffer.product?.location?.state || "Não informado",
              country: rawOffer.product?.location?.country || "Brasil"
            },           
-           // Inclusão condicional
-           ...(vehicleData && { vehicle_details: vehicleData }),           
+           ...(vehicleData && { vehicle_details: vehicleData }), // Faz merge apenas se for veículo          
            photos: rawOffer.product?.galleryJson?.map((p: any) => ({
              highlight: p.highlight || false,
              link: p.link,
@@ -253,52 +271,54 @@ serve(async (req) => {
     }
 
     // =========================================================================
-    // 4. PERSISTÊNCIA E SEGURANÇA
+    // PERSISTÊNCIA INTELIGENTE
     // =========================================================================
-    const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const sessionToken = crypto.randomUUID();
     const agora = new Date()
-    const expiraEmSegundos = 14400; 
-    const margemSegurancaMs = 15 * 60 * 1000;
-    const nossaExpiracao = new Date(agora.getTime() + (expiraEmSegundos * 1000) - margemSegurancaMs)
+    const expiraEmSegundos = 14400; // 4 horas
+    const nossaExpiracao = new Date(agora.getTime() + (expiraEmSegundos * 1000) - (15 * 60 * 1000))
 
-    const infra = await captureInfrastructure(req);
-    const { insertData: sessionData, insertError: insertError } = await supabaseAdmin
-      .from('session_tokens')
-      .insert({ 
-        session_token: sessionToken, 
-        user_id: userId, 
-        sbx_access_token: sbx_access_token, 
-        environment, 
-        expires_at: nossaExpiracao.toISOString(),
-        ip_address: infra.ip_address,
-        country: infra.country,
-        state: infra.state,
-        city: infra.city,
-        user_agent: infra.user_agent,
-        device_type: infra.device_type,
-        operating_system: infra.operating_system,
-        origin_details: infra.metadata
-      })
-      .select();
-      
-    if (insertError) {
-        debugLog("[CRITICAL] Falha catastrófica ao persistir sessão:", {
-            error: insertError,
-            context: { sessionToken, userId }
-        });
+    let finalJwt = auth_token; // Se já chegou como JWT, mantemos o mesmo
+
+    // Só gravamos no banco e emitimos um novo JWT se for um Handshake inicial (acess token da sbX)
+    // Isso evita o banco de dados encher de sessões duplicadas a cada refresh da página.
+    if (!isJwt) {
+        debugLog("Token inicial verificado com sucesso. Persistindo nova sessão no banco...");
+        const newSessionToken = crypto.randomUUID();
+        const infra = await captureInfrastructure(req);
         
-        // Interrompe imediatamente. Não deixe a função prosseguir e retornar sucesso.
-        throw new Error(`[sbx-loader] DB_INSERT_FAILURE: ${insertError.message}`);
+        const { insertError } = await supabaseAdmin
+          .from('session_tokens')
+          .insert({ 
+            session_token: newSessionToken, 
+            user_id: userId, 
+            sbx_access_token: sbx_access_token, // Guardamos a chave de terceiros aqui
+            environment, 
+            expires_at: nossaExpiracao.toISOString(),
+            ip_address: infra.ip_address,
+            origin_details: infra.metadata
+          });
+          
+        if (insertError) {
+            throw new Error(`DB_INSERT_FAILURE: Falha catastrófica ao persistir sessão - ${insertError.message}`);
+        }
+
+        // Assina criptograficamente a nova sessão (O 'crachá' do nosso sistema)
+        const jwtSecret = Deno.env.get("JWT_SECRET")!;
+        const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+        
+        finalJwt = await create(
+            { alg: "HS256", typ: "JWT" }, 
+            { sub: userId, jti: newSessionToken, exp: getNumericDate(nossaExpiracao.getTime() / 1000) }, 
+            key
+        );
+    } else {
+        debugLog("Sessão já existente. Banco de dados poupado. Reutilizando JWT recebido.");
     }
 
-    const jwtSecret = Deno.env.get("JWT_SECRET")!;
-    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-    const jwt = await create({ alg: "HS256", typ: "JWT" }, { sub: userId, jti: sessionToken, exp: getNumericDate(nossaExpiracao.getTime() / 1000) }, key);
-
+    // Entrega a resposta de sucesso com o Token seguro e o payload hidratado
     return new Response(JSON.stringify({
       success: true,
-      session_token: jwt,
+      session_token: finalJwt,
       user_id: userId,
       expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
       server_now_ms: agora.getTime(),
@@ -310,22 +330,32 @@ serve(async (req) => {
         headers: { 
             ...corsHeaders, 
             'Content-Type': 'application/json',
-            'Set-Cookie': `session_token=${jwt}; Path=/; HttpOnly; SameSite=Lax` 
+            // Define cookie seguro para mitigar XSS (opcional, dependendo de como o front lê)
+            'Set-Cookie': `session_token=${finalJwt}; Path=/; HttpOnly; SameSite=Lax` 
         } 
     });
 
   } catch (err: any) {
     // =========================================================================
-    // DISPATCHER DE ERROS SEMÂNTICOS
+    // DISPATCHER DE ERROS SEGURO
     // =========================================================================
     console.error("[sbx-loader] Erro capturado:", err.message);
     
-    let status = 500;
-    if (err.message.includes("SESSION_UPSTREAM_EXPIRED")) status = 401;
-    else if (err.message.includes("BAD_REQUEST")) status = 400;
-    else if (err.message.includes("OFFER_NOT_FOUND")) status = 404;
-    else if (err.message.includes("UPSTREAM")) status = 502;
+    // Status HTTP semânticos (Evita retornar 500 para não estourar proxy da Cloudflare)
+    let status = 400; 
+    
+    if (err.message.includes("SESSION_UPSTREAM_EXPIRED")) {
+        status = 401; // Front-end deve forçar logout e redirecionar para tela de login
+    } else if (err.message.includes("OFFER_NOT_FOUND")) {
+        status = 404; // Front-end deve exibir "Oferta indisponível"
+    } else if (err.message.includes("UPSTREAM_USER_ERROR") || err.message.includes("UPSTREAM_OFFER_ERROR")) {
+        status = 422; // Falha na Superbid. Mudado de 502 para 422 para o frontend conseguir ler o JSON.
+    }
 
-    return new Response(JSON.stringify({ success: false, message: err.message }), { status, headers: corsHeaders });
+    // Retorna a mensagem limpa em JSON (impede que o app crashe lendo HTML de erro)
+    return new Response(
+        JSON.stringify({ success: false, message: err.message }), 
+        { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });
