@@ -252,8 +252,37 @@ export const orchestrateNavigation = async (
     } else {
       console.warn("⚠️ [useOrchestrator.ts | orchestrateNavigation] Backend processou o payload, mas reteve a URL de destino.");
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error("❌ [useOrchestrator.ts | orchestrateNavigation] Aborto crítico no fluxo de orquestração:", err);
+    
+    // =========================================================================
+    // RESGATE ATIVO (POST): Tratamento de Erros de Infraestrutura e Segurança
+    // Se o backend devolveu uma rota de fuga (fallback_url), nós acatamos imediatamente.
+    // =========================================================================
+    if (err.fallback_url) {
+       console.warn(`[Orchestrator] Forçando redirecionamento de erro para: ${err.fallback_url}`);
+       
+       // Cria a URL baseada no fallback (ex: /accounts/signin?redirect_uri=...)
+       const urlObj = new URL(err.fallback_url, window.location.origin);
+       
+       // Injeta a mensagem do backend na URL para a próxima tela exibir (URL as Truth)
+       if (err.message) {
+         urlObj.searchParams.set("alert_msg", err.message);
+       }
+       if (err.code) {
+         urlObj.searchParams.set("alert_type", err.code);
+       }
+
+       // Redirecionamento duro para matar a tela atual e ir pro fallback
+       window.location.replace(urlObj.toString());
+       
+       // Retornamos para abortar a função e não disparar o 'throw',
+       // evitando que a UI atual mostre erro enquanto a página descarrega.
+       return; 
+    }
+
+    // Se for um erro de negócio que não exige mudar de página, 
+    // joga para o componente que chamou a função (para ele dar um toast, por exemplo).
     throw err;
   }
 };

@@ -348,22 +348,6 @@ serve(async (req: Request) => {
       });
   }
 
-      // Limpeza da mensagem: remove as tags de roteamento antes de enviar ao cliente
-      const cleanMessage = err.message
-          .replace(/UNAUTHORIZED:|SESSION_EXPIRED:|INTERNAL_ERROR:|FORBIDDEN:/g, '')
-          .trim();
-
-      return new Response(JSON.stringify({ 
-          success: false,
-          code: errorCode,
-          message: cleanMessage,
-          fallback_url: fallbackUrl 
-      }), { 
-          status: errorCode === "FORBIDDEN" ? 403 : 401, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      });
-  }
-
   // =========================================================================
   // PIPELINE DE LEITURA (GET): Hidratação do Front-End
   // =========================================================================

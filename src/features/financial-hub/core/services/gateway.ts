@@ -159,22 +159,33 @@ export async function callSimulation(
     let errorData;
     
     try {
-      // Tenta ler o JSON real que o orquestrador enviou
+      // 1. Lê o JSON original, rico, feito pelo Orquestrador/Gatekeeper
       errorData = await response.json();
     } catch (e) {
-      // Só entra aqui se o backend nem JSON mandou (ex: erro de servidor 500 puro)
+      // 2. Failsafe: Se o backend morreu feio e não devolveu JSON (ex: erro 502 de Nginx)
       throw {
         success: false,
-        code: "GATEWAY_ERROR",
-        message: `Erro ${response.status}: Falha ao processar resposta`,
+        code: "NETWORK_ERROR",
+        message: `Falha de rede ou servidor inacessível (Status: ${response.status})`,
         fallback_url: "/"
       };
     }
 
-    // A MÁGICA: Joga o erro real (o que o orquestrador mandou) direto para o catch do front
-    throw errorData; 
+    // 3. TRANSPARÊNCIA: Joga o erro exatamente como o backend mandou.
+    // Isso garante que o OrchestratorWrapper leia o fallback_url e o code ('SESSION_EXPIRED') nativamente.
+    // O fallback para GATEWAY_ERROR só ocorre se o backend enviar um JSON malformado sem 'code'.
+    // Quando o próprio Deno/Supabase lança um erro não-tratado, o padrão universal da plataforma deles é devolver um JSON assim:
+    // {
+    //  "error": "Internal Server Error" 
+    // }
+    throw {
+       ...errorData, // Espalha as propriedades nativas (code, message, fallback_url)
+       status: response.status, // Anexa o HTTP status para caso o front precise (ex: 401)
+       code: errorData.code || "GATEWAY_ERROR", 
+       message: errorData.message || errorData.error || "Erro desconhecido ao chamar orquestrador",
+       fallback_url: errorData.fallback_url || "/" // Proteção final de rota
+    };
   }
 
   return response.json();
-  
 }
