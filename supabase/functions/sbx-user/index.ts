@@ -44,6 +44,9 @@ serve(async (req) => {
     const env = req.headers.get("x-sbx-env") || "stage";
     const baseUrl = env === "production" ? "https://api.s4bdigital.net" : "https://stgapi.s4bdigital.net";
 
+    debugLog("Ambiente sendo chamado:", env)
+    debugLog("URL sendo chamada:", baseUrl)
+
     // Validação de presença do token de entrada
     if (!sessionToken) {
       throw new Error("AUTH_REQUIRED: Cabeçalho x-session-token não fornecido.");

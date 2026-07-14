@@ -59,7 +59,7 @@ export function SandboxLayout() {
     }
 
     console.log("sessionToken:", sessionToken)
-    
+
     let isMounted = true;
     async function validate() {
       try {
@@ -129,6 +129,7 @@ export function SandboxLayout() {
 
           <button
             onClick={() => {
+               localStorage.setItem("sbx_environment", envPreLogin);
                navigate({ 
                  to: '/accounts/signin', 
                  search: { 
