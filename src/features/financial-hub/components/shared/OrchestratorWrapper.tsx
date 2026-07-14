@@ -50,7 +50,6 @@ export function OrchestratorWrapper({ visitId, visitUpdateId, children }: Orches
   const payload = useMemo(() => {
     // Se houver erro, retornamos o objeto de erro
     if (error) {
-      console.log("DEBUG COMPLETO DO ERRO QUE CHEGOU NO WRAPPER:", JSON.stringify(error, null, 2));
       return {
         success: false,
         message: typeof error === 'string' ? error : "Erro desconhecido",

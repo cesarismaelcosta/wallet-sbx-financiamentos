@@ -77,8 +77,6 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
   return (
     <OrchestratorWrapper visitId={(search as any).visit_id} visitUpdateId={(search as any).visit_update_id}>
       {(simData) => {
-        console.log("DEBUG: O que o Wrapper está entregando:", simData); // Adicione isso
-
         // Se o backend nos enviou uma resposta com success: false,
         // renderizamos o componente de erro com countdown
         if (simData?.success === false) {
@@ -104,8 +102,6 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
 
           // Se o cara mudou a URL na mão para tentar ver outra jornada...
           if (currentPath !== intendedPath && intendedPath !== "") {
-            console.warn(`[sbX Guard] Rota inválida para esta visita. Redirecionando para: ${intendedPath}`);
-
             // Corrige o caminho substituindo o histórico para limpar a trapaça do botão Voltar
             window.location.replace(`${simData.target_url}${window.location.search}`);
 

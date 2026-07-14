@@ -39,7 +39,6 @@ export function FinancialHubDataInjector({ children}: { children: React.ReactNod
     async function hydrate() {
       try {
         hasInitialized.current = true; // Marca como iniciado antes do fetch
-        console.log("cahamando orchestrator GET em FinancialDataHubInjector:", visitId)
         const data = await callOrchestrator({ visit_id: visitId }, "GET");
 
         // Hidratação única
@@ -56,7 +55,6 @@ export function FinancialHubDataInjector({ children}: { children: React.ReactNod
         }, 50);
 
       } catch (error: any) { // Adicione o : any aqui para acessar as propriedades
-        console.error("[FinancialHubDataInjector] Falha na hidratação:", error);
         hasInitialized.current = false; 
 
         // Envia o erro para o estado global. 

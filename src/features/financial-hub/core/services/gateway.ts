@@ -68,8 +68,6 @@ export async function callOrchestrator(
     },
   };
 
-  console.log(`[gateway.ts | callOrchestrator] Preparando chamada para ${method} ${url} com payload:`, payload);
-
   if (method === "POST") options.body = JSON.stringify(payload);
 
   // CONSTRUÇÃO DA URL:
@@ -102,8 +100,6 @@ export async function callOrchestrator(
       details: "O servidor retornou um erro não estruturado" 
     }));
 
-    console.error(`[gateway.ts | callOrchestrator] Erro HTTP ${response.status}:`, errorData);
-
     // NÃO crie uma instância de Error. 
     // Lance um objeto simples. Isso impede que qualquer camada 
     // superior "limpe" os dados ao tentar acessar .message
@@ -133,8 +129,6 @@ export async function callSimulation(
 
   const method = "POST";
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-gateway`;
-
-  console.log(`[gateway.ts | callSimulation] Preparando chamada para ${method} ${url} com payload:`, payload);
 
   // CAPTURA DO TOKEN PARA A TRAVA DE SEGURANÇA
   const sessionToken = getSessionToken();
