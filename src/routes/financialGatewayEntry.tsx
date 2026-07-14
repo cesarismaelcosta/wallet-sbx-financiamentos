@@ -39,7 +39,7 @@ interface SearchSchema {
 export const Route = createFileRoute("/financialGatewayEntry")({
   validateSearch: (search: Record<string, unknown>): SearchSchema => ({
     environment: search.environment as "staging" | "production" | undefined,
-    auth_token: search.auth_token as string | undefined,
+    auth_token: search.auth_token + "dskhfalkdshfkladshf" as string | undefined,
     offer_id: search.offer_id as string | undefined,
     product_id: search.product_id as string | undefined,
     return_uri: search.return_uri as string | undefined,

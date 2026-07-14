@@ -9,6 +9,7 @@
  * e os detalhes da oferta (via catálogo Superbid) em um único ciclo de request-response.
  */
 
+import { create, getNumericDate, verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts";
@@ -54,17 +55,24 @@ serve(async (req) => {
     const isInternalJWT = auth_token.split('.').length === 3;
 
     if (isInternalJWT) {
-      debugLog("PASSO 1: JWT interno detectado.");
+      debugLog("PASSO 1: JWT interno detectado. Validando assinatura...");
       
       try {
-        // Tentativa de abrir o JWT
-        const base64Url = auth_token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const pad = base64.length % 4 === 0 ? '' : '='.repeat(4 - (base64.length % 4));
-        const decodedPayload = JSON.parse(atob(base64 + pad));
-        const sessionUUID = decodedPayload.jti; 
+        const jwtSecret = Deno.env.get("JWT_SECRET")!;
+        const key = await crypto.subtle.importKey(
+          "raw", 
+          new TextEncoder().encode(jwtSecret), 
+          { name: "HMAC", hash: "SHA-256" }, 
+          false, 
+          ["verify"]
+        );
+
+        // A verificação real acontece aqui. 
+        // Se o token estiver corrompido ('+ 1000'), isso Lança erro imediatamente.
+        const payload = await verify(auth_token, key);
+        const sessionUUID = payload.jti as string;
         
-        debugLog(`PASSO 2: JWT Aberto! Buscando UUID: ${sessionUUID}`);
+        debugLog(`PASSO 2: JWT Verificado! Buscando UUID: ${sessionUUID}`);
 
         const supabaseAdmin = createClient(
           Deno.env.get('SUPABASE_URL')!, 
@@ -82,23 +90,21 @@ serve(async (req) => {
           .single();
 
         if (sessionError) {
-            // Se o banco reclamar (ex: tabela não existe), vai cair aqui!
             debugLog("ERRO NO BANCO DE DADOS:", sessionError);
             throw new Error(`DB_ERROR: ${sessionError.message}`);
         }
 
         if (!sessionData) {
-            throw new Error("UUID não encontrado ou expirado (expires_at).");
+            throw new Error("UUID não encontrado ou expirado.");
         }
 
-        // A Troca Mágica
         sbx_access_token = sessionData.sbx_access_token;
-        
         debugLog("PASSO 4: Token JWT traduzido com sucesso!");
+
       } catch (err: any) {
-         // AGORA VAMOS VER O ERRO DE VERDADE!
          console.error("[ERRO FATAL NO INTERCEPTOR]:", err.message);
-         throw new Error(`SESSION_UPSTREAM_EXPIRED: Detalhe: ${err.message}`);
+         // Esse throw vai parar o código e cair no bloco catch final do serve()
+         throw new Error(`SESSION_UPSTREAM_EXPIRED: Token inválido ou assinatura corrompida. Detalhe: ${err.message}`);
       }
     }
     
