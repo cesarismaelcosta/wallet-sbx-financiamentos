@@ -26,7 +26,7 @@ import { jwtDecode } from "jwt-decode";
 
 const FinanciamentosGuard = () => {
   // [ARQUITETURA]: Apenas o token do app (JWT Próprio) é acessível aqui.
-  const { token, isLoading } = useFinancialAuth();
+  const { sessionToken, isLoading } = useFinancialAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const productConsult = useProductConsult();
@@ -36,7 +36,7 @@ const FinanciamentosGuard = () => {
     if (isLoading) return;
 
     // 1. [BUSINESS LOGIC]: Bloqueio de acesso não autenticado.
-    if (!token && location.pathname !== '/accounts/signin') {
+    if (!sessionToken && location.pathname !== '/accounts/signin') {
       navigate({ 
         to: '/accounts/signin',
         search: { redirect_uri: location.pathname + location.search}
@@ -46,9 +46,9 @@ const FinanciamentosGuard = () => {
 
     // 2. [SECURITY]: Validação Passiva de Expiração (UX Guard)
     // Valida o seu JWT localmente contra a expiração, usando o Clock Drift calculado no login.
-    if (token) {
+    if (sessionToken) {
       try {
-        const decoded = jwtDecode<{ exp?: number }>(token);
+        const decoded = jwtDecode<{ exp?: number }>(sessionToken);
         
         // Resgata o desvio do relógio salvo no momento do login
         const timeDelta = parseInt(localStorage.getItem('time_delta') || '0', 10);
@@ -57,17 +57,17 @@ const FinanciamentosGuard = () => {
         const syncedCurrentTimeInSeconds = Math.floor((Date.now() + timeDelta) / 1000);
 
         if (decoded.exp && decoded.exp < syncedCurrentTimeInSeconds) {
-          console.warn("🚨 [UX Guard] Token expirado localmente. Acionando Amnésia.");
+          console.warn("🚨 [UX Guard] sessionToken expirado localmente. Acionando Amnésia.");
           window.dispatchEvent(new CustomEvent('session_expired'));
           return;
         }
       } catch (error) {
-        console.warn("⚠️ [UX Guard] Token malformado. Expulsando por segurança.");
+        console.warn("⚠️ [UX Guard] sessionToken malformado. Expulsando por segurança.");
         window.dispatchEvent(new CustomEvent('session_expired'));
         return;
       }
     }
-  }, [token, isLoading, navigate, location.pathname]);
+  }, [sessionToken, isLoading, navigate, location.pathname]);
 
   // [COMPLIANCE]: Fail-safe de segurança durante carregamento
   if (isLoading) {
@@ -81,8 +81,8 @@ const FinanciamentosGuard = () => {
     );
   }
 
-  // [COMPLIANCE]: Fail-safe de segurança caso não haja token
-  if (!token) return null;
+  // [COMPLIANCE]: Fail-safe de segurança caso não haja sessionToken
+  if (!sessionToken) return null;
 
   return (
     <FinancialHubLayout>

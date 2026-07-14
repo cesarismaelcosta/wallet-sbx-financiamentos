@@ -17,8 +17,8 @@ import { jwtDecode } from "jwt-decode";
  * Interrompe a renderização caso o usuário não esteja autenticado ou a sessão tenha expirado.
  */
 const SegurosGuard = () => {
-  // [CORREÇÃO]: Apenas 'token' (JWT Próprio) é acessível no front.
-  const { token, isLoading } = useFinancialAuth();
+  // [CORREÇÃO]: Apenas 'sessionToken' (JWT Próprio) é acessível no front.
+  const { sessionToken, isLoading } = useFinancialAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -27,7 +27,7 @@ const SegurosGuard = () => {
     if (isLoading) return;
 
     // 1. [BUSINESS LOGIC]: Se não houver token, bloqueio imediato.
-    if (!token && location.pathname !== '/accounts/signin') {
+    if (!sessionToken && location.pathname !== '/accounts/signin') {
       navigate({ 
         to: '/accounts/signin',
         search: { redirect_uri: location.pathname + location.search}
@@ -37,21 +37,21 @@ const SegurosGuard = () => {
 
     // 2. [SECURITY]: Validação Passiva de Expiração (UX Guard)
     // Valida o seu JWT localmente, usando o Clock Drift para evitar requests falhos (401).
-    if (token) {
+    if (sessionToken) {
       try {
-        const decoded = jwtDecode<{ exp?: number }>(token);
+        const decoded = jwtDecode<{ exp?: number }>(sessionToken);
         const timeDelta = parseInt(localStorage.getItem('time_delta') || '0', 10);
         
         // Sincroniza a hora local do usuário com o relógio do servidor
         const syncedCurrentTimeInSeconds = Math.floor((Date.now() + timeDelta) / 1000);
 
         if (decoded.exp && decoded.exp < syncedCurrentTimeInSeconds) {
-          console.warn("🚨 [UX Guard - Seguros] Token expirado localmente. Acionando Amnésia.");
+          console.warn("🚨 [UX Guard - Seguros] sessionToken expirado localmente. Acionando Amnésia.");
           window.dispatchEvent(new CustomEvent('session_expired'));
           return;
         }
       } catch (error) {
-        console.warn("⚠️ [UX Guard - Seguros] Token malformado. Expulsando por segurança.");
+        console.warn("⚠️ [UX Guard - Seguros] sessionToken malformado. Expulsando por segurança.");
         window.dispatchEvent(new CustomEvent('session_expired'));
         return;
       }
@@ -71,7 +71,7 @@ const SegurosGuard = () => {
   }
 
   // [COMPLIANCE]: Fail-safe de renderização.
-  if (!token) return null;
+  if (!sessionToken) return null;
 
   return (
     <FinancialHubLayout>

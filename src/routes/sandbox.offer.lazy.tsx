@@ -132,7 +132,7 @@ export const Route = createLazyFileRoute("/sandbox/offer")({
 // [COMPONENTE PRINCIPAL]
 // =========================================================================
 export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
-  const { logout, userId, token } = useFinancialAuth();
+  const { logout, userId, sessionToken } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = Route.useSearch();
   
@@ -178,7 +178,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   // =========================================================================
   useEffect(() => {
     // [GUARD CLAUSE]: Aborta imediatamente se já inicializado, buscando ou se houver erro terminal
-    if (hasInitialized.current || isFetching.current || fetchError || !targetOfferId || !token) return;
+    if (hasInitialized.current || isFetching.current || fetchError || !targetOfferId || !sessionToken) return;
 
     const loadOffer = async () => {
       isFetching.current = true;
@@ -187,12 +187,12 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
       setFetchError(null);
 
       try {
-        const data = await fetchOfferDetails(token, targetOfferId);
+        const data = await fetchOfferDetails(sessionToken, targetOfferId);
         setActiveOffer(data);
       } catch (error: any) {
         console.error("[OFFER_FETCH_ERROR]:", error);
 
-        logSystemError(token || "NO_TOKEN", {
+        logSystemError(sessionToken || "NO_TOKEN", {
           context: 'SANDBOX-OFFER-FETCH',
           message: error?.message || "Erro desconhecido na busca de oferta na sandbox",
           details: {
@@ -217,7 +217,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     };
 
     loadOffer();
-  }, [targetOfferId, token, ambiente]);
+  }, [targetOfferId, sessionToken, ambiente]);
 
   // [UX FALLBACK]: Contador regressivo dinâmico para a Redirect URI
   useEffect(() => {
@@ -256,7 +256,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     if (!activeOffer) return;
     setLoading(true);
 
-    // O 'token' do contexto é o interno. Precisamos do sbx_token real.
+    // O 'sessionToken' do contexto é o interno.
     // Leitura 100% segura aqui (Execução exclusiva no Client-Side)
     const sessionToken = localStorage.getItem('session_token');
     console.log("[sandbox.offer | OfferDetailsSandbox] Delegando para o Gateway com nosso session_token:", sessionToken);
