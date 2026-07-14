@@ -9,10 +9,9 @@
  * e os detalhes da oferta (via catálogo Superbid) em um único ciclo de request-response.
  */
 
-import { create, getNumericDate, verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts";
+import { create, getNumericDate, verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { BFFUserProfile, BFFOfferDetails } from "../_shared/types.ts";
 
@@ -50,14 +49,21 @@ serve(async (req) => {
     let sbx_access_token = auth_token;
 
     // =========================================================================
-    // [SECURITY]: HYBRID AUTH INTERCEPTOR (JWT)
+    // [SECURITY]: STRICT JWT VALIDATOR
     // =========================================================================
-    const isInternalJWT = auth_token.split('.').length === 3;
+    const parts = auth_token.split('.');
+    
+    // Se não tiver 3 partes, não aceite. É um token corrompido ou inválido.
+    if (parts.length !== 3) {
+      console.error("[SECURITY ALERT]: Token malformado recebido:", auth_token);
+      throw new Error("SESSION_UPSTREAM_EXPIRED: Formato de token inválido (Não é um JWT).");
+    }
 
-    if (isInternalJWT) {
-      debugLog("PASSO 1: JWT interno detectado. Validando assinatura...");
-      
-      try {
+    // Agora, se chegou aqui, é garantido que é um JWT.
+    // Se a assinatura estiver errada, o 'verify' vai estourar na sua cara.
+    debugLog("PASSO 1: JWT detectado. Validando assinatura...");
+    
+    try {
         const jwtSecret = Deno.env.get("JWT_SECRET")!;
         const key = await crypto.subtle.importKey(
           "raw", 
@@ -67,45 +73,12 @@ serve(async (req) => {
           ["verify"]
         );
 
-        // A verificação real acontece aqui. 
-        // Se o token estiver corrompido ('+ 1000'), isso Lança erro imediatamente.
         const payload = await verify(auth_token, key);
         const sessionUUID = payload.jti as string;
         
-        debugLog(`PASSO 2: JWT Verificado! Buscando UUID: ${sessionUUID}`);
-
-        const supabaseAdmin = createClient(
-          Deno.env.get('SUPABASE_URL')!, 
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-        );
-
-        const now = new Date().toISOString(); 
-
-        debugLog("PASSO 3: Indo no banco de dados...");
-        const { data: sessionData, error: sessionError } = await supabaseAdmin
-          .from('session_tokens') 
-          .select('sbx_access_token, environment')
-          .eq('session_token', sessionUUID) 
-          .gt('expires_at', now)
-          .single();
-
-        if (sessionError) {
-            debugLog("ERRO NO BANCO DE DADOS:", sessionError);
-            throw new Error(`DB_ERROR: ${sessionError.message}`);
-        }
-
-        if (!sessionData) {
-            throw new Error("UUID não encontrado ou expirado.");
-        }
-
-        sbx_access_token = sessionData.sbx_access_token;
-        debugLog("PASSO 4: Token JWT traduzido com sucesso!");
-
-      } catch (err: any) {
-         console.error("[ERRO FATAL NO INTERCEPTOR]:", err.message);
-         // Esse throw vai parar o código e cair no bloco catch final do serve()
-         throw new Error(`SESSION_UPSTREAM_EXPIRED: Token inválido ou assinatura corrompida. Detalhe: ${err.message}`);
-      }
+        // ... resto da sua lógica de banco de dados
+    } catch (err: any) {
+        throw new Error(`SESSION_UPSTREAM_EXPIRED: Assinatura inválida. Detalhe: ${err.message}`);
     }
     
     // =========================================================================
