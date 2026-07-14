@@ -296,12 +296,72 @@ serve(async (req: Request) => {
   // =========================================================================
   let auth;
   try {
-     auth = await validateRequest(req);
+      auth = await validateRequest(req);
   } catch (err: any) {
-     return new Response(JSON.stringify({ error: err.message }), { 
-        status: 401, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-     });
+      // 1. Descoberta da Origem (Produção: fallback para "/")
+      const referer = req.headers.get("Referer"); 
+      let originPath = "/"; 
+
+      if (referer) {
+         try {
+             const url = new URL(referer);
+             originPath = url.pathname + url.search; 
+         } catch (e) {
+             console.warn("[Orchestrator] Falha ao extrair Referer, assumindo root (/).", referer);
+         }
+      }
+
+      // 2. Padronização de Variáveis (Igual ao seu fluxo de Ofertas)
+      let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
+      let errorCode = "UNAUTHORIZED";
+      let fallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(originPath)}`;
+      let statusCode = 401;
+
+      // 3. Tradução do Erro para Experiência do Usuário (UX)
+      if (err.message.includes("SESSION_EXPIRED")) {
+          userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+          errorCode = "SESSION_EXPIRED";
+          // Mantém fallbackUrl para o login com redirect
+          
+      } else if (err.message.includes("FORBIDDEN")) {
+          userMessage = "Você não tem permissão para acessar este recurso.";
+          errorCode = "FORBIDDEN";
+          fallbackUrl = originPath; // Apenas devolve para a página atual, não pede login
+          statusCode = 403;
+          
+      } else if (err.message.includes("INTERNAL_ERROR")) {
+          userMessage = "Ocorreu um erro interno ao validar sua sessão.";
+          errorCode = "INTERNAL_ERROR";
+          fallbackUrl = "/"; // Devolve para a home em caso de falha de banco/infra
+          statusCode = 500;
+      }
+
+      // 4. Retorno seguindo o contrato oficial da API
+      return new Response(JSON.stringify({ 
+          success: false,
+          code: errorCode,
+          message: userMessage, // <--- O padrão exato que você usa
+          fallback_url: fallbackUrl 
+      }), { 
+          status: statusCode, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
+  }
+
+      // Limpeza da mensagem: remove as tags de roteamento antes de enviar ao cliente
+      const cleanMessage = err.message
+          .replace(/UNAUTHORIZED:|SESSION_EXPIRED:|INTERNAL_ERROR:|FORBIDDEN:/g, '')
+          .trim();
+
+      return new Response(JSON.stringify({ 
+          success: false,
+          code: errorCode,
+          message: cleanMessage,
+          fallback_url: fallbackUrl 
+      }), { 
+          status: errorCode === "FORBIDDEN" ? 403 : 401, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
   }
 
   // =========================================================================

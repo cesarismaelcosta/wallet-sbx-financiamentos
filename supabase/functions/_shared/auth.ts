@@ -2,18 +2,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 
 /**
- * Valida a sessão do usuário baseada no token JWT fornecido no request.
- * * Fluxo de execução:
- * 1. Extração [HÍBRIDA]: Tenta obter o 'x-session-token' do header. Se falhar, tenta o cabeçalho 'Cookie'.
- * 2. Verificação: Valida a assinatura do JWT usando o segredo de ambiente.
- * 3. Identificação: Extrai o 'jti' (UUID da sessão) do payload.
- * 4. Persistência: Consulta o Supabase para garantir que a sessão ainda existe no banco.
- * * @param req - Objeto de requisição HTTP original.
+ * Valida a sessão do usuário baseada no token opaco/JWT fornecido na requisição.
+ * 
+ * @param req - Objeto de requisição HTTP original.
  * @returns {Promise<any>} Dados da sessão encontrada no banco.
- * @throws {Error} Se o token for inválido, ausente ou se a sessão não existir.
+ * @throws {Error} Lança erros tipados via string (UNAUTHORIZED, SESSION_EXPIRED, INTERNAL_ERROR)
+ * para facilitar o mapeamento de status HTTP e regras de fallback no Orchestrator.
  */
 export async function validateRequest(req: Request) {
-  // 1. Extração Estratégica Híbrida (Header -> Fallback para Cookie)
+  // =========================================================================
+  // 1. EXTRAÇÃO HÍBRIDA (Header -> Cookie)
+  // Estratégia de fallback para garantir compatibilidade com diferentes
+  // clientes (Mobile via header, Web via HttpOnly Cookie).
+  // =========================================================================
   let token = req.headers.get("x-session-token");
 
   if (!token) {
@@ -25,13 +26,17 @@ export async function validateRequest(req: Request) {
   }
 
   if (!token) {
-    throw new Error("Token de sessão ausente nos headers e nos cookies.");
+    // Flag estruturada para falha de identidade inicial (Usuário "pelado")
+    throw new Error("UNAUTHORIZED: Token de sessão ausente nos headers e nos cookies.");
   }
 
   try {
-    // 2. Preparação da chave para verificação do JWT
+    // =========================================================================
+    // 2. VERIFICAÇÃO CRIPTOGRÁFICA (JWT)
+    // Garante que o token foi emitido por nós e não sofreu adulteração.
+    // =========================================================================
     const jwtSecret = Deno.env.get("JWT_SECRET");
-    if (!jwtSecret) throw new Error("Configuração de segurança (JWT_SECRET) ausente.");
+    if (!jwtSecret) throw new Error("INTERNAL_ERROR: Configuração de segurança (JWT_SECRET) ausente.");
 
     const key = await crypto.subtle.importKey(
       "raw", 
@@ -41,14 +46,15 @@ export async function validateRequest(req: Request) {
       ["verify"]
     );
 
-    // 3. Verificação e decodificação do payload
-    // AQUI ESTAVA O ERRO (Corrigido): Sem as chaves { }, recebemos o objeto direto.
     const payload = await verify(token, key);
-    const sessionId = payload.jti as string; // Agora 'jti' existe!
+    const sessionId = payload.jti as string;
 
     console.log(`[DEBUG] JTI extraído do JWT: ${sessionId}`);
 
-    // 4. Consulta ao banco de dados (A fonte da verdade)
+    // =========================================================================
+    // 3. CONSULTA AO BANCO DE DADOS (Stateful Validation)
+    // Valida se a sessão não foi revogada administrativamente ou via logout.
+    // =========================================================================
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '', 
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -62,23 +68,37 @@ export async function validateRequest(req: Request) {
       .gt('expires_at', now)
       .single();
 
-    // 5. Tratamento de erros de banco de dados
     if (error) {
       console.error("[DEBUG] Erro de consulta ao banco:", error);
-      throw new Error("Falha ao buscar sessão no banco de dados.");
+      throw new Error("INTERNAL_ERROR: Falha ao buscar sessão no banco de dados.");
     }
 
     if (!data) {
-      console.warn(`[DEBUG] Nenhuma sessão encontrada para o ID: ${sessionId}`);
-      throw new Error("Sessão não encontrada ou expirada.");
+      // Diferencia ausência de token de uma sessão morta pelo tempo
+      console.warn(`[DEBUG] Nenhuma sessão ativa para o ID: ${sessionId}`);
+      throw new Error("SESSION_EXPIRED: Sessão não encontrada ou expirada.");
     }
 
-    // Retorno bem-sucedido
     return data;
 
   } catch (err: any) {
     console.error(`[DEBUG] Falha na validação de request: ${err.message}`);
-    // Repassa o erro para ser tratado pela rota que chama esta função
-    throw new Error(`Não autorizado: ${err.message}`);
+    
+    // Captura erros nativos da biblioteca de JWT (ex: adulteração, formato inválido)
+    if (err.message.includes("signature") || err.message.includes("jwt")) {
+       throw new Error("UNAUTHORIZED: Token inválido, corrompido ou malformado.");
+    }
+    
+    // Propaga os erros que já foram envelopados com nossas flags customizadas
+    if (
+      err.message.includes("UNAUTHORIZED") || 
+      err.message.includes("SESSION_EXPIRED") || 
+      err.message.includes("INTERNAL_ERROR")
+    ) {
+       throw err; 
+    }
+
+    // Failsafe: Reduz o raio de explosão para qualquer erro não mapeado
+    throw new Error(`UNAUTHORIZED: Erro de segurança estrutural - ${err.message}`);
   }
 }

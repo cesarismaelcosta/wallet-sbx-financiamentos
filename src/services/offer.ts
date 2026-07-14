@@ -84,7 +84,7 @@ export const fetchOfferDetails = async (sessionToken: string, offerId: string, e
   const isBrowser = typeof window !== 'undefined';
   const storedAmbiente = environment || (isBrowser ? (localStorage.getItem("sbx_environment") || "stage") : "stage");
   
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ldzutiojmcawhwdhojlo.supabase.co';
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   const url = `${supabaseUrl}/functions/v1/sbx-offer?offer_id=${offerId}`;
