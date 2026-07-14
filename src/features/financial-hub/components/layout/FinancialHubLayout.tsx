@@ -11,6 +11,7 @@
 // Limpei o createContext e useContext daqui, pois agora vêm do arquivo neutro!
 import React, { useState, useEffect } from "react";
 import { useSearch } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
 import { OrchestratorWrapper } from "@/features/financial-hub/components/shared/OrchestratorWrapper";
 import { SiteHeader } from "./SiteHeader";
 import { FAQSection } from "./FAQSection";
@@ -19,6 +20,38 @@ import { FinancialHubContext } from "@/features/financial-hub/core/contexts/Fina
 
 interface FinancialHubLayoutProps {
   children: React.ReactNode;
+}
+
+function ErrorCountdown({ fallbackUrl }: { fallbackUrl: string }) {
+  const [countdown, setCountdown] = useState(10);
+
+  useEffect(() => {
+    if (countdown === 0) {
+      window.location.href = fallbackUrl;
+      return;
+    }
+    const timer = setInterval(() => setCountdown((prev) => prev - 1), 1000);
+    return () => clearInterval(timer);
+  }, [countdown, fallbackUrl]);
+
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+      
+      {/* Seu Spinner original */}
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-6"></div>
+
+      <p className="text-slate-500 font-medium text-sm">Falha ao carregar simulação...</p>
+      <p className="text-slate-500 font-medium text-sm mb-4">Retornando em {countdown}s...</p>
+      
+      <button 
+        onClick={() => window.location.href = fallbackUrl}
+        className="flex items-center text-primary font-semibold text-sm hover:opacity-80 transition-opacity"
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        retornar agora
+      </button>
+    </div>
+  );
 }
 
 export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
@@ -44,9 +77,20 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
   return (
     <OrchestratorWrapper visitId={(search as any).visit_id} visitUpdateId={(search as any).visit_update_id}>
       {(simData) => {
-        // =========================================================================
-        // TRAVA DE SEGURANÇA CONTRA MANIPULAÇÃO DE ROTAS (PATH MATCHING)
-        // =========================================================================
+
+        // Se o backend nos enviou uma resposta com success: false,
+        // renderizamos o componente de erro com countdown
+        if (simData?.success === false) {
+            return (
+                <ErrorCountdown 
+                    message={simData.message || "Esta oferta não está mais disponível."} 
+                    fallbackUrl={simData.fallback_url || "/"} 
+                />
+            );
+        }
+        
+        // Se o backend nos enviou uma resposta com success: true,
+        // navegamos para o destino
         if (simData?.target_url) {
           const currentPath = window.location.pathname.replace(/\/$/, "");
 

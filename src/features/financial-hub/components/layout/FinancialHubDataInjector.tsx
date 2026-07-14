@@ -55,11 +55,20 @@ export function FinancialHubDataInjector({ children}: { children: React.ReactNod
           }
         }, 50);
 
-      } catch (error) {
+      } catch (error: any) { // Adicione o : any aqui para acessar as propriedades
         console.error("[FinancialHubDataInjector] Falha na hidratação:", error);
-        hasInitialized.current = false; // Permite tentar novamente se falhar
+        hasInitialized.current = false; 
 
-        // Se a API falhar, a cortina abre para não bloquear a experiência do utilizador
+        // Envia o erro para o estado global. 
+        // O Layout vai detectar esse 'success: false' e exibir a tela de erro automaticamente.
+        updateData({
+          success: false,
+          code: error.code || "UNKNOWN_ERROR",
+          message: error.message || "Falha ao carregar simulação.",
+          fallback_url: error.fallback_url || "/"
+        });
+
+        // Abre a cortina para mostrar a tela de erro
         if (setIsOrchestratorHydrating) setIsOrchestratorHydrating(false);
       }
     }

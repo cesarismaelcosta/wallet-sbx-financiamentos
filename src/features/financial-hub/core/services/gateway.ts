@@ -10,9 +10,11 @@
 
 /**
  * Função auxiliar para capturar o JWT do usuário ativo.
- * Procura automaticamente pelo token padrão do Supabase ou por chaves manuais.
+ * No futuro poderá ser usado cookies ou outro mecanismo de armazenamento seguro.
+ * @returns {string} O token de sessão do usuário, ou string vazia se não encontrado.
  */
 function getSessionToken(): string {
+
   // Busca especificamente a chave 'session_token' que está no seu Local Storage
   const sessionToken = localStorage.getItem("session_token");
   
@@ -162,25 +164,23 @@ export async function callSimulation(
    * para permitir log de diagnóstico detalhado no frontend e monitoramento externo.
    */
   if (!response.ok) {
+    let errorData;
     
-    // Tenta decodificar o corpo do erro como JSON; fallback para texto simples.
-    // Capturas o payload de erro como um objeto puro
-    const errorData = await response.json().catch(() => ({ 
-      error: "Erro de parsing no Gateway", 
-      details: "O servidor retornou um erro não estruturado" 
-    }));
+    try {
+      // Tenta ler o JSON real que o orquestrador enviou
+      errorData = await response.json();
+    } catch (e) {
+      // Só entra aqui se o backend nem JSON mandou (ex: erro de servidor 500 puro)
+      throw {
+        success: false,
+        code: "GATEWAY_ERROR",
+        message: `Erro ${response.status}: Falha ao processar resposta`,
+        fallback_url: "/"
+      };
+    }
 
-    console.error(`[gateway.ts | callSimulation] Erro HTTP ${response.status}:`, errorData);
-
-    // NÃO crie uma instância de Error. 
-    // Lance um objeto simples. Isso impede que qualquer camada 
-    // superior "limpe" os dados ao tentar acessar .message
-    throw {
-        message: errorData?.error || errorData?.message || `Erro: ${response.status}`,
-        code: 'GATEWAY_ERROR',
-        status: response.status,
-        response: errorData
-    };
+    // A MÁGICA: Joga o erro real (o que o orquestrador mandou) direto para o catch do front
+    throw errorData; 
   }
 
   console.log(`[gateway.ts | callSimulation] Retorno ${method} ${url} com payload:`, payload);
