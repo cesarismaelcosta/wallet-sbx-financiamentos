@@ -21,13 +21,6 @@ export function OrchestratorWrapper({ visitId, visitUpdateId, children }: Orches
   // 1. LÓGICA DE API: Delegamos a busca de dados ao hook especializado
   const { simData, loading, error } = useOrchestratorHydration(visitId, visitUpdateId);
 
-  // ADICIONE ISSO
-  console.log("DEBUG [OrchestratorWrapper] Renderizando com:", { loading, hasError: !!error, error });
-  // DEBUG DE ESTADO DO HOOK
-  useEffect(() => {
-    console.log("DEBUG [OrchestratorWrapper] Ocorreu uma mudança no erro:", error);
-  }, [error]);
-
   // 2. BRANDING: Memoização das cores e assets dinâmicos
   const brandStyles = useMemo(() => {
     const fallback = {

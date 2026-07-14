@@ -92,14 +92,6 @@ export const fetchOfferDetails = async (sessionToken: string, offerId: string, e
   // -----------------------------------------------------------------------
   // [TELEMETRIA]: Log Operacional de Diagnóstico Inicial
   // -----------------------------------------------------------------------
-  console.log("DEBUG_OFFER_SERVICE: ", {
-    url: supabaseUrl,
-    offerId: offerId,
-    hasKey: !!supabaseAnonKey,
-    token: sessionToken ? 'presente' : 'ausente',
-    env: storedAmbiente
-  });
-
   const options: RequestInit = {
     method: "GET",
     headers: {

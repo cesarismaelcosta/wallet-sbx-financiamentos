@@ -67,11 +67,6 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     const storedToken = localStorage.getItem("session_token");
     const storedUserId = localStorage.getItem("user_id");
 
-    console.log("🔍 [AuthContext] Carregando sessão:", { 
-      hasToken: !!storedToken, 
-      userId: storedUserId 
-    });
-
     if (storedToken) {
       setSessionToken(storedToken);
       setUserId(storedUserId);
