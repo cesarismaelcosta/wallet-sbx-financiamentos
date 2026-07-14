@@ -63,6 +63,8 @@ export async function callOrchestrator(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      // Envia a URL exata da página onde o usuário está agora (pathname + query params)
+      "x-original-url": window.location.pathname + window.location.search,
       // INJEÇÃO DO HEADER DE SEGURANÇA
       ...(sessionToken ? { "x-session-token": sessionToken } : {})
     },
@@ -99,6 +101,9 @@ export async function callOrchestrator(
       error: "Erro de parsing no Gateway", 
       details: "O servidor retornou um erro não estruturado" 
     }));
+
+    // 2. LOGA O QUE O BACKEND MANDOU (aqui você verá o fallback_url)
+    console.error("[DEBUG] Resposta completa do Backend:", errorData);
 
     // NÃO crie uma instância de Error. 
     // Lance um objeto simples. Isso impede que qualquer camada 
@@ -138,6 +143,8 @@ export async function callSimulation(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      // ✅ Injeta a URL visual exata de onde o usuário está navegando agora
+      "x-original-url": window.location.pathname + window.location.search,
       // INJEÇÃO DO HEADER DE SEGURANÇA
       ...(sessionToken ? { "x-session-token": sessionToken } : {})
     },

@@ -57,7 +57,7 @@ const debugLog = (message: string, data?: any) => {
  */
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-original-url, x-session-token",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
@@ -298,26 +298,36 @@ serve(async (req: Request) => {
   try {
       auth = await validateRequest(req);
   } catch (err: any) {
-      // 1. Descoberta da Origem (Produção: fallback para "/")
-      const referer = req.headers.get("Referer"); 
-      let originPath = "/"; 
+      // =========================================================================
+      // 1. Descoberta da Origem (Corrigido: Obtém da requisição atual)
+      // =========================================================================
+      const originPath = req.headers.get("x-original-url");
 
-      if (referer) {
-         try {
-             const url = new URL(referer);
-             originPath = url.pathname + url.search; 
-         } catch (e) {
-             console.warn("[Orchestrator] Falha ao extrair Referer, assumindo root (/).", referer);
-         }
+      if (!originPath) {
+          // Failsafe: Se o frontend não enviou o header, barramos aqui para evitar 
+          // redirecionamentos quebrados ou comportamento indefinido.
+          return new Response(JSON.stringify({ 
+              success: false,
+              code: "INTERNAL_ERROR",
+              message: "Erro de segurança: A origem da requisição não foi identificada.",
+              fallback_url: "/"
+          }), { 
+              status: 400, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          });
       }
 
-      // 2. Padronização de Variáveis (Igual ao seu fluxo de Ofertas)
+      // =========================================================================
+      // 2. Padronização de Variáveis
+      // =========================================================================
       let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
       let errorCode = "UNAUTHORIZED";
       let fallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(originPath)}`;
       let statusCode = 401;
 
+      // =========================================================================
       // 3. Tradução do Erro para Experiência do Usuário (UX)
+      // =========================================================================
       if (err.message.includes("SESSION_EXPIRED")) {
           userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
           errorCode = "SESSION_EXPIRED";
@@ -336,7 +346,9 @@ serve(async (req: Request) => {
           statusCode = 500;
       }
 
+      // =========================================================================
       // 4. Retorno seguindo o contrato oficial da API
+      // =========================================================================
       return new Response(JSON.stringify({ 
           success: false,
           code: errorCode,

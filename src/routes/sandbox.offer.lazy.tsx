@@ -258,7 +258,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
     // O 'sessionToken' do contexto é o interno.
     // Leitura 100% segura aqui (Execução exclusiva no Client-Side)
     const sessionToken = localStorage.getItem('session_token');
-    console.log("[sandbox.offer | OfferDetailsSandbox] Delegando para o Gateway com nosso session_token:", sessionToken);
 
     // 1. Construção do Payload base (Sem destruir IDs)
     const searchPayload: any = {
@@ -278,12 +277,6 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
         searchPayload.category_id = activeOffer.offer.category_id;
       }
     }
-
-    // LOG DE RASTREAMENTO: Inserido imediatamente antes do redirecionamento
-    console.log("🚀 [SANDBOX-DEBUG] Payload enviado para o Gateway:", {
-      to: "/financialGatewayEntry",
-      searchPayload
-    });
 
     navigate({
       to: "/financialGatewayEntry",

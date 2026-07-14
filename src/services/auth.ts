@@ -62,8 +62,6 @@ export const autenticateWalletsbX = async (
             localStorage.setItem('time_delta', timeDelta.toString());
             // Persiste o limite de validade absoluta (já com margem T-15m)
             localStorage.setItem('session_expires_at', data.expires_at.toString());
-            
-            console.log(`⏱️ [auth.ts] Clock Drift sincronizado. Delta: ${timeDelta}ms`);
           }
         } catch (err) {
           console.warn("⚠️ [auth.ts] Falha ao processar metadados temporais da sessão.", err);
