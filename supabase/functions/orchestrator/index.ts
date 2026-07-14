@@ -361,22 +361,31 @@ serve(async (req: Request) => {
               // Só toca no objeto se a validação passar
               visitOfferData.offer_value = validatedOffer.offer.offer_value;
           } catch (err: any) {
-              // SUA LÓGICA ORIGINAL PRESERVADA (O mesmo catch de antes)
-              debugLog("🚨 [validateOfferIntegrity] Falha na validação no GET:", err.message);
-              
+              debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
+
               let userMessage = "Ocorreu um erro ao carregar a oferta.";
+              let errorCode = "UNKNOWN_ERROR"; // Novo campo
+
               if (err.message.includes("OFFER_NOT_FOUND")) {
                   userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
+                  errorCode = "OFFER_NOT_FOUND";
               } else if (err.message.includes("INVALID_RELATIONSHIP")) {
                   userMessage = "Você não tem permissão para acessar esta oferta.";
+                  errorCode = "INVALID_RELATIONSHIP";
               } else if (err.message.includes("SESSION_EXPIRED")) {
                   userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+                  errorCode = "SESSION_EXPIRED";
               } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
                   userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+                  errorCode = "UPSTREAM_CONNECTION_ERROR";
               }
 
               const errorForUI = new Error(userMessage);
-              (errorForUI as any).originalCode = err.message; 
+              
+              // Injetando as propriedades para o catch global ler depois
+              (errorForUI as any).errorCode = errorCode; 
+              (errorForUI as any).fallback_url = visit.origin_url;
+              
               throw errorForUI; 
           }
       } else {
@@ -438,9 +447,23 @@ serve(async (req: Request) => {
       };
 
       return new Response(JSON.stringify(hydratedPayload), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
     } catch (error: any) {
-      console.error(`[Orquestrador GET Error]: ${error.message}`);
-      return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        console.error(`[Orquestrador GET Error]: ${error.message}`);
+        
+        // Extraímos o código que injetamos lá no bloco de validação. 
+        // Se não existir, é um erro genérico.
+        const errorCode = error.errorCode || "UNKNOWN_ERROR";
+
+        return new Response(JSON.stringify({ 
+            success: false,
+            code: errorCode,             // <--- Agora o front-end recebe isso!
+            message: error.message,      // <--- A mensagem amigável
+            fallback_url: error.fallback_url || "/" 
+        }), { 
+            status: 400, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        });
     }
   }
 
@@ -520,21 +543,28 @@ serve(async (req: Request) => {
           } catch (err: any) {
               debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
 
-              // Mapeamento de erros técnicos para mensagens de interface (Sua lógica original preservada)
               let userMessage = "Ocorreu um erro ao carregar a oferta.";
+              let errorCode = "UNKNOWN_ERROR"; // Novo campo
 
               if (err.message.includes("OFFER_NOT_FOUND")) {
                   userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
+                  errorCode = "OFFER_NOT_FOUND";
               } else if (err.message.includes("INVALID_RELATIONSHIP")) {
                   userMessage = "Você não tem permissão para acessar esta oferta.";
+                  errorCode = "INVALID_RELATIONSHIP";
               } else if (err.message.includes("SESSION_EXPIRED")) {
                   userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+                  errorCode = "SESSION_EXPIRED";
               } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
                   userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+                  errorCode = "UPSTREAM_CONNECTION_ERROR";
               }
 
               const errorForUI = new Error(userMessage);
-              (errorForUI as any).originalCode = err.message; 
+              
+              // Injetando as propriedades para o catch global ler depois
+              (errorForUI as any).errorCode = errorCode; 
+              (errorForUI as any).fallback_url = payload.origin_url || payload.interaction_context?.origin_url;
               
               throw errorForUI; 
           }
@@ -554,10 +584,17 @@ serve(async (req: Request) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } catch (error: any) {
-      debugLog(`[Orquestrador POST Error REAL]: ${error.message}`); // Log técnico
+      debugLog(`[Orquestrador POST Error REAL]: ${error.message}`);
+      
+      // Extraímos o código que injetamos lá no bloco de validação. 
+      // Se não existir, é um erro genérico.
+      const errorCode = error.errorCode || "UNKNOWN_ERROR";
+
       return new Response(JSON.stringify({ 
-          error: "Falha na validação", 
-          details: error.message // ISSO vai te mostrar se é um SQL Error, ReferenceError, etc.
+          success: false,
+          code: errorCode,             // <--- Agora o front-end recebe isso!
+          message: error.message,      // <--- A mensagem amigável
+          fallback_url: error.fallback_url || "/" 
       }), { 
           status: 400, 
           headers: { ...corsHeaders, "Content-Type": "application/json" } 
