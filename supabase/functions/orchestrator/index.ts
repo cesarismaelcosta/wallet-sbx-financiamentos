@@ -455,6 +455,8 @@ serve(async (req: Request) => {
         // Se não existir, é um erro genérico.
         const errorCode = error.errorCode || "UNKNOWN_ERROR";
 
+        debugLog("fallback url:", error.fallback_url);
+
         return new Response(JSON.stringify({ 
             success: false,
             code: errorCode,             // <--- Agora o front-end recebe isso!
@@ -496,6 +498,8 @@ serve(async (req: Request) => {
       payload.integration_method = destination.integration_method;
       payload.integration_details = destination.integration_details;
       payload.partner_id = destination.partner_id; 
+
+      debugLog("Origem: ", payload.origin_url)
 
       // E: Persistência (One-Shot Database Insertion)
       const { visitId, visitUpdateId } = await persistVisitData(

@@ -123,7 +123,6 @@ export const Route = createLazyFileRoute("/sandbox/offer")({
   validateSearch: (search: Record<string, unknown>) => ({
     flow: search.flow as string | undefined,
     return_uri: search.return_uri as string | undefined,
-    redirect_uri: search.redirect_uri as string | undefined,
   }),
   component: OfferDetailsSandboxPage,
 });

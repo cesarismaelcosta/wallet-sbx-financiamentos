@@ -119,9 +119,6 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         throw error;
       }
 
-      // 🐛 [DEBUG CRÍTICO]: Inspecionando o retorno exato da Edge Function
-      console.log("🐛 [financialGatewayEntry] sbxData RAW:\n", JSON.stringify(sbxData, null, 2));
-
       // Montagem do Contrato
       const payload: SimulationPayload = {
         action: "CONSULT",
@@ -237,8 +234,9 @@ export const Route = createFileRoute("/financialGatewayEntry")({
           status: "ERROR_LOGIN", 
           redirect_url: `/accounts/signin?redirect_uri=${currentUrl}` 
         };
-      }''
+      }
 
+      console.log("🚨 [DEBUG] REDIRECT_URL que está sendo enviada para o Front:", deps.return_uri);
       // 4. Erro de Sistema: Qualquer outra quebra devolve o usuário para a página de origem da simulação após aguardar no componente UI.
       return { status: "ERROR_OTHER", redirect_url: deps.return_uri || request.headers.get("Referer") };
     }
@@ -255,8 +253,6 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     const [isError, setIsError] = useState(false);
     // Estado para o contador regressivo de erro
     const [countdown, setCountdown] = useState(10);
-
-    console.log("🚀 [financialGatewayEntry] Component renderizado. Data:", data, "isError:", isError);
 
     useEffect(() => {
       if (!data) return;

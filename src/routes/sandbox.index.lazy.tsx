@@ -120,7 +120,7 @@ export function SandboxHome() {
                     to: config.route, 
                     search: { 
                         flow: config.flowKey,
-                        redirect_uri: window.location.pathname 
+                        return_uri: window.location.pathname 
                     } as any 
                 });
             }

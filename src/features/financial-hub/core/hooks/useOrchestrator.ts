@@ -184,7 +184,10 @@ export function useOrchestratorHydration(visitId: string | null, visitUpdateId?:
       })
       .catch((err) => {
         console.error(`❌ [useOrchestrator.ts | useOrchestratorHydration] Erro crítico para visita [${visitId}]:`, err);
-        setError(err.message || "[useOrchestrator.ts | useOrchestratorHydration] Falha na resolução do contrato no Orchestrator.");
+        console.log("DEBUG [Hook] Tentando setar erro:", err);
+        setError(err); 
+        // ADICIONE ISSO LOGO APÓS O SETERROR:
+        console.log("DEBUG [Hook] Estado do erro após setError (pode ser stale):", error);
       })
       .finally(() => setLoading(false));
 

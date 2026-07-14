@@ -21,6 +21,13 @@ export function OrchestratorWrapper({ visitId, visitUpdateId, children }: Orches
   // 1. LÓGICA DE API: Delegamos a busca de dados ao hook especializado
   const { simData, loading, error } = useOrchestratorHydration(visitId, visitUpdateId);
 
+  // ADICIONE ISSO
+  console.log("DEBUG [OrchestratorWrapper] Renderizando com:", { loading, hasError: !!error, error });
+  // DEBUG DE ESTADO DO HOOK
+  useEffect(() => {
+    console.log("DEBUG [OrchestratorWrapper] Ocorreu uma mudança no erro:", error);
+  }, [error]);
+
   // 2. BRANDING: Memoização das cores e assets dinâmicos
   const brandStyles = useMemo(() => {
     const fallback = {
@@ -40,13 +47,25 @@ export function OrchestratorWrapper({ visitId, visitUpdateId, children }: Orches
     return () => Object.keys(brandStyles).forEach((key) => root.style.removeProperty(key));
   }, [brandStyles]);
 
-  // Se a API falhou miseravelmente (Erro 500, etc), ele pode ejetar um erro de sistema.
-  // Caso contrário, ele NÃO bloqueia nada e não desenha Divs.
-  if (error) {
-    return <div className="p-10 text-center text-red-500">{error}</div>; // Único UI aceitável (Boundary)
-  }
+  const payload = useMemo(() => {
+    // Se houver erro, retornamos o objeto de erro
+    if (error) {
+      console.log("DEBUG COMPLETO DO ERRO QUE CHEGOU NO WRAPPER:", JSON.stringify(error, null, 2));
+      return {
+        success: false,
+        message: typeof error === 'string' ? error : "Erro desconhecido",
+        fallback_url: error.response?.fallback_url || "/"
+      };
+    }
+    
+    // SE ESTIVER CARREGANDO OU NULO, retornamos um objeto de "carregando" 
+    // para não quebrar o layout
+    if (!simData) {
+      return { success: 'loading' }; 
+    }
 
-  // RETORNO HEADLESS: Não tem mais <div className="min-h-screen...">
-  // Ele simplesmente invisivelmente repassa os dados para baixo.
-  return <>{children(simData)}</>;
+    return simData; // Dados carregados com sucesso
+  }, [error, simData]);
+
+  return <>{children(payload)}</>;
 }

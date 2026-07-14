@@ -77,6 +77,7 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
   return (
     <OrchestratorWrapper visitId={(search as any).visit_id} visitUpdateId={(search as any).visit_update_id}>
       {(simData) => {
+        console.log("DEBUG: O que o Wrapper está entregando:", simData); // Adicione isso
 
         // Se o backend nos enviou uma resposta com success: false,
         // renderizamos o componente de erro com countdown

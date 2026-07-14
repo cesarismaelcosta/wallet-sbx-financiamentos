@@ -113,7 +113,7 @@ export async function persistVisitData(
             ${payload.interaction_context?.utm_source || null},
             ${payload.interaction_context?.utm_medium || null},
             ${payload.interaction_context?.utm_campaign || null},
-            ${ (originUrl || "").split('?')[0] },
+            ${ originUrl || null },
             ${ (targetUrl || "").split('?')[0] }, 
             ${payload.action}, 
             ${origin.ip_address}, ${origin.country}, ${origin.state}, 
@@ -139,7 +139,7 @@ export async function persistVisitData(
           ${payload.interaction_context?.utm_medium || null},
           ${payload.interaction_context?.utm_campaign || null},
           ${payload.action}, 
-          ${ (originUrl || "").split('?')[0] },
+          ${ originUrl || null },
           ${ (targetUrl || "").split('?')[0] }
         )
         RETURNING id
