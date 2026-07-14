@@ -56,14 +56,6 @@ export function useNavigation() {
       timestamp: new Date().toISOString()
     };
 
-    if (import.meta.env.DEV) {
-      console.group(`[useNavigation.ts | useNavigation] Navigation Event: ${intent.action_description}`);
-      console.log("Estado Atual do Wizard:", state.data);
-      console.log("Payload Enviado para Orquestração:", payload);
-      console.log("Intent Recebida:", intent);
-      console.groupEnd();
-    }
-
     try {
       // 2. Dispara a orquestração (Obrigatório para rastreio)
       await callOrchestrator(payload, "POST");

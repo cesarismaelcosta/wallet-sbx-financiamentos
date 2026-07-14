@@ -115,8 +115,6 @@ export async function callOrchestrator(
     };
   }
 
-  console.log(`[gateway.ts | callOrchestrator] Retorno ${method} ${url} com payload:`, payload);
-
   return response.json();
 }
 
@@ -182,8 +180,6 @@ export async function callSimulation(
     // A MÁGICA: Joga o erro real (o que o orquestrador mandou) direto para o catch do front
     throw errorData; 
   }
-
-  console.log(`[gateway.ts | callSimulation] Retorno ${method} ${url} com payload:`, payload);
 
   return response.json();
   
