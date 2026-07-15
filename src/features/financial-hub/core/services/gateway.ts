@@ -102,15 +102,12 @@ export async function callOrchestrator(
       details: "O servidor retornou um erro não estruturado" 
     }));
 
-    // 2. LOGA O QUE O BACKEND MANDOU (aqui você verá o fallback_url)
-    console.error("[DEBUG] Resposta completa do Backend:", errorData);
-
-    // NÃO crie uma instância de Error. 
-    // Lance um objeto simples. Isso impede que qualquer camada 
+    // NÃO cria uma instância de Error. 
+    // Lança um objeto simples. Isso impede que qualquer camada 
     // superior "limpe" os dados ao tentar acessar .message
     throw {
         message: errorData?.error || errorData?.message || `Erro: ${response.status}`,
-        code: 'GATEWAY_ERROR',
+        code: errorData.code || "GATEWAY_ERROR", 
         status: response.status,
         response: errorData
     };
@@ -174,7 +171,7 @@ export async function callSimulation(
         success: false,
         code: "NETWORK_ERROR",
         message: `Falha de rede ou servidor inacessível (Status: ${response.status})`,
-        fallback_url: "/"
+        fallback_url: window.location.pathname + window.location.search
       };
     }
 
@@ -190,7 +187,7 @@ export async function callSimulation(
        status: response.status, // Anexa o HTTP status para caso o front precise (ex: 401)
        code: errorData.code || "GATEWAY_ERROR", 
        message: errorData.message || errorData.error || "Erro desconhecido ao chamar orquestrador",
-       fallback_url: errorData.fallback_url || "/" // Proteção final de rota
+       fallback_url: errorData.fallback_url || window.location.pathname + window.location.search // Proteção final de rota
     };
   }
 

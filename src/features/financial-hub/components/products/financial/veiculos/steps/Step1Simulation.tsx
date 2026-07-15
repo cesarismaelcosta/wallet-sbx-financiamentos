@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { callOrchestrator, callSimulation } from "@/features/financial-hub/core/services/gateway";
+import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 
 export function Step1Simulation() {
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
@@ -88,9 +89,7 @@ export function Step1Simulation() {
       };
 
       // 3. Chamada via Gateway centralizado
-      const result = await callSimulation(
-        payload
-      );
+      await execute(() => callSimulation(payload))
       
       // 4. Atualização de estado
       update({
