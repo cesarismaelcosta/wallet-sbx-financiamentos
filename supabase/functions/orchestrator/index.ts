@@ -57,7 +57,7 @@ const debugLog = (message: string, data?: any) => {
  */
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-original-url, x-session-token",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-original-url, x-session-token, x-auth-fallback-url",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
@@ -302,6 +302,7 @@ serve(async (req: Request) => {
       // 1. Descoberta da Origem (Corrigido: Obtém da requisição atual)
       // =========================================================================
       const originPath = req.headers.get("x-original-url");
+      const authUrl = req.headers.get("x-auth-fallback-url");
 
       if (!originPath) {
           // Failsafe: Se o frontend não enviou o header, barramos aqui para evitar 
@@ -322,7 +323,7 @@ serve(async (req: Request) => {
       // =========================================================================
       let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
       let errorCode = "UNAUTHORIZED";
-      let fallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(originPath)}`;
+      let fallbackUrl = authUrl;
       let statusCode = 401;
 
       // =========================================================================

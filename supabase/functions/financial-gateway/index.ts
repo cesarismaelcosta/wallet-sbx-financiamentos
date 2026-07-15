@@ -35,7 +35,7 @@ const debugLog = (message: string, data?: any) => {
  */
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-original-url, x-session-token",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-original-url, x-session-token, x-auth-fallback-url",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
   "Content-Type": "application/json",
 };
@@ -53,6 +53,7 @@ serve(async (req) => {
 
   // Descoberta da Origem (Usada nos tratamentos de erro abaixo)
   const originPath = req.headers.get("x-original-url") || "/";
+  const authUrl = req.headers.get("x-auth-fallback-url");
 
   // =========================================================================
   // 2. SEGURANÇA: VALIDAÇÃO DE IDENTIDADE E TOKEN
@@ -67,7 +68,7 @@ serve(async (req) => {
 
       let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
       let finalCode = "UNAUTHORIZED";
-      let fallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(originPath)}`;
+      let fallbackUrl = authUrl;
       let statusCode = 401;
 
       // CLASSIFICAÇÃO EXATA E PROTEÇÃO DE NAVEGAÇÃO

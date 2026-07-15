@@ -58,14 +58,17 @@ export async function callOrchestrator(
   // 2. Se não, chama a função getSessionToken() (que busca no localStorage)
   const sessionToken = passedSessionToken || getSessionToken();
 
+  // Monta a rota de login exata que você quer
+  const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
+
   const options: RequestInit = {
     method: method,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      // Envia a URL exata da página onde o usuário está agora (pathname + query params)
-      "x-original-url": window.location.pathname + window.location.search,
-      // INJEÇÃO DO HEADER DE SEGURANÇA
+      "x-original-url": currentPath,
+      // ✅ Envia a URL de login COMPLETA e montada para o backend
+      "x-auth-fallback-url": loginFallbackUrl,
       ...(sessionToken ? { "x-session-token": sessionToken } : {})
     },
   };
@@ -135,14 +138,17 @@ export async function callSimulation(
   // CAPTURA DO TOKEN PARA A TRAVA DE SEGURANÇA
   const sessionToken = getSessionToken();
 
+  // Monta a rota de login para fallback
+  const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      // ✅ Injeta a URL visual exata de onde o usuário está navegando agora
-      "x-original-url": window.location.pathname + window.location.search,
-      // INJEÇÃO DO HEADER DE SEGURANÇA
+      "x-original-url": currentPath,
+      // ✅ Envia a URL de login COMPLETA e montada para o backend
+      "x-auth-fallback-url": loginFallbackUrl,
       ...(sessionToken ? { "x-session-token": sessionToken } : {})
     },
     body: JSON.stringify({
