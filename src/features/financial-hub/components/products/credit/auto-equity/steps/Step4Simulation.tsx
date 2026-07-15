@@ -25,11 +25,13 @@ import {
 import { BRL } from "../schemas";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider"; // Motor Genérico
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
+import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 
 export function Step4Simulation() {
   // Motor Genérico
   const { state, next, back, update } = useWizard<any>();
   const [loading, setLoading] = useState(false);
+  const { execute } = useSafeCall();
 
   // Recuperação dos dados caso o utilizador volte atrás
   const [amount, setAmount] = useState(state.data?.desiredAmount ?? 20000);
@@ -56,8 +58,8 @@ export function Step4Simulation() {
       
       console.log("step4 payload:", payload)
 
-      // Chamada do serviço com step de execução
-      const result = await callSimulation(payload, 'EXECUTE_SIMULATION');
+      // Chamada via Gateway centralizado e captura do resultado
+      const result = await execute(() => callSimulation(payload, 'EXECUTE_SIMULATION'));
 
       if (result.success) {
         // Atualiza estado global para o próximo step (Resultados)

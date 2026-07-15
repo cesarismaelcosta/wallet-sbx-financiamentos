@@ -22,6 +22,7 @@ import { useWizard } from "@/features/financial-hub/components/shared/WizardProv
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { CardWizardData } from "../card.types";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
+import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 
 export function Step1Simulation() {
   const [loading, setLoading] = useState(false);
@@ -30,6 +31,7 @@ export function Step1Simulation() {
   // DUAS TRAVAS: Uma para gerenciar estado visual, outra para impedir loops
   const isSimulating = useRef(false);
   const hasAttempted = useRef(false); 
+  const { execute } = useSafeCall();
 
   if (!state || !state.data) {
     return (
@@ -37,6 +39,7 @@ export function Step1Simulation() {
         <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-primary)]" />
       </div>
     );
+    
   }
 
   const offerValue = state.data?.offer?.offer_value;
@@ -68,9 +71,8 @@ export function Step1Simulation() {
         }
       };
 
-      const result = await callSimulation(
-        payload
-      );
+      // Chamada via Gateway centralizado e captura do resultado
+      const result = await execute(() => callSimulation(payload));
 
       update({ 
         data: { 

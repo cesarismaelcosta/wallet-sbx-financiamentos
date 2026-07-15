@@ -38,7 +38,7 @@ export function Step1Simulation() {
   const [localPercentualEntrada, setLocalPercentualEntrada] = useState(0);
   const [localParcelas, setLocalParcelas] = useState<number | null>(null);
 
-// Inicialização sob demanda: apenas quando a API retornar os dados
+  // Inicialização sob demanda: apenas quando a API retornar os dados
   useEffect(() => {
     if (state?.data?.offer) {
       setLocalValorVeiculo(state.data.offer.offer_value ?? 0);
@@ -59,7 +59,8 @@ export function Step1Simulation() {
    * Sintaxe validada e isolada para garantir que o compilador reconheça o 'async'.
    */
   const isSimulating = useRef(false);
-  
+  const { execute } = useSafeCall();
+
   const handleSimular = async () => {
     // 1. Prevenção de cliques múltiplos
     if (loading || isSimulating.current) return;
@@ -88,9 +89,9 @@ export function Step1Simulation() {
           }))
       };
 
-      // 3. Chamada via Gateway centralizado
-      await execute(() => callSimulation(payload))
-      
+      // 3. Chamada via Gateway centralizado e captura do resultado
+      const result = await execute(() => callSimulation(payload));
+
       // 4. Atualização de estado
       update({
         meta: { ...state.meta, step: 2 }, // Isso move o ponteiro de navegação

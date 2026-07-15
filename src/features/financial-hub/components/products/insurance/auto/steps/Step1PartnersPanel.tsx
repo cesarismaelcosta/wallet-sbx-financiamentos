@@ -8,6 +8,7 @@ import { ButtonWhatsApp } from "@/features/financial-hub/components/layout/Butto
 
 // Importe a config ou de onde venham os seus URLs
 import { useNavigation, NAVIGATION_INTENTS } from "@/features/financial-hub/core/hooks/useNavigation";
+import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 import { DynamicConsents } from "@/features/financial-hub/components/layout/DynamicConsents";
 import { useMemo, useState } from "react";
 
@@ -50,7 +51,15 @@ export function Step1PartnersPanel() {
 
   // 2. A CHAMADA DO HOOK ACONTECE AQUI, NO TOPO DA FUNÇÃO
   // É aqui que a "mágica" é inicializada e conectada ao seu componente
-  const { handleRedirect, loading } = useNavigation();
+  const { handleRedirect, loading: navLoading } = useNavigation();
+
+  // Inicialize o hook aqui
+  const { execute } = useSafeCall();
+  
+  // Cria o handler seguro que trata integração com financial-gateway (session, etc)
+  const handleProceed = async () => {
+    await execute(() => handleRedirect(NAVIGATION_INTENTS.REDIRECT_PARTNER_PAGE, config?.urlRedirect, consents));
+  };
 
   return (
     <div className="bg-white border border-slate-100 rounded-3xl p-8 font-sans">
@@ -99,13 +108,13 @@ export function Step1PartnersPanel() {
         
         {/* Botão Principal */}
         <button 
-          disabled={loading || !areConsentsValid}  
-          onClick={() => handleRedirect(NAVIGATION_INTENTS.REDIRECT_PARTNER_PAGE, config?.urlRedirect, consents)} 
+          disabled={loading || !areConsentsValid || navLoading} // Use navLoading ou loading conforme sua preferência
+          onClick={handleProceed} // <- Chamada protegida pelo 'execute'
           className="w-full bg-[#B300FF] hover:bg-[#9900D9] text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-[#B300FF]/20 disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none"
         >
           Continuar cotação
         </button>
-
+        
         {/* Botão de contato só aparece se houver whatsappContact definido em integration_details */}
         <ButtonWhatsApp 
             productName="Seguros Auto"

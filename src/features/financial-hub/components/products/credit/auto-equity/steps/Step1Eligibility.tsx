@@ -18,11 +18,13 @@ import { eligibilitySchema, type EligibilityData } from "../schemas";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider"; 
 import { DynamicConsents } from "@/features/financial-hub/components/layout/DynamicConsents";
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
+import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 
 export function Step1Eligibility() {
   // Acesso ao estado global do Wizard para navegação e dados
   const { state, next, update } = useWizard<any>();
-  
+  const { execute } = useSafeCall();
+
   const entity = state.data; 
   const consentConfigs = state.data?.consent_configs || [];
   
@@ -51,23 +53,20 @@ export function Step1Eligibility() {
     defaultValues: { fullName: "", cpf: "", birthDate: "", phone: "", email: "" },
   });
 
-  console.log("DEBUG_ERROS_ZOD:", form.formState.errors);
-  console.log("DETALHE_ERRO_ZOD:", JSON.stringify(form.formState.errors, null, 2));
-
   // Preenchimento automático dos dados recebidos do orquestrador
-useEffect(() => {
-  if (entity) {
-    const cpfFormatado = (entity.document || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-    const phoneFormatado = (entity.phone || "").replace(/(\d{2})(\d{2})(\d+)/, '($1) $2 $3');
+  useEffect(() => {
+    if (entity) {
+      const cpfFormatado = (entity.document || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+      const phoneFormatado = (entity.phone || "").replace(/(\d{2})(\d{2})(\d+)/, '($1) $2 $3');
 
-    // Usa setValue para injetar o valor diretamente no campo
-    form.setValue("fullName", entity.name || "", { shouldValidate: true });
-    form.setValue("cpf", cpfFormatado, { shouldValidate: true });
-    form.setValue("phone", phoneFormatado, { shouldValidate: true });
-    form.setValue("birthDate", entity.birth_date || "", { shouldValidate: true });
-    form.setValue("email", entity.email || "", { shouldValidate: true });
-  }
-}, [entity, form]);
+      // Usa setValue para injetar o valor diretamente no campo
+      form.setValue("fullName", entity.name || "", { shouldValidate: true });
+      form.setValue("cpf", cpfFormatado, { shouldValidate: true });
+      form.setValue("phone", phoneFormatado, { shouldValidate: true });
+      form.setValue("birthDate", entity.birth_date || "", { shouldValidate: true });
+      form.setValue("email", entity.email || "", { shouldValidate: true });
+    }
+  }, [entity, form]);
 
   // Validação de obrigatoriedade dos consentimentos (LGPD)
   const areConsentsValid = useMemo(() => {
@@ -98,7 +97,8 @@ useEffect(() => {
           }))
       };
 
-      const result = await callSimulation(payload, 'CHECK_ELIGIBILITY');
+      // Chamada via Gateway centralizado e captura do resultado
+      const result = await execute(() => callSimulation(payload, 'CHECK_ELIGIBILITY'));
       const statusId = result.consults?.[0]?.status_id;
 
       // Validação do retorno do backend
