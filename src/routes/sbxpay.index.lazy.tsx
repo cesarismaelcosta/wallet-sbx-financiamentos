@@ -10,18 +10,18 @@ import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Button } from "@/components/ui/button";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 
-export const Route = createLazyFileRoute('/sandbox/')({
+export const Route = createLazyFileRoute('/sbxpay/')({
     component: SandboxHome,
 });
 
 // Configuração centralizada das jornadas
 const flowsConfig = {
     // Fluxos de Vitrine (Passam por /sandbox/offer)
-    cartao: { route: "/sandbox/offer", flowKey: "Cartão", disabled: false },
-    carros: { route: "/sandbox/offer", flowKey: "Carros", disabled: false },
-    caminhoes: { route: "/sandbox/offer", flowKey: "Caminhões", disabled: false },
-    imoveis: { route: "/sandbox/offer", flowKey: "Imóveis", disabled: true },
-    floorPlan: { route: "/sandbox/offer", flowKey: "Vendedor", disabled: true },
+    cartao: { route: "/sbxpay/offer", flowKey: "Cartão", disabled: false },
+    carros: { route: "/sbxpay/offer", flowKey: "Carros", disabled: false },
+    caminhoes: { route: "/sbxpay/offer", flowKey: "Caminhões", disabled: false },
+    imoveis: { route: "/sbxpay/offer", flowKey: "Imóveis", disabled: true },
+    floorPlan: { route: "/sbxpay/offer", flowKey: "Vendedor", disabled: true },
     
     // =========================================================================
     // [FLUXOS DIRETOS]: Redirecionam para o Gateway APENAS com o product_id

@@ -16,7 +16,7 @@ import { fetchMyProfile } from "@/services/user";
 import { jwtDecode } from "jwt-decode"; 
 import { WalletLogo } from "@/components/brand/WalletLogo";
 
-export const Route = createLazyFileRoute("/sandbox")({
+export const Route = createLazyFileRoute("/sbxpay")({
   component: SandboxLayout, 
 });
 

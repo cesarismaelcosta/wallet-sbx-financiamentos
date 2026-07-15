@@ -21,7 +21,7 @@ import { Offer, Manager, Event, Seller } from "../_shared/types";
 // =========================================================================
 // [ROTEAMENTO]: Registro TanStack Router (Lazy Loading)
 // =========================================================================
-export const Route = createLazyFileRoute("/sandbox/consultabsx")({
+export const Route = createLazyFileRoute("/sbxpay/consultabsx")({
   validateSearch: (search: Record<string, unknown>) => ({
     offer: search.offer as string | undefined,
   }),
@@ -59,7 +59,7 @@ export function OfferDetailsNewSandbox() {
   useEffect(() => {
     if (!offerParam) {
       navigate({
-        to: "/sandbox/consultabsx",
+        to: "/sbxpay/consultabsx",
         search: { offer: DEFAULT_OFFER },
         replace: true, // Importante: não polui o histórico
       });

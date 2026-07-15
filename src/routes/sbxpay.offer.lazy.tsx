@@ -19,7 +19,7 @@ import { Loader2, CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react
 import { WalletLogo } from "@/components/brand/WalletLogo";
 
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { UserDataContext } from "./sandbox.lazy";
+import { UserDataContext } from "./sbxpay.lazy";
 import { fetchOfferDetails } from "@/services/offer";
 import { logSystemError } from "@/services/systemNotification";
 
@@ -119,7 +119,7 @@ function OfferDetailsSandboxPage() {
   return <OfferDetailsSandbox key={flow} flowKey={flow as any} />;
 }
 
-export const Route = createLazyFileRoute("/sandbox/offer")({
+export const Route = createLazyFileRoute("/sbxpay/offer")({
   validateSearch: (search: Record<string, unknown>) => ({
     flow: search.flow as string | undefined,
     return_uri: search.return_uri as string | undefined,
