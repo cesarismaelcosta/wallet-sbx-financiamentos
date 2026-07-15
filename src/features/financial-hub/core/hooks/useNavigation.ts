@@ -63,19 +63,16 @@ export function useNavigation() {
         window.open(externalUrl, intent.target);
       }
     } catch (error: any) {
-      
       // =========================================================================
       // INTERCEPTADOR DE SESSÃO
       // A fonte da verdade é o Backend (Gateway). Se ele envia um fallback_url,
       // nós obedecemos e redirecionamos. Não calculamos rotas no frontend.
       // =========================================================================
-      if (error?.code === 'SESSION_EXPIRED' || error?.code === 'UNAUTHORIZED') {
-        if (error.fallback_url) {
-           window.location.href = error.fallback_url;
-           // Retornamos uma Promise vazia para "congelar" a execução do componente
-           // evitando que o React tente processar estados subsequentes após o redirecionamento.
-           return new Promise(() => {}); 
-        }
+      const redirectUrl = error.response?.fallback_url;
+
+      if ((error?.code === 'SESSION_EXPIRED' || error?.code === 'UNAUTHORIZED') && redirectUrl) {
+        window.location.href = redirectUrl;
+        return new Promise(() => {}); 
       }
 
       // 4. LOG ESTRUTURADO

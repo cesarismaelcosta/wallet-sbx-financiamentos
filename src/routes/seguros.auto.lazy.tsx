@@ -46,8 +46,6 @@ function ProductConsultPage() {
   // 1. RESGATE: Consome os dados já hidratados pelo SimulationLayout (Pai).
   const simData = useProductConsult();
 
-  console.log("SimData no ProductConsultPage:", simData); // Debug: Verificar se os dados estão chegando
-  
   // Guard Clause de segurança
   if (!simData?.entity) return null; 
 

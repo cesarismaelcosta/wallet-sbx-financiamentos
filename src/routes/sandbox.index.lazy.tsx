@@ -108,8 +108,6 @@ export function SandboxHome() {
                     utm_campaign: `flow_${config.flowKey.toLowerCase()}`
                 };
 
-                console.log("🚀 [SANDBOX-DEBUG] Delegação Direta (SEM VALIDAR OFFER):", searchPayload);
-
                 await navigate({
                     to: config.route,
                     search: searchPayload

@@ -54,7 +54,7 @@ export function Step1PartnersPanel() {
   const { handleRedirect, loading: navLoading } = useNavigation();
 
   // Inicialize o hook aqui
-  const { execute } = useSafeCall();
+  const { execute, loading } = useSafeCall();
   
   // Cria o handler seguro que trata integração com financial-gateway (session, etc)
   const handleProceed = async () => {
@@ -114,7 +114,7 @@ export function Step1PartnersPanel() {
         >
           Continuar cotação
         </button>
-        
+
         {/* Botão de contato só aparece se houver whatsappContact definido em integration_details */}
         <ButtonWhatsApp 
             productName="Seguros Auto"

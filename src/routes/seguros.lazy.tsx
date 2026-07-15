@@ -56,7 +56,7 @@ const SegurosGuard = () => {
         return;
       }
     }
-  }, [token, isLoading, navigate, location.pathname]);
+  }, [sessionToken, isLoading, navigate, location.pathname]);
 
   // [COMPLIANCE]: Estado de carregamento seguro.
   if (isLoading) {
