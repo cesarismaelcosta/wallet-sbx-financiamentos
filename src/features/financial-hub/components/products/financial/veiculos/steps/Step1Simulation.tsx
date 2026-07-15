@@ -98,8 +98,12 @@ export function Step1Simulation() {
         data: { ...state.data, simulationResult: result, simulation_id: result.simulation_id, simulation_update_id: result.simulation_update_id } // Isso salva o resultado
       });
       
-    } catch (error) {
-      console.error("[Simulação Error]:", error);
+    } catch (error: any) {
+      console.error("[Erro na Simulação Card]:", error);
+      
+      // DISPARA O EVENTO GLOBAL PARA O LAYOUT OUVIR
+      // O Layout vai capturar esse erro e exibir o ErrorCountdown automaticamente.
+      window.dispatchEvent(new CustomEvent('app-error', { detail: error }));
     } finally {
       setLoading(false);
       isSimulating.current = false;

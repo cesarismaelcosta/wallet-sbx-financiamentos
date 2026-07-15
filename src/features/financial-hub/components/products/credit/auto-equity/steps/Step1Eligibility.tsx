@@ -119,7 +119,10 @@ export function Step1Eligibility() {
       }
     } catch (error) {
       console.error("[Elegibilidade Error]:", error);
-      setErrorMsg("Erro técnico na comunicação.");
+      
+      // DISPARA O EVENTO GLOBAL PARA O LAYOUT OUVIR
+      // O layout vai mostrar o ErrorCountdown automaticamente
+      window.dispatchEvent(new CustomEvent('app-error', { detail: error }));
     } finally {
       setLoading(false);
     }

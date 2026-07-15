@@ -58,7 +58,13 @@ export function Step1PartnersPanel() {
   
   // Cria o handler seguro que trata integração com financial-gateway (session, etc)
   const handleProceed = async () => {
-    await execute(() => handleRedirect(NAVIGATION_INTENTS.REDIRECT_PARTNER_PAGE, config?.urlRedirect, consents));
+    try {
+      // O useSafeCall executa e gerencia o loading para você
+      await execute(() => handleRedirect(NAVIGATION_INTENTS.REDIRECT_PARTNER_PAGE, config?.urlRedirect, consents));
+    } catch (err: any) {
+      // Se deu erro, o Layout está ouvindo esse evento e vai desenhar o ErrorCountdown
+      window.dispatchEvent(new CustomEvent('app-error', { detail: err }));
+    }
   };
 
   return (

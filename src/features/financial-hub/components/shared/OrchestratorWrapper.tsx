@@ -41,12 +41,17 @@ export function OrchestratorWrapper({ visitId, visitUpdateId, children }: Orches
   }, [brandStyles]);
 
   const payload = useMemo(() => {
-    // Se houver erro, retornamos o objeto de erro
+    // Se houver erro, extraímos os dados conforme a estrutura do Gateway
     if (error) {
+      // O 'error' aqui é o objeto que você deu throw no gateway.ts
+      // O 'response' já é o próprio errorData.
+      const errData = error.response || {}; 
+      
       return {
         success: false,
-        message: typeof error === 'string' ? error : "Erro desconhecido",
-        fallback_url: error.response?.fallback_url || "/"
+        code: errData.code,                         // Pega o código exato enviado pelo backend
+        message: errData.message,                   // Pega a mensagem exata enviada pelo backend
+        fallback_url: errData.fallback_url || "/"
       };
     }
     

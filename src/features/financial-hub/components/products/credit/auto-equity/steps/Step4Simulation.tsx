@@ -71,8 +71,9 @@ export function Step4Simulation() {
         console.error("Erro na simulação:", result.message);
       }
       
-    } catch (error) {
-      console.error("[Simulação Error]:", error);
+    } catch (error: any) {
+      // Aqui acontece a mágica: dispara o evento global que o Layout ouve
+      window.dispatchEvent(new CustomEvent('app-error', { detail: error }));
     } finally {
       setLoading(false);
       isSimulating.current = false;

@@ -24,7 +24,6 @@ const LandingIndexLazyRouteImport = createFileRoute('/landing/')()
 const BackofficeIndexLazyRouteImport = createFileRoute('/backoffice/')()
 const SegurosAutoLazyRouteImport = createFileRoute('/seguros/auto')()
 const SandboxOfferLazyRouteImport = createFileRoute('/sandbox/offer')()
-const SandboxIndexoldLazyRouteImport = createFileRoute('/sandbox/indexold')()
 const SandboxConsultabsxLazyRouteImport = createFileRoute(
   '/sandbox/consultabsx',
 )()
@@ -120,13 +119,6 @@ const SandboxOfferLazyRoute = SandboxOfferLazyRouteImport.update({
   path: '/offer',
   getParentRoute: () => SandboxLazyRoute,
 } as any).lazy(() => import('./routes/sandbox.offer.lazy').then((d) => d.Route))
-const SandboxIndexoldLazyRoute = SandboxIndexoldLazyRouteImport.update({
-  id: '/indexold',
-  path: '/indexold',
-  getParentRoute: () => SandboxLazyRoute,
-} as any).lazy(() =>
-  import('./routes/sandbox.indexold.lazy').then((d) => d.Route),
-)
 const SandboxConsultabsxLazyRoute = SandboxConsultabsxLazyRouteImport.update({
   id: '/consultabsx',
   path: '/consultabsx',
@@ -251,7 +243,6 @@ export interface FileRoutesByFullPath {
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/sandbox/consultabsx': typeof SandboxConsultabsxLazyRoute
-  '/sandbox/indexold': typeof SandboxIndexoldLazyRoute
   '/sandbox/offer': typeof SandboxOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
@@ -277,7 +268,6 @@ export interface FileRoutesByTo {
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/sandbox/consultabsx': typeof SandboxConsultabsxLazyRoute
-  '/sandbox/indexold': typeof SandboxIndexoldLazyRoute
   '/sandbox/offer': typeof SandboxOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice': typeof BackofficeIndexLazyRoute
@@ -306,7 +296,6 @@ export interface FileRoutesById {
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/sandbox/consultabsx': typeof SandboxConsultabsxLazyRoute
-  '/sandbox/indexold': typeof SandboxIndexoldLazyRoute
   '/sandbox/offer': typeof SandboxOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
@@ -336,7 +325,6 @@ export interface FileRouteTypes {
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/sandbox/consultabsx'
-    | '/sandbox/indexold'
     | '/sandbox/offer'
     | '/seguros/auto'
     | '/backoffice/'
@@ -362,7 +350,6 @@ export interface FileRouteTypes {
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/sandbox/consultabsx'
-    | '/sandbox/indexold'
     | '/sandbox/offer'
     | '/seguros/auto'
     | '/backoffice'
@@ -390,7 +377,6 @@ export interface FileRouteTypes {
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/sandbox/consultabsx'
-    | '/sandbox/indexold'
     | '/sandbox/offer'
     | '/seguros/auto'
     | '/backoffice/'
@@ -488,13 +474,6 @@ declare module '@tanstack/react-router' {
       path: '/offer'
       fullPath: '/sandbox/offer'
       preLoaderRoute: typeof SandboxOfferLazyRouteImport
-      parentRoute: typeof SandboxLazyRoute
-    }
-    '/sandbox/indexold': {
-      id: '/sandbox/indexold'
-      path: '/indexold'
-      fullPath: '/sandbox/indexold'
-      preLoaderRoute: typeof SandboxIndexoldLazyRouteImport
       parentRoute: typeof SandboxLazyRoute
     }
     '/sandbox/consultabsx': {
@@ -641,14 +620,12 @@ const FinanciamentosLazyRouteWithChildren =
 
 interface SandboxLazyRouteChildren {
   SandboxConsultabsxLazyRoute: typeof SandboxConsultabsxLazyRoute
-  SandboxIndexoldLazyRoute: typeof SandboxIndexoldLazyRoute
   SandboxOfferLazyRoute: typeof SandboxOfferLazyRoute
   SandboxIndexLazyRoute: typeof SandboxIndexLazyRoute
 }
 
 const SandboxLazyRouteChildren: SandboxLazyRouteChildren = {
   SandboxConsultabsxLazyRoute: SandboxConsultabsxLazyRoute,
-  SandboxIndexoldLazyRoute: SandboxIndexoldLazyRoute,
   SandboxOfferLazyRoute: SandboxOfferLazyRoute,
   SandboxIndexLazyRoute: SandboxIndexLazyRoute,
 }

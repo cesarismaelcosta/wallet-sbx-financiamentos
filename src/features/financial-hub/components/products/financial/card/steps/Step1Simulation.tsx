@@ -83,8 +83,12 @@ export function Step1Simulation() {
         } 
       });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error("[Erro na Simulação Card]:", error);
+      
+      // DISPARA O EVENTO GLOBAL PARA O LAYOUT OUVIR
+      // O Layout vai capturar esse erro e exibir o ErrorCountdown automaticamente.
+      window.dispatchEvent(new CustomEvent('app-error', { detail: error }));
     } finally {
       setLoading(false);
       isSimulating.current = false;
