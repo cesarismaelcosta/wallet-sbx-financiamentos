@@ -1,9 +1,9 @@
 /**
- * @fileoverview Componente: OfferDetailsNewSandbox (Rota: /sandbox/consultabsx)
+ * @fileoverview Componente: OfferDetailsNewSBXPAY (Rota: /sbxpay/consultabsx)
  * * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
- * Página de Sandbox isolada para testes de integração do Motor de Ofertas.
+ * Página de sbXPAY isolada para integração do Motor de Ofertas.
  * Execução sequencial estrita: Autenticação -> Perfil (BFF) -> Oferta.
  * * [RESPONSABILIDADES DA REFATORAÇÃO (COERÊNCIA DE CONTRATO)]:
  * 1. Higienização de Estado: Desestruturação explícita do 'sessionToken' do contexto.
@@ -25,7 +25,7 @@ export const Route = createLazyFileRoute("/sbxpay/consultabsx")({
   validateSearch: (search: Record<string, unknown>) => ({
     offer: search.offer as string | undefined,
   }),
-  component: OfferDetailsNewSandbox,
+  component: OfferDetailsNewSBXPAY,
 });
 
 // =========================================================================
@@ -41,7 +41,7 @@ interface OfferDataPayload {
 // =========================================================================
 // [COMPONENTE PRINCIPAL]
 // =========================================================================
-export function OfferDetailsNewSandbox() {
+export function OfferDetailsNewSBXPAY() {
   // 1. [SECURITY CORE]: Extração Desestruturada de Identidade
   // Ao invés de importar o objeto 'auth' inteiro e usar condicionais (auth.sessionToken || auth.accesssessionToken),
   // forçamos o contrato da interface. O 'sessionToken' extraído aqui é, arquiteturalmente,

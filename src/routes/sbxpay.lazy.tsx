@@ -1,6 +1,6 @@
 /**
- * @fileoverview Componente: SandboxLayout
- * * Esqueleto mestre de segurança da Sandbox.
+ * @fileoverview Componente: sbXPAYLayOut
+ * * Esqueleto mestre de segurança da sbxpay.
  * * [RESPONSABILIDADES]:
  * 1. Pre-Login Gate: Intercepta utilizadores sem sessão para configurar o ambiente (HML/PRD).
  * 2. Gatekeeper: Valida a integridade da sessão no servidor (Edge Function) uma única vez.
@@ -17,12 +17,12 @@ import { jwtDecode } from "jwt-decode";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 
 export const Route = createLazyFileRoute("/sbxpay")({
-  component: SandboxLayout, 
+  component: sbXPAYLayOut, 
 });
 
 export const UserDataContext = createContext<any>(null);
 
-export function SandboxLayout() {
+export function sbXPAYLayOut() {
   const { sessionToken, isLoading, logout } = useFinancialAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -68,7 +68,7 @@ export function SandboxLayout() {
         }
       } catch (err: any) {
         if (isMounted) {
-          console.error("🔒 [Sandbox Gatekeeper] Falha de validação no backend:", err.message);
+          console.error("🔒 [sbXPAY Gatekeeper] Falha de validação no backend:", err.message);
           logout();
         }
       }
@@ -162,7 +162,7 @@ export function SandboxLayout() {
   // [UI/UX - CENA 4]: Acesso Concedido
   // =========================================================================
   return (
-    <div className="sandbox-shell min-h-screen bg-white">
+    <div className="sbxpay-shell min-h-screen bg-white">
       <UserDataContext.Provider value={{ userData }}>
         <Outlet />
       </UserDataContext.Provider>

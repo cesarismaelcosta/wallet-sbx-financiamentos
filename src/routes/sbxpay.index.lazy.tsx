@@ -1,5 +1,5 @@
 /**
- * @fileoverview Componente: SandboxHome (Rota: /sandbox/)
+ * @fileoverview Componente: sbXPAYHome (Rota: /sbxpay/)
  * Ponto de entrada do ambiente de homologação e testes do Financial Hub.
  */
 
@@ -11,12 +11,12 @@ import { Button } from "@/components/ui/button";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 
 export const Route = createLazyFileRoute('/sbxpay/')({
-    component: SandboxHome,
+    component: sbXPAYHome,
 });
 
 // Configuração centralizada das jornadas
 const flowsConfig = {
-    // Fluxos de Vitrine (Passam por /sandbox/offer)
+    // Fluxos de Vitrine (Passam por /sbxpay/offer)
     cartao: { route: "/sbxpay/offer", flowKey: "Cartão", disabled: false },
     carros: { route: "/sbxpay/offer", flowKey: "Carros", disabled: false },
     caminhoes: { route: "/sbxpay/offer", flowKey: "Caminhões", disabled: false },
@@ -56,7 +56,7 @@ const flowsConfig = {
     },
 };
 
-export function SandboxHome() {
+export function sbXPAYHome() {
     const navigate = useNavigate();
     const { token, logout } = useFinancialAuth();
     

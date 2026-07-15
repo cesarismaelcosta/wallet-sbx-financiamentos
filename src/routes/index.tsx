@@ -6,6 +6,6 @@ export const Route = createFileRoute('/')({
 
 function IndexComponent() {
   // O 'replace' é crucial aqui: ele substitui a rota atual no histórico.
-  // Assim, se o usuário clicar em "Voltar" no Sandbox, ele não cai num loop infinito.
-  return <Navigate to="/sandbox" replace />;
+  // Assim, se o usuário clicar em "Voltar" no sbXPAY, ele não cai num loop infinito.
+  return <Navigate to="/sbxpay" replace />;
 }

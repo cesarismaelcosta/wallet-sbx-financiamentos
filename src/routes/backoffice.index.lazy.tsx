@@ -5,7 +5,7 @@
  * * @description
  * Esta página atua como o centro nervoso operacional do Backoffice. Ela carrega,
  * processa e renderiza dados consolidados sobre as operações de crédito e
- * interações de topo de funil (visitas) geradas pelo Sandbox.
+ * interações de topo de funil (visitas) geradas pelo Financial Hub.
  * * @architecture
  * - A busca de dados (fetch) ocorre diretamente via cliente Supabase (RLS protegido).
  * - Utilizamos processamento e agregação client-side (no navegador) baseados em `Map`
@@ -874,7 +874,7 @@ function DashboardPage() {
             <h2 className="text-xl font-bold tracking-tight text-slate-800">2. Tráfego e Topo de Funil</h2>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Volume de acessos ao Sandbox, fontes de origem e produtos visitados.
+            Volume de acessos ao Gateway de Financiamentos e Seguros, fontes de origem e produtos visitados.
           </p>
         </div>
 

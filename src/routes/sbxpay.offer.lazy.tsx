@@ -1,9 +1,9 @@
 /**
- * @fileoverview Componente: OfferDetailsSandbox (Rota: /sandbox/offer)
+ * @fileoverview Componente: OfferDetailsSBXPAY (Rota: /sbxpay/offer)
  * * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
- * Visualização de detalhes de uma oferta (ativo) na Sandbox.
+ * Visualização de detalhes de uma oferta (ativo) na sbxpay.
  * Atua apenas como "vitrine". A responsabilidade de orquestração foi 
  * delegada para o Gateway (/financialEntry).
  * * [RESPONSABILIDADES DA REFATORAÇÃO (SSR-Safe)]:
@@ -97,13 +97,13 @@ const FLOW_MAP: Record<string, {
   },
 };
 
-const allFiles = import.meta.glob("/src/assets/sandbox/**/*.{jpg,jpeg,png,gif,asset.json}", { eager: true });
+const allFiles = import.meta.glob("/src/assets/sbxpay/**/*.{jpg,jpeg,png,gif,asset.json}", { eager: true });
 const formatarCaminho = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "").toLowerCase();
 
 // =========================================================================
 // CONFIGURAÇÃO DA ROTA (Isolada para evitar re-render destrutivo)
 // =========================================================================
-function OfferDetailsSandboxPage() {
+function OfferDetailsSBXPage() {
   const search = Route.useSearch();
   const flow = search.flow; 
 
@@ -116,7 +116,7 @@ function OfferDetailsSandboxPage() {
     );
   }
 
-  return <OfferDetailsSandbox key={flow} flowKey={flow as any} />;
+  return <OfferDetailsSBXPAY key={flow} flowKey={flow as any} />;
 }
 
 export const Route = createLazyFileRoute("/sbxpay/offer")({
@@ -124,13 +124,13 @@ export const Route = createLazyFileRoute("/sbxpay/offer")({
     flow: search.flow as string | undefined,
     return_uri: search.return_uri as string | undefined,
   }),
-  component: OfferDetailsSandboxPage,
+  component: OfferDetailsSBXPage,
 });
 
 // =========================================================================
 // [COMPONENTE PRINCIPAL]
 // =========================================================================
-export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
+export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
   const { logout, userId, sessionToken } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = Route.useSearch();
@@ -170,7 +170,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
   const targetOfferId = ambiente === "production" ? currentFlow.offer_id.production : currentFlow.offer_id.staging;
 
   // [REDIRECIONAMENTO DINÂMICO]: Captura a URL de retorno preservando a origem
-  const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sandbox";
+  const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
 
   // =========================================================================
   // [FETCH VISUAL]: Busca dados com proteção rígida de concorrência
@@ -192,8 +192,8 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
         console.error("[OFFER_FETCH_ERROR]:", error);
 
         logSystemError(sessionToken || "NO_TOKEN", {
-          context: 'SANDBOX-OFFER-FETCH',
-          message: error?.message || "Erro desconhecido na busca de oferta na sandbox",
+          context: 'sbxpay-OFFER-FETCH',
+          message: error?.message || "Erro desconhecido na busca de oferta na sbxpay",
           details: {
             name: error?.name || "Error",
             message: error?.message,
@@ -356,7 +356,7 @@ export function OfferDetailsSandbox({ flowKey }: { flowKey?: keyof typeof FLOW_M
             <div className="hidden sm:block"><WalletLogo size="md" withTagline /></div>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">Sandbox: Simulação de Oferta Superbid</div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">sbxpay: Simulação de Oferta Superbid</div>
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <p className="text-[9px] font-mono text-slate-500">ID: {userId || "---"}</p>
