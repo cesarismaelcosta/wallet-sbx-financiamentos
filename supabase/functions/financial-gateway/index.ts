@@ -15,13 +15,13 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { processSimulation } from "./simulation-handler.ts";
+import { validateRequest } from "../_shared/auth.ts"; // Validação centralizada de segurança
 
 // Chave de controle para logs de depuração
 const DEBUG_MODE = true;
 
 /**
  * FUNÇÃO DE LOG PADRONIZADA
- * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
@@ -31,7 +31,7 @@ const debugLog = (message: string, data?: any) => {
 
 /**
  * CONFIGURAÇÃO GLOBAL DE HEADERS
- * Centraliza as permissões de CORS e tipo de conteúdo para garantir consistência em todas as saídas.
+ * Contém x-original-url liberado para evitar bloqueios de CORS no Preflight
  */
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,72 +41,110 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  /**
-   * 1. CORS HANDSHAKE
-   * Essencial para permitir a comunicação Cross-Origin vinda do Sandbox e aplicações Web.
-   * Adicionado 'Access-Control-Allow-Methods' para autorizar explicitamente o POST do front-end.
-   */
+  // =========================================================================
+  // 1. CORS HANDSHAKE (PREFLIGHT)
+  // =========================================================================
   if (req.method === "OPTIONS") {
-
     return new Response("ok", {
       status: 200,
       headers: corsHeaders,
     });
   }
 
-  /**
-   * 2. ROTA PRINCIPAL (PROCESSAMENTO ATIVO)* Acionada pelo botão "SIMULAR FINANCIAMENTO" no front-end.
-   */
+  // Descoberta da Origem (Usada nos tratamentos de erro abaixo)
+  const originPath = req.headers.get("x-original-url") || "/";
+
+  // =========================================================================
+  // 2. SEGURANÇA: VALIDAÇÃO DE IDENTIDADE E TOKEN
+  // =========================================================================
+  let auth;
   try {
-    /**
-     * @description Validação de Ingestão: Usando req.text() para
-     * capturar payloads vazios sem derrubar o processo.
-     */
+      auth = await validateRequest(req);
+  } catch (err: any) {
+      // EXTRAÇÃO DO CÓDIGO DO ERRO
+      const parts = err.message.split(':');
+      const errorCode = parts[0].trim();
+
+      let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
+      let finalCode = "UNAUTHORIZED";
+      let fallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(originPath)}`;
+      let statusCode = 401;
+
+      // CLASSIFICAÇÃO EXATA E PROTEÇÃO DE NAVEGAÇÃO
+      switch (errorCode) {
+          case "SESSION_EXPIRED":
+              userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+              finalCode = "SESSION_EXPIRED";
+              // Mantém o fallback apontando para a página de login
+              break;
+          case "FORBIDDEN":
+              userMessage = "Você não tem permissão para acessar este recurso.";
+              finalCode = "FORBIDDEN";
+              fallbackUrl = originPath; // Mantém o usuário na tela em que está
+              statusCode = 403;
+              break;
+          case "INTERNAL_ERROR":
+              userMessage = "Ocorreu um erro interno ao validar sua sessão.";
+              finalCode = "INTERNAL_ERROR";
+              fallbackUrl = originPath; // Mantém o usuário na tela em que está
+              statusCode = 500;
+              break;
+      }
+
+      return new Response(JSON.stringify({ 
+          success: false,
+          code: finalCode,
+          message: userMessage,
+          fallback_url: fallbackUrl 
+      }), { 
+          status: statusCode, 
+          headers: corsHeaders 
+      });
+  }
+
+  // =========================================================================
+  // 3. ROTA PRINCIPAL (PROCESSAMENTO ATIVO DA SIMULAÇÃO)
+  // =========================================================================
+  try {
     let payload;
 
-    // Captura e valida o payload apenas se for uma requisição POST
     if (req.method === "POST") {
       const rawBody = await req.text();
       if (!rawBody) throw new Error("Payload ausente na requisição POST.");
       payload = JSON.parse(rawBody);
 
-      // Extração e injeção do ID do Token
-      const sessionToken = req.headers.get("x-session-token");
-      if (sessionToken) {
-        try {
-          const sessionUserId = JSON.parse(atob(sessionToken.split('.')[1])).sub;
-          if (payload.entity) {
-            payload.entity.entity_id = String(sessionUserId);
-          }
-        } catch (e) {
-          debugLog("Erro ao extrair ID do token - ignorando");
-        }
+      // Injeção Segura: Usa o user_id real do banco, impossível de ser falsificado
+      if (payload.entity && auth.user_id) {
+        payload.entity.entity_id = String(auth.user_id);
       }
 
     } else {
-      // Se cair aqui e não for OPTIONS (já tratado acima), o método não é suportado
       return new Response(JSON.stringify({ error: "Método não permitido" }), {
         status: 405,
         headers: corsHeaders,
       });
     }
 
-    /**
-     * CHAMADA DO HANDLER:
-     * Com o payload validado, seguimos para a persistência e handshake Fandi.
-     */
+    // Aciona a regra de negócio da Fandi
     const result = await processSimulation(req, payload);
 
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: corsHeaders,
     });
+    
   } catch (err: any) {
     console.error("[GATEWAY ERROR]:", err.message);
+    
+    // Tratamento de Erro de Negócio (ex: CNPJ inválido, banco recusou)
+    // Retorna fallbackUrl como originPath para o Orchestrator não ejetar o usuário da tela
     return new Response(
       JSON.stringify({
-        error: err.message,
+        success: false,
+        code: "BUSINESS_ERROR",
+        message: err.message,
         details: "Consulte os logs da função para análise de rastreabilidade.",
+        fallback_url: originPath 
       }),
       {
         status: 400,
