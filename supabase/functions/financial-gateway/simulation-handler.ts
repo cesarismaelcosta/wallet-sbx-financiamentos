@@ -2,7 +2,7 @@
  * SIMULATION HANDLER - CAMADA DE NORMALIZAÇÃO E PERSISTÊNCIA
  * @author Cesar Ismael
  * @description Este módulo atua como o "Sanitizador" do Gateway. Sua função é receber payloads 
- * de diversas origens (Sandbox, Mobile, Web), normalizar os dados para um esquema plano (Flat) 
+ * de diversas origens (sbX, sbXPAY, Mobile, etc), normalizar os dados para um esquema plano (Flat) 
  * e garantir a gravação íntegra na tabela 'simulations'.
  * 
  * --- PILARES TÉCNICOS ---

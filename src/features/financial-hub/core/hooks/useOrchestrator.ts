@@ -87,7 +87,7 @@ export interface Offer {
   offer_description: string;
   offer_value: number;
   category_id?: number; // Preenchido no backend via roteamento (de-para)
-  category: string;     // String literal enviada pelo frontend/sandbox
+  category: string;     // String literal enviada pelo frontend
   [key: string]: any;   // Extensão de payload (Ex: Injeção de 'vehicle' ou 'equity')
 }
 
@@ -221,7 +221,7 @@ export const orchestrateNavigation = async (
     origin_visit_update_id: currentUpdateId || undefined,
     ...Payload,
     interaction_context: {
-      utm_source: Payload.interaction_context?.utm_source || "sandbox_navigation",
+      utm_source: Payload.interaction_context?.utm_source,
       origin_url: Payload.origin_url || window.location.href,
       target_url: Payload.target_url,
       ...(Payload.interaction_context || {}),

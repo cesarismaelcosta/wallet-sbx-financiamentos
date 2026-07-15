@@ -112,7 +112,7 @@ export interface Offer {
   offer_description: string;
   offer_value: number;
   category_id?: number;    // Injetado pelo Orquestrador após o de-para
-  category: string;        // Texto vindo do site/sandbox
+  category: string;        // Texto vindo do site
   [key: string]: any;      // Aqui entrará 'vehicle', 'equity' ou qualquer outro detalhe enviado
 }
 
@@ -166,7 +166,7 @@ export interface OrchestratorPayload {
   page_faqs?: any;
 
   // ROTEAMENTO
-  is_integrated?: boolean;                    // Indica se a visita veio de um parceiro integrado (ex: Fandi, Cartão) ou do Sandbox
+  is_integrated?: boolean;                    // Indica se a visita veio de um parceiro integrado (ex: Fandi, Cartão)
   integration_method?: string;                // integration_method = 'API', 'EMAIL', 'FILE', 'MANUAL'
   integration_details?: Record<string, any>;  // Permite enviar detalhes específicos do parceiro (ex: nome do parceiro, CNPJ, ponto de venda, webhook URL, etc.)  
   product_id?: number; 

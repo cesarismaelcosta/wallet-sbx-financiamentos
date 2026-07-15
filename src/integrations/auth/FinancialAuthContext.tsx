@@ -1,6 +1,6 @@
 /**
  * @fileoverview Contexto: FinancialAuthContext
- * @description Contexto de autenticação exclusivo para o Sandbox/Financial Hub.
+ * @description Contexto de autenticação exclusivo para o sbXPAY/Financial Hub.
  * Lê, gerencia e propaga o session_token e user_id para toda a aplicação.
  * * [ARQUITETURA DE SEGURANÇA - BFF & JWT PRÓPRIO]:
  * - O frontend opera exclusivamente com um JWT Próprio (session_token), assinado pelo 
@@ -44,7 +44,7 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
 
       // 2. RESETA O ESTADO GLOBAL
       // Ao removermos o redirecionamento forçado que existia aqui, o React re-renderiza 
-      // a árvore instantaneamente. Os Gatekeepers de cada rota (ex: SandboxLayout)
+      // a árvore instantaneamente. Os Gatekeepers de cada rota (ex: sbXPAYLayout)
       // vão interceptar a falta de token e rotear o usuário da forma correta.
       setSessionToken(null);
       setUserId(null);

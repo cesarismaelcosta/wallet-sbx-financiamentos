@@ -3,7 +3,7 @@
  * @version 1.0.0
  * @description Ponto central de orquestração entre o ecossistema Wallet sbX e parceiros financeiros (Fandi).
  * * --- ARQUITETURA DO FLUXO (A JORNADA DO CLIQUE) ---
- * 1. INGESTÃO: Recebe o payload estruturado do Sandbox/Front-end.
+ * 1. INGESTÃO: Recebe o payload estruturado do sbXPAY/Front-end.
  * 2. PERSISTÊNCIA: Aciona o 'simulation_handler' para validar e gravar a intenção (Status: Enviada).
  * 3. INTEGRAÇÃO (HANDSHAKE FANDI):
  * - GUID: Identificação única da sessão.

@@ -92,7 +92,7 @@ export interface Offer {
   offer_description: string;
   offer_value: number;
   category_id?: number;    // Injetado pelo Orquestrador após o de-para
-  category: string;        // Texto vindo do site/sandbox
+  category: string;        // Texto vindo do site
   [key: string]: any;      // Aqui entrará 'vehicle', 'equity' ou qualquer outro detalhe enviado
 }
 
@@ -145,7 +145,7 @@ export interface OrchestratorPayload {
   page_faqs?: any;
 
   // ROTEAMENTO
-  is_integrated?: boolean;                    // Indica se a visita veio de um parceiro integrado (ex: Fandi, Cartão) ou do Sandbox
+  is_integrated?: boolean;                    // Indica se a visita veio de um parceiro integrado (ex: Fandi, Cartão)
   integration_method?: string;                // integration_method = 'API', 'EMAIL', 'FILE', 'MANUAL'
   integration_details?: Record<string, any>;  // Permite enviar detalhes específicos do parceiro (ex: nome do parceiro, CNPJ, ponto de venda, webhook URL, etc.)  
   product_id?: number; 
@@ -287,7 +287,7 @@ export interface HomeCollateral {
 export interface SimulationPayload {
   visit_id: string;
   simulation_id: string;
-  is_integrated: boolean;       // Indica se a simulação veio de um parceiro integrado (ex: Fandi, Cartão) ou do Sandbox
+  is_integrated: boolean;       // Indica se a simulação veio de um parceiro integrado (ex: Fandi, Cartão)
   integration_method: string;   // integration_method = 'API', 'EMAIL', 'FILE', 'MANUAL'
   partner_id: number;
   product_id: number;
@@ -396,4 +396,119 @@ export interface EmailTemplateResult {
     content_id: string;   // O CID para embutir no HTML
     storage_path: string;  // O caminho da imagem no Bucket
   }>;
+}
+
+
+/**
+ * @fileoverview Contratos de Dados (Shared Types) - Ecossistema sbX
+ * Centraliza as interfaces de dados que trafegam entre o Upstream (Superbid), 
+ * o Gateway (BFF) e o Frontend.
+ * 
+ * * [PADRONIZAÇÃO]:
+ * 1. Interfaces seguem a nomenclatura BFF (Backend For Frontend).
+ * 2. Campos são mapeados para facilitar a legibilidade no frontend (camelCase).
+ * 3. Esta estrutura elimina a redundância de buscar dados repetidamente.
+ */
+
+// =========================================================================
+// [1] USUÁRIO: Perfil Identitário
+// =========================================================================
+export interface BFFUserProfile {
+  entity_id: string; // ID único do usuário no ecossistema
+  name: string;      // Nome completo
+  document: string;  // CPF/CNPJ (Mapeado)
+  email: string;     // E-mail principal de contato
+  phone: string;     // Telefone formatado
+  birth_date: string;// Data de nascimento ISO
+  gender: "M" | "F"; // Gênero
+  login: string;     // Usuário de login
+  mothers_name: string;
+  address: {
+    street: string;
+    number: string;
+    complement: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    country: string;
+  } | null;
+  metadata: {
+    processedAt: string;
+    originIp: string;
+  };
+}
+
+// =========================================================================
+// [2] OFERTA: Detalhamento do Lote e Entidades Associadas
+// =========================================================================
+export interface BFFOfferPhoto {
+  highlight: boolean;
+  link: string;
+  thumbnail?: string;
+  file_name?: string;
+  type: string;
+  content_type: string;
+}
+
+export interface BFFOfferDetails {
+  offer: {
+    offer_id: string;
+    lot_number: string | number;
+    offer_description: string;
+    offer_detailed_description: string;
+    offer_value: number;
+    category_id: number;
+    category: string;
+    offer_status: string;
+    sale_status: string;
+    end_date: string;
+    photos: BFFOfferPhoto[];
+  };
+  manager: {
+    manager_id: number;
+    manager_name: string;
+  };
+  event: {
+    event_id: string;
+    event_description: string;
+    event_start_date: string;
+    event_end_date: string;
+    modality_id: number | null;
+    status_id: number | null;
+    event_short_description: string;
+    event_full_description: string;
+    event_image_url: string;
+  };
+  seller: {
+    seller_id: string;
+    legal_name: string;
+    trade_name: string;
+    economic_group: string;
+  };
+}
+
+// =========================================================================
+// [3] REIDRATAÇÃO: O Payload "Barba, Cabelo e Bigode"
+// =========================================================================
+/**
+ * Interface de resposta unificada para a Edge Function de Exchange.
+ * Permite que o frontend inicialize a aplicação com tudo o que precisa
+ * em uma única chamada de rede (Zero-latency start).
+ */
+export interface BFFRehydrationPayload {
+  user_profile: BFFUserProfile;
+  offer_details: BFFOfferDetails | null; // Nullável caso a chamada seja apenas de autenticação
+}
+
+// =========================================================================
+// [4] RESPONSE: Estrutura final da Edge Function (sbx-auth-exchange)
+// =========================================================================
+export interface BFFAuthExchangeResponse {
+  success: boolean;
+  session_token: string;
+  user_id: string;
+  expires_at: number;
+  server_now_ms: number;
+  rehydration_payload: BFFRehydrationPayload; // Aqui reside o combo completo
 }
