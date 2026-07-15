@@ -22,7 +22,17 @@ interface FinancialHubLayoutProps {
   children: React.ReactNode;
 }
 
-function ErrorCountdown({ fallbackUrl }: { fallbackUrl: string }) {
+function ErrorCountdown({ 
+  title, 
+  message, 
+  buttonText, 
+  fallbackUrl 
+}: { 
+  title: string; 
+  message: string; 
+  buttonText: string; 
+  fallbackUrl: string; 
+}) {
   const [countdown, setCountdown] = useState(10);
 
   useEffect(() => {
@@ -67,12 +77,29 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
       const timeout = setTimeout(() => {
         setIsOrchestratorHydrating(false);
         console.warn(
-          "⚠️ [Failsafe] A cortina global foi aberta à força por timeout (8s). Verifique se ocorreu algum erro silencioso nos componentes filhos.",
+          "⚠️ [Failsafe] A cortina global foi aberta à força por timeout (10s). Verifique se ocorreu algum erro silencioso nos componentes filhos.",
         );
-      }, 8000);
+      }, 10000);
       return () => clearTimeout(timeout);
     }
   }, [isOrchestratorHydrating]);
+
+  // Define o tipo para ficar tudo organizado
+  interface ErrorUI {
+    title: string;
+    msg: string;
+    cta: string;
+  }
+
+  const getErrorUI = (code: string): ErrorUI => {
+    const map: Record<string, ErrorUI> = {
+      'SESSION_EXPIRED': { title: "Sua sessão expirou.", msg: "Por favor, faça login novamente.", cta: "Ir para o login" },
+      'INVALID_RELATIONSHIP': { title: "Acesso restrito.", msg: "Você não tem permissão para esta simulação.", cta: "Voltar" },
+      'OFFER_NOT_FOUND': { title: "Oferta expirada.", msg: "Esta oferta não está mais ativa ou foi removida.", cta: "Voltar" }
+    };
+
+    return map[code] || { title: "Ops!", msg: "Tivemos um problema inesperado.", cta: "Tentar novamente" };
+  };
 
   return (
     <OrchestratorWrapper visitId={(search as any).visit_id} visitUpdateId={(search as any).visit_update_id}>
@@ -80,12 +107,14 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
         // Se o backend nos enviou uma resposta com success: false,
         // renderizamos o componente de erro com countdown
         if (simData?.success === false) {
-            return (
-                <ErrorCountdown 
-                    message={simData.message || "Esta oferta não está mais disponível."} 
-                    fallbackUrl={simData.fallback_url || "/"} 
-                />
-            );
+          return (
+            <ErrorCountdown 
+                title={errorUI.title} 
+                message={String(errorUI.msg || simData.message)}
+                buttonText={errorUI.cta}
+                fallbackUrl={String(simData.fallback_url || "/")} 
+            />
+          );
         }
         
         // Se o backend nos enviou uma resposta com success: true,
