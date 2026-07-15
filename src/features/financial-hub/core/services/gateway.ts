@@ -97,6 +97,11 @@ export async function callOrchestrator(
    * para permitir log de diagnóstico detalhado no frontend e monitoramento externo.
    */
   if (!response.ok) {
+
+    console.error("=========================================");
+    console.error(`[GATEWAY DEBUG - ORCHESTRATOR] Falhou no método: ${method}`);
+    console.error(`[GATEWAY DEBUG - ORCHESTRATOR] HTTP Status: ${response.status}`);
+    console.error(`[GATEWAY DEBUG - ORCHESTRATOR] Texto Cru do Servidor:`, errorText);
     
     // Tenta decodificar o corpo do erro como JSON; fallback para texto simples.
     // Capturas o payload de erro como um objeto puro
@@ -104,6 +109,9 @@ export async function callOrchestrator(
       error: "Erro de parsing no Gateway", 
       details: "O servidor retornou um erro não estruturado" 
     }));
+
+    console.error(`[GATEWAY DEBUG - ORCHESTRATOR] JSON Interpretado:`, errorData);
+    console.error("=========================================");
 
     // NÃO cria uma instância de Error. 
     // Lança um objeto simples. Isso impede que qualquer camada 
