@@ -23,7 +23,7 @@ import { decode } from "https://deno.land/x/djwt@v2.8/mod.ts";
 
 // IMPORTANTE: Trazendo o Gatekeeper unificado do ecossistema
 import { validateRequest } from "../_shared/auth.ts";
-import type { Offer, Manager, Event, Seller, Vehicle } from "../../../src/features/financial-hub/components/shared/types.ts";
+import { Offer, Manager, Event, Seller } from "../_shared/types.ts";
 
 /**
  * ============================================================================
