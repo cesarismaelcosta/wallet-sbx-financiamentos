@@ -1,28 +1,27 @@
 /**
- * @fileoverview EDGE FUNCTION: SBX-USER (Security Gatekeeper & User BFF)
+ * @fileoverview Edge Function: sbx-user (Security Gatekeeper & User BFF)
  * * ============================================================================
- * ARQUITETURA DE SEGURANÇA E CONTEXTO (BFF Contract)
+ * ARQUITETURA DE SEGURANÇA E CONTEXTO:
  * ============================================================================
- * Esta função atua como o validador de identidade primordial e provedor de perfil
- * do ecossistema sbX.
+ * Esta função atua como o validador de identidade primordial do ecossistema sbX.
+ * Ela adota uma postura de "Zero Confiança" no cliente: valida matematicamente o JWT,
+ * valida o estado e o TTL da sessão diretamente no banco de dados corporativo, resolve
+ * o token upstream oculto e realiza o proxy seguro para a API da Superbid.
  * 
- * 1. Identidade: Delega a validação criptográfica para o shared/auth (validateRequest).
- * 2. SSOT (Single Source of Truth): Extrai o `environment` e `sbx_access_token` 
- *    EXCLUSIVAMENTE do banco de dados (session_tokens). O frontend não dita o ambiente.
- * 3. Integração Upstream: Realiza a chamada à API da Superbid injetando o Bearer real.
- * 4. Resiliência: Intercepta tokens upstream expirados (401) e devolve o contrato padrão
+ * * [RESPONSABILIDADES]:
+ * 1. Identidade: Delega a verificação HMAC-SHA256 para o shared/auth (validateRequest).
+ * 2. Estado (SSOT): Valida o ciclo de vida e ambiente via tabela `session_tokens`.
+ * 3. Integração Upstream: Realiza a chamada à API da Superbid injetando o Bearer token real.
+ * 4. Resiliência End-to-End: Intercepta tokens de parceiros expirados (401) e propaga o erro
  *    para disparar o Protocolo de Amnésia global no Frontend.
- * 5. Type Safety: Mapeia o payload bruto de perfil de usuário com tipagem forte.
  * 
  * @author Cesar Ismael Pereira da Costa
- * @description Single Source of Truth para perfil de usuário com Handshake Zero Trust.
- * @version 3.0.0 (Integração Total com sbX Core Auth e Blindagem de Ambiente)
+ * @version 3.1.0 (Refatoração de Exceções Semânticas, SSOT e Alinhamento com Orchestrator)
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-
-// IMPORTANTE: Trazendo o Gatekeeper unificado do ecossistema
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { decode } from "https://deno.land/x/djwt@v2.8/mod.ts";
 import { validateRequest } from "../_shared/auth.ts";
 
 /**
@@ -30,13 +29,8 @@ import { validateRequest } from "../_shared/auth.ts";
  * CONFIGURAÇÕES GLOBAIS E SEGURANÇA
  * ============================================================================
  */
-const DEBUG_MODE = Deno.env.get("DEBUG_MODE") === "true";
+const DEBUG_MODE = true;
 
-/**
- * @function debugLog
- * @description Centraliza os logs do pipeline. Em produção, DEBUG_MODE deve ser false
- * para evitar exposição de PII (Personally Identifiable Information).
- */
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
     console.log(`[SBX-USER-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
@@ -46,45 +40,44 @@ const debugLog = (message: string, data?: any) => {
 /**
  * CONFIGURAÇÃO GLOBAL DE CORS (Única Fonte de Verdade)
  * @description Espelha as regras estritas do Orquestrador Central.
- * A inclusão do 'x-session-token' é vital para o Handshake Zero Trust (Validação de Identidade).
- * NOTA DE SEGURANÇA: x-sbx-env foi removido. O ambiente agora é ditado 100% pelo Backend/DB.
+ * NOTA DE SEGURANÇA: x-sbx-env removido. O ambiente agora é ditado 100% pelo Backend/DB.
  */
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token, x-original-url, x-auth-fallback-url",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-original-url, x-session-token, x-auth-fallback-url",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
 /**
  * ============================================================================
- * HANDLER PRINCIPAL (PIPELINE DE LEITURA DO PERFIL)
+ * HANDLER PRINCIPAL
  * ============================================================================
  */
 serve(async (req: Request) => {
-  // 1. AVALIAÇÃO DE CORS E PREFLIGHT
+  // =========================================================================
+  // 1. HANDSHAKE (OPTIONS) - Preflight CORS
+  // =========================================================================
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // 2. INICIALIZAÇÃO DE CONTEXTO (Bypass RLS para operações internas de sessão)
-  const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!, 
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-      auth: { persistSession: false },
+  // Bypass RLS para operações críticas do motor
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: { persistSession: false },
   });
 
   // =========================================================================
-  // FASE 1: SEGURANÇA E IDENTIDADE (Handshake Zero Trust)
+  // 2. FASE 1: SEGURANÇA E IDENTIDADE (Handshake Zero Trust)
   // =========================================================================
   let auth;
   try {
       auth = await validateRequest(req);
   } catch (err: any) {
-      // 1. Descoberta da Origem
       const originPath = req.headers.get("x-original-url");
       const authUrl = req.headers.get("x-auth-fallback-url");
 
       if (!originPath) {
+          // Failsafe: Se o frontend não enviou o header, barramos aqui.
           return new Response(JSON.stringify({ 
               success: false,
               code: "INTERNAL_ERROR",
@@ -96,12 +89,12 @@ serve(async (req: Request) => {
           });
       }
 
-      // 2. Padronização de Variáveis e Tradução UX
       let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
       let errorCode = "UNAUTHORIZED";
       let fallbackUrl = authUrl;
       let statusCode = 401;
 
+      // Tradução do Erro para Experiência do Usuário (UX)
       if (err.message.includes("SESSION_EXPIRED")) {
           userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
           errorCode = "SESSION_EXPIRED";
@@ -117,7 +110,7 @@ serve(async (req: Request) => {
           statusCode = 500;
       }
 
-      // 3. Retorno seguindo o contrato oficial da API
+      // Retorno seguindo o contrato oficial da API
       return new Response(JSON.stringify({ 
           success: false,
           code: errorCode,
@@ -130,60 +123,64 @@ serve(async (req: Request) => {
   }
 
   // =========================================================================
-  // FASE 2: LÓGICA DE NEGÓCIO E PERFIL (Single Source of Truth)
+  // 3. FASE 2: ESTADO E INTEGRAÇÃO UPSTREAM (SSOT)
   // =========================================================================
   try {
     const originPath = req.headers.get("x-original-url") || "/";
     const authUrl = req.headers.get("x-auth-fallback-url") || "/";
-
-    // A. Busca do Access Token e Ambiente da Superbid no Banco
-    const sessionToken = req.headers.get("x-session-token");
+    const sessionToken = req.headers.get("x-session-token")!;
     
-    // 🔒 SSOT: A verdade sobre o ambiente e TTL vem exclusivamente do banco de dados.
-    const { data: session } = await supabaseAdmin
+    // 🔒 EXTRAÇÃO LIMPA: Usa a lib oficial para ler o JWT sem validar a assinatura novamente
+    const [, jwtPayload] = decode(sessionToken);
+    const sessionId = (jwtPayload as any).jti;
+
+    // 🔒 SSOT: Busca a sessão no banco usando o JTI exato
+    const { data: session } = await supabase
         .from("session_tokens")
         .select("sbx_access_token, environment") 
-        .eq("session_token", auth?.jti || sessionToken) 
+        .eq("session_token", sessionId) 
         .single();
         
     if (!session) {
       const err = new Error("Sua sessão na plataforma expirou ou foi revogada.");
-      (err as any).code = "SESSION_EXPIRED";
+      (err as any).errorCode = "SESSION_EXPIRED";
       (err as any).fallback_url = authUrl;
       throw err;
     }
 
-    // 🔒 SEGURANÇA BLINDADA: O ambiente da integração Upstream é ditado pelo banco.
     const env = session.environment || "stage";
     const baseUrl = env === "production" ? "https://api.s4bdigital.net" : "https://stgapi.s4bdigital.net";
     
     debugLog(`[INFO] Roteando requisição de usuário para ambiente Upstream: ${env}`);
 
-    // B. Integração Upstream (Superbid API - User Profile)
+    // Chamada Upstream (Superbid API)
     const response = await fetch(`${baseUrl}/account/v2/user/me`, {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${session.sbx_access_token}`, 
+        "Authorization": `Bearer ${session.sbx_access_token}`, // Injeção do token upstream protegido
         "Content-Type": "application/json"
       },
     });
 
+    // Interceptação de Token do Parceiro Expirado / Revogado na Superbid
     if (response.status === 401) {
       const err = new Error("Sua sessão com a plataforma expirou. Por favor, faça login novamente.");
-      (err as any).code = "SESSION_EXPIRED";
+      (err as any).errorCode = "SESSION_EXPIRED";
       (err as any).fallback_url = authUrl;
       throw err;
     }
     
+    // Tratamento de indisponibilidade da API externa
     if (!response.ok) {
-        const errBody = await response.text();
         const err = new Error(`Instabilidade na integração com a plataforma (${response.status}).`);
-        (err as any).code = "UPSTREAM_ERROR";
+        (err as any).errorCode = "UPSTREAM_ERROR";
         (err as any).fallback_url = originPath;
         throw err;
     }
     
-    // C. Hidratação: Mapeamento e Contrato BFF
+    // =========================================================================
+    // 4. HIDRATAÇÃO: MAPEAMENTO E CONTRATO BFF
+    // =========================================================================
     const data = await response.json();
     const account = data.userAccounts?.[0];
     const mainAddress = account?.addresses?.[0];
@@ -211,18 +208,16 @@ serve(async (req: Request) => {
       } : null
     };
 
-    // D. Resposta de Sucesso
     return new Response(JSON.stringify(enrichedData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
 
-  } catch (err: any) {
-    debugLog(`[SBX-USER] Falha na operação: ${err.message}`);
+  } catch (error: any) {
+    debugLog(`[SBX-USER] Falha na operação: ${error.message}`);
     
-    // Extrativismo de Propriedades Injetadas ou Default
-    const errorCode = err.code || "UNKNOWN_ERROR";
-    const fallbackUrl = err.fallback_url || "/";
+    // Extraímos o código que injetamos lá no bloco de validação (Padrão Orchestrator)
+    const errorCode = error.errorCode || "UNKNOWN_ERROR";
     
     let statusCode = 400;
     if (errorCode === "UNAUTHORIZED" || errorCode === "SESSION_EXPIRED") statusCode = 401;
@@ -233,8 +228,8 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({ 
         success: false,
         code: errorCode,             
-        message: err.message,        
-        fallback_url: fallbackUrl 
+        message: error.message,        
+        fallback_url: error.fallback_url || "/" 
     }), { 
         status: statusCode, 
         headers: { ...corsHeaders, "Content-Type": "application/json" } 
