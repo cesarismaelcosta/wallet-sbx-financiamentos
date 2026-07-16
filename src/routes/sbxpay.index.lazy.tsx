@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createLazyFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Loader2, LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Building, UserPlus } from 'lucide-react';
+import { Loader2, LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Building, UserPlus, AppWindow, Users, ShieldCheck, Lock, Plus } from 'lucide-react';
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Button } from "@/components/ui/button";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
@@ -58,7 +58,7 @@ const flowsConfig = {
 
 export function sbXPAYHome() {
     const navigate = useNavigate();
-    const { token, logout } = useFinancialAuth();
+    const { sessionToken, logout } = useFinancialAuth();
     
     const [isScrolled, setIsScrolled] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -143,36 +143,40 @@ export function sbXPAYHome() {
         isSingle: boolean = false
     ) => {
         const config = flowsConfig[configKey];
-        
-        // Identifica se ESTE botão específico é o que está carregando
         const isCurrentLoading = loading && activeKey === configKey;
         
-        const baseClasses = `flex items-center justify-center gap-2 px-6 py-3 font-medium rounded-xl transition-all ${isSingle ? 'w-auto' : 'flex-1'}`;
+        // [AJUSTE GEMINI]: Adicionado 'w-full md:w-auto' para o botão ocupar 100% no mobile e se ajustar no desktop
+        const baseClasses = `flex items-center justify-center gap-3 px-6 py-3 font-medium rounded-xl transition-all w-full md:w-auto`;
 
-        // Se estiver desabilitado por configuração
         if (config.disabled) {
             return (
                 <button disabled className={`${baseClasses} bg-slate-50 border border-slate-200 text-slate-400 cursor-not-allowed opacity-60`}>
-                    <Icon className="w-5 h-5" strokeWidth={1.5} />
-                    <span className="font-jakarta tracking-tight">{label}</span>
+                    {/* Wrapper de tamanho fixo com flex-shrink-0 para o ícone não amassar */}
+                    <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                        <Icon className="w-full h-full" strokeWidth={1.5} />
+                    </div>
+                    {/* text-left adicionado para alinhamento correto em quebras de linha */}
+                    <span className="font-jakarta tracking-tight text-left">{label}</span>
                 </button>
             );
         }
 
         return (
             <button 
-                // 1. O DISABLED AQUI MATA O HOVER E O CLIQUE
                 disabled={loading} 
                 onClick={() => handleProductClick(configKey)}
                 className={`${baseClasses} bg-white border border-purple-600 text-purple-600 ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-50'}`}
             >
-                {/* 2. A TROCA DO ÍCONE */}
-                {isCurrentLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" strokeWidth={1.5} />
-                ) : (
-                    <Icon className="w-5 h-5" strokeWidth={1.5} />
-                )}
-                <span className="font-jakarta tracking-tight">
+                {/* Wrapper de tamanho fixo com flex-shrink-0 para o ícone não amassar */}
+                <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                    {isCurrentLoading ? (
+                        <Loader2 className="w-full h-full animate-spin" strokeWidth={1.5} />
+                    ) : (
+                        <Icon className="w-full h-full" strokeWidth={1.5} />
+                    )}
+                </div>
+                {/* text-left para alinhamento correto em quebras de linha */}
+                <span className="font-jakarta tracking-tight text-left">
                     {isCurrentLoading ? "Aguarde..." : label}
                 </span>
             </button>
@@ -207,9 +211,9 @@ export function sbXPAYHome() {
                         <a href="#seguros" className="hover:text-purple-600 transition-colors">Seguros</a>
                     </nav>
 
-                    <div className="flex items-center space-x-3">
+                    <div className="hidden md:flex items-center space-x-3">
                         <a href="/backoffice" className={ghostBtn}>Backoffice</a>
-                        {token ? (
+                        {sessionToken ? (
                             <button onClick={logout} className={`flex items-center gap-2 ${ghostBtn}`}>
                                 Sair <LogOut className="w-3 h-3" />
                             </button>
@@ -240,23 +244,29 @@ export function sbXPAYHome() {
                             </h1>
                             
                             <p className="text-sm md:text-base text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                                A plataforma líder da América Latina é a única com fintech própria. Negocie em um ecossistema seguro, com a proteção que seu patrimônio exige.
+                                A plataforma líder da América Latina é tem uma infraestrutura segura e inovadora, com a proteção que seu patrimônio exige.
                             </p>
 
                             <div className="border-t border-gray-100 pt-5 space-y-4 text-left max-w-xl mx-auto lg:mx-0">
                                 <h3 className="text-xs font-bold text-purple-600 uppercase tracking-wider">Conta sbXPAY: Prática e Segura</h3>
+                                
+                                {/* Item 1 */}
                                 <div className="flex items-start space-x-3">
-                                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 mt-0.5">
-                                        <i className="fa-solid fa-vault text-sm"></i>
+                                    <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
+                                        {/* Ícone de Mais estilizado */}
+                                        <Plus className="w-4 h-4 text-purple-500" strokeWidth={3} />
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-900 text-sm">O seu dinheiro sempre protegido</h4>
                                         <p className="text-slate-600 text-xs mt-1 leading-relaxed">Fique tranquilo na hora de comprar. Os valores das suas negociações ficam guardados em contas pagamento de nossa Instituição de Pagamento regulada pelo BC.</p>
                                     </div>
                                 </div>
+                                
+                                {/* Item 2 */}
                                 <div className="flex items-start space-x-3">
-                                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 mt-0.5">
-                                        <i className="fa-solid fa-file-shield text-sm"></i>
+                                    <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
+                                        {/* Ícone de Mais estilizado */}
+                                        <Plus className="w-4 h-4 text-purple-500" strokeWidth={3} />
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-900 text-sm">Padrão máximo de segurança</h4>
@@ -302,18 +312,34 @@ export function sbXPAYHome() {
                                 <span>Até R$ 120 mil</span>
                             </div>
                             <div className="space-y-3">
-                                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Use seu cartão de crédito na Superbid.</h2>
+                                <h2 className="text-xl md:text-3xl font-bold text-slate-900 tracking-tight">Parcele em até 18x com seu cartão.</h2>
                                 <p className="text-sm md:text-base text-slate-600 leading-relaxed">Não deixe um bom negócio escapar. Amplie seu poder de compra usando o seu limite do cartão de crédito com total tranquilidade na hora de arrematar.</p>
                             </div>
-                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-md shadow-purple-500/5 space-y-4">
-                                <div className="flex items-center space-x-3 text-purple-600 font-bold text-base">
-                                    <i className="fa-solid fa-calendar-check text-xl"></i>
-                                    <span>Parcele suas compras em até 18x</span>
+                            {/* Dois quadros cinza lado a lado com diferenciais adicionais*/}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                                
+                                {/* Card 1: PF e PJ */}
+                                <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4 flex flex-col gap-2 transition-colors hover:bg-slate-50">
+                                    <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                                        <Plus className="w-4 h-4 text-purple-500" strokeWidth={3} />
+                                        <span>Para PF e PJ</span>
+                                    </div>
+                                    <p className="text-slate-600 text-xs leading-relaxed">
+                                        Condições válidas para pessoas físicas e jurídicas aproveitarem o parcelamento de aquisições no cartão.
+                                    </p>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <p className="text-slate-600 text-xs leading-relaxed"><strong className="text-slate-900">Para PF e PJ:</strong> Pessoas físicas e jurídicas podem parcelar as aquisições em até 18 vezes.</p>
-                                    <p className="text-slate-600 text-xs leading-relaxed"><strong className="text-slate-900">Segurança 3DS:</strong> Protocolo avançado de autenticação (3D Secure) para transações em cartão.</p>
+
+                                {/* Card 2: Segurança */}
+                                <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4 flex flex-col gap-2 transition-colors hover:bg-slate-50">
+                                    <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                                        <Plus className="w-4 h-4 text-purple-500" strokeWidth={3} />
+                                        <span>Segurança 3DS</span>
+                                    </div>
+                                    <p className="text-slate-600 text-xs leading-relaxed">
+                                        Protocolo avançado de autenticação (3D Secure) ativado para garantir transações protegidas e sem fraudes.
+                                    </p>
                                 </div>
+
                             </div>
                             <div className="pt-2">
                                 {renderButton("Ofertas parceladas com cartão", CreditCard, "cartao", true)}
@@ -340,11 +366,12 @@ export function sbXPAYHome() {
                         <div className="w-full lg:w-6/12 space-y-5 text-center lg:text-left">
                             <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
                                 <i className="fa-solid fa-truck-pickup"></i>
-                                <span>PROCESSO 100% DIGITAL E NECOCIAÇÃO COM ESPECIALISTAS</span>
+                                <span>PROCESSO DIGITAL COM APOIO DE ESPECIALISTAS</span>
                             </div>
-                            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Financie seu novo veículo em até 60x.</h2>
-                            <p className="text-sm md:text-base text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0">Compre seu carro ou caminhão com as melhores taxas do mercado. Nós fazemos o trabalho pesado de assessoria e buscamos as melhores soluções nas maiores parceiras financeiras do Brasil.</p>
-                            <div className="flex gap-4 w-full max-w-2xl">
+                            <h2 className="text-xl md:text-3xl font-bold text-slate-900 tracking-tight">Financie seu veículo em até 60x.</h2>
+                            <p className="text-sm md:text-base text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0">Compre seu carro ou caminhão com as melhores taxas do mercado. Nós fazemos o trabalho pesado de assessoria e buscamos as melhores soluções nos maiores bancos do Brasil.</p>
+                            {/* quebra responsiva */}
+                            <div className="flex flex-col md:flex-row gap-4 w-full max-w-2xl">
                                 {renderButton("Carros financiados", Car, "carros")}
                                 {renderButton("Caminhões financiados", Truck, "caminhoes")}
                             </div>
@@ -370,10 +397,10 @@ export function sbXPAYHome() {
                         <div className="w-full lg:w-6/12 space-y-5">
                             <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
                                 <i className="fa-solid fa-house-chimney"></i>
-                                <span>INVISTA PAGANDO EM ATÉ 240 MESES</span>
+                                <span>INVISTA PAGANDO EM ATÉ 240x</span>
                             </div>
-                            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Financie seu novo imóvel em até 240 meses.</h2>
-                            <p className="text-sm md:text-base text-slate-600 leading-relaxed">Realize o sonho do imóvel próprio com prazos e taxas especiais. Uma facilidade robusta construída em parceria com os maiores bancos do país.</p>
+                            <h2 className="text-xl md:text-3xl font-bold text-slate-900 tracking-tight">Financie seu imóvel em até 240x.</h2>
+                            <p className="text-sm md:text-base text-slate-600 leading-relaxed">Realize o sonho do imóvel próprio com prazos e condições especiais. Buscamos as melhores taxas em parceria com os maiores bancos do país.</p>
                             <div className="pt-2">
                                 {renderButton("Imóveis financiados", Home, "imoveis", true)}
                             </div>
@@ -399,11 +426,12 @@ export function sbXPAYHome() {
                         <div className="w-full lg:w-6/12 space-y-5 text-center lg:text-left">
                             <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
                                 <i className="fa-solid fa-money-bill-trend-up"></i>
-                                <span>TAXAS DIFERENCIADAS PARA VOCÊ INVESTIR NA SUPERBID</span>
+                                <span>TAXAS DIFERENCIADAS PARA VOCÊ INVESTIR</span>
                             </div>
-                            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Rentabilize seus ativos investindo na sbX.</h2>
-                            <p className="text-sm md:text-base text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0">Use seu próprio imóvel ou carro como garantia e consiga empréstimos com taxas reduzidas para comprar ativos únicos na sbX. Tenha prazos de até 240x para você aproveitar nossas oportunidades exclusivas.</p>
-                            <div className="flex gap-4 w-full max-w-2xl">
+                            <h2 className="text-xl md:text-3xl font-bold text-slate-900 tracking-tight">Converta seu bem em investimento.</h2>
+                            <p className="text-sm md:text-base text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0">Use seu próprio imóvel ou carro como garantia e consiga empréstimos com taxas reduzidas para comprar ativos únicos na sbX. Tenha prazos de até 240x para aproveitar nossas oportunidades.</p>
+                            {/* quebra responsiva */}
+                            <div className="flex flex-col md:flex-row gap-4 w-full max-w-2xl">
                                 {renderButton("Crédito usando seu carro", Car, "equityCarro")}
                                 {renderButton("Crédito usando seu imóvel", Home, "equityImovel")}
                             </div>
@@ -431,8 +459,8 @@ export function sbXPAYHome() {
                                 <i className="fa-solid fa-store"></i>
                                 <span>Lojistas AutoArremate</span>
                             </div>
-                            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Floor Plan para pagamento em até 90 dias.</h2>
-                            <p className="text-sm md:text-base text-slate-600 leading-relaxed">Você é lojista? Aproveite uma linha de crédito exclusiva para a compra de veículos na nossa plataforma com pagamento facilitado em até 90 dias.</p>
+                            <h2 className="text-xl md:text-3xl font-bold text-slate-900 tracking-tight">Floor Plan com prazo de até 90 dias.</h2>
+                            <p className="text-sm md:text-base text-slate-600 leading-relaxed">Você é lojista? Aproveite nossa linha de crédito exclusiva para a compra de veículos na nossa plataforma com pagamento em até 90 dias.</p>
                             <div className="pt-2">
                                 {renderButton("Conheça as condições", () => <TrendingUp className="w-5 h-5 rotate-90" strokeWidth={1.5} />, "floorPlan", true)}
                             </div>
@@ -461,16 +489,17 @@ export function sbXPAYHome() {
                                 <span>SEGURE SEU VEÍCULO OU SUA RESIDÊNCIA</span>
                             </div>
                             <div className="space-y-3">
-                                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Patrimônio protegido.</h2>
+                                <h2 className="text-xl md:text-3xl font-bold text-slate-900 tracking-tight">Patrimônio protegido.</h2>
                                 <p className="text-sm md:text-base text-slate-600">Use a Wallet sBX para desfrutar de condições diferenciadas e garantir seus bens com contra imprevistos.</p>
                             </div>
                             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-md shadow-purple-500/5 space-y-3">
                                 <h3 className="text-xs font-bold text-purple-600 uppercase tracking-wider">Cotação 100% Online, em segundos, sem compromisso</h3>
                                 <p className="text-slate-600 text-xs leading-relaxed">Simulação nas seguradoras líderes de mercado. Se você comprou ou já tem um imóvel ou veículo, conheça nossas condições, sem burocracias, sem cobranças, tudo online.</p>
                             </div>
-                            <div className="flex gap-4 w-full max-w-2xl">
-                                {renderButton("Compare seguros residenciais", Building, "seguroResidencial")}
-                                {renderButton("Compare seguros de veículos", Car, "seguroAuto")}
+                            {/* quebra responsiva */}
+                            <div className="flex flex-col md:flex-row gap-4 w-full max-w-2xl">
+                                {renderButton("Seguros residenciais", Building, "seguroResidencial")}
+                                {renderButton("Seguros de veículos", Car, "seguroAuto")}
                             </div>
                         </div>
                         <div className="w-full lg:w-5/12 flex justify-center mt-8 lg:mt-0 relative">
@@ -488,7 +517,7 @@ export function sbXPAYHome() {
             </section>
 
             {/* FOOTER - Logo aumentada */}
-            <footer className="w-full py-10 mt-auto bg-black border-t border-gray-800">
+            <footer className="w-full pt-10 pb-40 md:py-10 mt-auto bg-black border-t border-gray-800">
                 <div className="container mx-auto px-6 flex flex-col items-center gap-4 text-center">
                     
                     {/* Container maior (h-16 w-16) com o mesmo corte nas bordas */}
@@ -512,7 +541,6 @@ export function sbXPAYHome() {
             </footer>
 
             {/* OVERLAY DE LOADING */}
-            {/* OVERLAY DE LOADING */}
             {loading && (
                 <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
@@ -521,6 +549,35 @@ export function sbXPAYHome() {
                     </p>
                 </div>        
             )}
+
+            {/* MOBILE TAB BAR (Visível apenas no celular) */}
+            <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-50 flex justify-around items-center pt-2 pb-4 md:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                
+                {/* Botão Início (Ativo) */}
+                <a href="#" className="flex flex-col items-center justify-center text-purple-600 min-w-[70px] gap-1">
+                    <Home className="w-6 h-6" strokeWidth={1.5} />
+                    <span className="text-[10px] font-bold">Início</span>
+                </a>
+
+                {/* Botão Backoffice */}
+                <a href="/backoffice" className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[70px] gap-1">
+                    <AppWindow className="w-6 h-6" strokeWidth={1.5} />
+                    <span className="text-[10px] font-medium">Backoffice</span>
+                </a>
+
+                {/* Botão Entrar / Sair dinâmico */}
+                {sessionToken ? (
+                    <button onClick={logout} className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[70px] gap-1">
+                        <LogOut className="w-6 h-6" strokeWidth={1.5} />
+                        <span className="text-[10px] font-medium">Sair</span>
+                    </button>
+                ) : (
+                    <button onClick={() => navigate({ to: '/accounts/signin' })} className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[70px] gap-1">
+                        <LogIn className="w-6 h-6" strokeWidth={1.5} />
+                        <span className="text-[10px] font-medium">Entrar</span>
+                    </button>
+                )}
+            </div>
         </div>
     );
 }

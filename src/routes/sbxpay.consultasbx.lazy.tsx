@@ -21,7 +21,7 @@ import { Offer, Manager, Event, Seller } from "../_shared/types";
 // =========================================================================
 // [ROTEAMENTO]: Registro TanStack Router (Lazy Loading)
 // =========================================================================
-export const Route = createLazyFileRoute("/sbxpay/consultabsx")({
+export const Route = createLazyFileRoute("/sbxpay/consultasbx")({
   validateSearch: (search: Record<string, unknown>) => ({
     offer: search.offer as string | undefined,
   }),

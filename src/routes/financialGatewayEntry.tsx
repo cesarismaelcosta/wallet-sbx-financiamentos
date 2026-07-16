@@ -147,8 +147,8 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          "x-session-token": sbxData.session_token // Usa o token recém-criado
+          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,   // Libera o proxy do Supabase (Kong)
+          "Authorization": `Bearer ${sbxData.session_token}` // Nosso token de sessão padronizado
         },
         body: JSON.stringify({
            ...payload

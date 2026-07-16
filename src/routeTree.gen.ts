@@ -24,8 +24,8 @@ const LandingIndexLazyRouteImport = createFileRoute('/landing/')()
 const BackofficeIndexLazyRouteImport = createFileRoute('/backoffice/')()
 const SegurosAutoLazyRouteImport = createFileRoute('/seguros/auto')()
 const SbxpayOfferLazyRouteImport = createFileRoute('/sbxpay/offer')()
-const SbxpayConsultabsxLazyRouteImport = createFileRoute(
-  '/sbxpay/consultabsx',
+const SbxpayConsultasbxLazyRouteImport = createFileRoute(
+  '/sbxpay/consultasbx',
 )()
 const FinanciamentosVeiculosLazyRouteImport = createFileRoute(
   '/financiamentos/veiculos',
@@ -119,12 +119,12 @@ const SbxpayOfferLazyRoute = SbxpayOfferLazyRouteImport.update({
   path: '/offer',
   getParentRoute: () => SbxpayLazyRoute,
 } as any).lazy(() => import('./routes/sbxpay.offer.lazy').then((d) => d.Route))
-const SbxpayConsultabsxLazyRoute = SbxpayConsultabsxLazyRouteImport.update({
-  id: '/consultabsx',
-  path: '/consultabsx',
+const SbxpayConsultasbxLazyRoute = SbxpayConsultasbxLazyRouteImport.update({
+  id: '/consultasbx',
+  path: '/consultasbx',
   getParentRoute: () => SbxpayLazyRoute,
 } as any).lazy(() =>
-  import('./routes/sbxpay.consultabsx.lazy').then((d) => d.Route),
+  import('./routes/sbxpay.consultasbx.lazy').then((d) => d.Route),
 )
 const FinanciamentosVeiculosLazyRoute =
   FinanciamentosVeiculosLazyRouteImport.update({
@@ -242,7 +242,7 @@ export interface FileRoutesByFullPath {
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
-  '/sbxpay/consultabsx': typeof SbxpayConsultabsxLazyRoute
+  '/sbxpay/consultasbx': typeof SbxpayConsultasbxLazyRoute
   '/sbxpay/offer': typeof SbxpayOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
@@ -267,7 +267,7 @@ export interface FileRoutesByTo {
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
-  '/sbxpay/consultabsx': typeof SbxpayConsultabsxLazyRoute
+  '/sbxpay/consultasbx': typeof SbxpayConsultasbxLazyRoute
   '/sbxpay/offer': typeof SbxpayOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice': typeof BackofficeIndexLazyRoute
@@ -295,7 +295,7 @@ export interface FileRoutesById {
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
-  '/sbxpay/consultabsx': typeof SbxpayConsultabsxLazyRoute
+  '/sbxpay/consultasbx': typeof SbxpayConsultasbxLazyRoute
   '/sbxpay/offer': typeof SbxpayOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
@@ -324,7 +324,7 @@ export interface FileRouteTypes {
     | '/financiamentos/cartao'
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
-    | '/sbxpay/consultabsx'
+    | '/sbxpay/consultasbx'
     | '/sbxpay/offer'
     | '/seguros/auto'
     | '/backoffice/'
@@ -349,7 +349,7 @@ export interface FileRouteTypes {
     | '/financiamentos/cartao'
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
-    | '/sbxpay/consultabsx'
+    | '/sbxpay/consultasbx'
     | '/sbxpay/offer'
     | '/seguros/auto'
     | '/backoffice'
@@ -376,7 +376,7 @@ export interface FileRouteTypes {
     | '/financiamentos/cartao'
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
-    | '/sbxpay/consultabsx'
+    | '/sbxpay/consultasbx'
     | '/sbxpay/offer'
     | '/seguros/auto'
     | '/backoffice/'
@@ -476,11 +476,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SbxpayOfferLazyRouteImport
       parentRoute: typeof SbxpayLazyRoute
     }
-    '/sbxpay/consultabsx': {
-      id: '/sbxpay/consultabsx'
-      path: '/consultabsx'
-      fullPath: '/sbxpay/consultabsx'
-      preLoaderRoute: typeof SbxpayConsultabsxLazyRouteImport
+    '/sbxpay/consultasbx': {
+      id: '/sbxpay/consultasbx'
+      path: '/consultasbx'
+      fullPath: '/sbxpay/consultasbx'
+      preLoaderRoute: typeof SbxpayConsultasbxLazyRouteImport
       parentRoute: typeof SbxpayLazyRoute
     }
     '/financiamentos/veiculos': {
@@ -619,13 +619,13 @@ const FinanciamentosLazyRouteWithChildren =
   FinanciamentosLazyRoute._addFileChildren(FinanciamentosLazyRouteChildren)
 
 interface SbxpayLazyRouteChildren {
-  SbxpayConsultabsxLazyRoute: typeof SbxpayConsultabsxLazyRoute
+  SbxpayConsultasbxLazyRoute: typeof SbxpayConsultasbxLazyRoute
   SbxpayOfferLazyRoute: typeof SbxpayOfferLazyRoute
   SbxpayIndexLazyRoute: typeof SbxpayIndexLazyRoute
 }
 
 const SbxpayLazyRouteChildren: SbxpayLazyRouteChildren = {
-  SbxpayConsultabsxLazyRoute: SbxpayConsultabsxLazyRoute,
+  SbxpayConsultasbxLazyRoute: SbxpayConsultasbxLazyRoute,
   SbxpayOfferLazyRoute: SbxpayOfferLazyRoute,
   SbxpayIndexLazyRoute: SbxpayIndexLazyRoute,
 }

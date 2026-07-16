@@ -66,11 +66,10 @@ export async function callOrchestrator(
     method: method,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY, // Obrigatório para o API Gateway do Supabase (Kong)
       "x-original-url": currentPath,
-      // ✅ Envia a URL de login COMPLETA e montada para o backend
       "x-auth-fallback-url": loginFallbackUrl,
-      ...(sessionToken ? { "x-session-token": sessionToken } : {})
+      ...(sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {})
     },
   };
 
@@ -146,11 +145,11 @@ export async function callSimulation(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY, // Obrigatório para o API Gateway do Supabase (Kong)
       "x-original-url": currentPath,
-      // ✅ Envia a URL de login COMPLETA e montada para o backend
       "x-auth-fallback-url": loginFallbackUrl,
-      ...(sessionToken ? { "x-session-token": sessionToken } : {})
+      // Condicional correta: Só envia o Bearer se o token existir de verdade
+      ...(sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {})
     },
     body: JSON.stringify({
       ...payload,
