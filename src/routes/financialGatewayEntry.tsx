@@ -142,13 +142,25 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       // =====================================================================
       // FASE 2: ORQUESTRAÇÃO NA EDGE (Substitui o Lazy Import)
       // =====================================================================
+      // 1. TERRA FIRME (Origem Lógica)
+      // Se não houver return_uri válido, o fallback padrão evita quebrar a string.
+      const partnerOrigin = deps.return_uri || "/"; 
+      
+      // 2. FALLBACK DE LOGIN
+      // Se a sessão cair, vai pro Sign In. Quando terminar o Sign In, é devolvido
+      // para a loja do parceiro (partnerOrigin) para recomeçar o fluxo limpo, 
+      // e NUNCA para a rota fantasma do Gateway.
+      const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(partnerOrigin)}`;
+
       // O Servidor faz a chamada pesada, poupando a rede 3G do cliente
       const orchestratorResponse = await fetch(`${supabaseUrl}/functions/v1/orchestrator`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,   // Libera o proxy do Supabase (Kong)
-          "Authorization": `Bearer ${sbxData.session_token}` // Nosso token de sessão padronizado
+          "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          "x-session-token": sbxData.session_token, // Usa o token recém-criado
+          "x-original-url": partnerOrigin,          // Usa a própria URI enviada pela origem por ser um loader
+          "x-auth-fallback-url": loginFallbackUrl   // Login também volta para a própria URI enviada pela origem por ser um loader
         },
         body: JSON.stringify({
            ...payload
