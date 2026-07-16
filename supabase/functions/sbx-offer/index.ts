@@ -14,11 +14,12 @@
  * 
  * @author Cesar Ismael Pereira da Costa
  * @description Single Source of Truth para consulta de ofertas e eventos com Handshake Zero Trust.
- * @version 2.6.0 (Integração Total com sbX Core Auth e Blindagem de Ambiente)
+ * @version 2.7.0 (Integração Total com sbX Core Auth, JTI Decode e Blindagem de Ambiente)
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { decode } from "https://deno.land/x/djwt@v2.8/mod.ts";
 
 // IMPORTANTE: Trazendo o Gatekeeper unificado do ecossistema
 import { validateRequest } from "../_shared/auth.ts";
@@ -136,18 +137,22 @@ serve(async (req: Request) => {
     const authUrl = req.headers.get("x-auth-fallback-url") || "/";
 
     // A. Busca do Access Token e Ambiente da Superbid no Banco
-    const sessionToken = req.headers.get("x-session-token");
+    const sessionToken = req.headers.get("x-session-token")!;
     
-    // 🔒 SSOT: A verdade sobre o ambiente vem exclusivamente do banco de dados.
+    // 🔒 EXTRAÇÃO LIMPA: Usa a lib oficial para ler o JWT sem validar a assinatura novamente
+    const [, jwtPayload] = decode(sessionToken);
+    const sessionId = (jwtPayload as any).jti;
+
+    // 🔒 SSOT: A verdade sobre o ambiente vem exclusivamente do banco de dados, buscando pelo JTI
     const { data: session } = await supabaseAdmin
         .from("session_tokens")
         .select("sbx_access_token, environment") 
-        .eq("session_token", auth?.jti || sessionToken) 
+        .eq("session_token", sessionId) 
         .single();
         
     if (!session) {
       const err = new Error("Sua sessão na plataforma expirou ou foi revogada.");
-      (err as any).code = "SESSION_EXPIRED";
+      (err as any).errorCode = "SESSION_EXPIRED";
       (err as any).fallback_url = authUrl;
       throw err;
     }
@@ -158,7 +163,7 @@ serve(async (req: Request) => {
 
     if (!offerId) {
       const err = new Error("O parâmetro 'offer_id' é obrigatório para esta requisição.");
-      (err as any).code = "MISSING_OFFER_ID";
+      (err as any).errorCode = "MISSING_OFFER_ID";
       (err as any).fallback_url = originPath;
       throw err;
     }
@@ -191,15 +196,14 @@ serve(async (req: Request) => {
 
     if (response.status === 401) {
       const err = new Error("Sua sessão com a plataforma expirou. Por favor, faça login novamente.");
-      (err as any).code = "SESSION_EXPIRED";
+      (err as any).errorCode = "SESSION_EXPIRED";
       (err as any).fallback_url = authUrl;
       throw err;
     }
 
     if (!response.ok) {
-        const errBody = await response.text();
         const err = new Error(`Instabilidade na integração com a plataforma (${response.status}).`);
-        (err as any).code = "UPSTREAM_ERROR";
+        (err as any).errorCode = "UPSTREAM_ERROR";
         (err as any).fallback_url = originPath;
         throw err;
     }
@@ -209,7 +213,7 @@ serve(async (req: Request) => {
 
     if (!rawOffer) {
       const err = new Error(`Oferta não encontrada ou indisponível (Lote: ${offerId}).`);
-      (err as any).code = "OFFER_NOT_FOUND";
+      (err as any).errorCode = "OFFER_NOT_FOUND";
       (err as any).fallback_url = originPath;
       throw err;
     }
@@ -317,8 +321,8 @@ serve(async (req: Request) => {
   } catch (err: any) {
     debugLog(`[SBX-OFFER] Falha na operação: ${err.message}`);
     
-    // Extrativismo de Propriedades Injetadas ou Default
-    const errorCode = err.code || "UNKNOWN_ERROR";
+    // Extrativismo de Propriedades Injetadas ou Default (Padrão Orchestrator)
+    const errorCode = err.errorCode || "UNKNOWN_ERROR";
     const fallbackUrl = err.fallback_url || "/";
     
     let statusCode = 400;
