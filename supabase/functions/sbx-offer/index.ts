@@ -1,93 +1,173 @@
 /**
- * @fileoverview Edge Function: sbx-offer (Offer Details BFF)
- * * ARQUITETURA DE SEGURANÇA E CONTEXTO (Desacoplada):
- * 1. Identidade: Valida o JWT recebido no header `x-session-token` (padrão do ecossistema) e consulta a sessão ativa.
- * 2. Contexto: Extrai o `offer_id` diretamente dos parâmetros da URL (Query String).
- * 3. Integração: Consulta o catálogo da Superbid passando o access token real da sessão original.
- * 4. Resiliência: Intercepta tokens upstream expirados (401) e aciona o Protocolo de Amnésia no front.
- * 5. BFF (Backend For Frontend): Mapeia o payload bruto da Superbid com Type Safety forte.
- * * @version 2.3.0 (Autenticação Unificada, Type Safety E2E e Interceptação Upstream)
+ * @fileoverview EDGE FUNCTION: SBX-OFFER (Offer Details BFF)
+ * * ============================================================================
+ * ARQUITETURA DE SEGURANÇA E CONTEXTO (BFF Contract)
+ * ============================================================================
+ * Este módulo atua como Backend For Frontend para hidratação de ofertas.
+ * 
+ * 1. Identidade: Delega a validação criptográfica para o shared/auth (validateRequest).
+ * 2. SSOT (Single Source of Truth): Extrai o `environment` e `sbx_access_token` 
+ *    EXCLUSIVAMENTE do banco de dados (session_tokens). O frontend não dita o ambiente.
+ * 3. Integração: Consulta o catálogo da Superbid com o access token real (Upstream).
+ * 4. Resiliência: Intercepta tokens upstream expirados (401) e devolve o contrato padrão.
+ * 5. Type Safety: Mapeia o payload bruto com tipagem forte para o frontend.
+ * 
+ * @author Cesar Ismael Pereira da Costa
+ * @description Single Source of Truth para consulta de ofertas e eventos com Handshake Zero Trust.
+ * @version 2.6.0 (Integração Total com sbX Core Auth e Blindagem de Ambiente)
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 
-// ============================================================================
-// IMPORTAÇÃO DE TIPOS COMPARTILHADOS
-// (Ajuste o caminho relativo até a pasta 'src' e mantenha a extensão '.ts')
-// ============================================================================
+// IMPORTANTE: Trazendo o Gatekeeper unificado do ecossistema
+import { validateRequest } from "../_shared/auth.ts";
 import type { Offer, Manager, Event, Seller, Vehicle } from "../../../src/features/financial-hub/components/shared/types.ts";
 
-const DEBUG_MODE = true;
+/**
+ * ============================================================================
+ * CONFIGURAÇÕES GLOBAIS E SEGURANÇA
+ * ============================================================================
+ */
+const DEBUG_MODE = Deno.env.get("DEBUG_MODE") === "true";
 
+/**
+ * @function debugLog
+ * @description Centraliza os logs do pipeline. Em produção, DEBUG_MODE deve ser false
+ * para evitar exposição de PII (Personally Identifiable Information) ou dados internos da Superbid.
+ */
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
-    console.log(`[SBX-OFFER] ${message}`, data ? JSON.stringify(data) : "");
+    console.log(`[SBX-OFFER-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
   }
 };
 
-
-// IMPORTANTE: 'x-session-token' adicionado aos headers permitidos no CORS
+/**
+ * CONFIGURAÇÃO GLOBAL DE CORS (Única Fonte de Verdade)
+ * @description Espelha as regras estritas do Orquestrador Central.
+ * A inclusão do 'x-session-token' é vital para o Handshake Zero Trust (Validação de Identidade).
+ * NOTA DE SEGURANÇA: x-sbx-env foi removido. O ambiente agora é ditado 100% pelo Backend/DB.
+ */
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sbx-env, x-session-token',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token, x-original-url, x-auth-fallback-url",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
 
-serve(async (req) => {
-  // Preflight CORS
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+/**
+ * ============================================================================
+ * HANDLER PRINCIPAL (PIPELINE DE LEITURA)
+ * ============================================================================
+ */
+serve(async (req: Request) => {
+  // 1. AVALIAÇÃO DE CORS E PREFLIGHT
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
+  // 2. INICIALIZAÇÃO DE CONTEXTO (Bypass RLS para operações internas de sessão)
+  const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!, 
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      auth: { persistSession: false },
+  });
+
+  // =========================================================================
+  // FASE 1: SEGURANÇA E IDENTIDADE (Handshake Zero Trust)
+  // =========================================================================
+  let auth;
   try {
-    // =========================================================================
-    // 1. IDENTIDADE (Autenticação via JWT estático e unificado)
-    // =========================================================================
+      auth = await validateRequest(req);
+  } catch (err: any) {
+      // 1. Descoberta da Origem
+      const originPath = req.headers.get("x-original-url");
+      const authUrl = req.headers.get("x-auth-fallback-url");
+
+      if (!originPath) {
+          return new Response(JSON.stringify({ 
+              success: false,
+              code: "INTERNAL_ERROR",
+              message: "Erro de segurança: A origem da requisição não foi identificada.",
+              fallback_url: "/"
+          }), { 
+              status: 400, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          });
+      }
+
+      // 2. Padronização de Variáveis e Tradução UX
+      let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
+      let errorCode = "UNAUTHORIZED";
+      let fallbackUrl = authUrl;
+      let statusCode = 401;
+
+      if (err.message.includes("SESSION_EXPIRED")) {
+          userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+          errorCode = "SESSION_EXPIRED";
+      } else if (err.message.includes("FORBIDDEN")) {
+          userMessage = "Você não tem permissão para acessar este recurso.";
+          errorCode = "FORBIDDEN";
+          fallbackUrl = originPath; 
+          statusCode = 403;
+      } else if (err.message.includes("INTERNAL_ERROR")) {
+          userMessage = "Ocorreu um erro interno ao validar sua sessão.";
+          errorCode = "INTERNAL_ERROR";
+          fallbackUrl = "/"; 
+          statusCode = 500;
+      }
+
+      // 3. Retorno seguindo o contrato oficial da API
+      return new Response(JSON.stringify({ 
+          success: false,
+          code: errorCode,
+          message: userMessage,
+          fallback_url: fallbackUrl 
+      }), { 
+          status: statusCode, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
+  }
+
+  // =========================================================================
+  // FASE 2: LÓGICA DE NEGÓCIO (Single Source of Truth)
+  // =========================================================================
+  try {
+    const originPath = req.headers.get("x-original-url") || "/";
+    const authUrl = req.headers.get("x-auth-fallback-url") || "/";
+
+    // A. Busca do Access Token e Ambiente da Superbid no Banco
     const sessionToken = req.headers.get("x-session-token");
-    if (!sessionToken) {
-        throw new Error("AUTH_REQUIRED: x-session-token ausente.");
-    }
-
-    const jwtSecret = Deno.env.get("JWT_SECRET")!;
-    const key = await crypto.subtle.importKey(
-        "raw", new TextEncoder().encode(jwtSecret), 
-        { name: "HMAC", hash: "SHA-256" }, false, ["verify"]
-    );
     
-    // Valida a assinatura do token da aplicação
-    const payload = await verify(sessionToken, key) as any;
-
-    const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL')!, 
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-    
-    // Busca a sessão no banco para capturar o token real da Superbid
+    // 🔒 SSOT: A verdade sobre o ambiente vem exclusivamente do banco de dados.
     const { data: session } = await supabaseAdmin
-        .from('session_tokens')
-        .select('sbx_access_token')
-        .eq('session_token', payload.jti)
+        .from("session_tokens")
+        .select("sbx_access_token, environment") 
+        .eq("session_token", auth?.jti || sessionToken) 
         .single();
         
     if (!session) {
-        throw new Error("SESSION_INVALID: Sessão não encontrada ou expirada no banco de dados.");
+      const err = new Error("Sua sessão na plataforma expirou ou foi revogada.");
+      (err as any).code = "SESSION_EXPIRED";
+      (err as any).fallback_url = authUrl;
+      throw err;
     }
 
-    // =========================================================================
-    // 2. CONTEXTO DA OFERTA (Parâmetro dinâmico via URL)
-    // =========================================================================
+    // B. Contexto e Parâmetros da Oferta
     const reqUrl = new URL(req.url);
     const offerId = reqUrl.searchParams.get("offer_id");
 
     if (!offerId) {
-        throw new Error("MISSING_OFFER_ID: O parâmetro ?offer_id= é obrigatório na URL.");
+      const err = new Error("O parâmetro 'offer_id' é obrigatório para esta requisição.");
+      (err as any).code = "MISSING_OFFER_ID";
+      (err as any).fallback_url = originPath;
+      throw err;
     }
 
-    // =========================================================================
-    // 3. INTEGRAÇÃO UPSTREAM (Superbid API)
-    // =========================================================================
-    const env = req.headers.get("x-sbx-env") || "stage";
-    // Dependências da Superbid
+    // 🔒 SEGURANÇA BLINDADA: O ambiente da integração Upstream é ditado pelo banco.
+    const env = session.environment || "stage";
+    debugLog(`[INFO] Roteando requisição para ambiente Upstream: ${env}`);
+
+    // C. Integração Upstream (Superbid API)
     const offerBaseUrl = env === "production" 
         ? "https://offer-query.superbid.net" 
         : "https://offer-query.stage.superbid.net";
@@ -96,13 +176,12 @@ serve(async (req) => {
         ? "https://event-query.superbid.net" 
         : "https://event-query.stage.superbid.net";
 
-    // Sintaxe exata exigida pelo parser da Superbid: id:[VALOR]
     const upstreamUrl = `${offerBaseUrl}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${offerId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
 
     const response = await fetch(upstreamUrl, {
       method: "GET",
       headers: { 
-        "Authorization": `Bearer ${session.sbx_access_token}`, // Injeção do token upstream resgatado do BD
+        "Authorization": `Bearer ${session.sbx_access_token}`, 
         "Accept": "application/json", 
         "Content-Type": "application/json",
         "Origin": "https://www.superbid.net",
@@ -110,34 +189,32 @@ serve(async (req) => {
       },
     });
 
-    // =========================================================================
-    // 4. INTERCEPTAÇÃO DE TOKEN EXPIRADO NA SUPERBID
-    // =========================================================================
     if (response.status === 401) {
-        // Ao lançar a palavra "SESSION", o catch traduzirá para HTTP 401.
-        // O frontend reconhece o 401 e dispara o 'session_expired' limpando a sessão.
-        throw new Error("SESSION_UPSTREAM_EXPIRED: O token real da Superbid expirou ou foi revogado.");
+      const err = new Error("Sua sessão com a plataforma expirou. Por favor, faça login novamente.");
+      (err as any).code = "SESSION_EXPIRED";
+      (err as any).fallback_url = authUrl;
+      throw err;
     }
 
     if (!response.ok) {
         const errBody = await response.text();
-        throw new Error(`UPSTREAM_ERROR (${response.status}): ${errBody}`);
+        const err = new Error(`Instabilidade na integração com a plataforma (${response.status}).`);
+        (err as any).code = "UPSTREAM_ERROR";
+        (err as any).fallback_url = originPath;
+        throw err;
     }
 
     const data = await response.json();
-
-    // LOG PARA AUDITORIA (Retorno da SBX)
-    debugLog(`[DEBUG SUPERBID RAW DATA - LOTE ${offerId}]:`, JSON.stringify(data).substring(0, 1000));
-
     const rawOffer = data.offers?.[0];
 
     if (!rawOffer) {
-        throw new Error(`OFFER_NOT_FOUND_IN_UPSTREAM: Nenhuma oferta retornada para o ID ${offerId}.`);
+      const err = new Error(`Oferta não encontrada ou indisponível (Lote: ${offerId}).`);
+      (err as any).code = "OFFER_NOT_FOUND";
+      (err as any).fallback_url = originPath;
+      throw err;
     }
 
-    // =========================================================================
-    // 5. BUSCA DADOS DO EVENTO
-    // =========================================================================
+    // D. Busca de Dados do Evento
     let eventData: any = {};
     const auctionId = rawOffer.auction?.id;
 
@@ -147,7 +224,7 @@ serve(async (req) => {
         const eventResponse = await fetch(eventUrl, {
           method: "GET",
           headers: { 
-            "Authorization": `Bearer ${session.sbx_access_token}`, // MESMO TOKEN
+            "Authorization": `Bearer ${session.sbx_access_token}`,
             "Accept": "application/json", 
             "Content-Type": "application/json",
             "Origin": "https://www.superbid.net",
@@ -161,15 +238,9 @@ serve(async (req) => {
         }
     }
 
-    // =========================================================================
-    // 6. MAPEAMENTO DO PAYLOAD (BFF Contract com Type Safety)
-    // =========================================================================
-
-    // 1. Identifica a categoria e cria objetos especializados se for o caso
+    // E. Mapeamento do Payload (BFF Contract com Type Safety)
     const productTypeId = rawOffer.product?.productType?.id;
     const isVehicleCategory = [10, 11].includes(productTypeId);
-
-    // 2. Extrai apenas se for veículo
     let vehicleData: Vehicle | undefined;
 
     if (isVehicleCategory) {
@@ -178,9 +249,9 @@ serve(async (req) => {
             groups.find((g: any) => g.id === groupId)?.properties.find((p: any) => p.id === propId)?.value;
 
         vehicleData = {
-            manufacture_year: Number(getGroupProp('identificacao', 'anofabricacao')) || 0,
-            model_year: Number(getGroupProp('identificacao', 'anomodelo')) || 0,
-            fipe_code: getGroupProp('financiamento', 'codigofipe') || "",
+            manufacture_year: Number(getGroupProp("identificacao", "anofabricacao")) || 0,
+            model_year: Number(getGroupProp("identificacao", "anomodelo")) || 0,
+            fipe_code: getGroupProp("financiamento", "codigofipe") || "",
         };
     }
 
@@ -195,7 +266,6 @@ serve(async (req) => {
         category: rawOffer.product?.productType?.description || "",
         sub_category_id: rawOffer.product?.subCategory?.id || "",
         sub_category: rawOffer.product?.subCategory?.description || "",
-        lot_number: rawOffer.lotNumber || "",
         offer_status: rawOffer.offerStatus || "",
         sale_status: rawOffer.saleStatus || "",
         end_date: rawOffer.endDate || "",
@@ -205,7 +275,6 @@ serve(async (req) => {
           state: rawOffer.product?.location?.state || "Não informado",
           country: rawOffer.product?.location?.country || "Brasil"
         },
-        // Inclusão condicional
         ...(vehicleData && { vehicle_details: vehicleData }),
         photos: rawOffer.product?.galleryJson?.map((p: any) => ({
           highlight: p.highlight || false,
@@ -239,23 +308,33 @@ serve(async (req) => {
       }
     };
 
-    // =========================================================================
-    // 6. RESPOSTA DE SUCESSO
-    // =========================================================================
+    // F. Resposta de Sucesso
     return new Response(JSON.stringify(payloadResult), { 
       headers: { ...corsHeaders, "Content-Type": "application/json" }, 
       status: 200 
     });
 
   } catch (err: any) {
-    console.error("[SBX-OFFER] Erro Fatal:", err.message);
+    debugLog(`[SBX-OFFER] Falha na operação: ${err.message}`);
     
-    let status = 500;
-    // Captura tanto a sessão inválida do BD quanto a sessão rejeitada pela Superbid
-    if (err.message.includes("AUTH") || err.message.includes("SESSION")) status = 401;
-    if (err.message.includes("MISSING")) status = 400;
-    if (err.message.includes("UPSTREAM")) status = 502;
+    // Extrativismo de Propriedades Injetadas ou Default
+    const errorCode = err.code || "UNKNOWN_ERROR";
+    const fallbackUrl = err.fallback_url || "/";
+    
+    let statusCode = 400;
+    if (errorCode === "UNAUTHORIZED" || errorCode === "SESSION_EXPIRED") statusCode = 401;
+    if (errorCode === "FORBIDDEN") statusCode = 403;
+    if (errorCode === "UPSTREAM_ERROR") statusCode = 502;
+    if (errorCode === "UNKNOWN_ERROR") statusCode = 500;
 
-    return new Response(JSON.stringify({ error: err.message }), { status, headers: corsHeaders });
+    return new Response(JSON.stringify({ 
+        success: false,
+        code: errorCode,             
+        message: err.message,        
+        fallback_url: fallbackUrl 
+    }), { 
+        status: statusCode, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    });
   }
 });

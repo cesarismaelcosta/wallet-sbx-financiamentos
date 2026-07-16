@@ -400,7 +400,7 @@ export function sbXPAYHome() {
                                 <span>INVISTA PAGANDO EM ATÉ 240x</span>
                             </div>
                             <h2 className="text-xl md:text-3xl font-bold text-slate-900 tracking-tight">Financie seu imóvel em até 240x.</h2>
-                            <p className="text-sm md:text-base text-slate-600 leading-relaxed">Realize o sonho do imóvel próprio com prazos e condições especiais. Buscamos as melhores taxas em parceria com os maiores bancos do país.</p>
+                            <p className="text-sm md:text-base text-slate-600 leading-relaxed">Realize o sonho do imóvel próprio com negociações bem abaixo do valor de mercado, agora também com prazos e condições especiais. Buscamos as melhores taxas em parceria com os maiores bancos do país.</p>
                             <div className="pt-2">
                                 {renderButton("Imóveis financiados", Home, "imoveis", true)}
                             </div>
@@ -523,9 +523,9 @@ export function sbXPAYHome() {
                     {/* Container maior (h-16 w-16) com o mesmo corte nas bordas */}
                     <div className="h-20 w-20 rounded-md bg-black overflow-hidden flex items-center justify-center">
                         <img 
-                            src="/assets/home/sbxpay_p.png" 
+                            src="/assets/home/sbxpay_p_sem_borda.png" 
                             alt="sbXPAY" 
-                            className="h-full w-full object-cover scale-110"
+                            className="h-full w-full object-cover scale-100"
                         />
                     </div>
 

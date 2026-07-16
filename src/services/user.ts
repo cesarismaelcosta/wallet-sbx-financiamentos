@@ -1,19 +1,31 @@
 /**
- * @fileoverview Serviço: User Profile
- * Busca os dados do usuário autenticado através da Edge Function sbx-data.
+ * @fileoverview Serviço: User Profile (Client Service)
+ * * =========================================================================
+ * [ARQUITETURA & CLEAN ARCHITECTURE]
+ * =========================================================================
+ * Busca os dados do usuário autenticado através da Edge Function sbx-user.
  * Centraliza a chamada para garantir compliance e segurança.
+ * 
  * * [RESPONSABILIDADES]:
  * 1. Interface de comunicação: O front-end envia apenas o session_token (JWT Próprio),
- * mantendo os tokens reais da API da Superbid protegidos no servidor.
+ *    mantendo os tokens reais da API da Superbid protegidos no servidor.
  * 2. Gateway Bypass: Utiliza a Anon Key do Supabase para transpor o Kong Gateway.
- * 3. Delegação de Rota: Erros 401 lançam exceções, abortam o fluxo local e 
- * ativam o Protocolo de Amnésia global.
+ * 3. SSOT Compliance: Omitiu o envio de `x-sbx-env` pois a Edge Function resolve 
+ *    o ambiente 100% via banco de dados (Zero Trust Frontend).
+ * 4. Error Handling: Intercepta o novo contrato de erro padronizado ({ code, message, fallback_url })
+ *    e propaga para a Action/Loader do React Router ou dispara a Amnésia.
+ * 
+ * @version 3.0.0 (Adequação ao novo contrato SSOT e Padronização de Erros BFF)
  */
 
+// =========================================================================
+// [CONTRATO DE DADOS]: Interface de Reidratação do BFF
+// =========================================================================
 export interface BFFUserProfile {
   entity_id: string;
   name: string;
   document: string;
+  document_rg?: string; // Adicionado seguindo a edge function
   email: string;
   phone: string;
   birth_date: string;
@@ -30,74 +42,116 @@ export interface BFFUserProfile {
     zip_code: string;
     country: string;
   } | null;
-  metadata: {
+  metadata?: {
     processedAt: string;
     originIp: string;
   };
 }
 
+// =========================================================================
+// [CONTRATO DE ERRO PADRONIZADO (BFF)]
+// =========================================================================
+export interface BFFErrorResponse {
+  success: boolean;
+  code: string;
+  message: string;
+  fallback_url: string;
+}
+
+// =========================================================================
+// [SERVIÇO CORE]: Abstração de Chamada HTTP e Telemetria
+// =========================================================================
+
 /**
  * Busca o perfil do usuário no servidor.
  * @param sessionToken O JWT Próprio de sessão gerado pelo nosso backend.
- * @param environment [NOVO] Opcional. Força o ambiente (production/stage) contornando o localStorage durante o SSR.
+ * @param originUrl [NOVO] A URL atual da página, para ser enviada no header 'x-original-url'
+ * @throws {BFFErrorResponse} Objeto de erro padronizado para consumo do React Router.
  */
-export const fetchMyProfile = async (sessionToken: string, environment?: string): Promise<BFFUserProfile> => {
-  // [STATE]: Resgate de variáveis de ambiente e preferências de armazenamento local
-  // ====================================================================================
-  // [SSR SAFEGUARD & CROSS-DOMAIN SYNC]: A Injeção do Parâmetro 'environment'
-  // ====================================================================================
-  // Por que precisamos do 'environment' aqui se já usávamos o localStorage?
-  // 1. O Servidor é Cego: Durante o carregamento inicial (SSR / F5) ou ao receber uma 
-  //    chamada real do mundo externo (Portal Superbid), o código roda no Node.js. Lá, o 
-  //    `window` e o `localStorage` não existem.
-  // 2. A Prevenção do Falso 401: Sem o `environment`, o servidor cairia no fallback e assumiria "stage". 
-  //    Se a URL pedisse "production", enviaríamos o token de Produção apontando para Stage, 
-  //    causando um erro 401 (SESSION_EXPIRED) falso.
-  // 3. O Fluxo: Se o 'environment' for fornecido (injetado pelo Loader do Router que leu a URL), 
-  //    ele assume prioridade máxima. Caso contrário (navegação interna via SPA), ele 
-  //    continua usando o localStorage perfeitamente.
-  const isBrowser = typeof window !== 'undefined';
-  const storedAmbiente = environment || (isBrowser ? (localStorage.getItem("sbx_environment") || "stage") : "stage");
+export const fetchMyProfile = async (
+  sessionToken: string, 
+  originUrl?: string
+): Promise<BFFUserProfile> => {
   
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const url = `${supabaseUrl}/functions/v1/sbx-user`;
 
-  // [NETWORK]: Chamada segura para a Edge Function via API REST
-  const response = await fetch(`${supabaseUrl}/functions/v1/sbx-user`, {
+  // -----------------------------------------------------------------------
+  // [TELEMETRIA]: Configuração da Requisição
+  // -----------------------------------------------------------------------
+  // Nota: x-sbx-env foi removido. A responsabilidade de descobrir o ambiente
+  // é exclusiva da Edge Function, consultando a tabela `session_tokens` (SSOT).
+  const options: RequestInit = {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${supabaseAnonKey}`,
       "apikey": supabaseAnonKey,
       "x-session-token": sessionToken,
-      "x-sbx-env": storedAmbiente, // Garante alinhamento total entre o Router e a API
+      ...(originUrl && { "x-original-url": originUrl }),
       "Content-Type": "application/json",
       "Accept": "application/json"
-    },
-  });
+    }
+  };
 
-  if (response.status === 401) {
+  try {
+    // [NETWORK]: Chamada segura para a Edge Function via API REST
+    const response = await fetch(url, options);
+
     // -----------------------------------------------------------------------
-    // [SECURITY]: Gatilho do Protocolo de Amnésia
+    // [INTERCEPTAÇÃO DE ERRO]: Leitura do Contrato Padronizado
     // -----------------------------------------------------------------------
-    // Ao invés de delegar a limpeza de estado apenas para o componente pai (que pode falhar ou vazar dados),
-    // gritamos para o FinancialAuthContext matar a sessão globalmente e forçar o redirecionamento limpo.
-    
-    // [CORE UPDATE - SSR SAFEGUARD]: Só dispara o evento na janela se estivermos no navegador.
-    // Durante o SSR, o throw Error abaixo será capturado pelo loader, que forçará o redirecionamento via backend.
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('session_expired'));
+    if (!response.ok) {
+      let bffError: BFFErrorResponse;
+      
+      try {
+        // Tenta parsear o contrato exato que construímos na Edge Function
+        const jsonError = await response.json();
+        bffError = {
+            success: false,
+            code: jsonError.code || "UNKNOWN_ERROR",
+            message: jsonError.message || `HTTP ${response.status} ${response.statusText}`,
+            fallback_url: jsonError.fallback_url || "/"
+        };
+      } catch (parseError) {
+        // Fallback de infraestrutura (Ex: Supabase fora do ar ou 502 do Nginx)
+        bffError = {
+            success: false,
+            code: "INFRASTRUCTURE_ERROR",
+            message: "Falha crítica de comunicação com o servidor.",
+            fallback_url: "/"
+        };
+      }
+
+      // [SECURITY]: Gatilho do Protocolo de Amnésia global (Retrocompatibilidade)
+      // Só dispara o evento na janela se estivermos rodando no navegador (CSR).
+      if (bffError.code === "SESSION_EXPIRED" || bffError.code === "UNAUTHORIZED") {
+          const isBrowser = typeof window !== 'undefined';
+          if (isBrowser) {
+            window.dispatchEvent(new CustomEvent('session_expired'));
+          }
+      }
+
+      // [CRITICAL FIX]: Interrompe a execução lançando o objeto formatado.
+      // Componentes e Loaders não devem lidar com strings, mas com este objeto.
+      throw bffError;
     }
 
-    // [CRITICAL FIX]: Interrompe a guerra de rotas e a execução do componente local.
-    // O throw garante que o `await fetchMyProfile` no componente pare aqui e não tente setar um estado com erro.
-    throw new Error("SESSION_EXPIRED");
-  }
+    // [DATA]: Retorna os dados hidratados garantindo a tipagem do contrato BFF
+    return await response.json();
 
-  if (!response.ok) {
-    // [BUSINESS LOGIC]: Interceptação de falhas sistêmicas da API (500, 403, 404)
-    throw new Error("API_ERROR");
+  } catch (error: any) {
+    // Se o erro já for o nosso BFFErrorResponse (lançado no if !response.ok acima), propaga direto.
+    if (error && "code" in error) {
+      throw error;
+    }
+    
+    // [FALLBACK CATASTRÓFICO]: Erro de rede (Ex: Cliente sem internet ou CORS block)
+    throw {
+        success: false,
+        code: "NETWORK_ERROR",
+        message: "Falha de conexão física. Verifique sua internet.",
+        fallback_url: "/"
+    } as BFFErrorResponse;
   }
-  
-  // [DATA]: Retorna os dados hidratados caso a resposta seja 200 OK
-  return response.json();
 };
