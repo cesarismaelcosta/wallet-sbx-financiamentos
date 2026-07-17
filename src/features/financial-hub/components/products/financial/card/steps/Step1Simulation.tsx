@@ -114,21 +114,34 @@ export function Step1Simulation() {
     <div className="w-full space-y-10">
       <div className="bg-white space-y-4">
         <div className="flex items-start gap-6">
-          <div className="bg-primary/10 p-2 rounded-full">
+          {/* shrink-0 garante que o ícone nunca seja amassado se o texto for grande */}
+          <div className="bg-primary/10 p-2 rounded-full shrink-0">
             <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
           </div>
-          <div className="space-y-1">
+          
+          {/* flex-1 min-w-0 são essenciais para o 'truncate' com 3 pontinhos funcionar dentro do flex */}
+          <div className="space-y-1 flex-1 min-w-0">
             <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">
               Simulação de parcelamento*!
             </h3>
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            
+            {/* BLOCO AJUSTADO: Sem negrito, apenas o truncate para cortar com ... */}
+            <p className="text-xs text-muted-foreground truncate">
               {offer?.offer_description 
                 ? offer.offer_description.replace(/[.,]+$/, "") 
                 : "Selecione o melhor parcelamento no cartão para você."}
             </p>
+            
+            <p className="flex items-baseline gap-1 mt-1">
+              {/* BLOCO AJUSTADO: Sem font-black, deixando a fonte normal para não pesar */}
+              <span className="text-slate-900 text-sm">{BRL(offerValue || 0)}</span>
+            </p>
           </div>
         </div>
-        <div className="p-6 md:p-8 space-y-4">
+        
+        {/* BLOCO DE AJUSTE DE ESPAÇAMENTO APLICADO AQUI ABAIXO */}
+        {/* Reduzimos o padding vertical e horizontal e removemos o redundant space-y-4 */}
+        <div className="py-2 md:py-3 px-4 md:px-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {(simulationResult?.consults || []).map((item: any, index: number) => {
               const qtdParcelas = item.installments;
@@ -173,8 +186,9 @@ export function Step1Simulation() {
             })}
           </div>
         </div>
-        <p className="text-[12px] text-slate-400 font-medium leading-relaxed">
-          *A simulação considerou o valor do lance atual, sem adicionar eventuais comissões ou outras taxas que também podem ser parceladas.
+        
+        <p className="text-[12px] text-slate-400 font-medium leading-relaxed px-6 md:px-8 pb-4">
+          * Considera o valor do lance no momento da simulação, sem adicionar eventuais comissões ou outras taxas que também podem ser parceladas.
         </p>
       </div>
     </div>

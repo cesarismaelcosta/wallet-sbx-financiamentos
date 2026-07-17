@@ -146,7 +146,7 @@ export function generateUserEmailNotificationHtml(
                 ${dicasPagamento}
                 
                 <p style="margin-top: 24px; font-size: 11px; color: ${muted}; line-height: 1.4; font-style: italic;">
-                  *A simulação considera o valor de um lance ou proposta para a oferta no momento da simulação, sem adicionar eventuais comissões ou outras taxas que também podem ser parceladas.
+                  * Considera o valor de um lance ou proposta para a oferta no momento da simulação, sem adicionar eventuais comissões ou outras taxas que também podem ser parceladas.
                 </p>
               </td>
             </tr>
