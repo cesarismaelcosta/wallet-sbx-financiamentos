@@ -46,6 +46,10 @@ serve(withSecurity('financial-gateway-webhook', async (req: Request) => {
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
         const supabase = createClient(supabaseUrl, supabaseKey);
 
+        // DEBUG DE CONEXÃO
+        debugLog(`[DEBUG-CONNECTION] URL DO BANCO: ${Deno.env.get('SUPABASE_URL')}`);
+        debugLog(`[DEBUG-CONNECTION] Buscando ID: ${simulationId}`);
+
         // Busca o visit_id para o hash e o partner_id para a barreira Cross-Tenant
         const { data: simulation, error: dbError } = await supabase
           .from('simulations')
