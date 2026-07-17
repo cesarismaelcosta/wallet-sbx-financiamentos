@@ -19,8 +19,7 @@
  * --------------------------------------------------------------------------------
  */
 
-
- /**
+/**
  *
  * -- Habilita a extensão pg_cron
  * CREATE EXTENSION IF NOT EXISTS pg_cron;
@@ -72,8 +71,10 @@ const debugLog = (message: string, data?: any) => {
 };
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { withSecurity } from "../_shared/server.ts";
 
-Deno.serve(async (req) => {
+serve(withSecurity('notification-dispatcher', async (req: Request) => {
   // 1. REGISTRO DE ACESSO:
   debugLog("1. --- DISPATCHER INICIADO ---");
 
@@ -96,7 +97,7 @@ Deno.serve(async (req) => {
     // 🚨 CORREÇÃO: Usando a variável 'tasks' corretamente
     if (!tasks || tasks.length === 0) {
       debugLog("3. Nenhuma pendência encontrada.");
-      return new Response("Sem pendências");
+      return { status: 200, data: { message: "Sem pendências" } };
     }
 
     debugLog(`4. Encontrei ${tasks.length} itens. Iniciando loop de disparo.`);
@@ -175,10 +176,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response("Processamento finalizado");
+    return { status: 200, data: { message: "Processamento finalizado" } };
 
-  } catch (e) {
+  } catch (e: any) {
     console.error("8. ERRO CRÍTICO NO DISPATCHER:", e);
-    return new Response("Erro no processamento", { status: 500 });
+    return { status: 500, data: { error: "Erro no processamento" } };
   }
-});
+}));

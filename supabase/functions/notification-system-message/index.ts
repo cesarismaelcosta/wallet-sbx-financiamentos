@@ -17,58 +17,32 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { generateSystemErrorEmailHtml } from './system-message-notification.ts'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { withSecurity } from "../_shared/server.ts";
 
-// =========================================================================
-// [POLÍTICA DE SEGURANÇA]: Configuração Estrita de CORS (Cross-Origin)
-// =========================================================================
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-session-token',
-};
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-/**
- * @function Deno.serve
- * @description Ponto de entrada do microserviço HTTP Deno Deploy.
- */
-Deno.serve(async (req) => {
-  
-  // -----------------------------------------------------------------------
-  // [GUARITA 1]: Intercepção Primária de Preflight (CORS OPTIONS)
-  // -----------------------------------------------------------------------
-  // Deve ser a primeira linha de execução. O navegador envia esta requisição 
-  // antes do POST real para validar se o domínio local tem autorização de tráfego.
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
+serve(withSecurity('notification-system-message', async (req: Request) => {
   // -----------------------------------------------------------------------
   // [GUARITA 2]: Restrição de Verbo HTTP (White-list)
   // -----------------------------------------------------------------------
   // Bloqueia qualquer tentativa de varredura ou acesso via métodos não homologados.
   if (req.method !== 'POST') {
-    return new Response("Method not allowed", { 
-      status: 405, 
-      headers: corsHeaders 
-    });
+    return { status: 405, data: { error: "Method not allowed" } };
   }
 
   // -----------------------------------------------------------------------
   // [INFRAESTRUTURA]: Inicialização do Client Supabase (Service Role)
   // -----------------------------------------------------------------------
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
   // Proteção de inicialização contra variáveis de ambiente ausentes na nuvem
-  if (!supabaseUrl || !supabaseKey) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.error("[CRITICAL CONFIG ERROR]: Variáveis de infraestrutura ausentes no ambiente Supabase.");
-    return new Response(JSON.stringify({ error: "Erro interno de configuração na nuvem." }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+    return { status: 500, data: { error: "Erro interno de configuração na nuvem." } };
   }
 
   // Utiliza a Service Role para ignorar políticas de RLS ao gravar na fila (Outbox)
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
   try {
     // -----------------------------------------------------------------------
@@ -86,7 +60,7 @@ Deno.serve(async (req) => {
       simulation_update_id 
     } = payload;
     
-   // Validação estrita dos nós obrigatórios do contrato do log
+    // Validação estrita dos nós obrigatórios do contrato do log
     if (!payload.context || !payload.message) {
       throw new Error("Parâmetros contratuais obrigatórios ('context' e 'message') ausentes.");
     }
@@ -127,10 +101,7 @@ Deno.serve(async (req) => {
     // -----------------------------------------------------------------------
     // [OUTPUT]: Resposta de Sucesso (Fila Aceita)
     // -----------------------------------------------------------------------
-    return new Response(JSON.stringify({ status: "queued" }), { 
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+    return { status: 200, data: { status: "queued" } };
 
   } catch (err: any) {
     // -----------------------------------------------------------------------
@@ -138,9 +109,6 @@ Deno.serve(async (req) => {
     // -----------------------------------------------------------------------
     console.error("[EDGE FUNCTION CRITICAL EXCEPTION]:", err.message);
     
-    return new Response(JSON.stringify({ error: err.message }), { 
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+    return { status: 500, data: { error: err.message } };
   }
-});
+}));

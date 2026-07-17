@@ -9,6 +9,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import nodemailer from "npm:nodemailer@6.9.13";
 import { encodeBase64 } from "jsr:@std/encoding/base64";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { withSecurity } from "../_shared/server.ts";
 
 // Chave de controle para logs de depuração
 const DEBUG_MODE = true;
@@ -23,7 +25,7 @@ const debugLog = (message: string, data?: any) => {
   }
 };
 
-Deno.serve(async (req) => {
+serve(withSecurity('notification-gateway', async (req: Request) => {
   // 1. AUTENTICAÇÃO E SEGURANÇA
   // Valida o header da requisição contra o secret de ambiente para evitar disparos indevidos
   const receivedSecret = req.headers.get('x-gateway-secret');
@@ -34,7 +36,7 @@ Deno.serve(async (req) => {
 
   if (!receivedSecret || receivedSecret !== expectedSecret) {
     console.error("ERRO [AUTH]: Acesso negado. Secret inválido ou ausente.");
-    return new Response("Unauthorized", { status: 401 });
+    return { status: 401, data: { error: "Unauthorized" } };
   }
 
   // 2. INICIALIZAÇÃO DO SUPABASE
@@ -140,7 +142,7 @@ Deno.serve(async (req) => {
       .eq('id', targetId);
 
     console.log(`SUCESSO: Notificação ${targetId} enviada e arquivada.`);
-    return new Response(JSON.stringify({ status: "success", id: targetId }), { status: 200 });
+    return { status: 200, data: { status: "success", id: targetId } };
 
   } catch (err: any) {
     console.error("[GATEWAY FATAL]:", err.message);
@@ -170,6 +172,6 @@ Deno.serve(async (req) => {
       }
     }
     
-    return new Response(JSON.stringify({ error: err.message }), { status: 400 });
+    return { status: 400, data: { error: err.message } };
   }
-});
+}));
