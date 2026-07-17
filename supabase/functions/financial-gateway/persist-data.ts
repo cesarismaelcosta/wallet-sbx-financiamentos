@@ -160,13 +160,13 @@ export async function insertSimulationData(
       // NOTA: O cast ::jsonb garante que o Postgres trate o objeto nativamente como JSONB, sem barras.
       const [sim] = await t`
         INSERT INTO simulations (
-          visit_id, is_integrated, integration_method, partner_id, product_id,
+          id, visit_id, is_integrated, integration_method, partner_id, product_id,
           entity_id, document, name, phone, email, birth_date, gender, entity_details,
           financial_institution_id, requested_value, down_payment_amount, down_payment_percentage,
           financed_amount, installments, cet_rate, installment_value, simulation_details,
           stage_id, status_id, result_partner_id, external_operation_id, raw_payload
         ) VALUES (
-          ${payload.visit_id}, ${payload.is_integrated ?? false}, ${payload.integration_method}, ${payload.partner_id}, ${payload.product_id},
+          ${payload.sumulation_id}, ${payload.visit_id}, ${payload.is_integrated ?? false}, ${payload.integration_method}, ${payload.partner_id}, ${payload.product_id},
           ${entity.entity_id}, ${entity.document}, ${entity.name}, ${entity.phone}, ${entity.email}, ${entity.birth_date}, ${entity.gender}, ${entity}::jsonb,
           ${bestConsult.financial_institution_id}, ${bestConsult.requested_value}, ${bestConsult.down_payment_amount}, ${bestConsult.down_payment_percentage},
           ${bestConsult.financed_amount}, ${bestConsult.installments}, ${bestConsult.cet_rate}, ${bestConsult.installment_value}, ${bestConsult}::jsonb,

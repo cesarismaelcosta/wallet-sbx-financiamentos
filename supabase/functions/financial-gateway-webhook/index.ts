@@ -1,105 +1,99 @@
 /**
  * @file financial-gateway-webhook/index.ts
  * @description Gateway especializado para recepção de Webhooks de parceiros financeiros.
- * 
- * PADRÃO DE CHAMADA (Endpoint Dinâmico):
- * O identificador da simulação (UUID) é passado diretamente no path da URL para 
- * garantir o rastreamento, mesmo que o payload do parceiro sofra alterações.
- * 
- * URL Esperada: .../financial-gateway-webhook/[PARCEIRO]/[ID_DA_SIMULACAO]
- * Exemplo: .../financial-gateway-webhook/fandi/2dcf75e3-0e75-4039-ae2f-51c6d578fb18
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { processSimulation } from './fandi-service.ts'; // Correção: A função chama tratarWebhookFandi do fandi-service.ts
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { tratarWebhookFandi } from './fandi-service.ts';
 import { withSecurity } from "../_shared/server.ts";
+import { generateSignature } from "../_shared/crypto.ts"; // <-- Importe sua função aqui
 
-/**
- * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
- */
-
-// Chave de controle para logs de depuração
 const DEBUG_MODE = true;
-
-/**
- * FUNÇÃO DE LOG PADRONIZADA
- * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
- */
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
     console.log(`[WEBHOOK-GATEWAY] ${message}`, data ? JSON.stringify(data, null, 2) : "");
   }
 };
 
+// ID Oficial da empresa MeResolve (Fandi)
+const MERESOLVE_PARTNER_ID = 2; 
+
 serve(withSecurity('webhook-gateway', async (req: Request) => {
   try {
     const url = new URL(req.url);
     const pathname = url.pathname.toLowerCase();
 
-    /**
-     * 1. LOG DE ENTRADA E RASTREABILIDADE
-     * Registra a chegada da requisição sem tocar no stream do corpo (req.json/text),
-     * evitando o esgotamento prematuro dos dados que a Service precisará processar.
-     */
-    debugLog(`[WEBHOOK-GATEWAY] Recebido: ${req.method} em ${pathname}`);
+    debugLog(`Recebido: ${req.method} em ${pathname}`);
 
-    /**
-     * 2. EXTRAÇÃO DINÂMICA DE CONTEXTO
-     * Segmenta o path para identificar o parceiro e o simulationId.
-     * A lógica baseia-se na posição relativa ao nome do parceiro no array de partes da URL.
-     */
+    // 1. EXTRAÇÃO DINÂMICA
     const pathParts = pathname.split("/").filter(Boolean);
     
-    // Identifica o parceiro (ex: 'fandi') para validar a origem
     const partnerIndex = pathParts.findIndex(part => part === "fandi");
     const partner = partnerIndex !== -1 ? pathParts[partnerIndex] : null;
-    
-    // O simulationId deve ser obrigatoriamente o segmento seguinte ao parceiro
     const simulationId = partnerIndex !== -1 ? pathParts[partnerIndex + 1] : null;
+    const receivedSignature = partnerIndex !== -1 ? pathParts[partnerIndex + 2] : null;
 
-    /**
-     * 3. ROTEAMENTO DE NEGÓCIO POR PARCEIRO (Switch-Gate)
-     * Isola o processamento de cada instituição financeira.
-     */
+    // 2. ROTEAMENTO E SEGURANÇA
     switch (partner) {
       case "fandi":
-        // Validação de segurança: Impede o processamento se o UUID não estiver no path
-        if (!simulationId) {
-          throw new Error("Simulation ID (UUID) ausente no path da URL.");
+        if (!simulationId || !receivedSignature) {
+          debugLog("Acesso negado: Credenciais ausentes na URL.");
+          return { status: 401, data: { error: "Credenciais de segurança ausentes." } };
         }
         
-        debugLog(`[WEBHOOK-GATEWAY] Direcionando callback Fandi para Simulação: ${simulationId}`);
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        // Busca o visit_id para o hash e o partner_id para a barreira Cross-Tenant
+        // IMPORTANTE: Ajuste 'partner_id' abaixo se a sua coluna tiver outro nome
+        const { data: simulation, error: dbError } = await supabase
+          .from('simulations')
+          .select('visit_id, partner_id') 
+          .eq('visit_id', visitId)
+          .single();
+
+        if (dbError || !simulation) {
+          debugLog(`Alerta: Simulação ${simulationId} não localizada.`);
+          return { status: 404, data: { error: "Simulação não encontrada." } };
+        }
+
+        // 🛡️ BARREIRA CROSS-TENANT
+        if (simulation.partner_id !== MERESOLVE_PARTNER_ID) {
+          console.error(`[ALERTA] Simulação ${simulationId} não pertence à MeResolve!`);
+          return { status: 403, data: { error: "Acesso negado. Conflito de propriedade." } };
+        }
+
+        // 🛡️ PROVA CRIPTOGRÁFICA HMAC SHA-256
+        const MASTER_SECRET = Deno.env.get('WEBHOOK_MASTER_SECRET');
+        if (!MASTER_SECRET) throw new Error("A variável WEBHOOK_MASTER_SECRET não foi configurada.");
+
+        // Assinatura esperada: "fandi:visit123...:sim456..."
+        const expectedPayload = `${simulation.visit_id}:${simulation.simulationId}`;
+        const expectedSignature = await generateSignature(expectedPayload, MASTER_SECRET);
+
+        if (receivedSignature !== expectedSignature) {
+          console.error(`[SEGURANÇA] Violação HMAC! Assinatura inválida para: ${simulationId}`);
+          return { status: 403, data: { error: "Acesso negado. Falha de integridade." } };
+        }
+
+        debugLog(`Segurança validada. Delegando para Service Fandi.`);
         
-        /**
-         * DELEGAÇÃO PARA SERVICE:
-         * Passamos o simulationId extraído do path e o objeto Request intacto.
-         * Isso garante que o 'fandi-service' realize apenas o UPDATE no registro correto.
-         */
+        // 3. EXECUÇÃO
         const result = await tratarWebhookFandi(simulationId, req);
         return { status: 200, data: result };
 
       default:
-        // Caso a URL não siga o padrão de parceiros cadastrados
-        debugLog(`[WEBHOOK-GATEWAY] Tentativa de acesso em rota não mapeada: ${partner}`);
-        return {
-          status: 404,
-          data: { error: "Parceiro ou rota inválida" }
-        };
+        debugLog(`Tentativa de acesso em rota não mapeada: ${partner}`);
+        return { status: 404, data: { error: "Parceiro financeiro não reconhecido." } };
     }
 
   } catch (err: any) {
-    /**
-     * TRATAMENTO DE ERROS CRÍTICOS
-     * Captura falhas de parsing de URL ou erros internos da service, retornando 500 
-     * para sinalizar ao parceiro que a tentativa deve ser reprocessada posteriormente.
-     */
     console.error("[WEBHOOK-GATEWAY CRITICAL ERROR]:", err.message);
     return {
       status: 500,
-      data: { 
-        error: err.message,
-        details: "Verifique os logs de execução para análise de rastreabilidade."
-      }
+      data: { error: err.message, details: "Falha no pipeline de recepção." }
     };
   }
 }));

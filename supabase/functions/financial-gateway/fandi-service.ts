@@ -26,6 +26,9 @@ import {
 
 import { Entity, Offer } from "../_shared/types.ts";
 
+// Importa a função geradora de hash para assinatura do webhook
+import { generateSignature } from '../_shared/crypto.ts';
+
 // Importa a função geradora de e-mail de usuários (Template de Veículos Fandi)
 import { generateUserEmailNotificationHtml } from "./fandi-notifications.ts";
 
@@ -72,11 +75,24 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
 
   // CNPJ DE ACORDO COM O PRODUTO (LEVES E PESADOS)
   const CNPJ_LOJA = integrationDetails.cnpjLoja; 
+
+  // ----------------------------------------------------------------------
   // URL DE WEBHOOK (CALLBACK)
+  // ----------------------------------------------------------------------
+
+  // Pega a chave mestra das variáveis de ambiente do Supabase
+  const MASTER_SECRET = Deno.env.get('WEBHOOK_MASTER_SECRET');
+  if (!MASTER_SECRET) throw new Error("Missing WEBHOOK_MASTER_SECRET");
+
+  // Cria a string que será "lacrada" (visit_id + simulation_id)
+  const payloadToSign = `${payload.visit_id}:${payload.simulation_id}`;
+
+  // Gera a assinatura digital
+  const signature = await generateSignature(payloadToSign, MASTER_SECRET);
+
+  // Monta a URL injetando a assinatura na query string
   const webhookBase = integrationDetails.urlCallback; 
-  const WEBHOOK_URL =
-    `${webhookBase}` +
-    `/${payload.simulation_id}`;
+  const WEBHOOK_URL = `${webhookBase}/${payload.simulation_id}/${signature}`;
 
   // Registra log no Supabase se ligado
   debugLog("DEBUG WEBHOOK_URL:", WEBHOOK_URL);
