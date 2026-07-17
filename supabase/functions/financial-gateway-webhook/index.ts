@@ -11,7 +11,8 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { tratarWebhookFandi } from './fandi-service.ts';
+import { processSimulation } from './fandi-service.ts'; // Correção: A função chama tratarWebhookFandi do fandi-service.ts
+import { withSecurity } from "../_shared/server.ts";
 
 /**
  * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
@@ -26,11 +27,11 @@ const DEBUG_MODE = true;
  */
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
-    debugLog(`[WEBHOOK-GATEWAY] ${message}`, data ? JSON.stringify(data, null, 2) : "");
+    console.log(`[WEBHOOK-GATEWAY] ${message}`, data ? JSON.stringify(data, null, 2) : "");
   }
 };
 
-serve(async (req) => {
+serve(withSecurity('webhook-gateway', async (req: Request) => {
   try {
     const url = new URL(req.url);
     const pathname = url.pathname.toLowerCase();
@@ -74,18 +75,16 @@ serve(async (req) => {
          * Passamos o simulationId extraído do path e o objeto Request intacto.
          * Isso garante que o 'fandi-service' realize apenas o UPDATE no registro correto.
          */
-        return await tratarWebhookFandi(simulationId, req);
+        const result = await tratarWebhookFandi(simulationId, req);
+        return { status: 200, data: result };
 
       default:
         // Caso a URL não siga o padrão de parceiros cadastrados
         debugLog(`[WEBHOOK-GATEWAY] Tentativa de acesso em rota não mapeada: ${partner}`);
-        return new Response(
-          JSON.stringify({ error: "Parceiro ou rota inválida" }),
-          { 
-            status: 404, 
-            headers: { "Content-Type": "application/json" } 
-          }
-        );
+        return {
+          status: 404,
+          data: { error: "Parceiro ou rota inválida" }
+        };
     }
 
   } catch (err: any) {
@@ -95,15 +94,12 @@ serve(async (req) => {
      * para sinalizar ao parceiro que a tentativa deve ser reprocessada posteriormente.
      */
     console.error("[WEBHOOK-GATEWAY CRITICAL ERROR]:", err.message);
-    return new Response(
-      JSON.stringify({ 
+    return {
+      status: 500,
+      data: { 
         error: err.message,
         details: "Verifique os logs de execução para análise de rastreabilidade."
-      }),
-      { 
-        status: 500, 
-        headers: { "Content-Type": "application/json" } 
       }
-    );
+    };
   }
-});
+}));

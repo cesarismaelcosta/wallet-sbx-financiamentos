@@ -1,22 +1,28 @@
 /**
  * @fileoverview Edge Function: Auth Exchange SBX (Federation Proxy & JWT Signer)
- * * ARQUITETURA DE SEGURANÇA E CONTEXTO:
+ * * =========================================================================
+ * [ARQUITETURA & CLEAN ARCHITECTURE]
+ * =========================================================================
  * Esta função atua como um proxy de federação (Token Exchange).
- * Ela recebe um token externo (Superbid), valida no upstream (como o sbx-user),
- * e se for válido, gera a sessão interna e assina o JWT (como o sbx-auth).
+ * Ela recebe um token externo (Superbid), valida no upstream, cria a sessão 
+ * interna e assina o JWT, utilizando o Wrapper de Segurança (withSecurity).
+ * 
  * * [RESPONSABILIDADES]:
  * 1. Validação Upstream: Bate no /account/v2/user/me para garantir que o token externo é quente.
  * 2. Prevenção: Intercepta tokens parceiros expirados (401) e nega a troca.
  * 3. Sessão Intermediária: Grava na tabela `session_tokens` para controle de estado.
  * 4. Assinatura Local: Gera o JWT HMAC-SHA256 para o frontend consumir de forma segura.
- * 5. [UPDATE]: Injeção dinâmica de Cookie para habilitar o fluxo SSR do Gateway.
+ * 5. Bridge: Injeção dinâmica de Cookie para habilitar o fluxo SSR do Gateway.
+ * 
+ * @author Cesar Ismael Pereira da Costa
+ * @version 2.1.0 (Alinhamento com Wrapper Core e Padrão de Execução)
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts";
+import { withSecurity } from "../_shared/server.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
-import { OriginDetails } from "../_shared/types.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,11 +35,8 @@ const ENV_URLS = {
   staging: "https://stgapi.s4bdigital.net"
 };
 
-serve(async (req) => {
-  // =========================================================================
-  // 1. HANDSHAKE (OPTIONS) - Preflight CORS
-  // =========================================================================
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+// [ENTRYPOINT]: Envelopamento com o Wrapper de Infraestrutura
+serve(withSecurity('sbx-auth-exchange', async (req: Request) => {
 
   try {
     // Lendo 'sbx_access_token' e 'environment' do JSON recebido do front-end
@@ -52,12 +55,11 @@ serve(async (req) => {
     const baseUrl = ENV_URLS[environment as keyof typeof ENV_URLS];
 
     // =========================================================================
-    // 2. INTEGRAÇÃO: VALIDAÇÃO UPSTREAM (Superbid API - Baseado no sbx-user)
+    // 2. INTEGRAÇÃO: VALIDAÇÃO UPSTREAM (Superbid API)
     // =========================================================================
     const verifyResponse = await fetch(`${baseUrl}/account/v2/user/me`, {
       method: "GET",
       headers: {
-        // AJUSTE 3: Passando o token para a API Upstream
         "Authorization": `Bearer ${sbx_access_token}`,
         "Content-Type": "application/json"
       },
@@ -82,7 +84,7 @@ serve(async (req) => {
     }
 
     // =========================================================================
-    // 3. ESTADO: CÁLCULO DE TTL E GRAVAÇÃO (Baseado no sbx-auth)
+    // 3. ESTADO: CÁLCULO DE TTL E GRAVAÇÃO
     // =========================================================================
     const agora = new Date();
     const expiraEmSegundos = 14400; 
@@ -94,13 +96,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Gera o UUID no Deno antes de qualquer coisa
     const sessionToken = crypto.randomUUID();
-
-    // Busca informações de infraestrutura do request (IP, User-Agent, etc.)
     const infra = await captureInfrastructure(req);
 
-    // Salva a sessão no Supabase com os detalhes do usuário e metadados de infraestrutura
     const { data: sessionData, error: sessionError } = await supabaseAdmin
       .from('session_tokens')
       .insert({ 
@@ -109,7 +107,6 @@ serve(async (req) => {
         sbx_access_token: sbx_access_token, 
         environment, 
         expires_at: nossaExpiracao.toISOString(),
-        // Mapeamento dos novos campos
         ip_address: infra.ip_address,
         country: infra.country,
         state: infra.state,
@@ -117,7 +114,7 @@ serve(async (req) => {
         user_agent: infra.user_agent,
         device_type: infra.device_type,
         operating_system: infra.operating_system,
-        origin_details: infra.metadata // O JSONB recebe o restante dos metadados
+        origin_details: infra.metadata
       })
       .select();
 
@@ -125,12 +122,8 @@ serve(async (req) => {
       throw new Error(`[sbx-auth] DATABASE_ERROR: Erro ao criar sessão -> ${sessionError?.message}`);
     }
 
-    if (!sessionData) {
-      throw new Error("DATABASE_ERROR: Sessão criada mas nenhum dado foi retornado.");
-    }
-
     // =========================================================================
-    // 4. SEGURANÇA: ASSINATURA DO JWT PRÓPRIO (Baseado no sbx-auth)
+    // 4. SEGURANÇA: ASSINATURA DO JWT PRÓPRIO
     // =========================================================================
     const jwtSecret = Deno.env.get("JWT_SECRET");
     if (!jwtSecret) throw new Error("[sbx-auth-exchange] INTERNAL_CONFIG_ERROR: JWT_SECRET não configurado.");
@@ -143,13 +136,12 @@ serve(async (req) => {
       { alg: "HS256", typ: "JWT" },
       { 
         sub: userId, 
-        jti: sessionToken, // UUID original como referência interna
+        jti: sessionToken, 
         exp: getNumericDate(nossaExpiracao.getTime() / 1000) 
       },
       key
     );
 
-    // [CORE UPDATE]: Transporte de Ponte para SSR
     const isProd = Deno.env.get("ENVIRONMENT") === "production";
     const cookieHeader = `session_token=${jwt}; Path=/; HttpOnly; SameSite=Lax${
       isProd ? "; Domain=.seudominio.com.br; Secure" : ""
@@ -158,37 +150,42 @@ serve(async (req) => {
     // =========================================================================
     // 5. RETORNO PARA O FRONTEND
     // =========================================================================
-    return new Response(JSON.stringify({
-      success: true,
-      session_token: jwt, 
-      user_id: userId,
-      expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
-      server_now_ms: agora.getTime()
-    }), { 
+    return { 
       status: 200, 
+      data: {
+        success: true,
+        session_token: jwt, 
+        user_id: userId,
+        expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
+        server_now_ms: agora.getTime()
+      },
       headers: { 
-        ...corsHeaders, 
-        'Content-Type': 'application/json',
         'Set-Cookie': cookieHeader 
-      } 
-    });
+      }
+    };
 
   } catch (err: any) {
     console.error("[sbx-auth-exchange] Fatal Exception:", err.message);
     
     let status = 500;
-    if (err.message.includes("AUTH") || err.message.includes("SESSION") || err.message.includes("EXPIRED")) {
+
+    // Identificação do Status HTTP baseado no erro
+    if (
+      err.message.includes("AUTH") || 
+      err.message.includes("SESSION") || 
+      err.message.includes("EXPIRED")
+    ) {
       status = 401;
     } else if (err.message.includes("UPSTREAM_API_UNAVAILABLE")) {
       status = 502;
     }
 
-    return new Response(JSON.stringify({ 
-      success: false, 
-      message: err.message 
-    }), { 
+    return { 
       status: status, 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-    });
+      data: { 
+        success: false, 
+        message: err.message 
+      } 
+    };
   }
-});
+}));

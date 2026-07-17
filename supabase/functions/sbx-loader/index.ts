@@ -14,6 +14,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { create, getNumericDate, verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
+import { withSecurity } from "../_shared/server.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { BFFUserProfile, BFFOfferDetails } from "../_shared/types.ts";
 
@@ -28,20 +29,12 @@ const debugLog = (message: string, data?: any) => {
   }
 };
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 const ENV_URLS = {
   production: { api: "https://api.s4bdigital.net", offer: "https://offer-query.superbid.net", event: "https://event-query.superbid.net" },
   staging: { api: "https://stgapi.s4bdigital.net", offer: "https://offer-query.stage.superbid.net", event: "https://event-query.stage.superbid.net" }
 };
 
-serve(async (req) => {
-  // Tratamento padrão de preflight (CORS) para requisições do navegador
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+serve(withSecurity('sbx-loader', async (req: Request) => {
 
   try {
     const { auth_token, environment, offer_id } = await req.json();
@@ -129,7 +122,7 @@ serve(async (req) => {
     const userId = String(account?.id);
 
     // =========================================================================
-    // 2. HIDRATAÇÃO DE PERFIL (BFF Mapping)
+    // HIDRATAÇÃO DE PERFIL (BFF Mapping)
     // =========================================================================
     // Limpa a estrutura complexa da Superbid para o formato enxuto que o Front-end precisa
     const userProfile: BFFUserProfile = {
@@ -157,7 +150,7 @@ serve(async (req) => {
     };
 
     // =========================================================================
-    // 3. BUSCA E MAPEAMENTO DE OFERTA
+    // BUSCA E MAPEAMENTO DE OFERTA
     // =========================================================================
     let offerPayload: BFFOfferDetails | null = null;
     
@@ -166,14 +159,14 @@ serve(async (req) => {
        const offerUrl = `${urls.offer}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${cleanOfferId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
 
        const offerRes = await fetch(offerUrl, {
-         method: "GET",
-         headers: { 
-           "Authorization": `Bearer ${sbx_access_token}`,
-           "Accept": "application/json",
-           "Content-Type": "application/json",
-           "Origin": "https://www.superbid.net",
-           "Referer": "https://www.superbid.net/"
-         }
+          method: "GET",
+          headers: { 
+            "Authorization": `Bearer ${sbx_access_token}`,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Origin": "https://www.superbid.net",
+            "Referer": "https://www.superbid.net/"
+          }
        });
 
        if (offerRes.status === 401) throw new Error("SESSION_UPSTREAM_EXPIRED: Token Superbid expirado durante busca de ofertas.");
@@ -235,8 +228,8 @@ serve(async (req) => {
              city: rawOffer.product?.location?.city || "Não informado",
              state: rawOffer.product?.location?.state || "Não informado",
              country: rawOffer.product?.location?.country || "Brasil"
-           },           
-           ...(vehicleData && { vehicle_details: vehicleData }), // Faz merge apenas se for veículo          
+           },             
+           ...(vehicleData && { vehicle_details: vehicleData }), // Faz merge apenas se for veículo 
            photos: rawOffer.product?.galleryJson?.map((p: any) => ({
              highlight: p.highlight || false,
              link: p.link,
@@ -315,25 +308,23 @@ serve(async (req) => {
         debugLog("Sessão já existente. Banco de dados poupado. Reutilizando JWT recebido.");
     }
 
-    // Entrega a resposta de sucesso com o Token seguro e o payload hidratado
-    return new Response(JSON.stringify({
-      success: true,
-      session_token: finalJwt,
-      user_id: userId,
-      expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
-      server_now_ms: agora.getTime(),
-      rehydration_payload: {
-        user_profile: userProfile,
-        offer_details: offerPayload
+    return { 
+      status: 200, 
+      data: {
+        success: true,
+        session_token: finalJwt,
+        user_id: userId,
+        expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
+        server_now_ms: agora.getTime(),
+        rehydration_payload: {
+          user_profile: userProfile,
+          offer_details: offerPayload
+        }
+      },
+      headers: { 
+        'Set-Cookie': `session_token=${finalJwt}; Path=/; HttpOnly; SameSite=Lax` 
       }
-    }), { 
-        headers: { 
-            ...corsHeaders, 
-            'Content-Type': 'application/json',
-            // Define cookie seguro para mitigar XSS (opcional, dependendo de como o front lê)
-            'Set-Cookie': `session_token=${finalJwt}; Path=/; HttpOnly; SameSite=Lax` 
-        } 
-    });
+    };
 
   } catch (err: any) {
     // =========================================================================
@@ -341,7 +332,6 @@ serve(async (req) => {
     // =========================================================================
     console.error("[sbx-loader] Erro capturado:", err.message);
     
-    // Status HTTP semânticos (Evita retornar 500 para não estourar proxy da Cloudflare)
     let status = 400; 
     
     if (err.message.includes("SESSION_UPSTREAM_EXPIRED")) {
@@ -352,10 +342,9 @@ serve(async (req) => {
         status = 422; // Falha na Superbid. Mudado de 502 para 422 para o frontend conseguir ler o JSON.
     }
 
-    // Retorna a mensagem limpa em JSON (impede que o app crashe lendo HTML de erro)
-    return new Response(
-        JSON.stringify({ success: false, message: err.message }), 
-        { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return { 
+      status, 
+      data: { success: false, message: err.message } 
+    };
   }
-});
+}));

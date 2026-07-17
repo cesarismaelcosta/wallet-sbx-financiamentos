@@ -16,6 +16,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateRequest } from "../_shared/auth.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { sql } from "../_shared/db.ts";
+import { withSecurity } from "../_shared/server.ts";
 import { validateVisitOwnership, validateOfferIntegrity } from "../_shared/gatekeeper.ts";
 import { persistVisitData } from "./persist-data.ts";
 
@@ -48,17 +49,6 @@ const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
     console.log(`[ORCHESTRATOR-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
   }
-};
-
-/**
- * CONFIGURAÇÃO GLOBAL DE CORS (Única Fonte de Verdade)
- * @description Regras estritas de Cross-Origin.
- * A inclusão do 'x-session-token' é vital para o Handshake Zero Trust (Validação de Identidade).
- */
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-original-url, x-session-token, x-auth-fallback-url",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
 /**
@@ -279,13 +269,8 @@ async function resolveOrchestratorConfigs(
  * HANDLER PRINCIPAL (E/S BILATERAL)
  * ============================================================================
  */
-serve(async (req: Request) => {
-  // 1. AVALIAÇÃO DE CORS E PREFLIGHT
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+serve(withSecurity('orchestrator', async (req: Request) => {
 
-  // 2. INICIALIZAÇÃO DE CONTEXTO (Bypass RLS para operações críticas do motor)
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false },
   });
@@ -307,15 +292,15 @@ serve(async (req: Request) => {
       if (!originPath) {
           // Failsafe: Se o frontend não enviou o header, barramos aqui para evitar 
           // redirecionamentos quebrados ou comportamento indefinido.
-          return new Response(JSON.stringify({ 
+          return {
+            status: 400,
+            data: { 
               success: false,
               code: "INTERNAL_ERROR",
               message: "Erro de segurança: A origem da requisição não foi identificada.",
               fallback_url: "/"
-          }), { 
-              status: 400, 
-              headers: { ...corsHeaders, "Content-Type": "application/json" } 
-          });
+            }
+          };
       }
 
       // =========================================================================
@@ -350,15 +335,15 @@ serve(async (req: Request) => {
       // =========================================================================
       // 4. Retorno seguindo o contrato oficial da API
       // =========================================================================
-      return new Response(JSON.stringify({ 
+      return { 
+        status: statusCode,
+        data: { 
           success: false,
           code: errorCode,
           message: userMessage, // <--- O padrão exato que você usa
           fallback_url: fallbackUrl 
-      }), { 
-          status: statusCode, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      });
+        }
+      };
   }
 
   // =========================================================================
@@ -503,7 +488,7 @@ serve(async (req: Request) => {
         },
       };
 
-      return new Response(JSON.stringify(hydratedPayload), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return { status: 200, data: hydratedPayload };
 
     } catch (error: any) {
         console.error(`[Orquestrador GET Error]: ${error.message}`);
@@ -514,15 +499,15 @@ serve(async (req: Request) => {
 
         debugLog("fallback url:", error.fallback_url);
 
-        return new Response(JSON.stringify({ 
-            success: false,
-            code: errorCode,             // <--- Agora o front-end recebe isso!
-            message: error.message,      // <--- A mensagem amigável
-            fallback_url: error.fallback_url || "/" 
-        }), { 
-            status: 400, 
-            headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        });
+        return {
+            status: 400,
+            data: { 
+                success: false,
+                code: errorCode,           // <--- Agora o front-end recebe isso!
+                message: error.message,      // <--- A mensagem amigável
+                fallback_url: error.fallback_url || "/" 
+            }
+        };
     }
   }
 
@@ -633,17 +618,18 @@ serve(async (req: Request) => {
           debugLog("ℹ️ Nenhum offer_id fornecido. Pulando validação de integridade.");
       }
 
-      return new Response(
-        JSON.stringify({
+      return {
+        status: 200,
+        data: {
           action: "REDIRECT",
           url: finalUrl,
           visit_id: visitId,
           visit_update_id: visitUpdateId,
           simulation_id: simulationId, 
           partner_id: payload.partner_id,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+        }
+      };
+
     } catch (error: any) {
       debugLog(`[Orquestrador POST Error REAL]: ${error.message}`);
       
@@ -651,20 +637,21 @@ serve(async (req: Request) => {
       // Se não existir, é um erro genérico.
       const errorCode = error.errorCode || "UNKNOWN_ERROR";
 
-      return new Response(JSON.stringify({ 
-          success: false,
-          code: errorCode,             // <--- Agora o front-end recebe isso!
-          message: error.message,      // <--- A mensagem amigável
-          fallback_url: error.fallback_url || "/" 
-      }), { 
-          status: 400, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      });
+      return {
+        status: 400,
+        data: { 
+            success: false,
+            code: errorCode,           // <--- Agora o front-end recebe isso!
+            message: error.message,      // <--- A mensagem amigável
+            fallback_url: error.fallback_url || "/" 
+        }
+      };
     }
   }
 
   // Falha de Método HTTP
-  return new Response(JSON.stringify({ error: "Método HTTP não permitido." }), {
-    status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-});
+  return { 
+    status: 405, 
+    data: { error: "Método HTTP não permitido." } 
+  };
+}));

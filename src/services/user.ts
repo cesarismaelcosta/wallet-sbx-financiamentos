@@ -78,10 +78,15 @@ export const fetchMyProfile = async (
   const url = `${supabaseUrl}/functions/v1/sbx-user`;
 
   // -----------------------------------------------------------------------
-  // [TELEMETRIA]: Configuração da Requisição
+  // Fallback dinâmico para a URL de origem
+  // Se o frontend não passou o originUrl, tentamos pegar do navegador ou assumimos "/"
   // -----------------------------------------------------------------------
-    // Monta a rota de login exata que você quer
-  const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(originUrl)}`;
+  const currentUrl = originUrl || (typeof window !== 'undefined' ? window.location.href : "/");
+  const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(currentUrl)}`;
+
+  // -----------------------------------------------------------------------
+  // Configuração da Requisição
+  // -----------------------------------------------------------------------
   // Nota: x-sbx-env foi removido. A responsabilidade de descobrir o ambiente
   // é exclusiva da Edge Function, consultando a tabela `session_tokens` (SSOT).
   const options: RequestInit = {

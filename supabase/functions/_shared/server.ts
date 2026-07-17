@@ -20,6 +20,7 @@ export const withSecurity = (
   return async (req: Request): Promise<Response> => {
     
     const config = FUNCTION_CONFIGS[functionName];
+
     if (!config) {
       console.error(`[WRAPPER FATAL ERROR]: Função '${functionName}' não mapeada no registry.ts`);
       return new Response(JSON.stringify({ error: "Configuração de segurança ausente" }), { status: 500 });
@@ -32,7 +33,7 @@ export const withSecurity = (
     
     // O Wrapper verifica se a função pediu um origin restrito. 
     // Se não pediu, assume o "*" como default global.
-    const allowedOrigin = config.origin || "*";
+    let allowedOrigin = config.origin || "*";
 
     if (allowedOrigin === 'self') {
         // Puxa a URL do projeto atual do ambiente do Deno

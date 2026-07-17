@@ -16,6 +16,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { processSimulation } from "./simulation-handler.ts";
 import { validateRequest } from "../_shared/auth.ts"; // Validação centralizada de segurança
+import { withSecurity } from "../_shared/server.ts";
 
 // Chave de controle para logs de depuração
 const DEBUG_MODE = true;
@@ -29,28 +30,7 @@ const debugLog = (message: string, data?: any) => {
   }
 };
 
-/**
- * CONFIGURAÇÃO GLOBAL DE HEADERS
- * Contém x-original-url liberado para evitar bloqueios de CORS no Preflight
- */
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-original-url, x-session-token, x-auth-fallback-url",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-  "Content-Type": "application/json",
-};
-
-serve(async (req) => {
-  // =========================================================================
-  // 1. CORS HANDSHAKE (PREFLIGHT)
-  // =========================================================================
-  if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
-
+serve(withSecurity('financial-gateway', async (req: Request) => {
   // Descoberta da Origem (Usada nos tratamentos de erro abaixo)
   const originPath = req.headers.get("x-original-url") || "/";
   const authUrl = req.headers.get("x-auth-fallback-url");
@@ -92,15 +72,15 @@ serve(async (req) => {
               break;
       }
 
-      return new Response(JSON.stringify({ 
-          success: false,
-          code: finalCode,
-          message: userMessage,
-          fallback_url: fallbackUrl 
-      }), { 
-          status: statusCode, 
-          headers: corsHeaders 
-      });
+      return {
+          status: statusCode,
+          data: { 
+              success: false,
+              code: finalCode,
+              message: userMessage,
+              fallback_url: fallbackUrl 
+          }
+      };
   }
 
   // =========================================================================
@@ -120,37 +100,34 @@ serve(async (req) => {
       }
 
     } else {
-      return new Response(JSON.stringify({ error: "Método não permitido" }), {
+      return {
         status: 405,
-        headers: corsHeaders,
-      });
+        data: { error: "Método não permitido" }
+      };
     }
 
-    // Aciona a regra de negócio da Fandi
+    // Processa simulação
     const result = await processSimulation(req, payload);
 
-    return new Response(JSON.stringify(result), {
+    return {
       status: 200,
-      headers: corsHeaders,
-    });
+      data: result
+    };
     
   } catch (err: any) {
     console.error("[GATEWAY ERROR]:", err.message);
     
     // Tratamento de Erro de Negócio (ex: CNPJ inválido, banco recusou)
     // Retorna fallbackUrl como originPath para o Orchestrator não ejetar o usuário da tela
-    return new Response(
-      JSON.stringify({
+    return {
+      status: 400,
+      data: {
         success: false,
         code: "BUSINESS_ERROR",
         message: err.message,
         details: "Consulte os logs da função para análise de rastreabilidade.",
         fallback_url: originPath 
-      }),
-      {
-        status: 400,
-        headers: corsHeaders,
-      },
-    );
+      }
+    };
   }
-});
+}));

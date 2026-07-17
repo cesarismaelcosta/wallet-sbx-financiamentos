@@ -5,12 +5,8 @@
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { withSecurity } from "../_shared/server.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -29,13 +25,6 @@ interface SetActivePayload { action: "set_active"; id: string; is_active: boolea
 interface SetRolePayload { action: "set_role"; id: string; role: Role; }
 interface ListPayload { action: "list"; }
 type Payload = RegisterPayload | SetActivePayload | SetRolePayload | ListPayload;
-
-function json(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 /**
  * Valida o usuário diretamente na tabela 'backoffice_users'.
@@ -87,21 +76,20 @@ async function ensureAdmin(authHeader: string | null) {
   return { ok: true as const };
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
+serve(withSecurity('manage-backoffice-users', async (req: Request) => {
+  if (req.method !== "POST") return { status: 405, data: { error: "method_not_allowed" } };
 
   let payload: Payload;
   try { 
     payload = (await req.json()) as Payload; 
   } catch { 
-    return json(400, { error: "invalid_json" }); 
+    return { status: 400, data: { error: "invalid_json" } };
   }
 
   // Verifica permissão de Admin antes de processar qualquer ação
   const adminCheck = await ensureAdmin(req.headers.get("Authorization"));
   if (!adminCheck.ok) {
-    return json(adminCheck.error === "forbidden" ? 403 : 401, { error: adminCheck.error });
+    return { status: adminCheck.error === "forbidden" ? 403 : 401, data: { error: adminCheck.error } };
   }
 
   switch (payload.action) {
@@ -111,21 +99,21 @@ Deno.serve(async (req) => {
         .select("*")
         .order("created_at", { ascending: false });
         
-      if (error) return json(500, { error: error.message });
-      return json(200, { users: data });
+      if (error) return { status: 500, data: { error: error.message } };
+      return { status: 200, data: { users: data } };
     }
 
     case "register": {
       const email = payload.email.trim().toLowerCase();
-      if (!["admin", "manager", "viewer"].includes(payload.role)) return json(400, { error: "invalid_role" });
+      if (!["admin", "manager", "viewer"].includes(payload.role)) return { status: 400, data: { error: "invalid_role" } };
       
       const { data, error } = await adminClient
         .from("backoffice_users")
         .insert({ email, name: payload.name, role: payload.role, is_active: true })
         .select().single();
         
-      if (error) return json(500, { error: error.message });
-      return json(200, { user: data });
+      if (error) return { status: 500, data: { error: error.message } };
+      return { status: 200, data: { user: data } };
     }
 
     case "set_active": {
@@ -135,7 +123,7 @@ Deno.serve(async (req) => {
         .eq("id", payload.id)
         .single();
 
-      if (fetchErr) return json(500, { error: fetchErr.message });
+      if (fetchErr) return { status: 500, data: { error: fetchErr.message } };
 
       const { data, error } = await adminClient
         .from("backoffice_users")
@@ -143,7 +131,7 @@ Deno.serve(async (req) => {
         .eq("id", payload.id)
         .select().single();
         
-      if (error) return json(500, { error: error.message });
+      if (error) return { status: 500, data: { error: error.message } };
 
       if (payload.is_active === false) {
         try {
@@ -158,11 +146,11 @@ Deno.serve(async (req) => {
         }
       }
 
-      return json(200, { user: data });
+      return { status: 200, data: { user: data } };
     }
 
     case "set_role": {
-      if (!["admin", "manager", "viewer"].includes(payload.role)) return json(400, { error: "invalid_role" });
+      if (!["admin", "manager", "viewer"].includes(payload.role)) return { status: 400, data: { error: "invalid_role" } };
       
       const { data, error } = await adminClient
         .from("backoffice_users")
@@ -170,11 +158,11 @@ Deno.serve(async (req) => {
         .eq("id", payload.id)
         .select().single();
         
-      if (error) return json(500, { error: error.message });
-      return json(200, { user: data });
+      if (error) return { status: 500, data: { error: error.message } };
+      return { status: 200, data: { user: data } };
     }
 
     default:
-      return json(400, { error: "unknown_action" });
+      return { status: 400, data: { error: "unknown_action" } };
   }
-});
+}));

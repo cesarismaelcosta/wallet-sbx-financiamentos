@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { withSecurity } from "../_shared/server.ts";
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -32,18 +34,7 @@ async function getGeoFallback(ip: string) {
   }
 }
 
-Deno.serve(async (req) => {
-  // CORS Handshake
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      },
-    });
-  }
-
+serve(withSecurity('login-history', async (req: Request) => {
   try {
     const body = await req.json();
     const ua = req.headers.get('user-agent') || '';
@@ -92,16 +83,16 @@ Deno.serve(async (req) => {
 
     if (error) throw error;
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
-      status: 200,
-    });
+    return { 
+        status: 200, 
+        data: { success: true } 
+    };
 
-  } catch (err) {
+  } catch (err: any) {
     console.error("[ORCHESTRATOR-ERROR]:", err.message);
-    return new Response(JSON.stringify({ error: err.message }), { 
-      headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
-      status: 500 
-    });
+    return { 
+        status: 500, 
+        data: { error: err.message } 
+    };
   }
-});
+}));
