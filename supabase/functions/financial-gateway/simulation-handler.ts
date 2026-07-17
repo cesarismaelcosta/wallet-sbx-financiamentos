@@ -249,6 +249,9 @@ export async function processSimulation(req: Request, payload: SimulationPayload
   // Definição da ação para o painel de visitas (atualizar para SIMULATE)
   const action = 'SIMULATE';
 
+  // Se for uma simulação nova (simulation_id veio null ou undefined), gera o UUID.
+  payload.simulation_id = payload.simulation_id || crypto.randomUUID();
+
   switch (payload.partner_id) {
     case 1: // sbxPAY
       debugLog("INICIO SIMULAÇÃO CARTÃO: ", payload);
@@ -258,7 +261,6 @@ export async function processSimulation(req: Request, payload: SimulationPayload
       // Insere simulação
       const result = await insertSimulationData(sql, payload, infra, gatewayResult, action, action_description)
       // Atualiza o payload com os IDs reais do banco
-      payload.simulation_id = String(result.simulation_id);
       payload.simulation_update_id = String(result.simulation_update_id);
       break;
 
@@ -283,7 +285,6 @@ export async function processSimulation(req: Request, payload: SimulationPayload
         // Insere simulação
         const result = await insertSimulationData(sql, payload, infra, gatewayResult, action, action_description)
         // Atualiza o payload com os IDs reais do banco
-        payload.simulation_id = String(result.simulation_id);
         payload.simulation_update_id = String(result.simulation_update_id);
       }
       break; 
@@ -300,7 +301,6 @@ export async function processSimulation(req: Request, payload: SimulationPayload
           // Insere simulação
           const result = await insertSimulationData(sql, payload, infra, gatewayResult, action, action_description, payload.step)
           // Atualiza o payload com os IDs reais do banco
-          payload.simulation_id = String(result.simulation_id);
           payload.simulation_update_id = String(result.simulation_update_idd);
           debugLog("após inserir em creditas", payload.simulation_id)
         } else {
