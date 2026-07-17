@@ -50,16 +50,37 @@ serve(withSecurity('financial-gateway-webhook', async (req: Request) => {
         debugLog(`[DEBUG-CONNECTION] URL DO BANCO: ${Deno.env.get('SUPABASE_URL')}`);
         debugLog(`[DEBUG-CONNECTION] Buscando ID: ${simulationId}`);
 
-        // Busca o visit_id para o hash e o partner_id para a barreira Cross-Tenant
-        const { data: simulation, error: dbError } = await supabase
-          .from('simulations')
-          .select('id, visit_id, partner_id') 
-          .eq('id', simulationId)            
-          .single();
+        // --- MOTOR DE BUSCA COM RETRY (PREVINE RACE CONDITION) ---
+        let simulation = null;
+        let dbError = null;
+        const maxRetries = 3;
+        const delayMs = 2000; // Tempo de espera entre tentativas (1000ms)
 
-        if (dbError || !simulation) {
-          debugLog(`Alerta: Simulação ${simulationId} não localizada.`, dbError);
-          return { status: 404, data: { error: "Simulação não encontrada." } };
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          debugLog(`Tentativa ${attempt} de buscar a simulação ${simulationId}...`);
+          
+          const { data, error } = await supabase
+            .from('simulations')
+            .select('id, visit_id, partner_id')
+            .eq('id', simulationId); // Buscamos sem o .single() para não quebrar o loop
+
+          if (!error && data && data.length > 0) {
+            simulation = data[0];
+            break; // Registro encontrado com sucesso! Sai do loop.
+          }
+
+          dbError = error;
+          
+          // Se for a última tentativa e não achou, nem gasta o sleep
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          }
+        }
+
+        // Se após os retries ainda continuar vazio, aí sim é um 404 real
+        if (!simulation) {
+          debugLog(`Alerta: Simulação ${simulationId} não localizada após ${maxRetries} tentativas.`);
+          return { status: 404, data: { error: "Simulação não encontrada.", details: dbError } };
         }
 
         // 🛡️ BARREIRA CROSS-TENANT
