@@ -54,7 +54,10 @@ serve(withSecurity('financial-gateway-webhook', async (req: Request) => {
         let simulation = null;
         let dbError = null;
         const maxRetries = 3;
-        const delayMs = 2000; // Tempo de espera entre tentativas (1000ms)
+        const delayMs = 2000; // Tempo de espera entre tentativas (2000ms)
+
+        // Espera obrigatória antes da 1ª tentativa para dar tempo do INSERT commitar
+        await new Promise(resolve => setTimeout(resolve, delayMs));
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           debugLog(`Tentativa ${attempt} de buscar a simulação ${simulationId}...`);
