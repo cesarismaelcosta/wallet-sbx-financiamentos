@@ -44,7 +44,7 @@ const debugLog = (message: string, data?: any) => {
  */
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-original-url, x-session-token, x-auth-fallback-url",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, content-type, x-original-url, x-session-token, x-auth-fallback-url",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 

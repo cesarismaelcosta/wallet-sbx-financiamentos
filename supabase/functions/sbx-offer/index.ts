@@ -18,12 +18,12 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decode } from "https://deno.land/x/djwt@v2.8/mod.ts";
 
 // IMPORTANTE: Trazendo o Gatekeeper unificado do ecossistema
 import { validateRequest } from "../_shared/auth.ts";
-import { Offer, Manager, Event, Seller } from "../_shared/types.ts";
+import { Offer, Manager, Event, Seller, Vehicle } from "../_shared/types.ts";
 
 /**
  * ============================================================================
@@ -51,7 +51,7 @@ const debugLog = (message: string, data?: any) => {
  */
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-session-token, x-original-url, x-auth-fallback-url",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, content-type, x-session-token, x-original-url, x-auth-fallback-url",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
 

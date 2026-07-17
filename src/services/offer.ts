@@ -1,15 +1,20 @@
 /**
- * @fileoverview Serviço: Offer Details
+ * @fileoverview Serviço: Offer Details (Client Service)
  * * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
  * Busca os dados consolidados da oferta através da Edge Function sbx-offer.
  * Atua na camada de Gateway de Serviços (Data Provider) do Hub Financeiro.
+ * 
  * * [RESPONSABILIDADES]:
  * 1. Interface (Type Safety): Define o contrato BFFOfferDetails para tipagem forte.
  * 2. Gateway Bypass: Utiliza a Anon Key para transpor o Kong Gateway.
- * 3. Transparência: Propaga mensagens brutas do upstream (Superbid) para logs.
- * 4. Segurança: Erros 401 disparam o Protocolo de Amnésia global.
+ * 3. SSOT Compliance: Omitiu o envio de `x-sbx-env` pois a Edge Function resolve 
+ *    o ambiente 100% via banco de dados (Zero Trust Frontend).
+ * 4. Error Handling: Intercepta o novo contrato de erro padronizado ({ code, message, fallback_url })
+ *    e propaga para a Action/Loader do React Router.
+ * 
+ * @version 2.5.0 (Adequação ao novo contrato SSOT e Padronização de Erros)
  */
 
 // =========================================================================
@@ -62,6 +67,16 @@ export interface BFFOfferDetails {
 }
 
 // =========================================================================
+// [CONTRATO DE ERRO PADRONIZADO (BFF)]
+// =========================================================================
+export interface BFFErrorResponse {
+  success: boolean;
+  code: string;
+  message: string;
+  fallback_url: string;
+}
+
+// =========================================================================
 // [SERVIÇO CORE]: Abstração de Chamada HTTP e Telemetria
 // =========================================================================
 
@@ -69,38 +84,38 @@ export interface BFFOfferDetails {
  * Busca os detalhes de uma oferta específica no servidor.
  * @param sessionToken O JWT Próprio de sessão gerado pelo backend.
  * @param offerId O ID do lote/oferta na Superbid.
- * @param environment [NOVO] Opcional. Força o ambiente (production/stage) contornando o localStorage durante o SSR.
+ * @param originUrl [NOVO] A URL atual da página, para ser enviada no header 'x-original-url'
+ * @throws {BFFErrorResponse} Objeto de erro padronizado para consumo do React Router.
  */
-export const fetchOfferDetails = async (sessionToken: string, offerId: string, environment?: "staging" | "production"): Promise<BFFOfferDetails> => {
-  // [STATE]: Resgate de variáveis de ambiente e preferências de armazenamento local
-  // ====================================================================================
-  // [SSR SAFEGUARD & CROSS-DOMAIN SYNC]: A Injeção do Parâmetro 'environment'
-  // ====================================================================================
-  // 1. O Servidor é Cego: No Node.js (SSR), o `window` e o `localStorage` não existem.
-  // 2. O Risco de Colapso (401 Falso): Sem o 'environment', o servidor usa o fallback "stage". 
-  //    Se o token for de Produção, a incompatibilidade gera um SESSION_EXPIRED falso.
-  // 3. O Fluxo Unificado: Ao receber o 'environment' do loader, a API garante que o Header 
-  //    'x-sbx-env' esteja perfeitamente sincronizado com a origem da requisição.
-  const isBrowser = typeof window !== 'undefined';
-  const storedAmbiente = environment || (isBrowser ? (localStorage.getItem("sbx_environment") || "stage") : "stage");
-  
+export const fetchOfferDetails = async (
+  sessionToken: string, 
+  offerId: string, 
+  originUrl?: string
+): Promise<BFFOfferDetails> => {
+
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
   const url = `${supabaseUrl}/functions/v1/sbx-offer?offer_id=${offerId}`;
 
   // -----------------------------------------------------------------------
-  // [TELEMETRIA]: Log Operacional de Diagnóstico Inicial
+  // [TELEMETRIA]: Configuração da Requisição
   // -----------------------------------------------------------------------
+  // Monta a rota de login exata que você quer
+  const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(originUrl)}`;
+  
+  // Nota: x-sbx-env foi removido. A responsabilidade de descobrir o ambiente
+  // é exclusiva da Edge Function, consultando a tabela `session_tokens`.
   const options: RequestInit = {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${supabaseAnonKey}`,
-      "apikey": supabaseAnonKey,
       "x-session-token": sessionToken,
-      "x-sbx-env": storedAmbiente, // Garante alinhamento total entre o Router e a API
       "Content-Type": "application/json",
-      "Accept": "application/json"
+      "Accept": "application/json",
+      // Mapeia a URL de origem
+      ...(originUrl && { "x-original-url": originUrl }),
+      // Mapeia a URL de fallback para o contrato esperado pelo backend
+      ...(loginFallbackUrl && { "x-auth-fallback-url": loginFallbackUrl })
     }
   };
 
@@ -108,54 +123,59 @@ export const fetchOfferDetails = async (sessionToken: string, offerId: string, e
     // [NETWORK]: Chamada segura para a Edge Function via API REST
     const response = await fetch(url, options);
 
-    if (response.status === 401) {
-      // -----------------------------------------------------------------------
-      // [SECURITY]: Gatilho do Protocolo de Amnésia
-      // -----------------------------------------------------------------------
-      // [CORE UPDATE - SSR SAFEGUARD]: Só dispara o evento se estivermos no Client-Side.
-      if (isBrowser) {
-        window.dispatchEvent(new CustomEvent('session_expired'));
-      }
-      throw new Error("SESSION_EXPIRED");
-    }
-
     // -----------------------------------------------------------------------
-    // [INTERCEPTAÇÃO DE ERRO]: Tratamento e Extração de Payload do Upstream
+    // [INTERCEPTAÇÃO DE ERRO]: Leitura do Contrato Padronizado
     // -----------------------------------------------------------------------
     if (!response.ok) {
-      let backendReason = "OFFER_API_ERROR";
+      let bffError: BFFErrorResponse;
       
       try {
-        // Tenta ler o corpo bruto enviado pela Edge Function
-        const textError = await response.text();
-        
-        try {
-          // Tenta fazer o parse estruturado caso seja um JSON de erro do Supabase
-          const jsonError = JSON.parse(textError);
-          // Prioriza as mensagens fatais detalhadas vindas do backend
-          backendReason = jsonError?.event_message || jsonError?.error || jsonError?.message || textError;
-        } catch {
-          // Fallback para texto bruto
-          backendReason = textError || `HTTP ${response.status} ${response.statusText}`;
-        }
+        // Tenta parsear o contrato exato que construímos na Edge Function
+        const jsonError = await response.json();
+        bffError = {
+            success: false,
+            code: jsonError.code || "UNKNOWN_ERROR",
+            message: jsonError.message || `HTTP ${response.status} ${response.statusText}`,
+            fallback_url: jsonError.fallback_url || "/"
+        };
       } catch (parseError) {
-        backendReason = `HTTP ${response.status} (Falha crítica ao ler corpo da resposta)`;
+        // Fallback de infraestrutura (Ex: Supabase fora do ar ou 502 do Nginx)
+        bffError = {
+            success: false,
+            code: "INFRASTRUCTURE_ERROR",
+            message: "Falha crítica de comunicação com o servidor.",
+            fallback_url: "/"
+        };
       }
 
-      // [CRITICAL FIX]: Interrompe a execução e lança o erro detalhado da infraestrutura
-      throw new Error(backendReason);
+      // [SECURITY]: Gatilho nativo legado (Amnésia) para retrocompatibilidade
+      if (bffError.code === "SESSION_EXPIRED" || bffError.code === "UNAUTHORIZED") {
+          const isBrowser = typeof window !== 'undefined';
+          if (isBrowser) {
+            window.dispatchEvent(new CustomEvent('session_expired'));
+          }
+      }
+
+      // [CRITICAL FIX]: Interrompe a execução lançando o objeto formatado 
+      // O Loader do React Router deve dar "catch" e ler (error as any).code
+      throw bffError;
     }
 
     // [DATA]: Retorna os dados hidratados garantindo a tipagem do contrato BFF
     return await response.json();
     
   } catch (error: any) {
-    // Se for o nosso erro tratado (ex: SESSION_EXPIRED ou o throw da infra), propaga direto
-    if (error.message && error.message !== "Failed to fetch") {
+    // Se o erro já for o nosso BFFErrorResponse (lançado no if !response.ok acima), propaga direto.
+    if (error && "code" in error) {
       throw error;
     }
     
-    // [FALLBACK]: Erro genérico (ex: CORS, queda de conexão)
-    throw new Error(`OFFER_API_ERROR: ${error.message || "Erro desconhecido de comunicação física"}`);
+    // [FALLBACK CATASTRÓFICO]: Erro de rede (Ex: Cliente sem internet ou CORS block)
+    throw {
+        success: false,
+        code: "NETWORK_ERROR",
+        message: "Falha de conexão física. Verifique sua internet.",
+        fallback_url: "/"
+    } as BFFErrorResponse;
   }
 };

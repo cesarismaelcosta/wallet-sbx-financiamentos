@@ -80,17 +80,21 @@ export const fetchMyProfile = async (
   // -----------------------------------------------------------------------
   // [TELEMETRIA]: Configuração da Requisição
   // -----------------------------------------------------------------------
+    // Monta a rota de login exata que você quer
+  const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(originUrl)}`;
   // Nota: x-sbx-env foi removido. A responsabilidade de descobrir o ambiente
   // é exclusiva da Edge Function, consultando a tabela `session_tokens` (SSOT).
   const options: RequestInit = {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${supabaseAnonKey}`,
-      "apikey": supabaseAnonKey,
       "x-session-token": sessionToken,
-      ...(originUrl && { "x-original-url": originUrl }),
       "Content-Type": "application/json",
-      "Accept": "application/json"
+      "Accept": "application/json",
+      // Mapeia a URL de origem
+      ...(originUrl && { "x-original-url": originUrl }),
+      // Mapeia a URL de fallback para o contrato esperado pelo backend
+      ...(loginFallbackUrl && { "x-auth-fallback-url": loginFallbackUrl })
     }
   };
 
