@@ -250,6 +250,7 @@ export async function processSimulation(req: Request, payload: SimulationPayload
   const action = 'SIMULATE';
 
   // Se for uma simulação nova (simulation_id veio null ou undefined), gera o UUID.
+  // Geração prévia permite a utilização do simulation_id, por exemplo, em webhooks
   payload.simulation_id = payload.simulation_id || crypto.randomUUID();
 
   switch (payload.partner_id) {

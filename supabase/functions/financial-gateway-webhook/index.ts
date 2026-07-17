@@ -19,7 +19,7 @@ const debugLog = (message: string, data?: any) => {
 // ID Oficial da empresa MeResolve (Fandi)
 const MERESOLVE_PARTNER_ID = 2; 
 
-serve(withSecurity('webhook-gateway', async (req: Request) => {
+serve(withSecurity('financial-gateway-webhook', async (req: Request) => {
   try {
     const url = new URL(req.url);
     const pathname = url.pathname.toLowerCase();
@@ -47,15 +47,14 @@ serve(withSecurity('webhook-gateway', async (req: Request) => {
         const supabase = createClient(supabaseUrl, supabaseKey);
 
         // Busca o visit_id para o hash e o partner_id para a barreira Cross-Tenant
-        // IMPORTANTE: Ajuste 'partner_id' abaixo se a sua coluna tiver outro nome
         const { data: simulation, error: dbError } = await supabase
           .from('simulations')
-          .select('visit_id, partner_id') 
-          .eq('visit_id', visitId)
+          .select('id, visit_id, partner_id') 
+          .eq('id', simulationId)            
           .single();
 
         if (dbError || !simulation) {
-          debugLog(`Alerta: Simulação ${simulationId} não localizada.`);
+          debugLog(`Alerta: Simulação ${simulationId} não localizada.`, dbError);
           return { status: 404, data: { error: "Simulação não encontrada." } };
         }
 
