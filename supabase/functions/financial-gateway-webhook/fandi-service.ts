@@ -137,15 +137,9 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
     throw new Error("Assinatura digital inválida.");
   }
 
-  // --------------------------------------------------------------------------
+  // ========================================================================
   // FASE 2: VALIDAÇÃO DE ESTADO NO BANCO DE DADOS (OUTER JOIN)
-  // Checa Existência, Cross-Tenant e Idempotência em uma única query REST.
-  // --------------------------------------------------------------------------
-
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+  // ========================================================================
 
   const { data: simulation, error: dbError } = await supabase
     .from('simulations')
@@ -158,21 +152,32 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
     .eq('simulation_updates.external_event_id', simulationUpdateId)
     .maybeSingle();
 
+  // 1. Tratamento de Erro e Race Condition (PGRST116)
   if (dbError) {
+    // Se o PostgREST surtar com o Join de 0 linhas, sabemos que é o dado que ainda não chegou.
+    if (dbError.code === 'PGRST116') {
+      debugLog(`Alerta: Simulação ${simulationId} não localizada (Possível Race Condition).`);
+      throw new Error("SIMULATION_NOT_FOUND");
+    }
+    
+    // Qualquer outro erro é falha real de banco
     console.error(`[DEBUG-ERRO-DB] Erro no Join da simulação:`, dbError);
     throw new Error("Falha interna de banco de dados na validação de integridade.");
   }
 
+  // 2. Validação de Existência (Se o driver retornar data nula mas sem disparar erro)
   if (!simulation) {
     debugLog(`Alerta: Simulação ${simulationId} não localizada.`);
-    throw new Error("Simulação não encontrada no banco de dados.");
+    throw new Error("SIMULATION_NOT_FOUND");
   }
 
+  // 3. Barreira Cross-Tenant
   if (simulation.partner_id !== MERESOLVE_PARTNER_ID) {
     console.error(`[ALERTA CRÍTICO] Simulação ${simulationId} não pertence à MeResolve! ID: ${simulation.partner_id}`);
     throw new Error("Acesso negado. Conflito de propriedade (Cross-Tenant).");
   }
 
+  // 4. Barreira de Idempotência (Garante que este webhook específico não foi processado)
   if (simulation.simulation_updates && simulation.simulation_updates.length > 0) {
     debugLog(`Evento duplicado capturado. Abortando com sucesso silencioso. simulationUpdateId: ${simulationUpdateId}`);
     return { success: true, message: "Evento já registrado", update_id: simulationUpdateId };
