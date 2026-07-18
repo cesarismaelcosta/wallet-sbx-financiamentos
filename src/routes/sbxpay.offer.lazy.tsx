@@ -120,18 +120,13 @@ function OfferDetailsSBXPage() {
 }
 
 export const Route = createLazyFileRoute("/sbxpay/offer")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    flow: search.flow as string | undefined,
-    return_uri: search.return_uri as string | undefined,
-  }),
   component: OfferDetailsSBXPage,
 });
 
 // =========================================================================
 // [COMPONENTE PRINCIPAL]
 // =========================================================================
-export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
-  const search = useSearch({ strict: false });     
+export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {  
   const { logout, userId, sessionToken } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = Route.useSearch();

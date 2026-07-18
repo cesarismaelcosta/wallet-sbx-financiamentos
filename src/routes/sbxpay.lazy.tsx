@@ -33,7 +33,7 @@ export function sbXPAYLayOut() {
   // 1. [SYNC - AMBIENTE]: Carrega o estado inicial do localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedEnv = localStorage.getItem("sbx_environment") as "staging" | "production";
+      const savedEnv = (localStorage.getItem("sbx_environment") as "staging" | "production") || "production";
       if (savedEnv) setEnvPreLogin(savedEnv);
     }
   }, []);
