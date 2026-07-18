@@ -141,48 +141,48 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
   // FASE 2: VALIDAÇÃO DE ESTADO NO BANCO DE DADOS (OUTER JOIN)
   // ========================================================================
 
-  // CORRIGIDO: Instanciando o cliente do Supabase que estava faltando
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  const { data: simulation, error: dbError } = await supabase
+  // Removido o .maybeSingle(). Agora tratamos como array, impossível dar PGRST116.
+  const { data: simulations, error: dbError } = await supabase
     .from('simulations')
     .select(`
       id,
       partner_id,
       simulation_updates ( id )
     `)
-    .eq('id', simulationId)
-    .maybeSingle();
+    .eq('id', simulationId);
 
+  // 1. Tratamento de Erro Real do Banco
   if (dbError) {
-    if (dbError.code === 'PGRST116') {
-      debugLog(`Alerta: Simulação ${simulationId} não localizada (Possível Race Condition).`);
-      throw new Error("SIMULATION_NOT_FOUND");
-    }
-    console.error(`[DEBUG-ERRO-DB] Erro no Join da simulação:`, dbError);
+    console.error(`[DEBUG-ERRO-DB] Erro ao buscar no banco:`, dbError);
     throw new Error("Falha interna de banco de dados na validação de integridade.");
   }
 
-  if (!simulation) {
-    debugLog(`Alerta: Simulação ${simulationId} vazia.`);
+  // 2. Validação de Existência (Se o array estiver vazio, a simulação não existe)
+  if (!simulations || simulations.length === 0) {
+    debugLog(`Alerta: Simulação ${simulationId} não localizada.`);
     throw new Error("SIMULATION_NOT_FOUND");
   }
 
+  // Pegamos o objeto único, já que garantimos que o array tem algo
+  const simulation = simulations[0];
+
+  // 3. Barreira Cross-Tenant
   if (simulation.partner_id !== MERESOLVE_PARTNER_ID) {
     console.error(`[ALERTA CRÍTICO] Simulação ${simulationId} não pertence à MeResolve! ID: ${simulation.partner_id}`);
     throw new Error("Acesso negado. Conflito de propriedade (Cross-Tenant).");
   }
 
-  // A MÁGICA AQUI: Checamos se o 'id' do histórico bate com o simulationUpdateId da URL
+  // 4. Barreira de Idempotência (Em memória)
   const isDuplicate = simulation.simulation_updates?.some(
     (simulationUpdate: any) => simulationUpdate.id === simulationUpdateId 
   );
 
   if (isDuplicate) {
-    // CORRIGIDO: Log chamava updateId
     debugLog(`Evento duplicado capturado. Abortando com sucesso silencioso. simulationUpdateId: ${simulationUpdateId}`);
     return { success: true, message: "Evento já registrado", simulation_update_id: simulationUpdateId };
   }
