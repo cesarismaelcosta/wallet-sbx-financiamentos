@@ -108,7 +108,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   // Registra log no Supabase se ligado
   debugLog("DEBUG PAYLOAD RECEBIDO:", JSON.stringify(payload, null, 2));
 
-  const GUID_URL = 'https://core.fandi.com.br/v2/checkout/obter-guid';
+  const GUID_URL = 'https://core.fandi.com.br/v1/checkout/obter-guid';
 
   /**
    * PASSO 1: SOLICITAÇÃO DE GUID
@@ -124,7 +124,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     cliente: {
       // Agora acessamos via payload.entity
       nome: entity.name,
-      cpfCnpj: entity.document,
+      cpf: entity.document,
       dataNascimento: entity.birth_date, 
       celular: (entity.phone || "").replace(/\D/g, ""),
       sexo: entity.gender || "M",
