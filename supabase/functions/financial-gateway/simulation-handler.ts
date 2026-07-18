@@ -249,12 +249,12 @@ export async function processSimulation(req: Request, payload: SimulationPayload
   // Definição da ação para o painel de visitas (atualizar para SIMULATE)
   const action = 'SIMULATE';
 
-  // Se for uma simulação nova (simulation_id veio null ou undefined), gera o UUID.
-  // Geração prévia permite a utilização do simulation_id, por exemplo, em webhooks
-  payload.simulation_id = payload.simulation_id || crypto.randomUUID();
-
   switch (payload.partner_id) {
     case 1: // sbxPAY
+      // Gera o UUID.
+      // Geração prévia permite a utilização do simulation_id, por exemplo, em webhooks
+      payload.simulation_id = crypto.randomUUID();
+      
       debugLog("INICIO SIMULAÇÃO CARTÃO: ", payload);
       gatewayResult = await processSimulationCreditCard(payload);
       const action_description = 'SIMULATE_CONDITIONS';
@@ -269,6 +269,10 @@ export async function processSimulation(req: Request, payload: SimulationPayload
       const isIntegratedRoute = payload?.is_integrated === true;
 
       if (isIntegratedRoute) {
+        // Gera o UUID.
+        // Geração prévia permite a utilização do simulation_id, por exemplo, em webhooks
+        payload.simulation_id = crypto.randomUUID();
+
         debugLog("REQUISITANDO MOTOR INTEGRADO (FANDI API): ", payload);
         gatewayResult = await processSimulationFandi(payload);
         const action_description = 'SIMULATE_ELIGIBILITY';
@@ -279,6 +283,10 @@ export async function processSimulation(req: Request, payload: SimulationPayload
         payload.simulation_id = String(result.simulation_id);
         payload.simulation_update_id = String(result.simulation_update_id);
       } else {
+        // Gera o UUID.
+        // Geração prévia permite a utilização do simulation_id, por exemplo, em webhooks
+        payload.simulation_id = crypto.randomUUID();
+
         debugLog("REQUISITANDO MOTOR LOCAL (SIMULAÇÃO FLUXO PARCEIRO): ", payload);
         gatewayResult = await processSimulationPartner(payload);
         const action_description = 'SIMULATE_CONDITIONS';
@@ -296,6 +304,10 @@ export async function processSimulation(req: Request, payload: SimulationPayload
 
       if (payload.product_id === 7) { // CAR EQUITY
         if (payload.step === 'CHECK_ELIGIBILITY') {
+          // Gera o UUID.
+          // Geração prévia permite a utilização do simulation_id, por exemplo, em webhooks
+          payload.simulation_id = crypto.randomUUID();
+                    
           gatewayResult = await processSimulationCreditasAutoEquity(payload, payload.step);
           const action_description = 'SIMULATION_CHECK_ELIGIBILITY';
           payload.action_description = action_description;
