@@ -36,7 +36,7 @@ const MERESOLVE_PARTNER_ID = 2;    // ID Oficial do Tenant da Fandi no banco
 async function updateSimulationData(
   sql: any,
   simulationId: string,
-  updateId: string,
+  simulationUpdateId: string,
   statusFinalId: number,
   financialInstId: number | null,
   infra: any,
@@ -65,7 +65,7 @@ async function updateSimulationData(
           raw_payload
         ) VALUES (
           ${simulationId}, 
-          ${updateId}, 
+          ${simulationUpdateId}, 
           'UPDATE', 
           ${statusFinalId}, 
           2, 
@@ -110,9 +110,9 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
   // Evita gasto de processamento e conexões de banco com payloads falsos.
   // --------------------------------------------------------------------------
 
-  const [simulationId, updateId, timestampStr, receivedSignature] = params;
+  const [simulationId, simulationUpdateId, timestampStr, receivedSignature] = params;
 
-  if (!simulationId || !updateId || !timestampStr || !receivedSignature) {
+  if (!simulationId || !simulationUpdateId || !timestampStr || !receivedSignature) {
     debugLog("Falha estrutural: URL não contém todos os parâmetros de segurança.");
     throw new Error("Parâmetros de segurança ausentes ou mal formatados na URL.");
   }
@@ -129,7 +129,7 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
   }
 
   // Remontamos a string do lacre na mesma ordem da origem
-  const expectedPayload = `${simulationId}.${updateId}.${timestampStr}`;
+  const expectedPayload = `${simulationId}.${simulationUpdateId}.${timestampStr}`;
   const expectedSignature = await generateSignature(expectedPayload, MASTER_SECRET);
 
   if (receivedSignature !== expectedSignature) {
@@ -155,7 +155,7 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
       simulation_updates ( id )
     `)
     .eq('id', simulationId)
-    .eq('simulation_updates.external_event_id', updateId)
+    .eq('simulation_updates.external_event_id', simulationUpdateId)
     .maybeSingle();
 
   if (dbError) {
@@ -174,8 +174,8 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
   }
 
   if (simulation.simulation_updates && simulation.simulation_updates.length > 0) {
-    debugLog(`Evento duplicado capturado. Abortando com sucesso silencioso. UpdateID: ${updateId}`);
-    return { success: true, message: "Evento já registrado", update_id: updateId };
+    debugLog(`Evento duplicado capturado. Abortando com sucesso silencioso. simulationUpdateId: ${simulationUpdateId}`);
+    return { success: true, message: "Evento já registrado", update_id: simulationUpdateId };
   }
 
   // --------------------------------------------------------------------------
@@ -224,7 +224,7 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
     await updateSimulationData(
       sql,
       simulationId,
-      updateId,
+      simulationUpdateId,
       statusFinalId,
       financialInstId,
       infra,
@@ -232,13 +232,13 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
       simulationDetails
     );
 
-    debugLog(`Processamento 100% concluído para UpdateID: ${updateId}`);
+    debugLog(`Processamento 100% concluído para simulationUpdateId: ${simulationUpdateId}`);
 
     return { 
       success: true, 
       fandi_id: codigoProposta, 
       status_applied: statusFinalId,
-      update_id: updateId
+      update_id: simulationUpdateId
     };
   } catch (error) {
     debugLog("Falha ao consolidar dados no banco de dados.", error);
