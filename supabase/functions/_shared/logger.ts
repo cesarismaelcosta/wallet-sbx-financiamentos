@@ -16,6 +16,9 @@ const SENSITIVE_REGISTRY: Record<string, RedactConfig> = {
   // Tokens (NUNCA exibir - Segurança máxima)
   "session_token": { mask: true, audit: false },
   "auth_token": { mask: true, audit: false },
+  "access_token": { mask: true, audit: false },
+  "refresh_token": { mask: true, audit: false },
+  "chaveAcesso": { mask: true, audit: false },
   "api_key": { mask: true, audit: false },
   "password": { mask: true, audit: false },
   "senha": { mask: true, audit: false },
