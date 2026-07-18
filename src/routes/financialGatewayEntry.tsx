@@ -255,7 +255,7 @@ loader: async ({ deps, context }: { deps: any, context: { request: Request } }) 
 
       console.log("🚨 [DEBUG] return_uri que está sendo enviada para o Front:", deps.return_uri);
       // 4. Erro de Sistema: Qualquer outra quebra devolve o usuário para a página de origem da simulação após aguardar no componente UI.
-      return { status: "ERROR_OTHER", return_uri: deps.return_uri || request?.headers?.get("Referer") ?? "/" };
+      return { status: "ERROR_OTHER", return_uri: (deps.return_uri || request?.headers?.get("Referer")) ?? "/" };
     }
   },
   
