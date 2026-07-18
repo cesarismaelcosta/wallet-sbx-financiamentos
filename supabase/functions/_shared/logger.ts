@@ -5,53 +5,85 @@
  */
 
 const IS_DEBUG = Deno.env.get("DEBUG_MODE") !== "false";
-const IS_AUDIT_ENABLED = Deno.env.get("AUDIT_MODE") !== "false";
 
 // Registro Central de dados sensíveis para controle granular de mascaramento
 // mask: true -> Mascara o dado (PII ou Segredo)
-// audit: true -> Se AUDIT_MODE estiver ativo, revela o dado real
-type RedactConfig = { mask: boolean; audit: boolean; };
+type RedactConfig = { mask: boolean };
 
 const SENSITIVE_REGISTRY: Record<string, RedactConfig> = {
-  // Tokens (NUNCA exibir - Segurança máxima)
-  "session_token": { mask: true, audit: false },
-  "auth_token": { mask: true, audit: false },
-  "access_token": { mask: true, audit: false },
-  "refresh_token": { mask: true, audit: false },
-  "chaveAcesso": { mask: true, audit: false },
-  "api_key": { mask: true, audit: false },
-  "password": { mask: true, audit: false },
-  "senha": { mask: true, audit: false },
+  // Tokens e Segredos
+  "session_token": { mask: true },
+  "auth_token": { mask: true },
+  "access_token": { mask: true },
+  "refresh_token": { mask: true },
+  "chaveAcesso": { mask: true },
+  "api_key": { mask: true },
+  "password": { mask: true },
+  "senha": { mask: true },
   
-  // PII (Mascarar por padrão, mas permitir auditar em caso de suporte técnico)
-  "cpf": { mask: true, audit: true },
-  "cnpj": { mask: true, audit: true },
-  "email": { mask: true, audit: true },
-  "name": { mask: true, audit: true },
-  "document": { mask: true, audit: true },
+  // PII e Identificação (Inglês e Português do seu código)
+  "cpf": { mask: true },
+  "cnpj": { mask: true },
+  "cpfCNPJ": { mask: true },
+  "email": { mask: true },
+  "name": { mask: true },
+  "nome": { mask: true },
+  "document": { mask: true },
+  "phone": { mask: true },
+  "celular": { mask: true },
+  "mothers_name": { mask: true },
+  "document_rg": { mask: true },
+  "birth_date": { mask: true },
+  "dataNascimento": { mask: true },
+  "login": { mask: true },
+  "clienteId": { mask: false },
+  "guid": { mask: false },
   
-  // Rastreio (Necessários para debug, sem risco de segurança)
-  "ip_address": { mask: false, audit: true },
-  "user_id": { mask: false, audit: true },
+  // Dados Financeiros e Veículo
+  "valorParcela": { mask: true },
+  "valorEntrada": { mask: true },
+  "valorFinanciado": { mask: true },
+  "valor": { mask: true },
+  "valorVeiculo": { mask: true },
+  "requested_value": { mask: true },
+  "down_payment_amount": { mask: true },
+  "chassi": { mask: true },
+  "renavam": { mask: true },
+  "placa": { mask: true },
+  "fipe": { mask: true },
+  "fipe_code": { mask: true },
+  
+  // Integração
+  "urlCallback": { mask: false },
+  "cnpjLoja": { mask: false },
+  "vendedorId": { mask: false },
+  "pontoVendaId": { mask: false },
+  "instituicaoFinanceiraId": { mask: false },
+  
+  // Estruturas
+  "address": { mask: true },
+  "seller": { mask: true },
+  "metadata": { mask: true },
+  "entity": { mask: false },
+  "offer_detailed_description": { mask: false },
+  
+  // Rastreio (Manter visível)
+  "ip_address": { mask: false },
+  "user_id": { mask: false }
 };
 
 /**
  * Função recursiva que limpa o objeto baseado no registro acima.
- * Caso encontre uma chave sensível, decide se mascara ou revela conforme a config.
+ * Caso encontre uma chave sensível, mascara o valor se a config exigir.
  */
 const redact = (key: string, value: any): any => {
-  const config = SENSITIVE_REGISTRY[key.toLowerCase()];
+  const config = SENSITIVE_REGISTRY[key];
 
   // Se não está no registro, retorna o valor original (seguro)
   if (!config) return value;
 
-  // Se é segredo proibido de auditar (audit: false), bloqueia sempre
-  if (config.mask && !config.audit) return "[REDACTED]";
-
-  // Se tem configuração de auditoria, revela apenas se o modo auditoria estiver ligado
-  if (config.mask && config.audit) {
-    return IS_AUDIT_ENABLED ? value : "[MASKED]";
-  }
+  // Se mask é true, bloqueia sempre
+  if (config.mask) return "[MASKED]";
 
   return value;
 };
