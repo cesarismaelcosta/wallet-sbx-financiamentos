@@ -4,8 +4,8 @@
  * Implementa mascaramento de dados sensíveis (PII) e rastreamento automático de chamadas.
  */
 
-const IS_DEBUG = Deno.env.get("DEBUG_MODE") === "true";
-const IS_AUDIT_ENABLED = Deno.env.get("AUDIT_MODE") === "true";
+const IS_DEBUG = Deno.env.get("DEBUG_MODE") !== "false";
+const IS_AUDIT_ENABLED = Deno.env.get("AUDIT_MODE") !== "false";
 
 // Registro Central de dados sensíveis para controle granular de mascaramento
 // mask: true -> Mascara o dado (PII ou Segredo)

@@ -325,7 +325,7 @@ serve(withSecurity('sbx-loader', async (req: Request) => {
     // =========================================================================
     // DISPATCHER DE ERROS SEGURO
     // =========================================================================
-    console.error("[sbx-loader] Erro capturado:", err.message);
+    debugLog("[sbx-loader] Erro capturado:", err.message);
     
     let status = 400; 
     

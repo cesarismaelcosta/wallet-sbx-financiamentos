@@ -111,7 +111,7 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
         .eq('id', task.id);
 
       if (updateError) {
-        console.error(`6. Falha ao travar o ID ${task.id}:`, updateError);
+        debugLog(`6. Falha ao travar o ID ${task.id}:`, updateError);
         continue; 
       }
 
@@ -132,7 +132,7 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`7. Falha no Gateway para ID ${task.id}:`, errorText);
+          debugLog(`7. Falha no Gateway para ID ${task.id}:`, errorText);
           
           // 🚨 CONTROLE DE RETENTATIVAS CORRIGIDO
           const nextRetry = (task.retry_count || 0) + 1;
@@ -152,7 +152,7 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
         }
 
       } catch (networkError: any) {
-        console.error(`7. Erro de rede ao chamar Gateway para ID ${task.id}:`, networkError);
+        debugLog(`7. Erro de rede ao chamar Gateway para ID ${task.id}:`, networkError);
 
         // 🚨 CONTROLE DE RETENTATIVAS PARA FALHA DE REDE CORRIGIDO
         const nextRetry = (task.retry_count || 0) + 1;
@@ -173,7 +173,7 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
     return { status: 200, data: { message: "Processamento finalizado" } };
 
   } catch (e: any) {
-    console.error("8. ERRO CRÍTICO NO DISPATCHER:", e);
+    debugLog("8. ERRO CRÍTICO NO DISPATCHER:", e);
     return { status: 500, data: { error: "Erro no processamento" } };
   }
 }));

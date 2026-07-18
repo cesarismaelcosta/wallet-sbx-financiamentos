@@ -352,7 +352,7 @@ export async function processSimulation(req: Request, payload: SimulationPayload
   };
 
   // LOG PARA VOCÊ CONFERIR NO SUPABASE
-  console.log("JSON FINAL SENDO DESPACHADO:", JSON.stringify(payloadFinal));
+  debugLog("JSON FINAL SENDO DESPACHADO:", JSON.stringify(payloadFinal));
 
   return payloadFinal;
 }

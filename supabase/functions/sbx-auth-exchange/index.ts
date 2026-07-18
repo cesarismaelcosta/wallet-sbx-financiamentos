@@ -30,6 +30,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+import { debugLog } from "../_shared/logger.ts";
+
 const ENV_URLS = {
   production: "https://api.s4bdigital.net",
   staging: "https://stgapi.s4bdigital.net"
@@ -165,7 +171,7 @@ serve(withSecurity('sbx-auth-exchange', async (req: Request) => {
     };
 
   } catch (err: any) {
-    console.error("[sbx-auth-exchange] Fatal Exception:", err.message);
+    debugLog("[sbx-auth-exchange] Fatal Exception:", err.message);
     
     let status = 500;
 

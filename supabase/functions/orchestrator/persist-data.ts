@@ -179,7 +179,7 @@ export async function persistVisitData(
       return { visitId, visitUpdateId: update.id };
     });
   } catch (error) {
-    console.error("[FATAL] Erro na persistência atômica da visita:", error);
+    debugLog("[FATAL] Erro na persistência atômica da visita:", error);
     throw error;
   }
 }

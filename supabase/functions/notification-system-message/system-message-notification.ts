@@ -32,6 +32,12 @@ export interface EmailTemplateResult {
 }
 
 /**
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+import { debugLog } from "../_shared/logger.ts";
+
+/**
  * @function generateSystemErrorEmailHtml
  * @description Constrói o HTML do alerta técnico baseado no payload estruturado.
  */

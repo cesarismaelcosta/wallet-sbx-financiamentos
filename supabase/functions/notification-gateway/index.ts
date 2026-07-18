@@ -28,7 +28,7 @@ serve(withSecurity('notification-gateway', async (req: Request) => {
   debugLog("DEBUG: Secret esperado (configurado no env):", expectedSecret ? "EXISTE" : "NÃO CONFIGURADO");
 
   if (!receivedSecret || receivedSecret !== expectedSecret) {
-    console.error("ERRO [AUTH]: Acesso negado. Secret inválido ou ausente.");
+    debugLog("ERRO [AUTH]: Acesso negado. Secret inválido ou ausente.");
     return { status: 401, data: { error: "Unauthorized" } };
   }
 
@@ -138,7 +138,7 @@ serve(withSecurity('notification-gateway', async (req: Request) => {
     return { status: 200, data: { status: "success", id: targetId } };
 
   } catch (err: any) {
-    console.error("[GATEWAY FATAL]:", err.message);
+    debugLog("[GATEWAY FATAL]:", err.message);
     
     // 9. CONTROLE DE RETRY E DEAD LETTER QUEUE (DLQ)
     // Evita loop infinito incrementando o contador e definindo morte térmica (dead_letter) se necessário.

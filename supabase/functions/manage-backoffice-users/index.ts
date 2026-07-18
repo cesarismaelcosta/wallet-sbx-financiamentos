@@ -8,6 +8,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { withSecurity } from "../_shared/server.ts";
 
+/**
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+import { debugLog } from "../_shared/logger.ts";
+
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -31,10 +38,10 @@ type Payload = RegisterPayload | SetActivePayload | SetRolePayload | ListPayload
  * INJETADO COM LOGS DE DEBUG
  */
 async function ensureAdmin(authHeader: string | null) {
-  console.log("DEBUG [ensureAdmin]: Iniciando verificação...");
+  debugLog("DEBUG [ensureAdmin]: Iniciando verificação...");
 
   if (!authHeader) {
-    console.log("DEBUG [ensureAdmin]: Erro -> missing_authorization");
+    debugLog("DEBUG [ensureAdmin]: Erro -> missing_authorization");
     return { ok: false as const, error: "missing_authorization" };
   }
   
@@ -46,11 +53,11 @@ async function ensureAdmin(authHeader: string | null) {
   const { data: { user }, error: authError } = await userClient.auth.getUser();
   
   if (authError || !user) {
-    console.log("DEBUG [ensureAdmin]: Erro Auth ->", authError);
+    debugLog("DEBUG [ensureAdmin]: Erro Auth ->", authError);
     return { ok: false as const, error: "unauthenticated" };
   }
 
-  console.log("DEBUG [ensureAdmin]: Usuário logado ->", user.email);
+  debugLog("DEBUG [ensureAdmin]: Usuário logado ->", user.email);
 
   // Consulta direta na tabela de confiança
   // Alterado para .ilike para ignorar case sensitive
@@ -62,17 +69,17 @@ async function ensureAdmin(authHeader: string | null) {
     .single();
 
   if (error) {
-    console.log("DEBUG [ensureAdmin]: Erro DB ->", error);
+    debugLog("DEBUG [ensureAdmin]: Erro DB ->", error);
   } else {
-    console.log("DEBUG [ensureAdmin]: Perfil encontrado ->", profile);
+    debugLog("DEBUG [ensureAdmin]: Perfil encontrado ->", profile);
   }
 
   if (error || !profile || profile.role !== 'admin') {
-    console.log("DEBUG [ensureAdmin]: Forbidden. Perfil ou Role inválido.");
+    debugLog("DEBUG [ensureAdmin]: Forbidden. Perfil ou Role inválido.");
     return { ok: false as const, error: "forbidden" };
   }
   
-  console.log("DEBUG [ensureAdmin]: Admin validado com sucesso.");
+  debugLog("DEBUG [ensureAdmin]: Admin validado com sucesso.");
   return { ok: true as const };
 }
 
@@ -142,7 +149,7 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
             await adminClient.auth.admin.signOut(targetUser.id);
           }
         } catch (e) {
-          console.error("Erro ao forçar logout:", e);
+          debugLog("Erro ao forçar logout:", e);
         }
       }
 

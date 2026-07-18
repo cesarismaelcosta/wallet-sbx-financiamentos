@@ -23,6 +23,7 @@ import { withSecurity } from "../_shared/server.ts";
  * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
 import { debugLog } from "../_shared/logger.ts";
+
 serve(withSecurity('financial-gateway', async (req: Request) => {
   // Descoberta da Origem (Usada nos tratamentos de erro abaixo)
   const originPath = req.headers.get("x-original-url") || "/";
@@ -108,7 +109,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
     };
     
   } catch (err: any) {
-    console.error("[GATEWAY ERROR]:", err.message);
+    debugLog("[GATEWAY ERROR]:", err.message);
     
     // Tratamento de Erro de Negócio (ex: CNPJ inválido, banco recusou)
     // Retorna fallbackUrl como originPath para o Orchestrator não ejetar o usuário da tela

@@ -5,6 +5,12 @@ import {
 } from "../_shared/types.ts";
 
 /**
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+import { debugLog } from "../_shared/logger.ts";
+
+/**
  * Gera o HTML completo de notificação de e-mail para simulações de Veículos (Fandi).
  * Exibe a oferta aprovada em destaque e inclui o botão de WhatsApp dinâmico.
  * 

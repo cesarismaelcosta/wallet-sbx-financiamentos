@@ -23,6 +23,13 @@ import { OriginDetails } from "../_shared/types.ts";
 
 // [INFRAESTRUTURA]: Importação do motor central de segurança e CORS
 import { withSecurity } from "../_shared/server.ts";
+import { debugLog } from "../_shared/logger.ts";
+
+/**
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+import { debugLog } from "../_shared/logger.ts";
 
 const ENV_URLS = {
   production: "https://api.s4bdigital.net",
@@ -57,7 +64,7 @@ serve(withSecurity('sbx-auth', async (req) => {
     const rawResponse = await sbxLoginResponse.text();
     
     if (!sbxLoginResponse.ok) {
-      console.error("[sbx-auth] ERRO REAL DA SBX:", {
+      debugLog("[sbx-auth] ERRO REAL DA SBX:", {
         status: sbxLoginResponse.status,
         body: rawResponse,
         sentBody: details.toString() 
@@ -66,7 +73,7 @@ serve(withSecurity('sbx-auth', async (req) => {
     }
 
     const sbxData = JSON.parse(rawResponse);
-    console.log("DEBUG [sbx-auth] - Resposta da API:", JSON.stringify(sbxData, null, 2));
+    debugLog("DEBUG [sbx-auth] - Resposta da API:", JSON.stringify(sbxData, null, 2));
 
     // -----------------------------------------------------------------------
     // [ESTADO]: Cálculo de Expiração e Geração de UUID Primário

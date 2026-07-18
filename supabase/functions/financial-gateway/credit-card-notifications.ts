@@ -5,6 +5,12 @@ import {
 } from "../_shared/types.ts";
 
 /**
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+import { debugLog } from "../_shared/logger.ts";
+
+/**
  * Gera o HTML completo de notificação de e-mail para simulações de parcelamento.
  * Integra o cabeçalho, o miolo (dados e grid de parcelas), seção de segurança 
  * e o rodapé dinâmico em uma estrutura única e autocontida.

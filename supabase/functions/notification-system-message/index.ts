@@ -20,6 +20,12 @@ import { generateSystemErrorEmailHtml } from './system-message-notification.ts'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { withSecurity } from "../_shared/server.ts";
 
+/**
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+import { debugLog } from "../_shared/logger.ts";
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -37,7 +43,7 @@ serve(withSecurity('notification-system-message', async (req: Request) => {
   // -----------------------------------------------------------------------
   // Proteção de inicialização contra variáveis de ambiente ausentes na nuvem
   if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.error("[CRITICAL CONFIG ERROR]: Variáveis de infraestrutura ausentes no ambiente Supabase.");
+    debugLog("[CRITICAL CONFIG ERROR]: Variáveis de infraestrutura ausentes no ambiente Supabase.");
     return { status: 500, data: { error: "Erro interno de configuração na nuvem." } };
   }
 
@@ -107,7 +113,7 @@ serve(withSecurity('notification-system-message', async (req: Request) => {
     // -----------------------------------------------------------------------
     // [FALLBACK]: Monitoramento Interno de Exceções da Própria Função
     // -----------------------------------------------------------------------
-    console.error("[EDGE FUNCTION CRITICAL EXCEPTION]:", err.message);
+    debugLog("[EDGE FUNCTION CRITICAL EXCEPTION]:", err.message);
     
     return { status: 500, data: { error: err.message } };
   }
