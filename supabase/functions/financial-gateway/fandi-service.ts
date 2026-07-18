@@ -102,7 +102,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   // Registra log no Supabase se ligado
   debugLog("DEBUG WEBHOOK_URL:", WEBHOOK_URL);
 
-  if (!FANDI_API_KEY) throw new Error("FANDI_API_KEY não encontrada no ambiente.");
+  if (!FANDI_CHAVE_ACESSO) throw new Error("FANDI_CHAVE_ACESSO não encontrada no ambiente.");
 
   // Registra log no Supabase se ligado
   debugLog("DEBUG PAYLOAD RECEBIDO:", JSON.stringify(payload, null, 2));
@@ -115,7 +115,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
    */
   const bodyGuid = { 
     config: { 
-      chaveAcesso: FANDI_API_KEY, 
+      chaveAcesso: FANDI_CHAVE_ACESSO, 
       cnpjLoja: CNPJ_LOJA, 
       confirmarDados: [], 
       exibeTelaFinalizacao: false
