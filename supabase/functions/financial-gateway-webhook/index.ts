@@ -20,7 +20,7 @@ serve(withSecurity('financial-gateway-webhook', async (req: Request) => {
 
   // Roteamento puro
   const partner = pathParts[1]; 
-  const params = pathParts.slice(webkitURL); // Ex Fandi: [simId, updateId, timestamp, signature]
+  const params = pathParts.slice(2); // Ex Fandi: [simId, updateId, timestamp, signature]
 
   // Rota recebida
   debugLog("ROTEADOR_WEBHOOK_CARREGADO=> partner: ", partner);
