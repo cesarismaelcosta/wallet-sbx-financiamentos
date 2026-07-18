@@ -19,7 +19,7 @@
  *    os tokens no localStorage para os legados, e executa a navegação decidida pela Edge.
  */
 
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { logSystemError } from "@/services/systemNotification";
