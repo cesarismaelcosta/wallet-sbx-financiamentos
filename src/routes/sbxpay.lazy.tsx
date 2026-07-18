@@ -9,7 +9,7 @@
  * 5. Segurança Passiva: Valida o JWT localmente antes de engatilhar chamadas de rede.
  */
 
-import { createContext, useState, useEffect } from "react";
+import { createContext, useState, useEffect, useRef } from "react";
 import { createLazyFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile } from "@/services/user";
@@ -22,10 +22,27 @@ export const Route = createLazyFileRoute("/sbxpay")({
 
 export const UserDataContext = createContext<any>(null);
 
+const Spinner = ({ msg }: { msg: string }) => (
+  <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+    <p className="text-slate-500 font-medium text-sm">{msg}</p>
+  </div>
+);
+
 export function sbXPAYLayOut() {
   const { sessionToken, isLoading, logout } = useFinancialAuth();
   const navigate = useNavigate();
-  
+  const logoutRef = useRef(logout);
+  useEffect(() => { logoutRef.current = logout; }, [logout]);
+
+  // Controla logout sem perder o ambiente escolhido antes do login
+  const performLogout = () => {
+    const env = localStorage.getItem("sbx_environment");
+    localStorage.clear();
+    if (env) localStorage.setItem("sbx_environment", env);
+    logout();
+  };
+
   const [envPreLogin, setEnvPreLogin] = useState<"staging" | "production">("production");
   const [userData, setUserData] = useState<any>(null);
   const [isVerifying, setIsVerifying] = useState(true);
@@ -52,7 +69,8 @@ export function sbXPAYLayOut() {
         window.dispatchEvent(new CustomEvent('session_expired'));
         return; 
       }
-    } catch {
+    } catch (err) {
+      console.error("🔒 [Gatekeeper] Erro de decoding:", err);
       window.dispatchEvent(new CustomEvent('session_expired'));
       return;
     }
@@ -68,26 +86,21 @@ export function sbXPAYLayOut() {
       } catch (err: any) {
         if (isMounted) {
           console.error("🔒 [sbXPAY Gatekeeper] Falha de validação no backend:", err.message);
-          logout();
+          logoutRef.current();
         }
       }
     }
 
     validate();
     return () => { isMounted = false; };
-  }, [isLoading, sessionToken, logout]);
+  }, [isLoading, sessionToken]);
 
   // =========================================================================
   // [UI/UX - CENA 1]: Auth Context inicializando
   // =========================================================================
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-        <p className="text-slate-500 font-medium text-sm">
-          Validando seus dados na Wallet sbX...
-        </p>
-      </div>      
+      <Spinner msg="Validando seus dados na Wallet sbX..."/>     
     );
   }
 
@@ -130,7 +143,7 @@ export function sbXPAYLayOut() {
                navigate({ 
                  to: '/accounts/signin', 
                  search: { 
-                   redirect_uri: typeof window !== "undefined" ? window.location.pathname + window.location.search : "/"
+                   redirect_uri: (typeof window !== "undefined" ? (window.location.pathname + window.location.search) : "/") || "/"
                  } 
                });
             }}
@@ -148,12 +161,7 @@ export function sbXPAYLayOut() {
   // =========================================================================
   if (isVerifying) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-        <p className="text-slate-500 font-medium text-sm">
-          Validando seus dados na Wallet sbX...
-        </p>
-      </div>
+      <Spinner msg="Validando seus dados na Wallet sbX..."/>
     );
   }
 
@@ -162,7 +170,7 @@ export function sbXPAYLayOut() {
   // =========================================================================
   return (
     <div className="sbxpay-shell min-h-screen bg-white">
-      <UserDataContext.Provider value={{ userData }}>
+      <UserDataContext.Provider value={{ userData, performLogout }}>
         <Outlet />
       </UserDataContext.Provider>
     </div>

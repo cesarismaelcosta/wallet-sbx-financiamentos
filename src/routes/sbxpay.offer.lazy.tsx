@@ -132,7 +132,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   const searchParams = Route.useSearch();
   
   const currentFlow = FLOW_MAP[flowKey as any] || FLOW_MAP["Carros"];
-  const { userData } = useContext(UserDataContext) || {};
+  const { userData, performLogout } = useContext(UserDataContext) || {};
 
   // [SEGURANÇA]: Trava estrita contra loops de concorrência de renderização
   const hasInitialized = useRef(false);
@@ -233,7 +233,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
     return () => clearTimeout(timer);
   }, [fetchError, countdown, navigate, dynamicReturnUri]);
 
-  const entity = userData || { name: "João da Silva", document: "43577059087", email: "cesar.costa@superbid.net", phone: "21988550999" };
+  const entity = userData;
   
   const imagens = useMemo(() => {
     if (!activeOffer?.offer?.photos) return [];
@@ -358,7 +358,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
                 <p className="text-[9px] font-mono text-slate-500">ID: {userId || "---"}</p>
                 <p className="text-[9px] font-mono text-slate-500 uppercase">AMB: {ambiente.toUpperCase()}</p>
               </div>
-              <button onClick={logout} className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-bold"><LogOut className="w-3 h-3" /> SAIR</button>
+              <button onClick={performLogout} className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-bold"><LogOut className="w-3 h-3" /> SAIR</button>
             </div>
           </div>
         </div>
