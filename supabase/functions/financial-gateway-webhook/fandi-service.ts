@@ -24,6 +24,28 @@ import { debugLog } from "../_shared/logger.ts";
 const MAX_AGE_MS = 5 * 60 * 1000;   // 5 minutos - Janela de validade do Webhook
 const MERESOLVE_PARTNER_ID = 2;     // ID Oficial do Tenant da Fandi no banco
 
+/**
+ * Compara dois arrays de bytes em tempo constante (Constant-Time).
+ * Essencial para validar assinaturas (HMAC) de forma segura contra ataques de temporização,
+ * garantindo que o tempo de execução não varie dependendo do sucesso da comparação.
+ */
+function safeCompare(a: Uint8Array, b: Uint8Array): boolean {
+  // Verifica se os tamanhos são iguais; se não forem, a assinatura é obviamente inválida
+  if (a.length !== b.length) return false;
+
+  let result = 0;
+  
+  // Itera sobre todos os bytes, nunca parando prematuramente (evita short-circuit)
+  for (let i = 0; i < a.length; i++) {
+    // ^ (XOR) retorna 0 se os bits forem iguais e 1 se forem diferentes
+    // |= (OR bitwise) acumula qualquer diferença encontrada no 'result'
+    result |= a[i] ^ b[i];
+  }
+
+  // Se o resultado for 0, significa que não houve diferença em nenhum byte
+  return result === 0;
+}
+
 // ============================================================================
 // DATA ACCESS LAYER (DAL) - Transacional
 // ============================================================================
@@ -144,7 +166,7 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
   }
 
   // Compara bytes em tempo constante para evitar ataque de timing
-  const isValid = crypto.subtle.timingSafeEqual(expectedBytes, receivedBytes);
+  const isValid = safeCompare(expectedBytes, receivedBytes);
 
   if (!isValid) {
       debugLog("Violação de Integridade: HMAC incompatível.");
