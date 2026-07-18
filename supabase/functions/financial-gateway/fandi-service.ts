@@ -65,9 +65,9 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   const integrationDetails = payload?.integration_details || {};
   
   // Chave de intefação
-  // const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
-  const FANDI_CHAVE_ACESSO = integrationDetails.chaveAcesso; 
-
+  // const FANDI_CHAVE_ACESSO = integrationDetails.chaveAcesso;  => futuro
+  const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
+  
   // CNPJ DE ACORDO COM O PRODUTO (LEVES E PESADOS)
   const CNPJ_LOJA = integrationDetails.cnpjLoja; 
 
@@ -102,7 +102,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   // Registra log no Supabase se ligado
   debugLog("DEBUG WEBHOOK_URL:", WEBHOOK_URL);
 
-  if (!FANDI_CHAVE_ACESSO) throw new Error("FANDI_CHAVE_ACESSO não encontrada no ambiente.");
+  if (!FANDI_API_KEY) throw new Error("FANDI_API_KEY não encontrada no ambiente.");
 
   // Registra log no Supabase se ligado
   debugLog("DEBUG PAYLOAD RECEBIDO:", JSON.stringify(payload, null, 2));
@@ -115,7 +115,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
    */
   const bodyGuid = { 
     config: { 
-      chaveAcesso: FANDI_CHAVE_ACESSO, 
+      chaveAcesso: FANDI_API_KEY, 
       cnpjLoja: CNPJ_LOJA, 
       confirmarDados: [], 
       exibeTelaFinalizacao: false
@@ -300,7 +300,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     cliente: {
       nome: entity.name || "",
       celular: (entity.phone || "").replace(/\D/g, ""), 
-      cpfCnpj: (entity.document || "").replace(/[.\/-]/g, ""),
+      cpfCnpj: (entity.document || "").replace(/\D/g, ""),
       email: entity.email || "",
       sexo: entity.gender || "M",
       dataNascimento: entity.birth_date, 
