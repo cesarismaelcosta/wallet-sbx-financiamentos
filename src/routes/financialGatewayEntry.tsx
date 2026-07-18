@@ -308,7 +308,7 @@ loader: async ({ deps, context }: { deps: any, context: any }) => {
     // Estado para controlar se o fluxo de dados falhou
     const [isError, setIsError] = useState(false);
     // Estado para o contador regressivo de erro
-    const [countdown, setCountdown] = useState(10);
+    const [countdown, setCountdown] = useState(5);
 
     useEffect(() => {
       if (!data) return;
@@ -355,7 +355,7 @@ loader: async ({ deps, context }: { deps: any, context: any }) => {
       }
     }, [isError, countdown]);
 
-    // --- UI DE ERRO (Padronizada com aviso e espera de 10s) ---
+    // --- UI DE ERRO (Padronizada com aviso e espera) ---
     if (isError) {
       return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
