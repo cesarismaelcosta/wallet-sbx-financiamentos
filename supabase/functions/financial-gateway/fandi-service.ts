@@ -301,7 +301,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     cliente: {
       nome: entity.name || "",
       celular: (entity.phone || "").replace(/\D/g, ""), 
-      cpfCnpj: (entity.document || "").replace(/\D/g, ""),
+      cpf: (entity.document || "").replace(/\D/g, ""),
       email: entity.email || "",
       sexo: entity.gender || "M",
       dataNascimento: entity.birth_date, 
