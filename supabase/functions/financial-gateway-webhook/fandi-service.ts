@@ -1,10 +1,18 @@
 /**
  * @file fandi-service.ts
- * @description Motor de processamento assíncrono para retornos da Fandi (MeResolve).
+ * @description Especialista em processamento de Webhooks da MeResolve (Fandi).
+ * Implementa pipeline de segurança severa (HMAC, TTL, Cross-Tenant) e Idempotência nativa.
  */
 
+// 1. Cliente REST (para leitura rápida com RLS e Outer Joins)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// 2. Driver SQL Transacional (para escritas ACID)
+import { sql } from '../_shared/db.ts';
+
+// 3. Utilitários internos
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
+import { generateSignature } from "../_shared/crypto.ts";
 
 const DEBUG_MODE = true;
 const debugLog = (message: string, data?: any) => {
@@ -13,86 +21,227 @@ const debugLog = (message: string, data?: any) => {
   }
 };
 
-export async function tratarWebhookFandi(simulationId: string, req: Request) {
-  // 1. CAPTURA DE INFRAESTRUTURA (Single Source of Truth)
-  const infra = await captureInfrastructure(req);
+// Configurações de Segurança e Negócio
+const MAX_AGE_MS = 60 * 60 * 1000; // 1 Hora - Janela de validade do Webhook
+const MERESOLVE_PARTNER_ID = 2;    // ID Oficial do Tenant da Fandi no banco
 
-  // 2. PARSE DO PAYLOAD
-  let body: any;
+// ============================================================================
+// DATA ACCESS LAYER (DAL) - Transacional
+// ============================================================================
+
+/**
+ * Atualiza o estado da simulação via Webhook com Atomicidade Total (ACID).
+ * Se qualquer instrução falhar, o banco executa ROLLBACK automático.
+ */
+async function updateSimulationData(
+  sql: any,
+  simulationId: string,
+  updateId: string,
+  statusFinalId: number,
+  financialInstId: number | null,
+  infra: any,
+  rawPayload: any,
+  simulationDetails: any
+) {
   try {
-    body = await req.json();
-  } catch (e) {
-    debugLog("ERRO CRÍTICO: Payload do Webhook inválido.");
-    throw new Error("Invalid JSON Payload");
+    return await sql.begin(async (t: any) => {
+      // 1. INSERT UPDATES: Grava o rastro de auditoria vinculando o protocolo único
+      const [update] = await t`
+        INSERT INTO simulation_updates (
+          simulation_id, 
+          external_event_id, 
+          operation, 
+          status_id, 
+          stage_id,
+          ip_address, 
+          country, 
+          state, 
+          city, 
+          user_agent, 
+          device_type, 
+          operating_system,
+          origin_details, 
+          simulation_details, 
+          raw_payload
+        ) VALUES (
+          ${simulationId}, 
+          ${updateId}, 
+          'UPDATE', 
+          ${statusFinalId}, 
+          2, 
+          ${infra.ip_address}, 
+          ${infra.country}, 
+          ${infra.state}, 
+          ${infra.city}, 
+          ${infra.user_agent},
+          ${infra.device_type}, 
+          ${infra.operating_system}, 
+          ${infra}::jsonb, 
+          ${simulationDetails}::jsonb, 
+          ${rawPayload}::jsonb
+        )
+        RETURNING id
+      `;
+
+      // 2. UPDATE MESTRE: Atualiza os dados finais da simulação
+      await t`
+        UPDATE simulations SET
+          status_id = ${statusFinalId},
+          financial_institution_id = ${financialInstId},
+          updated_at = NOW()
+        WHERE id = ${simulationId}
+      `;
+
+      return update.id;
+    });
+  } catch (error) {
+    console.error("[FATAL] Erro na transação do banco. Rollback executado:", error);
+    throw error;
+  }
+}
+
+// ============================================================================
+// BUSINESS LOGIC LAYER (WEBHOOK HANDLER)
+// ============================================================================
+
+export async function tratarWebhookFandi(req: Request, params: string[]) {
+  // --------------------------------------------------------------------------
+  // FASE 1: VALIDAÇÃO DE SEGURANÇA CROSS-ORIGIN E CRIPTOGRÁFICA
+  // Evita gasto de processamento e conexões de banco com payloads falsos.
+  // --------------------------------------------------------------------------
+
+  const [simulationId, updateId, timestampStr, receivedSignature] = params;
+
+  if (!simulationId || !updateId || !timestampStr || !receivedSignature) {
+    debugLog("Falha estrutural: URL não contém todos os parâmetros de segurança.");
+    throw new Error("Parâmetros de segurança ausentes ou mal formatados na URL.");
   }
 
-  debugLog("Payload recebido e decodificado", body);
+  const timestamp = parseInt(timestampStr, 10);
+  if (isNaN(timestamp) || (Date.now() - timestamp > MAX_AGE_MS)) {
+    debugLog(`Violação temporal: Webhook muito antigo. Timestamp: ${timestampStr}`);
+    throw new Error("Janela de validade do Webhook expirada.");
+  }
 
-  // 3. NORMALIZAÇÃO (Case Insensitivity)
-  const s = body.Simulacao || body.simulacao; 
-  const v = body.Veiculo || body.veiculo;     
-  const c = body.Cliente || body.cliente;     
-  
-  const bacenOriginal = s?.CodigoBacen || s?.codigoBacen;
-  const codigoProposta = body.CodigoProposta || body.codigoProposta;
+  const MASTER_SECRET = Deno.env.get('WEBHOOK_MASTER_SECRET');
+  if (!MASTER_SECRET) {
+    throw new Error("Falha crítica: WEBHOOK_MASTER_SECRET não configurado.");
+  }
 
-  // 4. SUPABASE CLIENT
+  // Remontamos a string do lacre na mesma ordem da origem
+  const expectedPayload = `${simulationId}.${updateId}.${timestampStr}`;
+  const expectedSignature = await generateSignature(expectedPayload, MASTER_SECRET);
+
+  if (receivedSignature !== expectedSignature) {
+    debugLog("Violação de Integridade: HMAC incompatível.", { expectedSignature, receivedSignature });
+    throw new Error("Assinatura digital inválida.");
+  }
+
+  // --------------------------------------------------------------------------
+  // FASE 2: VALIDAÇÃO DE ESTADO NO BANCO DE DADOS (OUTER JOIN)
+  // Checa Existência, Cross-Tenant e Idempotência em uma única query REST.
+  // --------------------------------------------------------------------------
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // 5. REGRAS DE STATUS
+  const { data: simulation, error: dbError } = await supabase
+    .from('simulations')
+    .select(`
+      id,
+      partner_id,
+      simulation_updates ( id )
+    `)
+    .eq('id', simulationId)
+    .eq('simulation_updates.external_event_id', updateId)
+    .maybeSingle();
+
+  if (dbError) {
+    console.error(`[DEBUG-ERRO-DB] Erro no Join da simulação:`, dbError);
+    throw new Error("Falha interna de banco de dados na validação de integridade.");
+  }
+
+  if (!simulation) {
+    debugLog(`Alerta: Simulação ${simulationId} não localizada.`);
+    throw new Error("Simulação não encontrada no banco de dados.");
+  }
+
+  if (simulation.partner_id !== MERESOLVE_PARTNER_ID) {
+    console.error(`[ALERTA CRÍTICO] Simulação ${simulationId} não pertence à MeResolve! ID: ${simulation.partner_id}`);
+    throw new Error("Acesso negado. Conflito de propriedade (Cross-Tenant).");
+  }
+
+  if (simulation.simulation_updates && simulation.simulation_updates.length > 0) {
+    debugLog(`Evento duplicado capturado. Abortando com sucesso silencioso. UpdateID: ${updateId}`);
+    return { success: true, message: "Evento já registrado", update_id: updateId };
+  }
+
+  // --------------------------------------------------------------------------
+  // FASE 3: PARSE DO PAYLOAD E LÓGICA DE NEGÓCIO
+  // --------------------------------------------------------------------------
+
+  const infra = await captureInfrastructure(req);
+  let body: any;
+
+  try {
+    body = await req.json();
+  } catch (e) {
+    debugLog("Violação de formato: Payload JSON inválido.");
+    throw new Error("O corpo da requisição não é um JSON válido.");
+  }
+
+  debugLog("Segurança validada. Iniciando processamento de negócio.", simulationId);
+
+  const s = body.Simulacao || body.simulacao; 
+  const v = body.Veiculo || body.veiculo;     
+  
+  const bacenOriginal = s?.CodigoBacen || s?.codigoBacen;
+  const codigoProposta = body.CodigoProposta || body.codigoProposta;
+
   const statusFinalId = bacenOriginal ? 1 : 2;
   const financialInstId = bacenOriginal ? parseInt(bacenOriginal, 10) : null;
 
-  debugLog(`Bacen: ${bacenOriginal} -> Status Final: ${statusFinalId}`);
+  const simulationDetails = {
+    installments: s?.QuantidadeParcelas || s?.quantidadeParcelas,
+    down_payment: s?.ValorEntrada || s?.valorEntrada,
+    requested_value: v?.Valor || v?.valor,
+    installment_value: s?.ValorParcela || s?.valorParcela,
+    financial_institution_name: s?.NomeIF || s?.nomeIF,
+    status_fandi: statusFinalId,
+    updated_at: new Date().toISOString()
+  };
 
-  // 6. TRILHA DE AUDITORIA
-  const { error: logError } = await supabase.from('simulation_updates').insert({
-    simulation_id: simulationId,
-    operation: 'UPDATE',
-    status_id: statusFinalId,
-    stage_id: 2, 
-    ip_address: infra.ip_address,
-    country: infra.country,
-    state: infra.state,
-    city: infra.city,
-    user_agent: infra.user_agent,
-    device_type: infra.device_type,
-    operating_system: infra.operating_system,
-    origin_details: infra,
-    financial_institution_id: financialInstId,
-    simulation_details: {
-      installments: s?.QuantidadeParcelas || s?.quantidadeParcelas,
-      down_payment: s?.ValorEntrada || s?.valorEntrada,
-      requested_value: v?.Valor || v?.valor,
-      installment_value: s?.ValorParcela || s?.valorParcela,
-      financial_institution_name: s?.NomeIF || s?.nomeIF,
-      status_fandi: statusFinalId,
-      updated_at: new Date().toISOString()
-    },
-    raw_payload: body 
-  });
+  debugLog(`Avaliação concluída. Bacen: ${bacenOriginal} -> Status: ${statusFinalId}`);
 
-  if (logError) debugLog("FALHA AO INSERIR AUDITORIA", logError);
+  // --------------------------------------------------------------------------
+  // FASE 4: AUDITORIA E CONSOLIDAÇÃO DE DADOS (TRANSAÇÃO SQL)
+  // --------------------------------------------------------------------------
 
-  // 7. UPDATE DA SIMULAÇÃO
-  const { error: updateError } = await supabase
-    .from('simulations')
-    .update({ 
-      status_id: statusFinalId, 
-      financial_institution_id: financialInstId,
-      updated_at: new Date().toISOString() 
-    })
-    .eq('id', simulationId);
+  try {
+    // Chama a função atômica usando o driver 'sql' puro
+    await updateSimulationData(
+      sql,
+      simulationId,
+      updateId,
+      statusFinalId,
+      financialInstId,
+      infra,
+      body,
+      simulationDetails
+    );
 
-  if (updateError) {
-    debugLog("ERRO NO UPDATE FINAL", updateError);
-    throw new Error("Database Update Failed");
+    debugLog(`Processamento 100% concluído para UpdateID: ${updateId}`);
+
+    return { 
+      success: true, 
+      fandi_id: codigoProposta, 
+      status_applied: statusFinalId,
+      update_id: updateId
+    };
+  } catch (error) {
+    debugLog("Falha ao consolidar dados no banco de dados.", error);
+    throw new Error("Falha ao consolidar transação financeira no banco de dados.");
   }
-
-  debugLog("Processamento finalizado", simulationId);
-
-  return { success: true, fandi_id: codigoProposta, status_applied: statusFinalId };
 }

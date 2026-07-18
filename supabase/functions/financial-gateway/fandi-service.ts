@@ -66,33 +66,38 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   
   // Chave de intefação
   const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
-
-  // Registra log no Supabase se ligado
-  debugLog("DEBUG integration_details:", integrationDetails);
-  debugLog("DEBUG payload:", payload);
-  debugLog("DEBUG offer:", offer);
-  debugLog("DEBUG entity:", entity);
+  // const FANDI_CHAVE_ACESSO = integrationDetails.chaveAcesso; 
 
   // CNPJ DE ACORDO COM O PRODUTO (LEVES E PESADOS)
   const CNPJ_LOJA = integrationDetails.cnpjLoja; 
 
+  // Registra log no Supabase se ligado
+  debugLog("DEBUG payload:", payload);
+  debugLog("DEBUG integration_details:", integrationDetails);
+  debugLog("DEBUG offer:", offer);
+  debugLog("DEBUG entity:", entity);
+
   // ----------------------------------------------------------------------
   // URL DE WEBHOOK (CALLBACK)
   // ----------------------------------------------------------------------
-
   // Pega a chave mestra das variáveis de ambiente do Supabase
   const MASTER_SECRET = Deno.env.get('WEBHOOK_MASTER_SECRET');
-  if (!MASTER_SECRET) throw new Error("Missing WEBHOOK_MASTER_SECRET");
 
-  // Cria a string que será "lacrada" (visit_id + simulation_id)
-  const payloadToSign = `${payload.visit_id}:${payload.simulation_id}`;
+  // Gera valores para string que será "lacrada" (visit_id + simulation_id)
+  const simulationId = payload.simulation_id;
+  const simulationUpdateId =  crypto.randomUUID();
+  const timestamp = Date.now().toString(); // Ex: "1784332805001"
+
+  // Lacramos os três: a identidade da simulação, o novo ID do update da simulação e o momento do envio
+  const payloadToSign = `${payload.simulation_id}.${simulationUpdateId}.${timestamp}`;
 
   // Gera a assinatura digital
   const signature = await generateSignature(payloadToSign, MASTER_SECRET);
 
   // Monta a URL injetando a assinatura na query string
+  // URL Final: /simulation_id/simulation_update_id/timestamp/signature
   const webhookBase = integrationDetails.urlCallback; 
-  const WEBHOOK_URL = `${webhookBase}/${payload.simulation_id}/${signature}`;
+  const WEBHOOK_URL = `${webhookBase}/${simId}/${updateId}/${timestamp}/${signature}`;
 
   // Registra log no Supabase se ligado
   debugLog("DEBUG WEBHOOK_URL:", WEBHOOK_URL);
