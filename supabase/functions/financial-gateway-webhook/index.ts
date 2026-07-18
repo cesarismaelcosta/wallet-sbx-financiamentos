@@ -50,16 +50,20 @@ serve(withSecurity('financial-gateway-webhook', async (req: Request) => {
         debugLog(`[DEBUG-CONNECTION] URL DO BANCO: ${Deno.env.get('SUPABASE_URL')}`);
         debugLog(`[DEBUG-CONNECTION] Buscando ID: ${simulationId}`);
 
-        // --- MOTOR DE BUSCA COM RETRY (PREVINE RACE CONDITION) --
-        const { data, error } = await supabase
+        // --- MOTOR DE BUSCA  --
+        const { data: simulation, error: dbError } = await supabase
           .from('simulations')
           .select('id, visit_id, partner_id')
-          .eq('id', simulationId);
-          .single()
+          .eq('id', simulationId)
+          .single();
 
-        // Se após os retries ainda continuar vazio, aí sim é um 404 real
-        if (error || !simulation) {
-          debugLog(`Alerta: Simulação ${simulationId} não localizada após ${maxRetries} tentativas.`);
+        // LOG AGRESSIVO PARA DEBUGAR
+        if (dbError) {
+          console.error(`[DEBUG-ERRO-DB] Erro ao buscar no banco:`, dbError);
+        }
+
+        if (dbError || !simulation) {
+          debugLog(`Alerta: Simulação ${simulationId} não localizada.`);
           return { status: 404, data: { error: "Simulação não encontrada.", details: dbError } };
         }
 
