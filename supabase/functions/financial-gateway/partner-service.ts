@@ -28,20 +28,10 @@ import {
 } from "./partner-notifications.ts";
 
 /**
- * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
- */
-// Chave de controle global para exibição de rastros no console do servidor
-const DEBUG_MODE = true;
-
-/**
  * FUNÇÃO DE LOG PADRONIZADA
- * @description Captura informações estratégicas do pipeline sem expor dados em ambientes produtivos se a flag estiver inativa.
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[PARTNER-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
-};
+import { debugLog } from "../_shared/logger.ts";
 
 /**
  * Calcula a taxa de juros mensal usando o Método da Secante.

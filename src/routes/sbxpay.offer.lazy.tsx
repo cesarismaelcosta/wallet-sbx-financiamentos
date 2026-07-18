@@ -14,7 +14,7 @@
  */
 
 import { useState, useMemo, useEffect, useContext, useRef } from "react";
-import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
+import { useNavigate, createLazyFileRoute, useSearch } from "@tanstack/react-router";
 import { Loader2, CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 
@@ -59,7 +59,7 @@ const FLOW_MAP: Record<string, {
   },
   Imóveis: { 
     name: "Financiamento de Imóveis", 
-    offer_id: "4680825", 
+    offer_id: { staging: "4680825", production: "4680825" },
     category: "Imóveis", 
     info: "Entity, Event, Manager, Offer, RealEstate", 
     link: "Box Financiamento" 
@@ -131,6 +131,7 @@ export const Route = createLazyFileRoute("/sbxpay/offer")({
 // [COMPONENTE PRINCIPAL]
 // =========================================================================
 export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
+  const search = useSearch({ strict: false });     
   const { logout, userId, sessionToken } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = Route.useSearch();

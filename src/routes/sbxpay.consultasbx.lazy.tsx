@@ -1,5 +1,5 @@
 /**
- * @fileoverview Componente: OfferDetailsNewSBXPAY (Rota: /sbxpay/consultabsx)
+ * @fileoverview Componente: OfferDetailsNewSBXPAY (Rota: /sbxpay/consultasbx)
  * * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
@@ -12,19 +12,16 @@
  */
 
 import { useState, useEffect, useMemo, useContext } from "react";
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute, useSearch } from "@tanstack/react-router";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile, type BFFUserProfile } from "@/services/user";
 import { fetchOfferDetails } from "@/services/offer";
-import { Offer, Manager, Event, Seller } from "../_shared/types";
+import { Offer, Manager, Event, Seller } from "@/features/financial-hub/components/shared/types";
 
 // =========================================================================
 // [ROTEAMENTO]: Registro TanStack Router (Lazy Loading)
 // =========================================================================
 export const Route = createLazyFileRoute("/sbxpay/consultasbx")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    offer: search.offer as string | undefined,
-  }),
   component: OfferDetailsNewSBXPAY,
 });
 
@@ -48,9 +45,11 @@ export function OfferDetailsNewSBXPAY() {
   // o 'session_sessionToken' (JWT interno assinado pela nossa Edge Function).
   const { sessionToken } = useFinancialAuth();
   const [fotoAtiva, setFotoAtiva] = useState(0);
-    const navigate = Route.useNavigate(); 
-  const { offer: offerParam } = Route.useSearch();
-  const DEFAULT_OFFER = "4753216";
+  const navigate = Route.useNavigate(); 
+  // Pegue o search de forma bruta, sem precisar de validateSearch
+  const search = useSearch({ strict: false });
+  const offerParam = (search as any).offer as string | undefined;
+  const DEFAULT_OFFER = "4755461";
 
   // Define o ID de forma estática, sem forçar navegação
   const offerId = offerParam || DEFAULT_OFFER;
@@ -59,7 +58,7 @@ export function OfferDetailsNewSBXPAY() {
   useEffect(() => {
     if (!offerParam) {
       navigate({
-        to: "/sbxpay/consultabsx",
+        to: "/sbxpay/consultasbx",
         search: { offer: DEFAULT_OFFER },
         replace: true, // Importante: não polui o histórico
       });

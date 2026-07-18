@@ -14,18 +14,11 @@ import {
   OrchestratorResponse
 } from "../_shared/types.ts";
 
-// Chave de controle para logs de depuração
-const DEBUG_MODE = true;
-
 /**
  * FUNÇÃO DE LOG PADRONIZADA
  * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[ORCHESTRATOR-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
-};
+import { debugLog } from "../_shared/logger.ts";
 
 
 /**

@@ -18,18 +18,11 @@ import { processSimulation } from "./simulation-handler.ts";
 import { validateRequest } from "../_shared/auth.ts"; // Validação centralizada de segurança
 import { withSecurity } from "../_shared/server.ts";
 
-// Chave de controle para logs de depuração
-const DEBUG_MODE = true;
-
 /**
  * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[FINANCIAL GATEWAY INDEX] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
-};
-
+import { debugLog } from "../_shared/logger.ts";
 serve(withSecurity('financial-gateway', async (req: Request) => {
   // Descoberta da Origem (Usada nos tratamentos de erro abaixo)
   const originPath = req.headers.get("x-original-url") || "/";

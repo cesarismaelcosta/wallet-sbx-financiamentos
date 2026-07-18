@@ -34,22 +34,10 @@ import {
 } from "../_shared/types.ts";
 
 /**
- * ============================================================================
- * CONFIGURAÇÕES GLOBAIS E SEGURANÇA
- * ============================================================================
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
-const DEBUG_MODE = true;
-
-/**
- * @function debugLog
- * @description Centraliza os logs do pipeline. Em produção, DEBUG_MODE deve ser false
- * para evitar exposição de PII (Personally Identifiable Information) nos logs da Edge Function.
- */
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[ORCHESTRATOR-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
-};
+import { debugLog } from "../_shared/logger.ts";
 
 /**
  * ============================================================================

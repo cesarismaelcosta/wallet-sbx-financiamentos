@@ -15,18 +15,11 @@ import { Entity, Offer } from "../_shared/types.ts";
 // Função de geração do template de e-mail
 import { generateUserEmailNotificationHtml } from "./credit-card-notifications.ts";
 
-// Chave de controle para logs de depuração
-const DEBUG_MODE = true;
-
 /**
  * FUNÇÃO DE LOG PADRONIZADA
  * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[CREDIT CARD DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
-};
+import { debugLog } from "../_shared/logger.ts";
 
 /**
  * Calcula a taxa de juros mensal usando o Método da Secante.

@@ -12,18 +12,11 @@ import { encodeBase64 } from "jsr:@std/encoding/base64";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { withSecurity } from "../_shared/server.ts";
 
-// Chave de controle para logs de depuração
-const DEBUG_MODE = true;
-
 /**
- * @function debugLog
- * @description Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[NOTIFICATION-GATEWAY] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
-};
+import { debugLog } from "../_shared/logger.ts";
 
 serve(withSecurity('notification-gateway', async (req: Request) => {
   // 1. AUTENTICAÇÃO E SEGURANÇA

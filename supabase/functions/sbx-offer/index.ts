@@ -18,10 +18,11 @@ import { withSecurity } from "../_shared/server.ts";
 import { validateRequest } from "../_shared/auth.ts"; // Reintegrado
 import { Vehicle } from "../_shared/types.ts";
 
-const DEBUG_MODE = Deno.env.get("DEBUG_MODE") === "true";
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) console.log(`[SBX-OFFER-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-};
+/**
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+import { debugLog } from "../_shared/logger.ts";
 
 serve(withSecurity('sbx-offer', async (req: Request) => {
 

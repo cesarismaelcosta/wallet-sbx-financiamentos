@@ -19,11 +19,11 @@
  *    os tokens no localStorage para os legados, e executa a navegação decidida pela Edge.
  */
 
-import { createFileRoute, redirect, isRedirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { logSystemError } from "@/services/systemNotification";
-import type { UserProfile, Offer, Seller, Event, Manager, SimulationPayload } from "@/features/financial-hub/shared/types";
+import type { UserProfile, Offer, Seller, Event, Manager, SimulationPayload } from "@/features/financial-hub/components/shared/types";
 
 interface SearchSchema {
   environment?: "staging" | "production";
@@ -50,14 +50,18 @@ export const Route = createFileRoute("/financialGatewayEntry")({
 
   loaderDeps: ({ search }) => search,
 
-  loader: async ({ deps, location, request }) => {
-    // 1. [PERSISTÊNCIA SSR]: Lê o cookie injetado automaticamente pelo navegador após o primeiro acesso
-    const cookieHeader = request?.headers?.get("Cookie") || "";
-    const cookieToken = cookieHeader.split('; ').find(row => row.startsWith('session_token='))?.split('=')[1] || null;
+loader: async ({ deps, context }: { deps: any, context: { request: Request } }) => {
+  const { request } = context; 
 
-    if (!deps?.auth_token && !cookieToken) {
-       throw redirect({ to: '/accounts/signin', replace: true });
-    }
+  const cookieHeader = request?.headers?.get("Cookie") || "";
+  const cookieToken = cookieHeader.split('; ').find((row: string) => row.startsWith('session_token='))?.split('=')[1] || null;
+
+  if (!deps?.auth_token && !cookieToken) {
+    throw redirect({ 
+      to: `/accounts/signin?redirect_uri=${encodeURIComponent(deps?.return_uri || "/")}`, 
+      replace: true 
+    });
+  }
 
     const currentEnvironment = deps.environment || "production";
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
@@ -69,6 +73,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       // =====================================================================
       const sbxResponse = await fetch(`${supabaseUrl}/functions/v1/sbx-loader`, {
         method: "POST",
+        signal: AbortSignal.timeout(10000),
         headers: { 
           "Content-Type": "application/json",
           "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` 
@@ -155,6 +160,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       // O Servidor faz a chamada pesada, poupando a rede 3G do cliente
       const orchestratorResponse = await fetch(`${supabaseUrl}/functions/v1/orchestrator`, {
         method: "POST",
+        signal: AbortSignal.timeout(10000),
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
@@ -206,7 +212,8 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       return { 
         session_token: sbxData.session_token, 
         auth_token: deps.auth_token,
-        orchestration_result: orchestratorData // O Comando retornado pela Edge
+        orchestration_result: orchestratorData, // O Comando retornado pela Edge
+        return_uri: deps.return_uri
       };
 
     } catch (error: any) {
@@ -220,7 +227,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       // 1. Definição do Escopo de Erro
       // - sessionToken: Se a falha ocorreu na Fase 1 (sbx-loader), será undefined. Se ocorreu na Fase 2 (orchestrator), terá o JWT válido.
       // - errorContext: Prioriza a propriedade injetada no throw (ex: SBX_LOADER_FAIL). Faz fallback para busca na string da mensagem.
-      const sessionToken = generatedSessionToken;
+      const sessionToken = generatedSessionToken || "";
       const msg = error.message || "";
       const errorContext = error.type || (msg.includes("HTTP_ORCH") ? "ORCHESTRATOR_FAIL" : "SBX_LOADER_FAIL");
 
@@ -239,18 +246,16 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       // 3. Regras de Redirecionamento e Fail-safe
       // Erro de Autenticação: Intercepta o novo type de TOKEN ou o legado de mensagens.
       if (error.type === "SBX_LOADER_FAIL_TOKEN" || error.type === "SBX_LOADER_FAIL_USER") {
-        // Captura a URL atual em que o Gateway estava (que contém todos os deps como offer_id)
-        const currentUrl = encodeURIComponent(location.href);
-        
+        // Retorna para login voltando para a URL original enviada em return_uri
         return { 
           status: "ERROR_LOGIN", 
-          redirect_url: `/accounts/signin?redirect_uri=${currentUrl}` 
+          return_uri: `/accounts/signin?redirect_uri=${encodeURIComponent(deps.return_uri || "/")}`
         };
       }
 
-      console.log("🚨 [DEBUG] REDIRECT_URL que está sendo enviada para o Front:", deps.return_uri);
+      console.log("🚨 [DEBUG] return_uri que está sendo enviada para o Front:", deps.return_uri);
       // 4. Erro de Sistema: Qualquer outra quebra devolve o usuário para a página de origem da simulação após aguardar no componente UI.
-      return { status: "ERROR_OTHER", redirect_url: deps.return_uri || request.headers.get("Referer") };
+      return { status: "ERROR_OTHER", return_uri: deps.return_uri || request?.headers?.get("Referer") ?? "/" };
     }
   },
   
@@ -269,26 +274,21 @@ export const Route = createFileRoute("/financialGatewayEntry")({
     useEffect(() => {
       if (!data) return;
 
-      // 1. PERSISTÊNCIA ATÔMICA: O que veio do sbx-loader deve ser salvo IMEDIATAMENTE.
-      // Não importa o que o orchestrator diz, se temos os tokens, salvamos.
-      if (data.session_token && data.auth_token) {
-          localStorage.setItem("auth_token", data.auth_token);
-          localStorage.setItem("session_token", data.session_token);
-      }
-
-      // 2. FLUXO DE SEGURANÇA (Auth Error ou falta de tokens)
+      // 1. FLUXO DE SEGURANÇA (Auth Error ou falta de tokens)
       const isAuthError = data.status === "ERROR_LOGIN";
       const isTokenMissing = !data.session_token || !data.auth_token;
 
       if (isAuthError || isTokenMissing) {
         console.error("🚨 [FinancialGateway] Falha de sessão ou integridade:", data);
-        // 1. Tenta usar o redirect_url que veio do servidor
-        // 2. Se não veio, constrói o retorno usando a URL atual
-        const target = data.redirect_url || `/accounts/signin?redirect_uri=${currentUrl}`;
+        const target = data.return_uri || `/accounts/signin?redirect_uri=${encodeURIComponent(data.return_uri || "/")}`;
         window.location.replace(target);
         return;
       }
-  
+
+      // 2. PERSISTÊNCIA ATÔMICA: Só salvamos se o acesso for autorizado (pós-guards)
+      localStorage.setItem("auth_token", data.auth_token);
+      localStorage.setItem("session_token", data.session_token);
+
       // 3. FLUXO DE ERRO (FAIL_SAFE)
       if (data.status === "ERROR_OTHER") {
         console.warn("⚠️ [FinancialGateway] Falha crítica detectada.");
@@ -296,21 +296,11 @@ export const Route = createFileRoute("/financialGatewayEntry")({
         return;
       }
 
-      // 3. FLUXO DE ORQUESTRAÇÃO (Direcionamento de Negócio)
-      // definição do orchestrador
+      // 4. FLUXO DE ORQUESTRAÇÃO
       if (data?.orchestration_result?.url) {
         window.location.replace(data.orchestration_result.url);
-        return;
-      }
-
-      // 4. FLUXO DE ERRO (FAIL_SAFE)
-      if (data.status === "ERROR_OTHER") {
-        console.warn("⚠️ [FinancialGateway] Falha crítica detectada.");
-        setIsError(true);
-        return;
       }
     }, [data]);
-
     // 3. [CONTADOR REGRESSIVO]: Lógica de timeout para retorno automático
     useEffect(() => {
       if (isError && countdown > 0) {
@@ -320,12 +310,12 @@ export const Route = createFileRoute("/financialGatewayEntry")({
       
       // Auto-retorno ao zerar o contador
       if (isError && countdown === 0) {
-        const target = data.redirect_url;
-        window.location.replace(data.redirect_url);
+        const target = data.return_uri || "/";
+        window.location.replace(data.return_uri);
       }
     }, [isError, countdown]);
 
-    // --- UI DE ERRO (Padronizada com aviso e espera de 5s) ---
+    // --- UI DE ERRO (Padronizada com aviso e espera de 10s) ---
     if (isError) {
       return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
@@ -337,7 +327,7 @@ export const Route = createFileRoute("/financialGatewayEntry")({
           <p className="text-slate-500 font-medium text-sm mb-4">Retornando em {countdown}s...</p>
           
           <button 
-            onClick={() => window.history.back()}
+            onClick={() => window.location.replace(data.return_uri || "/")}
             className="flex items-center text-primary font-semibold text-sm hover:opacity-80 transition-opacity"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />

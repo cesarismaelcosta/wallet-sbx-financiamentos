@@ -26,17 +26,10 @@ import { validateRequest } from "../_shared/auth.ts";
 import { withSecurity } from "../_shared/server.ts";
 
 /**
- * ============================================================================
- * CONFIGURAÇÕES GLOBAIS E SEGURANÇA
- * ============================================================================
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
-const DEBUG_MODE = true;
-
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[SBX-USER-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
-};
+import { debugLog } from "../_shared/logger.ts";
 
 /**
  * ============================================================================

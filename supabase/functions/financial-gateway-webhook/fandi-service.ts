@@ -14,16 +14,15 @@ import { sql } from '../_shared/db.ts';
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { generateSignature } from "../_shared/crypto.ts";
 
-const DEBUG_MODE = true;
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[FANDI-SERVICE] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
-};
+/**
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+import { debugLog } from "../_shared/logger.ts";
 
 // Configurações de Segurança e Negócio
-const MAX_AGE_MS = 60 * 60 * 1000; // 1 Hora - Janela de validade do Webhook
-const MERESOLVE_PARTNER_ID = 2;    // ID Oficial do Tenant da Fandi no banco
+const MAX_AGE_MS = 5 * 60 * 1000;   // 5 minutos - Janela de validade do Webhook
+const MERESOLVE_PARTNER_ID = 2;     // ID Oficial do Tenant da Fandi no banco
 
 // ============================================================================
 // DATA ACCESS LAYER (DAL) - Transacional
@@ -132,9 +131,24 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
   const expectedPayload = `${simulationId}.${simulationUpdateId}.${timestampStr}`;
   const expectedSignature = await generateSignature(expectedPayload, MASTER_SECRET);
 
-  if (receivedSignature !== expectedSignature) {
-    debugLog("Violação de Integridade: HMAC incompatível.", { expectedSignature, receivedSignature });
-    throw new Error("Assinatura digital inválida.");
+  // Verificação de assinatura
+  const encoder = new TextEncoder();
+  const expectedBytes = encoder.encode(expectedSignature);
+  const receivedBytes = encoder.encode(receivedSignature);
+
+  // Se os tamanhos forem diferentes, a assinatura está errada de cara.
+  // A comparação de tamanho não é um problema de timing.
+  if (expectedBytes.length !== receivedBytes.length) {
+      debugLog("Violação de Integridade: HMAC tamanho incompatível.");
+      throw new Error("Assinatura digital inválida.");
+  }
+
+  // Compara bytes em tempo constante para evitar ataque de timing
+  const isValid = crypto.subtle.timingSafeEqual(expectedBytes, receivedBytes);
+
+  if (!isValid) {
+      debugLog("Violação de Integridade: HMAC incompatível.");
+      throw new Error("Assinatura digital inválida.");
   }
 
   // ========================================================================

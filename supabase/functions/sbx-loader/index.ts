@@ -18,16 +18,11 @@ import { withSecurity } from "../_shared/server.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { BFFUserProfile, BFFOfferDetails } from "../_shared/types.ts";
 
-const DEBUG_MODE = true;
-
 /**
- * Função utilitária para rastreamento de execução no painel do Supabase.
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[SBX-LOADER] ${message}`, data ? JSON.stringify(data) : "");
-  }
-};
+import { debugLog } from "../_shared/logger.ts";
 
 const ENV_URLS = {
   production: { api: "https://api.s4bdigital.net", offer: "https://offer-query.superbid.net", event: "https://event-query.superbid.net" },

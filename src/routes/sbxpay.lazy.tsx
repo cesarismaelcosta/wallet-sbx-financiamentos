@@ -25,7 +25,6 @@ export const UserDataContext = createContext<any>(null);
 export function sbXPAYLayOut() {
   const { sessionToken, isLoading, logout } = useFinancialAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   
   const [envPreLogin, setEnvPreLogin] = useState<"staging" | "production">("production");
   const [userData, setUserData] = useState<any>(null);
@@ -46,7 +45,7 @@ export function sbXPAYLayOut() {
     // [SECURITY]: Validação Local Passiva
     try {
       const decoded = jwtDecode<{ exp?: number }>(sessionToken);
-      const timeDelta = parseInt(localStorage.getItem('time_delta') || '0', 10);
+      const timeDelta = typeof window !== "undefined" ? parseInt(localStorage.getItem('time_delta') || '0', 10) : 0;
       const syncedCurrentTimeInSeconds = Math.floor((Date.now() + timeDelta) / 1000);
 
       if (decoded.exp && decoded.exp < syncedCurrentTimeInSeconds) {
@@ -131,7 +130,7 @@ export function sbXPAYLayOut() {
                navigate({ 
                  to: '/accounts/signin', 
                  search: { 
-                   redirect_uri: window.location.pathname + window.location.search 
+                   redirect_uri: typeof window !== "undefined" ? window.location.pathname + window.location.search : "/"
                  } 
                });
             }}

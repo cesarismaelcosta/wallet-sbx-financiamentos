@@ -19,16 +19,11 @@ import {
 
 import { Entity, Offer } from "../_shared/types.ts";
 
-// ============================================================================
-// CONFIGURAÇÕES E FLAGS
-// ============================================================================
-const DEBUG_MODE = true;
-
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[CREDITAS-AUTO-EQUITY-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
-};
+/**
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ */
+import { debugLog } from "../_shared/logger.ts";
 
 // Helper de Regra (Stateless)
 function getMockBehavior(cpf: string) {
