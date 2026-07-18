@@ -379,6 +379,9 @@ serve(withSecurity('orchestrator', async (req: Request) => {
       const visitOfferData = visit.visit_offers?.[0] || {};
       const offerId = visitOfferData.offer_id;
 
+      // Insira esta linha logo abaixo para forçar o ID de teste (use o ID que seu banco reconhece como expirado)
+      offerId = "EXPIRED_OFFER_ID_TEST";
+
       if (offerId) {
           debugLog("🚨 [GET] Validando integridade da oferta:", offerId);
           try {
@@ -479,7 +482,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
       return { status: 200, data: hydratedPayload };
 
     } catch (error: any) {
-        console.error(`[Orquestrador GET Error]: ${error.message}`);
+        debugLog(`[Orquestrador GET Error]: ${error.message}`);
         
         // Extraímos o código que injetamos lá no bloco de validação. 
         // Se não existir, é um erro genérico.
