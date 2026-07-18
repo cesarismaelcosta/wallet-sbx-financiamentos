@@ -226,12 +226,12 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
    */
   let contextData;
   try {
-    const contextResponse = await fetch(`https://core.fandi.com.br/v2/checkout/${guid}`, {
+    const contextResponse = await fetch(`https://core.fandi.com.br/v1/checkout/${guid}`, {
       method: 'GET',
       headers: { 
         'Content-Type': 'application/json', 
         'fandi-tipo-servico': 'checkout', 
-        'ApiKey': guid 
+        "chave-acesso": FANDI_API_KEY! 
       }
     });
 
@@ -342,13 +342,12 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   // 4.1. RECEBIMENTO E VALIDAÇÃO INICIAL
   let simResult;
   try {
-      const simResponse = await fetch(`${urlFandi}/v2/checkout/simulacao`, {
+      const simResponse = await fetch(`${urlFandi}/v1/checkout/simulacao`, {
           method: 'POST',
           headers: { 
-              'Content-Type': 'application/json',
-              'fandi-tipo-servico': 'checkout',
-              'ApiKey': guid,
-              'Authorization': `Bearer ${tokenAcesso}`
+            "Content-Type": "application/json",
+            "fandi-tipo-servico": "checkout",
+            Authorization: tokenAcesso,
           },
           body: JSON.stringify(bodySimulacao)
       });
@@ -510,7 +509,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
       // Registra log no Supabase se ligado
       debugLog("ENVIO INCLUSÃO:", bodyInclusao);
 
-      const incResponse = await fetch(`${urlFandi}/v2/checkout/inclusao`, {
+      const incResponse = await fetch(`${urlFandi}/v1/checkout/inclusao`, {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json',
