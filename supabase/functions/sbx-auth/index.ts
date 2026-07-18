@@ -23,7 +23,6 @@ import { OriginDetails } from "../_shared/types.ts";
 
 // [INFRAESTRUTURA]: Importação do motor central de segurança e CORS
 import { withSecurity } from "../_shared/server.ts";
-import { debugLog } from "../_shared/logger.ts";
 
 /**
  * FUNÇÃO DE LOG PADRONIZADA
