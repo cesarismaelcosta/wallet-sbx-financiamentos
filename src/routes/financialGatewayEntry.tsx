@@ -36,13 +36,41 @@ interface SearchSchema {
   utm_campaign?: string;
 }
 
+// Lista de domínios confiáveis.
+// TODO: Remover o "*" e adicionar domínios reais (ex: "superbid.net") antes de fechar a segurança.
+const ALLOWED_DOMAINS = ["*"];
+
+// Valida Open Redirect (CWE-601) usando Allowlist
+const getSafeRedirectUrl = (url?: string): string => {
+  if (!url) return "/";
+  try {
+    if (url.startsWith('http')) {
+      const parsed = new URL(url);
+      // Libera se tiver o curinga "*" OU se bater com a lista
+      const isAllowed = ALLOWED_DOMAINS.includes("*") || ALLOWED_DOMAINS.some(domain => 
+        parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
+      );
+      
+      if (isAllowed) return url;
+      
+      console.warn(`🚨 [Security] Open Redirect bloqueado para: ${parsed.hostname}`);
+      return parsed.pathname + parsed.search; 
+    }
+  } catch (e) {
+    // URL malformada morre silenciosamente aqui
+  }
+  
+  if (url.startsWith('/') && !url.startsWith('//')) return url;
+  return "/";
+};
+
 export const Route = createFileRoute("/financialGatewayEntry")({
   validateSearch: (search: Record<string, unknown>): SearchSchema => ({
     environment: search.environment as "staging" | "production" | undefined,
     auth_token: search.auth_token as string | undefined,
     offer_id: search.offer_id as string | undefined,
     product_id: search.product_id as string | undefined,
-    return_uri: search.return_uri as string | undefined,
+    return_uri: getSafeRedirectUrl(search.return_uri as string | undefined),
     utm_source: search.utm_source as string | undefined,
     utm_medium: search.utm_medium as string | undefined,
     utm_campaign: search.utm_campaign as string | undefined,
@@ -50,18 +78,30 @@ export const Route = createFileRoute("/financialGatewayEntry")({
 
   loaderDeps: ({ search }) => search,
 
-loader: async ({ deps, context }: { deps: any, context: { request: Request } }) => {
-  const { request } = context; 
+loader: async ({ deps, context }: { deps: any, context: any }) => {
+    
+    let cookieToken = null;
 
-  const cookieHeader = request?.headers?.get("Cookie") || "";
-  const cookieToken = cookieHeader.split('; ').find((row: string) => row.startsWith('session_token='))?.split('=')[1] || null;
+    // Leitura Isomórfica do Cookie
+    if (typeof document !== "undefined") {
+      // Se estiver rodando no navegador (Client-Side Navigation)
+      cookieToken = document.cookie.split('; ').find(row => row.trim().startsWith('session_token='))?.split('=')[1] || null;
+    } else {
+      // Se estiver rodando no servidor (SSR / F5)
+      // Usamos optional chaining caso o request tenha sido injetado no root
+      const cookieHeader = context?.request?.headers?.get("Cookie") || "";
+      cookieToken = cookieHeader.split('; ').find((row: string) => row.trim().startsWith('session_token='))?.split('=')[1] || null;
+    }
 
-  if (!deps?.auth_token && !cookieToken) {
-    throw redirect({ 
-      to: `/accounts/signin?redirect_uri=${encodeURIComponent(deps?.return_uri || "/")}`, 
-      replace: true 
-    });
-  }
+    if (!deps?.auth_token && !cookieToken) {
+      throw redirect({ 
+        to: "/accounts/signin",
+        search: {
+          redirect_uri: deps?.return_uri || "/"
+        },
+        replace: true 
+      });
+    }
 
     const currentEnvironment = deps.environment || "production";
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
@@ -227,7 +267,7 @@ loader: async ({ deps, context }: { deps: any, context: { request: Request } }) 
       // 1. Definição do Escopo de Erro
       // - sessionToken: Se a falha ocorreu na Fase 1 (sbx-loader), será undefined. Se ocorreu na Fase 2 (orchestrator), terá o JWT válido.
       // - errorContext: Prioriza a propriedade injetada no throw (ex: SBX_LOADER_FAIL). Faz fallback para busca na string da mensagem.
-      const sessionToken = generatedSessionToken || "";
+      const sessionToken = generatedSessionToken || "FALHA_GERACAO_TOKEN_SESSAO";
       const msg = error.message || "";
       const errorContext = error.type || (msg.includes("HTTP_ORCH") ? "ORCHESTRATOR_FAIL" : "SBX_LOADER_FAIL");
 
@@ -246,16 +286,15 @@ loader: async ({ deps, context }: { deps: any, context: { request: Request } }) 
       // 3. Regras de Redirecionamento e Fail-safe
       // Erro de Autenticação: Intercepta o novo type de TOKEN ou o legado de mensagens.
       if (error.type === "SBX_LOADER_FAIL_TOKEN" || error.type === "SBX_LOADER_FAIL_USER") {
-        // Retorna para login voltando para a URL original enviada em return_uri
         return { 
           status: "ERROR_LOGIN", 
-          return_uri: `/accounts/signin?redirect_uri=${encodeURIComponent(deps.return_uri || "/")}`
+          return_uri: deps.return_uri // Retorna a URL limpa para o front
         };
       }
 
       console.log("🚨 [DEBUG] return_uri que está sendo enviada para o Front:", deps.return_uri);
       // 4. Erro de Sistema: Qualquer outra quebra devolve o usuário para a página de origem da simulação após aguardar no componente UI.
-      return { status: "ERROR_OTHER", return_uri: (deps.return_uri || request?.headers?.get("Referer")) ?? "/" };
+      return { status: "ERROR_OTHER", return_uri: deps.return_uri };
     }
   },
   
@@ -280,25 +319,26 @@ loader: async ({ deps, context }: { deps: any, context: { request: Request } }) 
 
       if (isAuthError || isTokenMissing) {
         console.error("🚨 [FinancialGateway] Falha de sessão ou integridade:", data);
-        const target = data.return_uri || `/accounts/signin?redirect_uri=${encodeURIComponent(data.return_uri || "/")}`;
-        window.location.replace(target);
+        const loginTarget = `/accounts/signin?redirect_uri=${encodeURIComponent(data.return_uri || "/")}`;
+        window.location.replace(loginTarget);
         return;
       }
 
-      // 2. PERSISTÊNCIA ATÔMICA: Só salvamos se o acesso for autorizado (pós-guards)
-      localStorage.setItem("auth_token", data.auth_token);
-      localStorage.setItem("session_token", data.session_token);
-
-      // 3. FLUXO DE ERRO (FAIL_SAFE)
+      // 2. FLUXO DE ERRO (FAIL_SAFE)
       if (data.status === "ERROR_OTHER") {
         console.warn("⚠️ [FinancialGateway] Falha crítica detectada.");
         setIsError(true);
         return;
       }
 
+      // 3. PERSISTÊNCIA ATÔMICA SE SUCESSO: Só salvamos se o acesso for autorizado (pós-guards)
+      localStorage.setItem("auth_token", data.auth_token);
+      localStorage.setItem("session_token", data.session_token);
+
       // 4. FLUXO DE ORQUESTRAÇÃO
       if (data?.orchestration_result?.url) {
-        window.location.replace(data.orchestration_result.url);
+        const target = data.orchestration_result.url || "/";
+        window.location.replace(target);
       }
     }, [data]);
     // 3. [CONTADOR REGRESSIVO]: Lógica de timeout para retorno automático
@@ -311,7 +351,7 @@ loader: async ({ deps, context }: { deps: any, context: { request: Request } }) 
       // Auto-retorno ao zerar o contador
       if (isError && countdown === 0) {
         const target = data.return_uri || "/";
-        window.location.replace(data.return_uri);
+        window.location.replace(target);
       }
     }, [isError, countdown]);
 
