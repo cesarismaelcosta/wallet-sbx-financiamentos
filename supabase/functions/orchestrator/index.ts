@@ -377,10 +377,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
       // Validação de Oferta (Condicional: Só valida se a offer_id existir)
       const visitOfferData = visit.visit_offers?.[0] || {};
-      const offerId = visitOfferData.offer_id;
-
-      // Insira esta linha logo abaixo para forçar o ID de teste (use o ID que seu banco reconhece como expirado)
-      offerId = "EXPIRED_OFFER_ID_TEST";
+      let offerId = visitOfferData.offer_id;
 
       if (offerId) {
           debugLog("🚨 [GET] Validando integridade da oferta:", offerId);
