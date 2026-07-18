@@ -65,8 +65,8 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   const integrationDetails = payload?.integration_details || {};
   
   // Chave de intefação
-  const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
-  // const FANDI_CHAVE_ACESSO = integrationDetails.chaveAcesso; 
+  // const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
+  const FANDI_CHAVE_ACESSO = integrationDetails.chaveAcesso; 
 
   // CNPJ DE ACORDO COM O PRODUTO (LEVES E PESADOS)
   const CNPJ_LOJA = integrationDetails.cnpjLoja; 
@@ -107,7 +107,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   // Registra log no Supabase se ligado
   debugLog("DEBUG PAYLOAD RECEBIDO:", JSON.stringify(payload, null, 2));
 
-  const GUID_URL = 'https://core.fandi.com.br/v1/checkout/obter-guid';
+  const GUID_URL = 'https://core.fandi.com.br/v2/checkout/obter-guid';
 
   /**
    * PASSO 1: SOLICITAÇÃO DE GUID
@@ -123,7 +123,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     cliente: {
       // Agora acessamos via payload.entity
       nome: entity.name,
-      cpf: entity.document,
+      cpfCnpj: entity.document,
       dataNascimento: entity.birth_date, 
       celular: (entity.phone || "").replace(/\D/g, ""),
       sexo: entity.gender || "M",
@@ -156,7 +156,10 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   try {
     const guidResponse = await fetch(GUID_URL, { 
       method: 'POST', 
-      headers: { 'Content-Type': 'application/json', 'fandi-tipo-servico': 'checkout' }, 
+      headers: { 
+        'Content-Type': 'application/json', 
+        'fandi-tipo-servico': 'checkout' 
+      }, 
       body: JSON.stringify(bodyGuid) 
     });
     
@@ -222,9 +225,13 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
    */
   let contextData;
   try {
-    const contextResponse = await fetch(`https://core.fandi.com.br/v1/checkout/${guid}`, {
+    const contextResponse = await fetch(`https://core.fandi.com.br/v2/checkout/${guid}`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json', 'fandi-tipo-servico': 'checkout', 'chave-acesso': FANDI_API_KEY! }
+      headers: { 
+        'Content-Type': 'application/json', 
+        'fandi-tipo-servico': 'checkout', 
+        'ApiKey': guid 
+      }
     });
 
     contextData = await contextResponse.json();
@@ -293,7 +300,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     cliente: {
       nome: entity.name || "",
       celular: (entity.phone || "").replace(/\D/g, ""), 
-      cpf: (entity.document || "").replace(/\D/g, ""),
+      cpfCnpj: (entity.document || "").replace(/[.\/-]/g, ""),
       email: entity.email || "",
       sexo: entity.gender || "M",
       dataNascimento: entity.birth_date, 
@@ -334,12 +341,13 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   // 4.1. RECEBIMENTO E VALIDAÇÃO INICIAL
   let simResult;
   try {
-      const simResponse = await fetch(`${urlFandi}/v1/checkout/simulacao`, {
+      const simResponse = await fetch(`${urlFandi}/v2/checkout/simulacao`, {
           method: 'POST',
           headers: { 
               'Content-Type': 'application/json',
               'fandi-tipo-servico': 'checkout',
-              'Authorization': tokenAcesso 
+              'ApiKey': guid,
+              'Authorization': `Bearer ${tokenAcesso}`
           },
           body: JSON.stringify(bodySimulacao)
       });
@@ -501,7 +509,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
       // Registra log no Supabase se ligado
       debugLog("ENVIO INCLUSÃO:", bodyInclusao);
 
-      const incResponse = await fetch(`${urlFandi}/v1/checkout/inclusao`, {
+      const incResponse = await fetch(`${urlFandi}/v2/checkout/inclusao`, {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json',
