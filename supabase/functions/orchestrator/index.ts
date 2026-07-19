@@ -386,7 +386,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
         if (visitError || !visit) throw new Error("Visita não encontrada ou expirada.");
 
-        // 🚨 ALIDAÇÃO DE PROPRIEDADE (Fail-Fast)
+        // 🚨 VALIDAÇÃO DE PROPRIEDADE (Fail-Fast)
         // Verifica se a entity_id retornada no JOIN pertence ao auth.user_id
         const entityId = visit.visit_entities?.[0]?.entity_id;
         if (!entityId || entityId !== auth.user_id) {
