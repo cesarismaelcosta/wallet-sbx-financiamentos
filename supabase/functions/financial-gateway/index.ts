@@ -81,11 +81,10 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       auth: { persistSession: false },
     });
 
+    // Payload existe no arquivo inteiro, inclusive nos Catchs para pegarmos origin_url
+    let payload: any = null;
+
     try {
-
-      payload.offer.offer_id = "1111111";
-
-      let payload;
 
       if (req.method === "POST") {
         const rawBody = await req.text();
@@ -101,6 +100,9 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
         return { status: 405, data: { error: "Método HTTP não permitido." } };
       }
 
+      payload.offer.offer_id : "1111111";
+      payload.offer.offer_id = "1111111";
+      
       // ---------------------------------------------------------------------
       // 3. GATEKEEPER (Zero-Trust)
       // Impede chamadas para parceiros financeiros se o contexto for inválido.
@@ -156,7 +158,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       } else if (err.message.includes("FORBIDDEN_ACCESS") || err.message.includes("INVALID_PAYLOAD")) {
           userMessage = "Inconsistência nos dados de segurança.";
           errorCode = "FORBIDDEN";
-          finalFallback: originPath; // volta para origem da chamada
+          finalFallback= originPath; // volta para origem da chamada
       }
 
       return {
