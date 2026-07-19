@@ -343,6 +343,9 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         const visitUpdateId = url.searchParams.get("visit_update_id");
         const simulationId = url.searchParams.get("simulation_id");
 
+        // 1. Defina o path de retorno aqui, no topo do escopo
+        const originPath = req.headers.get("x-original-url") || "/";
+
         if (!visitId) throw new Error("O parâmetro 'visit_id' é obrigatório.");
 
         // A: Busca de Simulação Prévia com Validação de Identidade (Ownership)
@@ -363,7 +366,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
             // Cria o erro seguindo o seu padrão de injetar propriedades
             const err = new Error("Você não tem permissão para simular nesta oferta.");
             (err as any).errorCode = "INVALID_RELATIONSHIP"; 
-            (err as any).fallback_url = visit.origin_url; // Garante que volta para a origem
+            (err as any).fallback_url = originPath; // Garante que volta para a origem
             
             throw err; // Lança para o catch, que já tratará o errorCode e a mensagem
           }
@@ -394,7 +397,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
             
             const err = new Error("Você não tem permissão para acessar esta visita.");
             (err as any).errorCode = "INVALID_RELATIONSHIP"; // Mesmo padrão de erro
-            (err as any).fallback_url = visit.origin_url || "/";
+            (err as any).fallback_url = originPath || "/";
             throw err;
         }
 
