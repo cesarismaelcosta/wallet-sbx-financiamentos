@@ -1,6 +1,8 @@
 /**
  * @fileoverview ORQUESTRADOR CENTRAL (Gateway de Roteamento Bilateral)
- * * ============================================================================
+ * @path supabase/functions/orchestrator/index.ts
+ * 
+ * ============================================================================
  * ARQUITETURA DE REDE E ROTEAMENTO (sbX Core)
  * ============================================================================
  * Este módulo é o coração do ecossistema sbX. Ele opera como E/S (Entrada/Saída):
@@ -39,9 +41,10 @@ import {
  */
 import { debugLog } from "../_shared/logger.ts";
 
+
 /**
  * ============================================================================
- * HELPER FUNCTIONS (Validação)
+ * HELPER FUNCTIONS (Gatekeeper de Dados e Motor de Decisão)
  * ============================================================================
  */
 
@@ -252,6 +255,7 @@ async function resolveOrchestratorConfigs(
   return null;
 }
 
+
 /**
  * ============================================================================
  * HANDLER PRINCIPAL (E/S BILATERAL)
@@ -271,15 +275,12 @@ serve(withSecurity('orchestrator', async (req: Request) => {
   try {
       auth = await validateRequest(req);
   } catch (err: any) {
-      // =========================================================================
-      // 1. Descoberta da Origem (Corrigido: Obtém da requisição atual)
-      // =========================================================================
+      // 1. Descoberta da Origem
       const originPath = req.headers.get("x-original-url");
       const authUrl = req.headers.get("x-auth-fallback-url");
 
       if (!originPath) {
-          // Failsafe: Se o frontend não enviou o header, barramos aqui para evitar 
-          // redirecionamentos quebrados ou comportamento indefinido.
+          // Failsafe: Se o frontend não enviou o header, barramos aqui.
           return {
             status: 400,
             data: { 
@@ -291,21 +292,16 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           };
       }
 
-      // =========================================================================
       // 2. Padronização de Variáveis
-      // =========================================================================
       let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
       let errorCode = "UNAUTHORIZED";
       let fallbackUrl = authUrl;
       let statusCode = 401;
 
-      // =========================================================================
       // 3. Tradução do Erro para Experiência do Usuário (UX)
-      // =========================================================================
       if (err.message.includes("SESSION_EXPIRED")) {
           userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
           errorCode = "SESSION_EXPIRED";
-          // Mantém fallbackUrl para o login com redirect
           
       } else if (err.message.includes("FORBIDDEN")) {
           userMessage = "Você não tem permissão para acessar este recurso.";
@@ -320,15 +316,13 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           statusCode = 500;
       }
 
-      // =========================================================================
       // 4. Retorno seguindo o contrato oficial da API
-      // =========================================================================
       return { 
         status: statusCode,
         data: { 
           success: false,
           code: errorCode,
-          message: userMessage, // <--- O padrão exato que você usa
+          message: userMessage, 
           fallback_url: fallbackUrl 
         }
       };
@@ -368,14 +362,14 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
       if (visitError || !visit) throw new Error("Visita não encontrada ou expirada.");
 
-      // Validação Triangular (Obrigatória para toda e qualquer visita)
+      // C.1: Validação Triangular (Obrigatória para toda e qualquer visita)
       await validateVisitOwnership(
           supabase, 
           auth, 
           visitId
       );
 
-      // Validação de Oferta (Condicional: Só valida se a offer_id existir)
+      // C.2: Validação de Oferta (Condicional: Só valida se a offer_id existir)
       const visitOfferData = visit.visit_offers?.[0] || {};
       let offerId = visitOfferData.offer_id;
 
@@ -394,7 +388,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
               debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
 
               let userMessage = "Ocorreu um erro ao carregar a oferta.";
-              let errorCode = "UNKNOWN_ERROR"; // Novo campo
+              let errorCode = "UNKNOWN_ERROR"; 
 
               if (err.message.includes("OFFER_NOT_FOUND")) {
                   userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
@@ -428,7 +422,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
       const orchestratorConfigs = await resolveOrchestratorConfigs(
         supabase,
         visitOfferData.event_details?.event_id, 
-        visitOfferData.seller_details?.seller_id, // Correção de typo original 'seller_details'
+        visitOfferData.seller_details?.seller_id, 
         visitOfferData.category_id, 
         visit.product_id, 
         visitEntityData.document, 
@@ -484,7 +478,6 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         // Extraímos o código que injetamos lá no bloco de validação. 
         // Se não existir, é um erro genérico.
         const errorCode = error.errorCode || "UNKNOWN_ERROR";
-
         debugLog("fallback url:", error.fallback_url);
 
         return {
@@ -503,82 +496,50 @@ serve(withSecurity('orchestrator', async (req: Request) => {
   // PIPELINE DE ESCRITA (POST): Orquestração do Clique
   // =========================================================================
   if (req.method === "POST") {
+    // Escopo seguro para o fallback: protege o catch caso `req.json()` quebre.
+    let safeFallbackUrl = req.headers.get("x-original-url") || "/";
+    
     try {
       const payload: OrchestratorPayload = await req.json();
+      safeFallbackUrl = payload.origin_url || payload.interaction_context?.origin_url || safeFallbackUrl;
 
-      // B: Captura de Contexto Nativo (Device/Geo)
+      // A: Captura de Contexto Nativo (Device/Geo)
       const infra = await captureInfrastructure(req);
+      
+      // B: Gatekeeper de Dados (Formatação e Regras Estruturais)
       const { category_id, product_id, action } = await validatePayload(supabase, payload);
 
-      // C: Motor de Decisão (Onde o usuário vai pousar?)
-      const destination = await resolveDestination(
-        supabase,
-        action,
-        payload.target_url,
-        payload.event?.event_id,
-        payload.seller?.seller_id,
-        category_id,
-        product_id,
-        payload.entity?.document, 
-      );
-
-      // D: Enriquecimento do Payload com a Rota Resolvida
-      payload.target_url = destination.url; 
-      payload.is_integrated = destination.is_integrated; 
-      payload.integration_method = destination.integration_method;
-      payload.integration_details = destination.integration_details;
-      payload.partner_id = destination.partner_id; 
-
-      debugLog("Origem: ", payload.origin_url)
-
-      // E: Persistência (One-Shot Database Insertion)
-      const { visitId, visitUpdateId } = await persistVisitData(
-        sql,
-        payload,
-        infra,
-        category_id,
-        payload.action,
-        payload.origin_url,
-        destination.url,
-        payload.visit_id,
-        destination.orchestrator_config_id,
-      );
-
-      // F: Montagem do Payload de Retorno (Command: REDIRECT)
-      const simulationId = payload.simulation_id || null;
-      let finalUrl = `${destination.url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
-      if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
-
-      debugLog("[POST] payload final de retorno:", { payload, visitId, visitUpdateId, simulationId });
-
-      // Validação Triangular (Obrigatória para toda e qualquer visita)
-      debugLog("🚨 [validateVisitOwnership] Validando visita:", visitId);
+      // =====================================================================
+      // C: GATEKEEPER DE SEGURANÇA E NEGÓCIO (Zero-Trust)
+      // Obrigatório executar ANTES de qualquer inserção/alteração no banco.
+      // =====================================================================
+      const targetVisitId = payload.visit_id || null;
+      const targetEntityId = payload.entity?.entity_id || null;
+      
+      debugLog("🚨 [validateVisitOwnership POST] Validando visita:", targetVisitId);
       await validateVisitOwnership(
           supabase, 
           auth, 
-          visitId, 
-          payload.entity.entity_id
+          targetVisitId, 
+          targetEntityId
       );
 
-      // Validação de Oferta (Condicional: Só valida se a offer_id existir)
-      debugLog("🚨 [validateOfferIntegrity] Validando visita:", visitId);
       const offerId = payload.offer?.offer_id;
-
       if (offerId) {
-          debugLog("🚨 [validateOfferIntegrity] Validando integridade da oferta:", offerId);
+          debugLog("🚨 [validateOfferIntegrity POST] Validando integridade da oferta:", offerId);
           try {
               await validateOfferIntegrity(
                   supabase, 
                   auth, 
-                  visitId, 
+                  targetVisitId, 
                   offerId
               );
               debugLog("✅ Oferta validada com sucesso.");
           } catch (err: any) {
-              debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
+              debugLog("🚨 [validateOfferIntegrity POST] Falha na validação:", err.message);
 
               let userMessage = "Ocorreu um erro ao carregar a oferta.";
-              let errorCode = "UNKNOWN_ERROR"; // Novo campo
+              let errorCode = "UNKNOWN_ERROR";
 
               if (err.message.includes("OFFER_NOT_FOUND")) {
                   userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
@@ -596,15 +557,60 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
               const errorForUI = new Error(userMessage);
               
-              // Injetando as propriedades para o catch global ler depois
               (errorForUI as any).errorCode = errorCode; 
-              (errorForUI as any).fallback_url = payload.origin_url || payload.interaction_context?.origin_url;
+              (errorForUI as any).fallback_url = safeFallbackUrl;
               
               throw errorForUI; 
           }
       } else {
           debugLog("ℹ️ Nenhum offer_id fornecido. Pulando validação de integridade.");
       }
+
+      // =====================================================================
+      // D: Motor de Decisão (Onde o usuário vai pousar?)
+      // =====================================================================
+      const destination = await resolveDestination(
+        supabase,
+        action,
+        payload.target_url,
+        payload.event?.event_id,
+        payload.seller?.seller_id,
+        category_id,
+        product_id,
+        payload.entity?.document, 
+      );
+
+      // E: Enriquecimento do Payload com a Rota Resolvida
+      payload.target_url = destination.url; 
+      payload.is_integrated = destination.is_integrated; 
+      payload.integration_method = destination.integration_method;
+      payload.integration_details = destination.integration_details;
+      payload.partner_id = destination.partner_id; 
+
+      debugLog("Origem: ", payload.origin_url);
+
+      // =====================================================================
+      // F: Persistência Segura (One-Shot Database Insertion)
+      // Agora protegido pelo Gatekeeper na etapa C.
+      // =====================================================================
+      const { visitId, visitUpdateId } = await persistVisitData(
+        sql,
+        payload,
+        infra,
+        category_id,
+        payload.action,
+        payload.origin_url,
+        destination.url,
+        payload.visit_id,
+        destination.orchestrator_config_id,
+      );
+
+      // G: Montagem do Payload de Retorno (Command: REDIRECT)
+      const simulationId = payload.simulation_id || null;
+      let finalUrl = `${destination.url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
+      if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
+
+      debugLog("[POST] payload final de retorno:", { payload, visitId, visitUpdateId, simulationId });
 
       return {
         status: 200,
@@ -621,8 +627,6 @@ serve(withSecurity('orchestrator', async (req: Request) => {
     } catch (error: any) {
       debugLog(`[Orquestrador POST Error REAL]: ${error.message}`);
       
-      // Extraímos o código que injetamos lá no bloco de validação. 
-      // Se não existir, é um erro genérico.
       const errorCode = error.errorCode || "UNKNOWN_ERROR";
 
       return {
@@ -631,7 +635,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
             success: false,
             code: errorCode,           // <--- Agora o front-end recebe isso!
             message: error.message,      // <--- A mensagem amigável
-            fallback_url: error.fallback_url || "/" 
+            fallback_url: error.fallback_url || safeFallbackUrl 
         }
       };
     }

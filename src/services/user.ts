@@ -18,35 +18,7 @@
  * @version 3.0.0 (Adequação ao novo contrato SSOT e Padronização de Erros BFF)
  */
 
-// =========================================================================
-// [CONTRATO DE DADOS]: Interface de Reidratação do BFF
-// =========================================================================
-export interface BFFUserProfile {
-  entity_id: string;
-  name: string;
-  document: string;
-  document_rg?: string; // Adicionado seguindo a edge function
-  email: string;
-  phone: string;
-  birth_date: string;
-  gender: string;
-  login: string;
-  mothers_name: string;
-  address: {
-    street: string;
-    number: string;
-    complement: string;
-    neighborhood: string;
-    city: string;
-    state: string;
-    zip_code: string;
-    country: string;
-  } | null;
-  metadata?: {
-    processedAt: string;
-    originIp: string;
-  };
-}
+import { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 
 // =========================================================================
 // [CONTRATO DE ERRO PADRONIZADO (BFF)]

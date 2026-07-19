@@ -16,24 +16,12 @@
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-
 /**
- * ============================================================================
- * CONFIGURAÇÕES GLOBAIS E SEGURANÇA
- * ============================================================================
+ * FUNÇÃO DE LOG PADRONIZADA
+ * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
-const DEBUG_MODE = true;
+import { debugLog } from "../_shared/logger.ts";
 
-/**
- * @function debugLog
- * @description Centraliza os logs do pipeline. Em produção, DEBUG_MODE deve ser false
- * para evitar exposição de PII (Personally Identifiable Information) nos logs da Edge Function.
- */
-const debugLog = (message: string, data?: any) => {
-  if (DEBUG_MODE) {
-    console.log(`[GATEKEEPER-DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : "");
-  }
-};
 
 // =========================================================================
 // 1. VALIDAÇÃO DE PROPRIEDADE DA VISITA (OWNERSHIP)
@@ -41,38 +29,24 @@ const debugLog = (message: string, data?: any) => {
 
 /**
  * @function validateVisitOwnership
- * @description Realiza a Validação Triangular forçada (Sessão x Visita x Payload).
+ * @description Realiza a Validação Triangular (Sessão x Visita DB x Payload).
+ *              Atua de forma autônoma: se `visitId` for fornecido, valida
+ *              contra o banco (Update). Se não, valida a identidade
+ *              (`targetEntityId`) contra o token da sessão (Create).
+ * 
  * @param {SupabaseClient} supabase - Cliente do Supabase com Service Role.
  * @param {Object} auth - Objeto contendo { user_id, session_token }.
- * @param {string} visitId - ID da visita (o alvo).
- * @param {string} payloadEntityId - ID enviado no payload para validação.
- * @throws {Error} - Lança FORBIDDEN_ACCESS se houver divergência.
+ * @param {string | null} visitId - ID da visita alvo. Nulo se for criação.
+ * @param {string | null} targetEntityId - ID da entidade alvo extraída do payload.
+ * @throws {Error} - Lança FORBIDDEN_ACCESS, VISIT_NOT_FOUND ou UNAUTHORIZED em caso de anomalias.
  */
 export async function validateVisitOwnership(
   supabase: SupabaseClient,
-  auth: { user_id: string, session_token: string },
-  visitId: string,
-  payloadEntityId?: string | null
+  auth: { user_id: string; session_token: string },
+  visitId?: string | null,
+  targetEntityId?: string | null
 ) {
-  if (visitId) {
-    debugLog(`Recebi visitId: ${visitId}. Verificando banco...`);
-  } else {
-    debugLog(`VisitId nulo/undefined. Fluxo de Criação (OK).`);
-  }
-
-  // 1. Busca a visita e o dono (dbEntityId) no banco
-  const { data: visit, error: visitError } = await supabase
-    .from('visits')
-    .select('id, visit_entities(entity_id)')
-    .eq('id', visitId)
-    .single();
-
-  if (visitError || !visit) throw new Error("VISIT_NOT_FOUND");
-  const dbEntityId = visit.visit_entities?.[0]?.entity_id;
-
-  debugLog(`[validateVisitOwnership] Consulta session_tokens: ${auth.session_token}. Verificando banco...`);
-
-  // 2. Busca o dono real através do session_token (Triangulação)
+  // 1. Busca o dono real através do session_token (Triangulação base)
   const now = new Date().toISOString();
   const { data: session, error: sessError } = await supabase
     .from('session_tokens')
@@ -84,17 +58,47 @@ export async function validateVisitOwnership(
   if (sessError || !session?.user_id) throw new Error("UNAUTHORIZED");
   const sessionUserId = session.user_id;
 
-  // 3. Validação Obrigatória: Token vs Banco (Ownership)
-  if (String(dbEntityId) !== String(sessionUserId)) {
-    debugLog(`[validateVisitOwnership]  DIVERGÊNCIA: Token(${sessionUserId}) vs DB(${dbEntityId})`);
-    throw new Error("FORBIDDEN_ACCESS");
+  // =========================================================
+  // CENÁRIO A: UPDATE (A visita já existe no banco)
+  // =========================================================
+  if (visitId) {
+    debugLog(`[validateVisitOwnership] Fluxo UPDATE. Verificando DB para visitId: ${visitId}`);
+    
+    const { data: visit, error: visitError } = await supabase
+      .from('visits')
+      .select('id, visit_entities(entity_id)')
+      .eq('id', visitId)
+      .single();
+
+    if (visitError || !visit) throw new Error("VISIT_NOT_FOUND");
+    const dbEntityId = visit.visit_entities?.[0]?.entity_id;
+
+    // A.1: Token vs Banco (IDOR Protection)
+    if (String(dbEntityId) !== String(sessionUserId)) {
+      debugLog(`[validateVisitOwnership] FRAUDE: Token(${sessionUserId}) tentou alterar DB(${dbEntityId})`);
+      throw new Error("FORBIDDEN_ACCESS");
+    }
+
+    // A.2: Payload vs Banco (Prevenção de sobrescrita de identidade)
+    if (targetEntityId && String(dbEntityId) !== String(targetEntityId)) {
+      debugLog(`[validateVisitOwnership] DIVERGÊNCIA: Entidade solicitada (${targetEntityId}) vs DB(${dbEntityId})`);
+      throw new Error("[validateVisitOwnership] INVALID_PAYLOAD: Divergência de identidade na solicitação.");
+    }
+    
+    return; // Propriedade confirmada para atualização.
   }
 
-  // 4. Validação Condicional: Payload vs Banco (Só roda se o payload existir)
-  if (payloadEntityId && String(dbEntityId) !== String(payloadEntityId)) {
-    debugLog(`[validateVisitOwnership]  DIVERGÊNCIA: Payload(${payloadEntityId}) vs DB(${dbEntityId})`);
-    throw new Error("[validateVisitOwnership] INVALID_PAYLOAD: Divergência de identidade no payload.");
+  // =========================================================
+  // CENÁRIO B: CREATE (A visita é nova)
+  // =========================================================
+  debugLog(`[validateVisitOwnership] Fluxo CREATE. Validando Sessão vs Entidade Solicitada.`);
+  
+  if (targetEntityId && String(sessionUserId) !== String(targetEntityId)) {
+      debugLog(`[validateVisitOwnership] FRAUDE: Token(${sessionUserId}) tentou forjar visita para Entity(${targetEntityId})`);
+      throw new Error("FORBIDDEN_ACCESS");
   }
+
+  // Propriedade confirmada para criação.
 }
 
 // =========================================================================
@@ -103,38 +107,48 @@ export async function validateVisitOwnership(
 
 /**
  * @function validateOfferIntegrity
- * @description Realiza a Triangulação + Validação de Relacionamento (DB) + Integridade Upstream.
- *              Esta função é o Gatekeeper central para validar que a oferta solicitada
- *              pertence à visita e está disponível na API da Superbid.
+ * @description Gatekeeper Upstream. Avalia os parâmetros para decidir entre validar
+ *              a relação DB (Update) ou ir direto ao Upstream (Create).
+ *              Garante a existência, disponibilidade e formatação da oferta via API parceira.
  * 
  * [RESPONSABILIDADES]:
- * 1. Ownership Check: Valida se a oferta pertence à visita no Supabase.
+ * 1. Ownership Check: Valida se a oferta pertence à visita (apenas em fluxos de Update).
  * 2. Session Integrity: Valida token da sessão (SBX).
  * 3. Upstream Request: Proxy para API da Superbid replicando headers de origem.
- * 4. Contract Validation: Garante que o retorno da API não seja vazio.
+ * 4. Contract Validation: Garante que o retorno da API siga o modelo esperado.
  *
  * @param {SupabaseClient} supabase - Cliente do Supabase (Service Role).
  * @param {Object} auth - Objeto contendo { user_id, session_token }.
- * @param {string} visitId - ID da visita (alvo).
- * @param {string} offerId - ID da oferta a ser validada.
- * @throws {Error} - Lança exceção se a relação for inválida, sessão expirada ou oferta indisponível.
+ * @param {string | null} visitId - ID da visita alvo. Nulo se for criação.
+ * @param {string} offerId - ID da oferta a ser validada no Upstream.
+ * @returns {Promise<any>} - Retorna o objeto hidratado e normalizado da oferta.
+ * @throws {Error} - Lança exceção se relação for inválida, sessão expirar ou oferta indisponível.
  */
 export async function validateOfferIntegrity(
   supabase: SupabaseClient,
-  auth: { user_id: string, session_token: string },
-  visitId: string,
+  auth: { user_id: string; session_token: string },
+  visitId: string | null | undefined,
   offerId: string
 ): Promise<any> {
-  // 1. Validação de Relacionamento (DB)
-  const { data: link, error: linkError } = await supabase
-    .from('visit_offers')
-    .select('id')
-    .eq('visit_id', visitId)
-    .eq('offer_id', offerId)
-    .single();
+  if (!offerId) {
+    debugLog(`[validateOfferIntegrity] Nenhuma oferta fornecida. Pulando validação.`);
+    return null;
+  }
 
-  if (linkError || !link) {
-    throw new Error("INVALID_RELATIONSHIP: Oferta não pertence a esta visita.");
+  // 1. Validação de Relacionamento (DB) - APENAS SE FOR UPDATE
+  if (visitId) {
+    const { data: link, error: linkError } = await supabase
+      .from('visit_offers')
+      .select('id')
+      .eq('visit_id', visitId)
+      .eq('offer_id', offerId)
+      .single();
+
+    if (linkError || !link) {
+      throw new Error("INVALID_RELATIONSHIP: Oferta não pertence a esta visita.");
+    }
+  } else {
+    debugLog(`[validateOfferIntegrity] Fluxo CREATE. Pulando vínculo DB, indo para Upstream.`);
   }
 
   // 2. Validação de Sessão (Upstream Token)
@@ -156,23 +170,22 @@ export async function validateOfferIntegrity(
     ? "https://offer-query.superbid.net" 
     : "https://offer-query.stage.superbid.net";
 
-    // 4. Construção da URL (Sintaxe idêntica ao sbx-offer funcional)
-    // Utilizamos colchetes brutos [ ] pois o parser da Superbid exige isso para os arrays
-    const cleanOfferId = String(offerId).replace(/[^0-9]/g, '');
-    const params = new URLSearchParams({
-      portalId: "[2,15]",
-      locale: "pt_BR",
-      timeZoneId: "America/Sao_Paulo",
-      searchType: "opened",
-      filter: `id:[${cleanOfferId}]`,
-      pageNumber: "1",
-      pageSize: "15",
-      orderBy: "price:desc",
-      requestOrigin: "marketplace",
-      preOrderBy: "orderByFirstOpenedOffersAndSecondHasPhoto"
-    });
+  // 4. Construção da URL
+  const cleanOfferId = String(offerId).replace(/[^0-9]/g, '');
+  const params = new URLSearchParams({
+    portalId: "[2,15]",
+    locale: "pt_BR",
+    timeZoneId: "America/Sao_Paulo",
+    searchType: "opened",
+    filter: `id:[${cleanOfferId}]`,
+    pageNumber: "1",
+    pageSize: "15",
+    orderBy: "price:desc",
+    requestOrigin: "marketplace",
+    preOrderBy: "orderByFirstOpenedOffersAndSecondHasPhoto"
+  });
 
-    const apiUrl = `${offerBaseUrl}/offers/?${params.toString()}`;
+  const apiUrl = `${offerBaseUrl}/offers/?${params.toString()}`;
 
   // 5. Execução (WAF Bypass Headers)
   const response = await fetch(apiUrl, {
@@ -187,7 +200,7 @@ export async function validateOfferIntegrity(
   });
 
   // 6. Parsers e Validação de Resposta
-  const apiData = await response.json(); // Leitura única, sem colisão de variável
+  const apiData = await response.json(); 
   
   if (!response.ok) {
     debugLog(`[SUPERBID_REJECT] Env: ${env} | Status: ${response.status} | Detalhe: ${JSON.stringify(apiData)}`);
@@ -242,9 +255,8 @@ export async function validateOfferIntegrity(
     }
   };
 
-  // Retornando o payload completo e hidratado
-  return offerResult;
-  
   // 8. Log de Auditoria
   debugLog(`[validateOfferIntegrity] Sucesso. Lote ${cleanOfferId} encontrado. Status: ${offer.offerStatus}`);
+
+  return offerResult;
 }

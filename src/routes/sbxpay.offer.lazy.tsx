@@ -14,7 +14,7 @@
  */
 
 import { useState, useMemo, useEffect, useContext, useRef } from "react";
-import { useNavigate, createLazyFileRoute, useSearch } from "@tanstack/react-router";
+import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
 import { Loader2, CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 
@@ -31,6 +31,7 @@ const formatPhone = (phone: string) => {
   const cleaned = phone.replace(/^55/, "");
   return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
 };
+const isInternal = (url: string) => url.startsWith('/') || url.startsWith(window.location.origin);
 
 // =========================================================================
 // [CONFIGURAÇÃO DE FLUXOS]: Mapeamento de Ambiente (Staging vs Production)
@@ -43,68 +44,23 @@ const FLOW_MAP: Record<string, {
   info: string; 
   link: "Box Financiamento" | "Box Parcelamento" | "Banner" 
 }> = {
-  Carros: { 
-    name: "Financiamento de Carros", 
-    offer_id: { staging: "4789138", production: "4789138" }, 
-    category: "Carros & Motos", 
-    info: "Entity, Event, Manager, Offer, Vehicle", 
-    link: "Box Financiamento" 
-  },
-  Caminhões: { 
-    name: "Financiamento de Caminhões", 
-    offer_id: { staging: "4680825", production: "4680825" }, 
-    category: "Caminhões & Ônibus", 
-    info: "Entity, Event, Manager, Offer, Vehicle", 
-    link: "Box Financiamento" 
-  },
-  Imóveis: { 
-    name: "Financiamento de Imóveis", 
-    offer_id: { staging: "4680825", production: "4680825" },
-    category: "Imóveis", 
-    info: "Entity, Event, Manager, Offer, RealEstate", 
-    link: "Box Financiamento" 
-  },
-  Cartão: { 
-    name: "Parcelamento com Cartão", 
-    offer_id: { staging: "4739764", production: "4739764" }, 
-    category: "Informática", 
-    product_id: "8", 
-    info: "Entity, Event, Manager, Offer", 
-    link: "Box Parcelamento" 
-  },
-  Vendedor: { 
-    name: "Parcelamento do vendedor VRental", 
-    offer_id: { staging: "4492361", production: "4492361" }, 
-    category: "Máquinas Amarelas", 
-    info: "Entity, Event, Manager, Offer", 
-    link: "Box Financiamento" 
-  },
-  AutoEquity: { 
-    name: "Auto Equity", 
-    offer_id: { staging: "4753216", production: "4753216" }, 
-    category: "Carros & Motos", 
-    product_id: "7", 
-    info: "Entity", 
-    link: "Banner" 
-  },
-  SeguroAuto: { 
-    name: "Seguro Auto", 
-    offer_id: { staging: "4753216", production: "4753216" }, 
-    category: "Carros & Motos", 
-    product_id: "9", 
-    info: "Entity", 
-    link: "Banner" 
-  },
+  Carros: { name: "Financiamento de Carros", offer_id: { staging: "4789138", production: "4789138" }, category: "Carros & Motos", info: "Entity, Event, Manager, Offer, Vehicle", link: "Box Financiamento" },
+  Caminhões: { name: "Financiamento de Caminhões", offer_id: { staging: "4680825", production: "4680825" }, category: "Caminhões & Ônibus", info: "Entity, Event, Manager, Offer, Vehicle", link: "Box Financiamento" },
+  Imóveis: { name: "Financiamento de Imóveis", offer_id: { staging: "4680825", production: "4680825" }, category: "Imóveis", info: "Entity, Event, Manager, Offer, RealEstate", link: "Box Financiamento" },
+  Cartão: { name: "Parcelamento com Cartão", offer_id: { staging: "4739764", production: "4739764" }, category: "Informática", product_id: "8", info: "Entity, Event, Manager, Offer", link: "Box Parcelamento" },
+  Vendedor: { name: "Parcelamento do vendedor VRental", offer_id: { staging: "4492361", production: "4492361" }, category: "Máquinas Amarelas", info: "Entity, Event, Manager, Offer", link: "Box Financiamento" },
+  AutoEquity: { name: "Auto Equity", offer_id: { staging: "4753216", production: "4753216" }, category: "Carros & Motos", product_id: "7", info: "Entity", link: "Banner" },
+  SeguroAuto: { name: "Seguro Auto", offer_id: { staging: "4753216", production: "4753216" }, category: "Carros & Motos", product_id: "9", info: "Entity", link: "Banner" },
 };
 
-const allFiles = import.meta.glob("/src/assets/sbxpay/**/*.{jpg,jpeg,png,gif,asset.json}", { eager: true });
+const allFiles = import.meta.glob("/src/assets/sbxpay/**/*.{jpg,jpeg,png,gif}", { eager: true });
 const formatarCaminho = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "").toLowerCase();
 
 // =========================================================================
-// CONFIGURAÇÃO DA ROTA (Isolada para evitar re-render destrutivo)
+// CONFIGURAÇÃO DA ROTA
 // =========================================================================
 function OfferDetailsSBXPage() {
-  const search = Route.useSearch();
+  const search = Route.useSearch() as any;
   const flow = search.flow; 
 
   if (!flow) {
@@ -127,12 +83,16 @@ export const Route = createLazyFileRoute("/sbxpay/offer")({
 // [COMPONENTE PRINCIPAL]
 // =========================================================================
 export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {  
-  const { logout, userId, sessionToken } = useFinancialAuth();
+  const { userId, sessionToken } = useFinancialAuth();
   const navigate = useNavigate();
-  const searchParams = Route.useSearch();
-  
-  const currentFlow = FLOW_MAP[flowKey as any] || FLOW_MAP["Carros"];
-  const { userData, performLogout } = useContext(UserDataContext) || {};
+  const searchParams = Route.useSearch() as any;
+
+  // [CORREÇÃO]: REGRA DOS HOOKS - Garantir um fluxo seguro para evitar crash nos hooks abaixo
+  const requestedFlow = FLOW_MAP[flowKey as any];
+  const currentFlow = requestedFlow || FLOW_MAP["Carros"]; // Fallback silencioso apenas para os hooks
+
+  const context = useContext(UserDataContext);
+  const { userData, performLogout } = context || {};
 
   // [SEGURANÇA]: Trava estrita contra loops de concorrência de renderização
   const hasInitialized = useRef(false);
@@ -145,12 +105,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   // =========================================================================
   // [AMBIENTE & HIDRATAÇÃO]: Proteção contra Erros de SSR
   // =========================================================================
-  // 1. Inicialização Síncrona Segura: Assume "production" por padrão para evitar divergência
-  // estrutural entre a renderização do Servidor (Node) e a do Cliente (React DOM).
   const [ambiente, setAmbiente] = useState<"staging" | "production">("production");
 
-  // 2. Hidratação Assíncrona: Executa exclusivamente no navegador após a montagem.
-  // Permite a leitura segura do 'localStorage' sem causar crashes no servidor.
   useEffect(() => {
     const savedEnv = localStorage.getItem("sbx_environment") as "staging" | "production";
     if (savedEnv) {
@@ -158,24 +114,25 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
     }
   }, []);
   
-  // [CONTROLE DE FALLBACK]: Estados de resiliência espelhados do Gateway
   const [fetchError, setFetchError] = useState<'TECHNICAL_INSTABILITY' | null>(null);
   const [countdown, setCountdown] = useState(5);
 
-  // Resolvendo dinamicamente o ID do upstream alvo baseado no escopo do ambiente reativo
   const targetOfferId = ambiente === "production" ? currentFlow.offer_id.production : currentFlow.offer_id.staging;
-
-  // [REDIRECIONAMENTO DINÂMICO]: Captura a URL de retorno preservando a origem
   const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
 
   // =========================================================================
   // [FETCH VISUAL]: Busca dados com proteção rígida de concorrência
   // =========================================================================
   useEffect(() => {
-    // [GUARD CLAUSE]: Aborta imediatamente se já inicializado, buscando ou se houver erro terminal
-    if (hasInitialized.current || isFetching.current || fetchError || !targetOfferId || !sessionToken) return;
+    // [CORREÇÃO]: Removido o "reset" inútil de isFetching aqui que destruía a trava
+
+    if (!targetOfferId || !sessionToken) return;
+
+    // A trava verdadeira
+    if (hasInitialized.current || isFetching.current || fetchError) return;
 
     const loadOffer = async () => {
+      // [CORREÇÃO]: Ativa a trava ANTES de fazer a requisição
       isFetching.current = true;
       hasInitialized.current = true;
       setLoading(true);
@@ -185,23 +142,14 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
         const data = await fetchOfferDetails(sessionToken, targetOfferId);
         setActiveOffer(data);
       } catch (error: any) {
+        // [CORREÇÃO]: Usar userId em vez de sessionToken no log (Vazamento de Credencial)
         console.error("[OFFER_FETCH_ERROR]:", error);
-
-        logSystemError(sessionToken || "NO_TOKEN", {
+        logSystemError(userId || "UNAUTHENTICATED", {
           context: 'sbxpay-OFFER-FETCH',
-          message: error?.message || "Erro desconhecido na busca de oferta na sbxpay",
-          details: {
-            name: error?.name || "Error",
-            message: error?.message,
-            stack: error?.stack
-          },
-          payload: { 
-            offer_id: targetOfferId,
-            flow_key: flowKey,
-            environment: ambiente
-          },
-          visit_id: null,
-          simulation_id: null
+          message: error?.message || "Erro na busca de oferta",
+          details: { name: error?.name, message: error?.message, stack: error?.stack },
+          payload: { offer_id: targetOfferId, flow_key: flowKey, environment: ambiente },
+          visit_id: null, simulation_id: null
         });
 
         setFetchError('TECHNICAL_INSTABILITY');
@@ -212,20 +160,20 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
     };
 
     loadOffer();
-  }, [targetOfferId, sessionToken, ambiente]);
+  }, [targetOfferId, sessionToken, ambiente, fetchError, userId]);
 
   // [UX FALLBACK]: Contador regressivo dinâmico para a Redirect URI
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
     
     if (fetchError) {
       if (countdown > 0) {
         timer = setTimeout(() => setCountdown(c => c - 1), 1000);
       } else {
-        if (dynamicReturnUri.startsWith("http")) {
+        if (isInternal(dynamicReturnUri)) {
           window.location.href = dynamicReturnUri;
         } else {
-          navigate({ to: dynamicReturnUri as any, replace: true });
+          navigate({ to: "/sbxpay" as any, replace: true });
         }
       }
     }
@@ -233,8 +181,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
     return () => clearTimeout(timer);
   }, [fetchError, countdown, navigate, dynamicReturnUri]);
 
-  const entity = userData;
-  
   const imagens = useMemo(() => {
     if (!activeOffer?.offer?.photos) return [];
     return [...activeOffer.offer.photos]
@@ -243,22 +189,29 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   }, [activeOffer]);
 
   // =========================================================================
+  // [CORREÇÃO]: EARLY RETURN SEGURO (Abaixo de todos os hooks)
+  // =========================================================================
+  useEffect(() => {
+    if (!requestedFlow) {
+      navigate({ to: "/", replace: true });
+    }
+  }, [requestedFlow, navigate]);
+
+  if (!requestedFlow) return null; // Evita quebrar a tela enquanto redireciona
+
+  // =========================================================================
   // [HANDLERS]: Ação de Delegação para o Gateway
   // =========================================================================
-  // Handler seguro para SSR: Funções atreladas a interações de usuário (Click)
-  // nunca executam no servidor, portanto podem ler o localStorage livremente.
   const handleSimulacao = () => {
     if (!activeOffer) return;
     setLoading(true);
 
-    // O 'sessionToken' do contexto é o interno.
-    // Leitura 100% segura aqui (Execução exclusiva no Client-Side)
-    const sessionToken = localStorage.getItem('session_token');
+    // Ignorando o linter: O Gateway DMZ PRECISA do token na URL para orquestrar os ambientes.
+    const tokenForGateway = localStorage.getItem('session_token') || sessionToken;
 
-    // 1. Construção do Payload base (Sem destruir IDs)
     const searchPayload: any = {
       environment: ambiente,
-      auth_token: sessionToken,
+      auth_token: tokenForGateway, 
       offer_id: encodeURIComponent(String(targetOfferId)),
       product_id: encodeURIComponent(String(currentFlow.product_id || '')),
       return_uri: window.location.pathname + window.location.search,
@@ -267,11 +220,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
       utm_campaign: `flow_${flowKey?.toLowerCase()}`,
     };
     
-    // 2. Adição condicional: Só enviamos category_id se NÃO for Banner
-    if (currentFlow.link !== "Banner") {
-      if (activeOffer?.offer?.category_id) {
-        searchPayload.category_id = activeOffer.offer.category_id;
-      }
+    if (currentFlow.link !== "Banner" && activeOffer?.offer?.category_id) {
+      searchPayload.category_id = activeOffer.offer.category_id;
     }
 
     navigate({
@@ -281,23 +231,14 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   };
 
   // =========================================================================
-  // [VIEW 1]: Erro - Alinhado rigorosamente com financialGatewayEntry
+  // [VIEW 1]: Erro
   // =========================================================================
   if (fetchError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center font-['Inter']">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">
-          Erro de Carregamento
-        </h2>
-        
-        <p className="text-sm text-gray-600 mb-8 max-w-sm">
-          Esta oferta não foi encontrada ou não está disponível.
-        </p>
-        
-        <p className="text-xs text-gray-400 mb-8">
-          Redirecionando em {countdown} segundos...
-        </p>
-        
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Erro de Carregamento</h2>
+        <p className="text-sm text-gray-600 mb-8 max-w-sm">Esta oferta não foi encontrada ou não está disponível.</p>
+        <p className="text-xs text-gray-400 mb-8">Redirecionando em {countdown} segundos...</p>
         <button 
           onClick={() => {
             hasInitialized.current = false;
@@ -312,15 +253,13 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   }
 
   // =========================================================================
-  // [VIEW 2]: Carregamento - Spinner padrão do sistema
+  // [VIEW 2]: Carregamento
   // =========================================================================
   if (loading || (!activeOffer && !fetchError)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-        <p className="text-slate-500 font-medium text-sm">
-          Carregando detalhes da oferta...
-        </p>
+        <p className="text-slate-500 font-medium text-sm">Carregando detalhes da oferta...</p>
       </div>
     );
   }
@@ -358,7 +297,12 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
                 <p className="text-[9px] font-mono text-slate-500">ID: {userId || "---"}</p>
                 <p className="text-[9px] font-mono text-slate-500 uppercase">AMB: {ambiente.toUpperCase()}</p>
               </div>
-              <button onClick={performLogout} className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-bold"><LogOut className="w-3 h-3" /> SAIR</button>
+              <button 
+                onClick={() => performLogout?.()} 
+                className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-bold"
+              >
+                <LogOut className="w-3 h-3" /> SAIR
+              </button>
             </div>
           </div>
         </div>
@@ -505,12 +449,12 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
               <div className="p-5 border-b border-slate-100">
                 <h2 className="text-[11px] font-bold uppercase text-gray-500 tracking-wider mb-2">ÚLTIMO LANCE</h2>
                 <div className="text-3xl font-black text-gray-900 mb-4">R$ {activeOffer.offer.offer_value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
-                <div className="text-xs text-gray-600 space-y-1">
-                  <p className="font-bold text-gray-900 mb-2">{entity.name}</p>
-                  <p><span className="font-semibold text-gray-500">CPF:</span> {formatCPF(entity.document)}</p>
-                  <p><span className="font-semibold text-gray-500">E-mail:</span> {entity.email}</p>
-                  <p><span className="font-semibold text-gray-500">Celular:</span> {formatPhone(entity.phone)}</p>
-                </div>
+                  <div className="text-xs text-gray-600 space-y-1">
+                    <p className="font-bold text-gray-900 mb-2">{userData?.name || "Carregando perfil..."}</p>
+                    <p><span className="font-semibold text-gray-500">CPF:</span> {userData ? formatCPF(userData.document) : "---"}</p>
+                    <p><span className="font-semibold text-gray-500">E-mail:</span> {userData?.email || "---"}</p>
+                    <p><span className="font-semibold text-gray-500">Celular:</span> {userData ? formatPhone(userData.phone) : "---"}</p>
+                  </div>
               </div>
               <div className="p-5 bg-slate-50 text-[11px] text-gray-600 leading-relaxed">
                   <p className="m-0 mb-1"><strong>Abertura:</strong> {new Date(activeOffer.event.event_start_date).toLocaleDateString("pt-BR")}</p>

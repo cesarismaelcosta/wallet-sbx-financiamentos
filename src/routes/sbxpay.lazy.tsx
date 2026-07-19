@@ -10,17 +10,21 @@
  */
 
 import { createContext, useState, useEffect, useRef } from "react";
-import { createLazyFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
+import { createLazyFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile } from "@/services/user";
 import { jwtDecode } from "jwt-decode"; 
 import { WalletLogo } from "@/components/brand/WalletLogo";
+import { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 
 export const Route = createLazyFileRoute("/sbxpay")({
   component: sbXPAYLayOut, 
 });
 
-export const UserDataContext = createContext<any>(null);
+export const UserDataContext = createContext<{ 
+  userData: BFFUserProfile | null; 
+  performLogout: () => void; 
+} | null>(null);
 
 const Spinner = ({ msg }: { msg: string }) => (
   <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
@@ -38,13 +42,12 @@ export function sbXPAYLayOut() {
   // Controla logout sem perder o ambiente escolhido antes do login
   const performLogout = () => {
     const env = localStorage.getItem("sbx_environment");
-    localStorage.clear();
+    logoutRef.current(); // Usa a referência para evitar stale closure
     if (env) localStorage.setItem("sbx_environment", env);
-    logout();
   };
 
   const [envPreLogin, setEnvPreLogin] = useState<"staging" | "production">("production");
-  const [userData, setUserData] = useState<any>(null);
+  const [userData, setUserData] = useState<BFFUserProfile | null>(null);
   const [isVerifying, setIsVerifying] = useState(true);
 
   // 1. [SYNC - AMBIENTE]: Carrega o estado inicial do localStorage
@@ -55,53 +58,63 @@ export function sbXPAYLayOut() {
     }
   }, []);
 
-  // 2. [GATEKEEPER]: Validação Contínua
+  // [GATEKEEPER]: Validação Contínua
   useEffect(() => {
-    if (isLoading || !sessionToken) return;
+    let isMounted = true; // [CORREÇÃO]: Evita memory leak se desmontar durante o fetch
+
+    if (isLoading) return; 
+
+    if (!sessionToken) {
+      if (isMounted) setIsVerifying(false); 
+      return;
+    }
+
+    if (isMounted) setIsVerifying(true); 
+    const controller = new AbortController();
+    
+    // [CORREÇÃO]: Narrowing de tipagem - Garante que 'token' é sempre string
+    const token = sessionToken;
+    const syncedCurrentTimeInSeconds = Math.floor(Date.now() / 1000);
 
     // [SECURITY]: Validação Local Passiva
     try {
-      const decoded = jwtDecode<{ exp?: number }>(sessionToken);
-      const timeDelta = typeof window !== "undefined" ? parseInt(localStorage.getItem('time_delta') || '0', 10) : 0;
-      const syncedCurrentTimeInSeconds = Math.floor((Date.now() + timeDelta) / 1000);
-
+      const decoded = jwtDecode<{ exp?: number }>(token);
       if (decoded.exp && decoded.exp < syncedCurrentTimeInSeconds) {
         window.dispatchEvent(new CustomEvent('session_expired'));
-        return; 
+        return;
       }
-    } catch (err) {
-      console.error("🔒 [Gatekeeper] Erro de decoding:", err);
+    } catch {
       window.dispatchEvent(new CustomEvent('session_expired'));
       return;
     }
 
-    let isMounted = true;
     async function validate() {
       try {
-        const profile = await fetchMyProfile(sessionToken);
+        const profile = await fetchMyProfile(token, { signal: controller.signal });
         if (isMounted) {
           setUserData(profile);
           setIsVerifying(false);
         }
       } catch (err: any) {
-        if (isMounted) {
-          console.error("🔒 [sbXPAY Gatekeeper] Falha de validação no backend:", err.message);
-          logoutRef.current();
+        if (err.name !== 'AbortError') {
+          console.error("🔒 [Gatekeeper] Falha:", err);
+          logoutRef.current(); 
         }
       }
     }
 
     validate();
-    return () => { isMounted = false; };
+    return () => { 
+      isMounted = false; 
+      controller.abort(); 
+    }; 
   }, [isLoading, sessionToken]);
 
   // =========================================================================
   // [UI/UX - CENA 1]: Auth Context inicializando
   // =========================================================================
   if (isLoading) {
-    return (
-      <Spinner msg="Validando seus dados na Wallet sbX..."/>     
-    );
+    return <Spinner msg="Validando seus dados na Wallet sbX..."/>;
   }
 
   // =========================================================================
@@ -144,7 +157,7 @@ export function sbXPAYLayOut() {
                  to: '/accounts/signin', 
                  search: { 
                    redirect_uri: (typeof window !== "undefined" ? (window.location.pathname + window.location.search) : "/") || "/"
-                 } 
+                 } as any // Evita erro de typescript de navegação estrita
                });
             }}
             className="w-full h-12 bg-[#B400FF] hover:bg-[#9a00db] text-white font-bold rounded-full transition-colors"
@@ -160,9 +173,7 @@ export function sbXPAYLayOut() {
   // [UI/UX - CENA 3]: Reidratação em curso
   // =========================================================================
   if (isVerifying) {
-    return (
-      <Spinner msg="Validando seus dados na Wallet sbX..."/>
-    );
+    return <Spinner msg="Validando seus dados na Wallet sbX..."/>;
   }
 
   // =========================================================================
