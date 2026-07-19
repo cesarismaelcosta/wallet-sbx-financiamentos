@@ -183,7 +183,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
             success: false,
             code: "INTERNAL_SERVER_ERROR",
             message: "Ocorreu um erro interno inesperado. Tente novamente.",
-            fallback_url: payload.origin_url || originPath || "/"; // Faz jornada voltar para a origem da visita ou se não existir origem da chamada.
+            fallback_url: payload.origin_url || originPath || "/" // Faz jornada voltar para a origem da visita ou se não existir origem da chamada.
         }
     };
   } 
