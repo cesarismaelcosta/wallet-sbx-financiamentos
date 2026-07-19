@@ -83,6 +83,8 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
 
     try {
 
+      payload.offer.offer_id = "1111111";
+
       let payload;
 
       if (req.method === "POST") {
@@ -135,7 +137,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       let userMessage = err.message;
       
       // A LÓGICA CORRETA DAS DUAS VARIÁVEIS:
-      let finalFallback = originPath; // Padrão
+      let finalFallback = payload.origin_url || originPath || "/"; // Padrão é voltar para inicio da visita
 
       if (err.message.includes("OFFER_NOT_FOUND")) {
           userMessage = "Esta oferta não está mais disponível ou não foi encontrada para simulação.";
@@ -146,13 +148,15 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       } else if (err.message.includes("SESSION_EXPIRED")) {
           userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
           errorCode = "SESSION_EXPIRED";
-          finalFallback = authPath; // LOGIN FALLBACK
+          fallback_url = authPath; // LOGIN FALLBACK
       } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
           userMessage = "O serviço de consulta da oferta está instável. Tente novamente.";
           errorCode = "UPSTREAM_CONNECTION_ERROR";
+          fallback_url: originPath;  // volta para origem da chamada
       } else if (err.message.includes("FORBIDDEN_ACCESS") || err.message.includes("INVALID_PAYLOAD")) {
           userMessage = "Inconsistência nos dados de segurança.";
           errorCode = "FORBIDDEN";
+          fallback_url: originPath; // volta para origem da chamada
       }
 
       return {
@@ -162,7 +166,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
           code: errorCode,
           message: userMessage,
           details: errorCode === "BUSINESS_ERROR" ? "Consulte os logs." : "Bloqueio de segurança (Gatekeeper).",
-          fallback_url: finalFallback // <--- FALLBACK ESCOLHIDO
+          fallback_url: originPath // <--- FALLBACK ESCOLHIDO  É VOLTAR PARA A PÁGINA DA CHAMADA ENVIADA NO HEADER
         }
       };
     }
