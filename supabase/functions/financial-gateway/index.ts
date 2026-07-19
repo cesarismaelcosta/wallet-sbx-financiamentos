@@ -118,6 +118,30 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
           debugLog("⚠️ [Gateway AVISO] Simulação solicitada sem offer_id.");
       }
 
+      // =====================================================================
+      // 🚨 4. GATEKEEPER DE SIMULAÇÃO (ESCUDO CONTRA CONFUSED DEPUTY)
+      // Valida se a simulação enviada pertence ao usuário logado e à visita
+      // =====================================================================
+      const simulationId = payload.simulation_id;
+      if (simulationId) {
+          debugLog("🚨 [Gateway POST] Gatekeeper: Validando ownership da simulação:", simulationId);
+          
+          const { data: sim, error: simError } = await supabase
+            .from("simulations")
+            .select("id")
+            .eq("id", simulationId)
+            .eq("visit_id", targetVisitId)
+            .eq("entity_id", auth.user_id) 
+            .single();
+
+          // Se não encontrar ou erro de banco:
+          if (simError || !sim) {
+            debugLog(`🚨 [Security] Tentativa de acesso não autorizada a simulação: ${simulationId}`);
+            // Lança o erro com a tag para o catch capturar corretamente
+            throw new Error("INVALID_RELATIONSHIP: Você não tem permissão para acessar esta simulação."); 
+          }
+      }
+
       // ---------------------------------------------------------------------
       // 4. PROCESSAMENTO DE SIMULAÇÃO (Integração Fandi)
       // ---------------------------------------------------------------------
