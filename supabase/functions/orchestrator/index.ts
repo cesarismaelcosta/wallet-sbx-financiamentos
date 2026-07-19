@@ -501,23 +501,12 @@ serve(withSecurity('orchestrator', async (req: Request) => {
     // PIPELINE DE ESCRITA (POST): Orquestração do Clique
     // =========================================================================
     if (req.method === "POST") {
-
-      
-        // 🚨 ======================================================= 🚨
-        // 🧪 TESTE MANUAL: FORÇANDO O ATAQUE IDOR
-        // Substitui o visit_id real do front-end por um de outra pessoa
-        // payload.visit_id = "COLE_AQUI_O_VISIT_ID_DO_OUTRO_CARA";
-        payload.offer_id = "1111111";
-        
-        debugLog("🧪 TESTE IDOR: Forçando offer_id para:", payload.offer_id);
-        // 🚨 ======================================================= 🚨
-
       // Escopo seguro para o fallback: protege o catch caso `req.json()` quebre.
       let safeFallbackUrl = req.headers.get("x-original-url") || "/";
       
       try {
         const payload: OrchestratorPayload = await req.json();
-        
+
         safeFallbackUrl = payload.origin_url || payload.interaction_context?.origin_url || safeFallbackUrl;
 
         // A: Captura de Contexto Nativo (Device/Geo)
@@ -664,20 +653,20 @@ serve(withSecurity('orchestrator', async (req: Request) => {
       data: { error: "Método HTTP não permitido." } 
     };
   } catch (fatalError: any) {
-      // O FAILSAFE ABSOLUTO
-      // Se qualquer coisa quebrar (syntax error, banco fora do ar, null pointer),
-      // cai aqui ANTES de vazar para o withSecurity.
-      
-      debugLog(`🚨 [CRASH FATAL INTERCEPTADO]: ${fatalError.message}`);
-      
-      return {
-          status: 500,
-          data: {
-              success: false,
-              code: "INTERNAL_SERVER_ERROR",
-              message: "Ocorreu um erro interno inesperado. Tente novamente.",
-              fallback_url: globalFallbackUrl // Faz jornada voltar para a origem
-          }
-      };
+    // O FAILSAFE ABSOLUTO
+    // Se qualquer coisa quebrar (syntax error, banco fora do ar, null pointer),
+    // cai aqui ANTES de vazar para o withSecurity.
+    
+    debugLog(`🚨 [CRASH FATAL INTERCEPTADO]: ${fatalError.message}`);
+    
+    return {
+        status: 500,
+        data: {
+            success: false,
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Ocorreu um erro interno inesperado. Tente novamente.",
+            fallback_url: globalFallbackUrl // Faz jornada voltar para a origem
+        }
+    };
   }
 }));

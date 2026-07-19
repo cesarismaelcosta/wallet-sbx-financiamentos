@@ -313,18 +313,15 @@ loader: async ({ deps, context }: { deps: any, context: any }) => {
     useEffect(() => {
       if (!data) return;
 
-      // 1. FLUXO DE SEGURANÇA (Auth Error ou falta de tokens)
-      const isAuthError = data.status === "ERROR_LOGIN";
-      const isTokenMissing = !data.session_token || !data.auth_token;
-
-      if (isAuthError || isTokenMissing) {
-        console.error("🚨 [FinancialGateway] Falha de sessão ou integridade:", data);
+      // 1. FLUXO DE SEGURANÇA (erro de autorização)
+      if (data.status === "ERROR_LOGIN") {
+        console.error("🚨 [FinancialGateway] Falha de sessão:", data);
         const loginTarget = `/accounts/signin?redirect_uri=${encodeURIComponent(data.return_uri || "/")}`;
         window.location.replace(loginTarget);
         return;
       }
 
-      // 2. FLUXO DE ERRO (FAIL_SAFE)
+      // 2. FLUXO DE ERRO (FAIL_SAFE) NÃO MAPEADO
       if (data.status === "ERROR_OTHER") {
         console.warn("⚠️ [FinancialGateway] Falha crítica detectada.");
         setIsError(true);
