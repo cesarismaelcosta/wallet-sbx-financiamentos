@@ -267,6 +267,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
   const globalFallbackUrl = req.headers.get("x-original-url") || "/";
 
   try  {
+
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
       auth: { persistSession: false },
     });
@@ -510,7 +511,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         
         debugLog("🧪 TESTE IDOR: Forçando offer_id para:", payload.offer_id);
         // 🚨 ======================================================= 🚨
-        
+
       // Escopo seguro para o fallback: protege o catch caso `req.json()` quebre.
       let safeFallbackUrl = req.headers.get("x-original-url") || "/";
       
@@ -662,23 +663,21 @@ serve(withSecurity('orchestrator', async (req: Request) => {
       status: 405, 
       data: { error: "Método HTTP não permitido." } 
     };
-  } catch {
-    } catch (fatalError: any) {
-        // O FAILSAFE ABSOLUTO
-        // Se qualquer coisa quebrar (syntax error, banco fora do ar, null pointer),
-        // cai aqui ANTES de vazar para o withSecurity.
-        
-        debugLog(`🚨 [CRASH FATAL INTERCEPTADO]: ${fatalError.message}`);
-        
-        return {
-            status: 500,
-            data: {
-                success: false,
-                code: "INTERNAL_SERVER_ERROR",
-                message: "Ocorreu um erro interno inesperado. Tente novamente.",
-                fallback_url: globalFallbackUrl // Faz jornada voltar para a origem
-            }
-        };
-    }
+  } catch (fatalError: any) {
+      // O FAILSAFE ABSOLUTO
+      // Se qualquer coisa quebrar (syntax error, banco fora do ar, null pointer),
+      // cai aqui ANTES de vazar para o withSecurity.
+      
+      debugLog(`🚨 [CRASH FATAL INTERCEPTADO]: ${fatalError.message}`);
+      
+      return {
+          status: 500,
+          data: {
+              success: false,
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Ocorreu um erro interno inesperado. Tente novamente.",
+              fallback_url: globalFallbackUrl // Faz jornada voltar para a origem
+          }
+      };
   }
 }));
