@@ -263,387 +263,422 @@ async function resolveOrchestratorConfigs(
  */
 serve(withSecurity('orchestrator', async (req: Request) => {
 
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-    auth: { persistSession: false },
-  });
+  // Salva a origem logo no milissegundo zero para casos de erro no codigo não tratados
+  const globalFallbackUrl = req.headers.get("x-original-url") || "/";
 
-  // =========================================================================
-  // SEGURANÇA: Validação de Identidade pelo token opaco próprio
-  // Como o GET e o POST exigem autenticação, validamos aqui no início.
-  // =========================================================================
-  let auth;
-  try {
-      auth = await validateRequest(req);
-  } catch (err: any) {
-      // 1. Descoberta da Origem
-      const originPath = req.headers.get("x-original-url");
-      const authUrl = req.headers.get("x-auth-fallback-url");
+  try  {
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      auth: { persistSession: false },
+    });
 
-      if (!originPath) {
-          // Failsafe: Se o frontend não enviou o header, barramos aqui.
-          return {
-            status: 400,
-            data: { 
-              success: false,
-              code: "INTERNAL_ERROR",
-              message: "Erro de segurança: A origem da requisição não foi identificada.",
-              fallback_url: "/"
+    // =========================================================================
+    // SEGURANÇA: Validação de Identidade pelo token opaco próprio
+    // Como o GET e o POST exigem autenticação, validamos aqui no início.
+    // =========================================================================
+    let auth;
+    try {
+        auth = await validateRequest(req);
+    } catch (err: any) {
+        // 1. Descoberta da Origem
+        const originPath = req.headers.get("x-original-url");
+        const authUrl = req.headers.get("x-auth-fallback-url");
+
+        if (!originPath) {
+            // Failsafe: Se o frontend não enviou o header, barramos aqui.
+            return {
+              status: 400,
+              data: { 
+                success: false,
+                code: "INTERNAL_ERROR",
+                message: "Erro de segurança: A origem da requisição não foi identificada.",
+                fallback_url: "/"
+              }
+            };
+        }
+
+        // 2. Padronização de Variáveis
+        let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
+        let errorCode = "UNAUTHORIZED";
+        let fallbackUrl = authUrl;
+        let statusCode = 401;
+
+        // 3. Tradução do Erro para Experiência do Usuário (UX)
+        if (err.message.includes("SESSION_EXPIRED")) {
+            userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+            errorCode = "SESSION_EXPIRED";
+            
+        } else if (err.message.includes("FORBIDDEN")) {
+            userMessage = "Você não tem permissão para acessar este recurso.";
+            errorCode = "FORBIDDEN";
+            fallbackUrl = originPath; // Apenas devolve para a página atual, não pede login
+            statusCode = 403;
+            
+        } else if (err.message.includes("INTERNAL_ERROR")) {
+            userMessage = "Ocorreu um erro interno ao validar sua sessão.";
+            errorCode = "INTERNAL_ERROR";
+            fallbackUrl = "/"; // Devolve para a home em caso de falha de banco/infra
+            statusCode = 500;
+        }
+
+        // 4. Retorno seguindo o contrato oficial da API
+        return { 
+          status: statusCode,
+          data: { 
+            success: false,
+            code: errorCode,
+            message: userMessage, 
+            fallback_url: fallbackUrl 
+          }
+        };
+    }
+
+    // =========================================================================
+    // PIPELINE DE LEITURA (GET): Hidratação do Front-End
+    // =========================================================================
+    if (req.method === "GET") {
+      try {
+        const url = new URL(req.url);
+        const visitId = url.searchParams.get("visit_id");
+        const visitUpdateId = url.searchParams.get("visit_update_id");
+        const simulationId = url.searchParams.get("simulation_id");
+
+        if (!visitId) throw new Error("O parâmetro 'visit_id' é obrigatório.");
+
+        // A: Busca de Simulação Prévia (Se Existir)
+        let simulationData = null;
+        if (simulationId) {
+          const { data: sim, error: simError } = await supabase.from("simulations").select("*").eq("id", simulationId).single();
+          if (!simError) simulationData = sim;
+        }
+
+        // B: DEEP JOIN - Extração do Snapshot Completo da Visita
+        const { data: visit, error: visitError } = await supabase
+          .from("visits")
+          .select(`
+            id, product_id, partner_id, utm_source, utm_medium, utm_campaign, origin_url, target_url,
+            visit_entities ( entity_id, name, document, phone, email, birth_date, gender, entity_details ),
+            visit_offers ( offer_id, offer_value, manager_details, seller_details, event_details, offer_details, category_id )
+          `)
+          .eq("id", visitId)
+          .single();
+
+        debugLog("VISIT no GET:", visit);
+
+        if (visitError || !visit) throw new Error("Visita não encontrada ou expirada.");
+
+        // C.1: Validação Triangular (Obrigatória para toda e qualquer visita)
+        await validateVisitOwnership(
+            supabase, 
+            auth, 
+            visitId
+        );
+
+        // C.2: Validação de Oferta (Condicional: Só valida se a offer_id existir)
+        const visitOfferData = visit.visit_offers?.[0] || {};
+        let offerId = visitOfferData.offer_id;
+
+        if (offerId) {
+            debugLog("🚨 [GET] Validando integridade da oferta:", offerId);
+            try {
+                const validatedOffer = await validateOfferIntegrity(
+                    supabase, 
+                    auth, 
+                    visitId, 
+                    offerId
+                );
+                // Só toca no objeto se a validação passar
+                visitOfferData.offer_value = validatedOffer.offer.offer_value;
+            } catch (err: any) {
+                debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
+
+                let userMessage = "Ocorreu um erro ao carregar a oferta.";
+                let errorCode = "UNKNOWN_ERROR"; 
+
+                if (err.message.includes("OFFER_NOT_FOUND")) {
+                    userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
+                    errorCode = "OFFER_NOT_FOUND";
+                } else if (err.message.includes("INVALID_RELATIONSHIP")) {
+                    userMessage = "Você não tem permissão para acessar esta oferta.";
+                    errorCode = "INVALID_RELATIONSHIP";
+                } else if (err.message.includes("SESSION_EXPIRED")) {
+                    userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+                    errorCode = "SESSION_EXPIRED";
+                } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
+                    userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+                    errorCode = "UPSTREAM_CONNECTION_ERROR";
+                }
+
+                const errorForUI = new Error(userMessage);
+                
+                // Injetando as propriedades para o catch global ler depois
+                (errorForUI as any).errorCode = errorCode; 
+                (errorForUI as any).fallback_url = visit.origin_url;
+                
+                throw errorForUI; 
             }
+        } else {
+            // Se não tem offerId, o fluxo ignora a validação e segue feliz
+            debugLog("ℹ️ Nenhuma oferta vinculada a esta visita. Pulando validação.");
+        }
+
+        // D: Resolução de Regras e Parâmetros (Cascata Inversa)
+        const visitEntityData = visit.visit_entities?.[0] || {};
+        const orchestratorConfigs = await resolveOrchestratorConfigs(
+          supabase,
+          visitOfferData.event_details?.event_id, 
+          visitOfferData.seller_details?.seller_id, 
+          visitOfferData.category_id, 
+          visit.product_id, 
+          visitEntityData.document, 
+        );
+
+        
+        if (!orchestratorConfigs) {
+          throw new Error(`[resolveOrchestratorConfigs]: Configurações não localizadas para o perfil e contexto informados.`);
+        }
+
+        // E: Construção do Payload Hidratado (Pronto para o React consumir)
+        const hydratedPayload = {
+          visit_id: visit.id,
+          visit_update_id: visitUpdateId,
+          simulation_id: simulationId || null,
+          product_id: visit.product_id,
+          partner_id: orchestratorConfigs.partner_id,
+          origin_url: visit.origin_url,
+          interaction_context: {
+            utm_source: visit.utm_source,
+            utm_medium: visit.utm_medium,
+            utm_campaign: visit.utm_campaign,
+            origin_url: visit.origin_url,
+          },
+          target_url: visit.target_url,
+          entity: visitEntityData.entity_details || {},
+          manager: visitOfferData.manager_details || {},
+          seller: visitOfferData.seller_details || {},
+          event: visitOfferData.event_details || {},
+          offer: visitOfferData.offer_details || {},
+          rules: orchestratorConfigs?.rules,
+          consent_configs: orchestratorConfigs?.consent_configs,
+          page_configs: orchestratorConfigs?.page_configs,
+          page_faqs: orchestratorConfigs?.page_faqs,
+          is_integrated: orchestratorConfigs?.is_integrated,
+          integration_method: orchestratorConfigs?.integration_method,
+          integration_details: orchestratorConfigs?.integration_details,
+          simulation_details: simulationData?.simulation_details || {
+            requested_value: visitOfferData.offer_details?.offer_value ? parseFloat(visitOfferData.offer_details.offer_value) : null,
+            installments: null,
+            down_payment_percentage: orchestratorConfigs?.simulation_rules?.min_down_payment_percentage ?? null, 
+            down_payment_amount: visitOfferData.offer_details?.offer_value && orchestratorConfigs?.simulation_rules?.min_down_payment_percentage
+                ? parseFloat(visitOfferData.offer_details.offer_value) * (orchestratorConfigs?.simulation_rules?.min_down_payment_percentage / 100)
+                : null,
+          },
+        };
+
+        return { status: 200, data: hydratedPayload };
+
+      } catch (error: any) {
+          debugLog(`[Orquestrador GET Error]: ${error.message}`);
+          
+          // Extraímos o código que injetamos lá no bloco de validação. 
+          // Se não existir, é um erro genérico.
+          const errorCode = error.errorCode || "UNKNOWN_ERROR";
+          debugLog("fallback url:", error.fallback_url);
+
+          return {
+              status: 400,
+              data: { 
+                  success: false,
+                  code: errorCode,           // <--- Agora o front-end recebe isso!
+                  message: error.message,      // <--- A mensagem amigável
+                  fallback_url: error.fallback_url || "/" 
+              }
           };
       }
+    }
 
-      // 2. Padronização de Variáveis
-      let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
-      let errorCode = "UNAUTHORIZED";
-      let fallbackUrl = authUrl;
-      let statusCode = 401;
-
-      // 3. Tradução do Erro para Experiência do Usuário (UX)
-      if (err.message.includes("SESSION_EXPIRED")) {
-          userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-          errorCode = "SESSION_EXPIRED";
-          
-      } else if (err.message.includes("FORBIDDEN")) {
-          userMessage = "Você não tem permissão para acessar este recurso.";
-          errorCode = "FORBIDDEN";
-          fallbackUrl = originPath; // Apenas devolve para a página atual, não pede login
-          statusCode = 403;
-          
-      } else if (err.message.includes("INTERNAL_ERROR")) {
-          userMessage = "Ocorreu um erro interno ao validar sua sessão.";
-          errorCode = "INTERNAL_ERROR";
-          fallbackUrl = "/"; // Devolve para a home em caso de falha de banco/infra
-          statusCode = 500;
-      }
-
-      // 4. Retorno seguindo o contrato oficial da API
-      return { 
-        status: statusCode,
-        data: { 
-          success: false,
-          code: errorCode,
-          message: userMessage, 
-          fallback_url: fallbackUrl 
-        }
-      };
-  }
-
-  // =========================================================================
-  // PIPELINE DE LEITURA (GET): Hidratação do Front-End
-  // =========================================================================
-  if (req.method === "GET") {
-    try {
-      const url = new URL(req.url);
-      const visitId = url.searchParams.get("visit_id");
-      const visitUpdateId = url.searchParams.get("visit_update_id");
-      const simulationId = url.searchParams.get("simulation_id");
-
-      if (!visitId) throw new Error("O parâmetro 'visit_id' é obrigatório.");
-
-      // A: Busca de Simulação Prévia (Se Existir)
-      let simulationData = null;
-      if (simulationId) {
-        const { data: sim, error: simError } = await supabase.from("simulations").select("*").eq("id", simulationId).single();
-        if (!simError) simulationData = sim;
-      }
-
-      // B: DEEP JOIN - Extração do Snapshot Completo da Visita
-      const { data: visit, error: visitError } = await supabase
-        .from("visits")
-        .select(`
-          id, product_id, partner_id, utm_source, utm_medium, utm_campaign, origin_url, target_url,
-          visit_entities ( entity_id, name, document, phone, email, birth_date, gender, entity_details ),
-          visit_offers ( offer_id, offer_value, manager_details, seller_details, event_details, offer_details, category_id )
-        `)
-        .eq("id", visitId)
-        .single();
-
-      debugLog("VISIT no GET:", visit);
-
-      if (visitError || !visit) throw new Error("Visita não encontrada ou expirada.");
-
-      // C.1: Validação Triangular (Obrigatória para toda e qualquer visita)
-      await validateVisitOwnership(
-          supabase, 
-          auth, 
-          visitId
-      );
-
-      // C.2: Validação de Oferta (Condicional: Só valida se a offer_id existir)
-      const visitOfferData = visit.visit_offers?.[0] || {};
-      let offerId = visitOfferData.offer_id;
-
-      if (offerId) {
-          debugLog("🚨 [GET] Validando integridade da oferta:", offerId);
-          try {
-              const validatedOffer = await validateOfferIntegrity(
-                  supabase, 
-                  auth, 
-                  visitId, 
-                  offerId
-              );
-              // Só toca no objeto se a validação passar
-              visitOfferData.offer_value = validatedOffer.offer.offer_value;
-          } catch (err: any) {
-              debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
-
-              let userMessage = "Ocorreu um erro ao carregar a oferta.";
-              let errorCode = "UNKNOWN_ERROR"; 
-
-              if (err.message.includes("OFFER_NOT_FOUND")) {
-                  userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
-                  errorCode = "OFFER_NOT_FOUND";
-              } else if (err.message.includes("INVALID_RELATIONSHIP")) {
-                  userMessage = "Você não tem permissão para acessar esta oferta.";
-                  errorCode = "INVALID_RELATIONSHIP";
-              } else if (err.message.includes("SESSION_EXPIRED")) {
-                  userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-                  errorCode = "SESSION_EXPIRED";
-              } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
-                  userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
-                  errorCode = "UPSTREAM_CONNECTION_ERROR";
-              }
-
-              const errorForUI = new Error(userMessage);
-              
-              // Injetando as propriedades para o catch global ler depois
-              (errorForUI as any).errorCode = errorCode; 
-              (errorForUI as any).fallback_url = visit.origin_url;
-              
-              throw errorForUI; 
-          }
-      } else {
-          // Se não tem offerId, o fluxo ignora a validação e segue feliz
-          debugLog("ℹ️ Nenhuma oferta vinculada a esta visita. Pulando validação.");
-      }
-
-      // D: Resolução de Regras e Parâmetros (Cascata Inversa)
-      const visitEntityData = visit.visit_entities?.[0] || {};
-      const orchestratorConfigs = await resolveOrchestratorConfigs(
-        supabase,
-        visitOfferData.event_details?.event_id, 
-        visitOfferData.seller_details?.seller_id, 
-        visitOfferData.category_id, 
-        visit.product_id, 
-        visitEntityData.document, 
-      );
+    // =========================================================================
+    // PIPELINE DE ESCRITA (POST): Orquestração do Clique
+    // =========================================================================
+    if (req.method === "POST") {
 
       
-      if (!orchestratorConfigs) {
-        throw new Error(`[resolveOrchestratorConfigs]: Configurações não localizadas para o perfil e contexto informados.`);
-      }
-
-      // E: Construção do Payload Hidratado (Pronto para o React consumir)
-      const hydratedPayload = {
-        visit_id: visit.id,
-        visit_update_id: visitUpdateId,
-        simulation_id: simulationId || null,
-        product_id: visit.product_id,
-        partner_id: orchestratorConfigs.partner_id,
-        origin_url: visit.origin_url,
-        interaction_context: {
-          utm_source: visit.utm_source,
-          utm_medium: visit.utm_medium,
-          utm_campaign: visit.utm_campaign,
-          origin_url: visit.origin_url,
-        },
-        target_url: visit.target_url,
-        entity: visitEntityData.entity_details || {},
-        manager: visitOfferData.manager_details || {},
-        seller: visitOfferData.seller_details || {},
-        event: visitOfferData.event_details || {},
-        offer: visitOfferData.offer_details || {},
-        rules: orchestratorConfigs?.rules,
-        consent_configs: orchestratorConfigs?.consent_configs,
-        page_configs: orchestratorConfigs?.page_configs,
-        page_faqs: orchestratorConfigs?.page_faqs,
-        is_integrated: orchestratorConfigs?.is_integrated,
-        integration_method: orchestratorConfigs?.integration_method,
-        integration_details: orchestratorConfigs?.integration_details,
-        simulation_details: simulationData?.simulation_details || {
-          requested_value: visitOfferData.offer_details?.offer_value ? parseFloat(visitOfferData.offer_details.offer_value) : null,
-          installments: null,
-          down_payment_percentage: orchestratorConfigs?.simulation_rules?.min_down_payment_percentage ?? null, 
-          down_payment_amount: visitOfferData.offer_details?.offer_value && orchestratorConfigs?.simulation_rules?.min_down_payment_percentage
-              ? parseFloat(visitOfferData.offer_details.offer_value) * (orchestratorConfigs?.simulation_rules?.min_down_payment_percentage / 100)
-              : null,
-        },
-      };
-
-      return { status: 200, data: hydratedPayload };
-
-    } catch (error: any) {
-        debugLog(`[Orquestrador GET Error]: ${error.message}`);
+        // 🚨 ======================================================= 🚨
+        // 🧪 TESTE MANUAL: FORÇANDO O ATAQUE IDOR
+        // Substitui o visit_id real do front-end por um de outra pessoa
+        // payload.visit_id = "COLE_AQUI_O_VISIT_ID_DO_OUTRO_CARA";
+        payload.offer_id = "1111111";
         
-        // Extraímos o código que injetamos lá no bloco de validação. 
-        // Se não existir, é um erro genérico.
-        const errorCode = error.errorCode || "UNKNOWN_ERROR";
-        debugLog("fallback url:", error.fallback_url);
+        debugLog("🧪 TESTE IDOR: Forçando offer_id para:", payload.offer_id);
+        // 🚨 ======================================================= 🚨
+        
+      // Escopo seguro para o fallback: protege o catch caso `req.json()` quebre.
+      let safeFallbackUrl = req.headers.get("x-original-url") || "/";
+      
+      try {
+        const payload: OrchestratorPayload = await req.json();
+        
+        safeFallbackUrl = payload.origin_url || payload.interaction_context?.origin_url || safeFallbackUrl;
+
+        // A: Captura de Contexto Nativo (Device/Geo)
+        const infra = await captureInfrastructure(req);
+        
+        // B: Gatekeeper de Dados (Formatação e Regras Estruturais)
+        const { category_id, product_id, action } = await validatePayload(supabase, payload);
+
+        // =====================================================================
+        // C: GATEKEEPER DE SEGURANÇA E NEGÓCIO (Zero-Trust)
+        // Obrigatório executar ANTES de qualquer inserção/alteração no banco.
+        // =====================================================================
+        const targetVisitId = payload.visit_id || null;
+        const targetEntityId = payload.entity?.entity_id || null;
+        
+        debugLog("🚨 [validateVisitOwnership POST] Validando visita:", targetVisitId);
+        await validateVisitOwnership(
+            supabase, 
+            auth, 
+            targetVisitId, 
+            targetEntityId
+        );
+
+        const offerId = payload.offer?.offer_id;
+        if (offerId) {
+            debugLog("🚨 [validateOfferIntegrity POST] Validando integridade da oferta:", offerId);
+            try {
+                await validateOfferIntegrity(
+                    supabase, 
+                    auth, 
+                    targetVisitId, 
+                    offerId
+                );
+                debugLog("✅ Oferta validada com sucesso.");
+            } catch (err: any) {
+                debugLog("🚨 [validateOfferIntegrity POST] Falha na validação:", err.message);
+
+                let userMessage = "Ocorreu um erro ao carregar a oferta.";
+                let errorCode = "UNKNOWN_ERROR";
+
+                if (err.message.includes("OFFER_NOT_FOUND")) {
+                    userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
+                    errorCode = "OFFER_NOT_FOUND";
+                } else if (err.message.includes("INVALID_RELATIONSHIP")) {
+                    userMessage = "Você não tem permissão para acessar esta oferta.";
+                    errorCode = "INVALID_RELATIONSHIP";
+                } else if (err.message.includes("SESSION_EXPIRED")) {
+                    userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+                    errorCode = "SESSION_EXPIRED";
+                } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
+                    userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+                    errorCode = "UPSTREAM_CONNECTION_ERROR";
+                }
+
+                const errorForUI = new Error(userMessage);
+                
+                (errorForUI as any).errorCode = errorCode; 
+                (errorForUI as any).fallback_url = safeFallbackUrl;
+                
+                throw errorForUI; 
+            }
+        } else {
+            debugLog("ℹ️ Nenhum offer_id fornecido. Pulando validação de integridade.");
+        }
+
+        // =====================================================================
+        // D: Motor de Decisão (Onde o usuário vai pousar?)
+        // =====================================================================
+        const destination = await resolveDestination(
+          supabase,
+          action,
+          payload.target_url,
+          payload.event?.event_id,
+          payload.seller?.seller_id,
+          category_id,
+          product_id,
+          payload.entity?.document, 
+        );
+
+        // E: Enriquecimento do Payload com a Rota Resolvida
+        payload.target_url = destination.url; 
+        payload.is_integrated = destination.is_integrated; 
+        payload.integration_method = destination.integration_method;
+        payload.integration_details = destination.integration_details;
+        payload.partner_id = destination.partner_id; 
+
+        debugLog("Origem: ", payload.origin_url);
+
+        // =====================================================================
+        // F: Persistência Segura (One-Shot Database Insertion)
+        // Agora protegido pelo Gatekeeper na etapa C.
+        // =====================================================================
+        const { visitId, visitUpdateId } = await persistVisitData(
+          sql,
+          payload,
+          infra,
+          category_id,
+          payload.action,
+          payload.origin_url,
+          destination.url,
+          payload.visit_id,
+          destination.orchestrator_config_id,
+        );
+
+        // G: Montagem do Payload de Retorno (Command: REDIRECT)
+        const simulationId = payload.simulation_id || null;
+        let finalUrl = `${destination.url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
+        if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
+
+        debugLog("[POST] payload final de retorno:", { payload, visitId, visitUpdateId, simulationId });
 
         return {
-            status: 400,
-            data: { 
+          status: 200,
+          data: {
+            action: "REDIRECT",
+            url: finalUrl,
+            visit_id: visitId,
+            visit_update_id: visitUpdateId,
+            simulation_id: simulationId, 
+            partner_id: payload.partner_id,
+          }
+        };
+
+      } catch (error: any) {
+        debugLog(`[Orquestrador POST Error REAL]: ${error.message}`);
+        
+        const errorCode = error.errorCode || "UNKNOWN_ERROR";
+
+        return {
+          status: 400,
+          data: { 
+              success: false,
+              code: errorCode,              // <--- Agora o front-end recebe isso!
+              message: error.message,       // <--- A mensagem amigável
+              fallback_url: error.fallback_url || safeFallbackUrl 
+          }
+        };
+      }
+    }
+
+    // Falha de Método HTTP
+    return { 
+      status: 405, 
+      data: { error: "Método HTTP não permitido." } 
+    };
+  } catch {
+    } catch (fatalError: any) {
+        // O FAILSAFE ABSOLUTO
+        // Se qualquer coisa quebrar (syntax error, banco fora do ar, null pointer),
+        // cai aqui ANTES de vazar para o withSecurity.
+        
+        debugLog(`🚨 [CRASH FATAL INTERCEPTADO]: ${fatalError.message}`);
+        
+        return {
+            status: 500,
+            data: {
                 success: false,
-                code: errorCode,           // <--- Agora o front-end recebe isso!
-                message: error.message,      // <--- A mensagem amigável
-                fallback_url: error.fallback_url || "/" 
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Ocorreu um erro interno inesperado. Tente novamente.",
+                fallback_url: globalFallbackUrl // Faz jornada voltar para a origem
             }
         };
     }
   }
-
-  // =========================================================================
-  // PIPELINE DE ESCRITA (POST): Orquestração do Clique
-  // =========================================================================
-  if (req.method === "POST") {
-    // Escopo seguro para o fallback: protege o catch caso `req.json()` quebre.
-    let safeFallbackUrl = req.headers.get("x-original-url") || "/";
-    
-    try {
-      const payload: OrchestratorPayload = await req.json();
-      safeFallbackUrl = payload.origin_url || payload.interaction_context?.origin_url || safeFallbackUrl;
-
-      // A: Captura de Contexto Nativo (Device/Geo)
-      const infra = await captureInfrastructure(req);
-      
-      // B: Gatekeeper de Dados (Formatação e Regras Estruturais)
-      const { category_id, product_id, action } = await validatePayload(supabase, payload);
-
-      // =====================================================================
-      // C: GATEKEEPER DE SEGURANÇA E NEGÓCIO (Zero-Trust)
-      // Obrigatório executar ANTES de qualquer inserção/alteração no banco.
-      // =====================================================================
-      const targetVisitId = payload.visit_id || null;
-      const targetEntityId = payload.entity?.entity_id || null;
-      
-      debugLog("🚨 [validateVisitOwnership POST] Validando visita:", targetVisitId);
-      await validateVisitOwnership(
-          supabase, 
-          auth, 
-          targetVisitId, 
-          targetEntityId
-      );
-
-      const offerId = payload.offer?.offer_id;
-      if (offerId) {
-          debugLog("🚨 [validateOfferIntegrity POST] Validando integridade da oferta:", offerId);
-          try {
-              await validateOfferIntegrity(
-                  supabase, 
-                  auth, 
-                  targetVisitId, 
-                  offerId
-              );
-              debugLog("✅ Oferta validada com sucesso.");
-          } catch (err: any) {
-              debugLog("🚨 [validateOfferIntegrity POST] Falha na validação:", err.message);
-
-              let userMessage = "Ocorreu um erro ao carregar a oferta.";
-              let errorCode = "UNKNOWN_ERROR";
-
-              if (err.message.includes("OFFER_NOT_FOUND")) {
-                  userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
-                  errorCode = "OFFER_NOT_FOUND";
-              } else if (err.message.includes("INVALID_RELATIONSHIP")) {
-                  userMessage = "Você não tem permissão para acessar esta oferta.";
-                  errorCode = "INVALID_RELATIONSHIP";
-              } else if (err.message.includes("SESSION_EXPIRED")) {
-                  userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-                  errorCode = "SESSION_EXPIRED";
-              } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
-                  userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
-                  errorCode = "UPSTREAM_CONNECTION_ERROR";
-              }
-
-              const errorForUI = new Error(userMessage);
-              
-              (errorForUI as any).errorCode = errorCode; 
-              (errorForUI as any).fallback_url = safeFallbackUrl;
-              
-              throw errorForUI; 
-          }
-      } else {
-          debugLog("ℹ️ Nenhum offer_id fornecido. Pulando validação de integridade.");
-      }
-
-      // =====================================================================
-      // D: Motor de Decisão (Onde o usuário vai pousar?)
-      // =====================================================================
-      const destination = await resolveDestination(
-        supabase,
-        action,
-        payload.target_url,
-        payload.event?.event_id,
-        payload.seller?.seller_id,
-        category_id,
-        product_id,
-        payload.entity?.document, 
-      );
-
-      // E: Enriquecimento do Payload com a Rota Resolvida
-      payload.target_url = destination.url; 
-      payload.is_integrated = destination.is_integrated; 
-      payload.integration_method = destination.integration_method;
-      payload.integration_details = destination.integration_details;
-      payload.partner_id = destination.partner_id; 
-
-      debugLog("Origem: ", payload.origin_url);
-
-      // =====================================================================
-      // F: Persistência Segura (One-Shot Database Insertion)
-      // Agora protegido pelo Gatekeeper na etapa C.
-      // =====================================================================
-      const { visitId, visitUpdateId } = await persistVisitData(
-        sql,
-        payload,
-        infra,
-        category_id,
-        payload.action,
-        payload.origin_url,
-        destination.url,
-        payload.visit_id,
-        destination.orchestrator_config_id,
-      );
-
-      // G: Montagem do Payload de Retorno (Command: REDIRECT)
-      const simulationId = payload.simulation_id || null;
-      let finalUrl = `${destination.url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
-      if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
-
-      debugLog("[POST] payload final de retorno:", { payload, visitId, visitUpdateId, simulationId });
-
-      return {
-        status: 200,
-        data: {
-          action: "REDIRECT",
-          url: finalUrl,
-          visit_id: visitId,
-          visit_update_id: visitUpdateId,
-          simulation_id: simulationId, 
-          partner_id: payload.partner_id,
-        }
-      };
-
-    } catch (error: any) {
-      debugLog(`[Orquestrador POST Error REAL]: ${error.message}`);
-      
-      const errorCode = error.errorCode || "UNKNOWN_ERROR";
-
-      return {
-        status: 400,
-        data: { 
-            success: false,
-            code: errorCode,           // <--- Agora o front-end recebe isso!
-            message: error.message,      // <--- A mensagem amigável
-            fallback_url: error.fallback_url || safeFallbackUrl 
-        }
-      };
-    }
-  }
-
-  // Falha de Método HTTP
-  return { 
-    status: 405, 
-    data: { error: "Método HTTP não permitido." } 
-  };
 }));
