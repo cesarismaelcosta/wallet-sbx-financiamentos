@@ -674,7 +674,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
               success: false,
               code: errorCode,              // <--- Agora o front-end recebe isso!
               message: error.message,       // <--- A mensagem amigável
-              fallback_url: error.fallback_url || safeFallbackUrl 
+              fallback_url: error.fallback_url || originPath 
           }
         };
       }
