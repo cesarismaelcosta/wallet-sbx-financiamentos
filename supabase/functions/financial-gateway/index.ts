@@ -148,15 +148,15 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       } else if (err.message.includes("SESSION_EXPIRED")) {
           userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
           errorCode = "SESSION_EXPIRED";
-          fallback_url = authPath; // LOGIN FALLBACK
+          finalFallback = authPath; // LOGIN FALLBACK
       } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
           userMessage = "O serviço de consulta da oferta está instável. Tente novamente.";
           errorCode = "UPSTREAM_CONNECTION_ERROR";
-          fallback_url: originPath;  // volta para origem da chamada
+          finalFallback: originPath;  // volta para origem da chamada
       } else if (err.message.includes("FORBIDDEN_ACCESS") || err.message.includes("INVALID_PAYLOAD")) {
           userMessage = "Inconsistência nos dados de segurança.";
           errorCode = "FORBIDDEN";
-          fallback_url: originPath; // volta para origem da chamada
+          finalFallback: originPath; // volta para origem da chamada
       }
 
       return {
@@ -166,7 +166,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
           code: errorCode,
           message: userMessage,
           details: errorCode === "BUSINESS_ERROR" ? "Consulte os logs." : "Bloqueio de segurança (Gatekeeper).",
-          fallback_url: originPath // <--- FALLBACK ESCOLHIDO  É VOLTAR PARA A PÁGINA DA CHAMADA ENVIADA NO HEADER
+          fallback_url: finalFallback // <--- FALLBACK ESCOLHIDO
         }
       };
     }
@@ -183,7 +183,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
             success: false,
             code: "INTERNAL_SERVER_ERROR",
             message: "Ocorreu um erro interno inesperado. Tente novamente.",
-            fallback_url: originPath // Faz jornada voltar para a origem
+            fallback_url: payload.origin_url || originPath || "/"; // Faz jornada voltar para a origem da visita ou se não existir origem da chamada.
         }
     };
   } 
