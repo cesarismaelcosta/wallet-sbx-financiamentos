@@ -30,135 +30,155 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
   const originPath = req.headers.get("x-original-url") || "/";
   const authUrl = req.headers.get("x-auth-fallback-url");
 
-  // =========================================================================
-  // 1. SEGURANÇA BÁSICA: VALIDAÇÃO DE IDENTIDADE E TOKEN
-  // =========================================================================
-  let auth;
-  try {
-      auth = await validateRequest(req);
-  } catch (err: any) {
-      const parts = err.message.split(':');
-      const errorCode = parts[0].trim();
+  try { 
 
-      let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
-      let finalCode = "UNAUTHORIZED";
-      let fallbackUrl = authUrl;
-      let statusCode = 401;
+    // =========================================================================
+    // 1. SEGURANÇA BÁSICA: VALIDAÇÃO DE IDENTIDADE E TOKEN
+    // =========================================================================
+    let auth;
+    try {
+        auth = await validateRequest(req);
+    } catch (err: any) {
+        const parts = err.message.split(':');
+        const errorCode = parts[0].trim();
 
-      switch (errorCode) {
-          case "SESSION_EXPIRED":
-              userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-              finalCode = "SESSION_EXPIRED";
-              break;
-          case "FORBIDDEN":
-              userMessage = "Você não tem permissão para acessar este recurso.";
-              finalCode = "FORBIDDEN";
-              fallbackUrl = originPath; 
-              statusCode = 403;
-              break;
-          case "INTERNAL_ERROR":
-              userMessage = "Ocorreu um erro interno ao validar sua sessão.";
-              finalCode = "INTERNAL_ERROR";
-              fallbackUrl = originPath; 
-              statusCode = 500;
-              break;
+        let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
+        let finalCode = "UNAUTHORIZED";
+        let fallbackUrl = authUrl;
+        let statusCode = 401;
+
+        switch (errorCode) {
+            case "SESSION_EXPIRED":
+                userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+                finalCode = "SESSION_EXPIRED";
+                break;
+            case "FORBIDDEN":
+                userMessage = "Você não tem permissão para acessar este recurso.";
+                finalCode = "FORBIDDEN";
+                fallbackUrl = originPath; 
+                statusCode = 403;
+                break;
+            case "INTERNAL_ERROR":
+                userMessage = "Ocorreu um erro interno ao validar sua sessão.";
+                finalCode = "INTERNAL_ERROR";
+                fallbackUrl = originPath; 
+                statusCode = 500;
+                break;
+        }
+
+        return {
+            status: statusCode,
+            data: { success: false, code: finalCode, message: userMessage, fallback_url: fallbackUrl }
+        };
+    }
+
+    // =========================================================================
+    // 2. ROTA PRINCIPAL E GATEKEEPER DE NEGÓCIO
+    // =========================================================================
+    
+    // Cliente Supabase necessário para o Gatekeeper operar
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      auth: { persistSession: false },
+    });
+
+    try {
+
+      let payload;
+
+      if (req.method === "POST") {
+        const rawBody = await req.text();
+        if (!rawBody) throw new Error("Payload ausente na requisição POST.");
+        payload = JSON.parse(rawBody);
+
+        // Injeção mantida por redundância, mas a segurança real
+        // agora é provida pelo Gatekeeper logo abaixo.
+        if (payload.entity && auth.user_id) {
+          payload.entity.entity_id = String(auth.user_id);
+        }
+      } else {
+        return { status: 405, data: { error: "Método HTTP não permitido." } };
+      }
+
+      // ---------------------------------------------------------------------
+      // 3. GATEKEEPER (Zero-Trust)
+      // Impede chamadas para parceiros financeiros se o contexto for inválido.
+      // ---------------------------------------------------------------------
+      const targetVisitId = payload.visit_id || null;
+      const targetEntityId = payload.entity?.entity_id || null;
+      
+      debugLog("🚨 [Gateway POST] Gatekeeper: Validando ownership:", targetVisitId);
+      await validateVisitOwnership(supabase, auth, targetVisitId, targetEntityId);
+
+      const offerId = payload.offer?.offer_id;
+      if (offerId) {
+          debugLog("🚨 [Gateway POST] Gatekeeper: Validando integridade da oferta:", offerId);
+          await validateOfferIntegrity(supabase, auth, targetVisitId, offerId);
+      } else {
+          debugLog("⚠️ [Gateway AVISO] Simulação solicitada sem offer_id.");
+      }
+
+      // ---------------------------------------------------------------------
+      // 4. PROCESSAMENTO DE SIMULAÇÃO (Integração Fandi)
+      // ---------------------------------------------------------------------
+      // Se chegou até aqui, o usuário é dono da visita e a oferta é real.
+      const result = await processSimulation(req, payload);
+
+      return {
+        status: 200,
+        data: result
+      };
+      
+    } catch (err: any) {
+      debugLog("[GATEWAY ERROR]:", err.message);
+      
+      // Tradutor de Erros do Gatekeeper para o Frontend
+      let errorCode = "BUSINESS_ERROR";
+      let userMessage = err.message;
+      let fallbackUrl = originPath;
+
+      if (err.message.includes("OFFER_NOT_FOUND")) {
+          userMessage = "Esta oferta não está mais disponível ou não foi encontrada para simulação.";
+          errorCode = "OFFER_NOT_FOUND";
+      } else if (err.message.includes("INVALID_RELATIONSHIP")) {
+          userMessage = "Você não tem permissão para simular nesta oferta.";
+          errorCode = "INVALID_RELATIONSHIP";
+      } else if (err.message.includes("SESSION_EXPIRED")) {
+          userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+          errorCode = "SESSION_EXPIRED";
+      } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
+          userMessage = "O serviço de consulta da oferta está instável. Tente novamente.";
+          errorCode = "UPSTREAM_CONNECTION_ERROR";
+      } else if (err.message.includes("FORBIDDEN_ACCESS") || err.message.includes("INVALID_PAYLOAD") || err.message.includes("VISIT_NOT_FOUND")) {
+          userMessage = "Inconsistência nos dados de segurança. Não foi possível validar sua sessão.";
+          errorCode = "FORBIDDEN";
       }
 
       return {
-          status: statusCode,
-          data: { success: false, code: finalCode, message: userMessage, fallback_url: fallbackUrl }
+        status: 400,
+        data: {
+          success: false,
+          code: errorCode,
+          message: userMessage,
+          details: errorCode === "BUSINESS_ERROR" ? "Consulte os logs da função para análise." : "Bloqueio de segurança (Gatekeeper).",
+          fallback_url: fallbackUrl 
+        }
       };
-  }
-
-  // =========================================================================
-  // 2. ROTA PRINCIPAL E GATEKEEPER DE NEGÓCIO
-  // =========================================================================
-  
-  // Cliente Supabase necessário para o Gatekeeper operar
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-    auth: { persistSession: false },
-  });
-
-  try {
-    let payload;
-
-    if (req.method === "POST") {
-      const rawBody = await req.text();
-      if (!rawBody) throw new Error("Payload ausente na requisição POST.");
-      payload = JSON.parse(rawBody);
-
-      // A injeção antiga foi mantida por redundância, mas a segurança real
-      // agora é provida pelo Gatekeeper logo abaixo.
-      if (payload.entity && auth.user_id) {
-        payload.entity.entity_id = String(auth.user_id);
-      }
-    } else {
-      return { status: 405, data: { error: "Método HTTP não permitido." } };
     }
-
-    // ---------------------------------------------------------------------
-    // 3. GATEKEEPER (Zero-Trust)
-    // Impede chamadas para parceiros financeiros se o contexto for inválido.
-    // ---------------------------------------------------------------------
-    const targetVisitId = payload.visit_id || null;
-    const targetEntityId = payload.entity?.entity_id || null;
+  } catch (fatalError: any) {
+    // O FAILSAFE ABSOLUTO
+    // Se qualquer coisa quebrar (syntax error, banco fora do ar, null pointer),
+    // cai aqui ANTES de vazar para o withSecurity.
     
-    debugLog("🚨 [Gateway POST] Gatekeeper: Validando ownership:", targetVisitId);
-    await validateVisitOwnership(supabase, auth, targetVisitId, targetEntityId);
-
-    const offerId = payload.offer?.offer_id;
-    if (offerId) {
-        debugLog("🚨 [Gateway POST] Gatekeeper: Validando integridade da oferta:", offerId);
-        await validateOfferIntegrity(supabase, auth, targetVisitId, offerId);
-    } else {
-        debugLog("⚠️ [Gateway AVISO] Simulação solicitada sem offer_id.");
-    }
-
-    // ---------------------------------------------------------------------
-    // 4. PROCESSAMENTO DE SIMULAÇÃO (Integração Fandi)
-    // ---------------------------------------------------------------------
-    // Se chegou até aqui, o usuário é dono da visita e a oferta é real.
-    const result = await processSimulation(req, payload);
-
+    debugLog(`🚨 [CRASH FATAL INTERCEPTADO]: ${fatalError.message}`);
+    
     return {
-      status: 200,
-      data: result
+        status: 500,
+        data: {
+            success: false,
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Ocorreu um erro interno inesperado. Tente novamente.",
+            fallback_url: originPath // Faz jornada voltar para a origem
+        }
     };
-    
-  } catch (err: any) {
-    debugLog("[GATEWAY ERROR]:", err.message);
-    
-    // Tradutor de Erros do Gatekeeper para o Frontend
-    let errorCode = "BUSINESS_ERROR";
-    let userMessage = err.message;
-    let fallbackUrl = originPath;
-
-    if (err.message.includes("OFFER_NOT_FOUND")) {
-        userMessage = "Esta oferta não está mais disponível ou não foi encontrada para simulação.";
-        errorCode = "OFFER_NOT_FOUND";
-    } else if (err.message.includes("INVALID_RELATIONSHIP")) {
-        userMessage = "Você não tem permissão para simular nesta oferta.";
-        errorCode = "INVALID_RELATIONSHIP";
-    } else if (err.message.includes("SESSION_EXPIRED")) {
-        userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-        errorCode = "SESSION_EXPIRED";
-    } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
-        userMessage = "O serviço de consulta da oferta está instável. Tente novamente.";
-        errorCode = "UPSTREAM_CONNECTION_ERROR";
-    } else if (err.message.includes("FORBIDDEN_ACCESS") || err.message.includes("INVALID_PAYLOAD") || err.message.includes("VISIT_NOT_FOUND")) {
-        userMessage = "Inconsistência nos dados de segurança. Não foi possível validar sua sessão.";
-        errorCode = "FORBIDDEN";
-    }
-
-    return {
-      status: 400,
-      data: {
-        success: false,
-        code: errorCode,
-        message: userMessage,
-        details: errorCode === "BUSINESS_ERROR" ? "Consulte os logs da função para análise." : "Bloqueio de segurança (Gatekeeper).",
-        fallback_url: fallbackUrl 
-      }
-    };
-  }
+  } 
 }));
