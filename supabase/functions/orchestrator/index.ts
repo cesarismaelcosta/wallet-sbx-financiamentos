@@ -345,11 +345,30 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
         if (!visitId) throw new Error("O parâmetro 'visit_id' é obrigatório.");
 
-        // A: Busca de Simulação Prévia (Se Existir)
+        // A: Busca de Simulação Prévia com Validação de Identidade (Ownership)
         let simulationData = null;
         if (simulationId) {
-          const { data: sim, error: simError } = await supabase.from("simulations").select("*").eq("id", simulationId).single();
-          if (!simError) simulationData = sim;
+          const { data: sim, error: simError } = await supabase
+            .from("simulations")
+            .select("*")
+            .eq("id", simulationId)
+            .eq("visit_id", visitId)
+            .eq("entity_id", auth.user_id) 
+            .single();
+
+          // Se não encontrar ou erro de banco:
+          if (simError || !sim) {
+            debugLog(`🚨 [Security] Tentativa de acesso não autorizada: ${simulationId}`);
+            
+            // Cria o erro seguindo o seu padrão de injetar propriedades
+            const err = new Error("Você não tem permissão para simular nesta oferta.");
+            (err as any).errorCode = "INVALID_RELATIONSHIP"; 
+            (err as any).fallback_url = visit.origin_url; // Garante que volta para a origem
+            
+            throw err; // Lança para o catch, que já tratará o errorCode e a mensagem
+          }
+
+          simulationData = sim;
         }
 
         // B: DEEP JOIN - Extração do Snapshot Completo da Visita
@@ -366,6 +385,18 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         debugLog("VISIT no GET:", visit);
 
         if (visitError || !visit) throw new Error("Visita não encontrada ou expirada.");
+
+        // 🚨 ALIDAÇÃO DE PROPRIEDADE (Fail-Fast)
+        // Verifica se a entity_id retornada no JOIN pertence ao auth.user_id
+        const entityId = visit.visit_entities?.[0]?.entity_id;
+        if (!entityId || entityId !== auth.user_id) {
+            debugLog(`🚨 [Security] Tentativa de acesso não autorizado à visita: ${visitId} pelo usuário: ${auth.user_id}`);
+            
+            const err = new Error("Você não tem permissão para acessar esta visita.");
+            (err as any).errorCode = "INVALID_RELATIONSHIP"; // Mesmo padrão de erro
+            (err as any).fallback_url = visit.origin_url || "/";
+            throw err;
+        }
 
         // C.1: Validação Triangular (Obrigatória para toda e qualquer visita)
         await validateVisitOwnership(
