@@ -81,6 +81,10 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       auth: { persistSession: false },
     });
 
+    // DEFINIÇÃO DAS VARIÁVEIS DE FALLBACK (Escopo do Gateway)
+    const originPath = req.headers.get("x-original-url") || "/";
+    const loginFallbackUrl = req.headers.get("x-auth-fallback-url") || "/";
+
     try {
 
       let payload;
@@ -131,10 +135,11 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
     } catch (err: any) {
       debugLog("[GATEWAY ERROR]:", err.message);
       
-      // Tradutor de Erros do Gatekeeper para o Frontend
       let errorCode = "BUSINESS_ERROR";
       let userMessage = err.message;
-      let fallbackUrl = originPath;
+      
+      // A LÓGICA CORRETA DAS DUAS VARIÁVEIS:
+      let finalFallback = originPath; // Padrão
 
       if (err.message.includes("OFFER_NOT_FOUND")) {
           userMessage = "Esta oferta não está mais disponível ou não foi encontrada para simulação.";
@@ -145,11 +150,12 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       } else if (err.message.includes("SESSION_EXPIRED")) {
           userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
           errorCode = "SESSION_EXPIRED";
+          finalFallback = loginFallbackUrl; // LOGIN FALLBACK
       } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
           userMessage = "O serviço de consulta da oferta está instável. Tente novamente.";
           errorCode = "UPSTREAM_CONNECTION_ERROR";
-      } else if (err.message.includes("FORBIDDEN_ACCESS") || err.message.includes("INVALID_PAYLOAD") || err.message.includes("VISIT_NOT_FOUND")) {
-          userMessage = "Inconsistência nos dados de segurança. Não foi possível validar sua sessão.";
+      } else if (err.message.includes("FORBIDDEN_ACCESS") || err.message.includes("INVALID_PAYLOAD")) {
+          userMessage = "Inconsistência nos dados de segurança.";
           errorCode = "FORBIDDEN";
       }
 
@@ -159,8 +165,8 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
           success: false,
           code: errorCode,
           message: userMessage,
-          details: errorCode === "BUSINESS_ERROR" ? "Consulte os logs da função para análise." : "Bloqueio de segurança (Gatekeeper).",
-          fallback_url: fallbackUrl 
+          details: errorCode === "BUSINESS_ERROR" ? "Consulte os logs." : "Bloqueio de segurança (Gatekeeper).",
+          fallback_url: finalFallback // <--- FALLBACK ESCOLHIDO
         }
       };
     }
