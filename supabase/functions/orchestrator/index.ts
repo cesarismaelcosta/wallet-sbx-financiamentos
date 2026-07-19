@@ -272,6 +272,10 @@ serve(withSecurity('orchestrator', async (req: Request) => {
       auth: { persistSession: false },
     });
 
+    // Descoberta da Origem e URL para falha de autenticação
+    const originPath = req.headers.get("x-original-url") || "/";
+    const authPath = req.headers.get("x-auth-fallback-url") || "/";
+    
     // =========================================================================
     // SEGURANÇA: Validação de Identidade pelo token opaco próprio
     // Como o GET e o POST exigem autenticação, validamos aqui no início.
@@ -280,9 +284,6 @@ serve(withSecurity('orchestrator', async (req: Request) => {
     try {
         auth = await validateRequest(req);
     } catch (err: any) {
-        // 1. Descoberta da Origem
-        const originPath = req.headers.get("x-original-url");
-        const authUrl = req.headers.get("x-auth-fallback-url");
 
         if (!originPath) {
             // Failsafe: Se o frontend não enviou o header, barramos aqui.
@@ -300,7 +301,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         // 2. Padronização de Variáveis
         let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
         let errorCode = "UNAUTHORIZED";
-        let fallbackUrl = authUrl;
+        let fallbackUrl = authPath;
         let statusCode = 401;
 
         // 3. Tradução do Erro para Experiência do Usuário (UX)
@@ -317,7 +318,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         } else if (err.message.includes("INTERNAL_ERROR")) {
             userMessage = "Ocorreu um erro interno ao validar sua sessão.";
             errorCode = "INTERNAL_ERROR";
-            fallbackUrl = "/"; // Devolve para a home em caso de falha de banco/infra
+            fallbackUrl = originPath; // Devolve para a home em caso de falha de banco/infra
             statusCode = 500;
         }
 
@@ -342,10 +343,6 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         const visitId = url.searchParams.get("visit_id");
         const visitUpdateId = url.searchParams.get("visit_update_id");
         const simulationId = url.searchParams.get("simulation_id");
-
-        // Define os patsh de retorno aqui, no topo do escopo
-        const originPath = req.headers.get("x-original-url") || "/";
-        const loginFallbackUrl = req.headers.get("x-auth-fallback-url") || "/";
 
         if (!visitId) throw new Error("O parâmetro 'visit_id' é obrigatório.");
 
@@ -445,7 +442,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
                     userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
                     errorCode = "SESSION_EXPIRED";
                     // Direciona para o Login
-                    targetFallback = loginFallbackUrl; 
+                    targetFallback = authPath; 
                 } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
                     userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
                     errorCode = "UPSTREAM_CONNECTION_ERROR";
@@ -541,11 +538,6 @@ serve(withSecurity('orchestrator', async (req: Request) => {
     // PIPELINE DE ESCRITA (POST): Orquestração do Clique
     // =========================================================================
     if (req.method === "POST") {
-      // Escopo seguro para o fallback
-      const originPath = req.headers.get("x-original-url") || "/";
-      const loginFallbackUrl = req.headers.get("x-auth-fallback-url") || "/";
-      let safeFallbackUrl = originPath;
-      
       try {
         const payload: OrchestratorPayload = await req.json();
 
@@ -586,7 +578,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
                 let userMessage = "Ocorreu um erro ao carregar a oferta.";
                 let errorCode = "UNKNOWN_ERROR";
-                let targetFallback = safeFallbackUrl; // Default para erros de negócio
+                let targetFallback = originPath; // Default para erros de negócio
 
                 if (err.message.includes("OFFER_NOT_FOUND")) {
                     userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
@@ -597,7 +589,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
                 } else if (err.message.includes("SESSION_EXPIRED")) {
                     userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
                     errorCode = "SESSION_EXPIRED";
-                    targetFallback = loginFallbackUrl; // Direciona para o login
+                    targetFallback = authPath; // Direciona para o login
                 } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
                     userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
                     errorCode = "UPSTREAM_CONNECTION_ERROR";
