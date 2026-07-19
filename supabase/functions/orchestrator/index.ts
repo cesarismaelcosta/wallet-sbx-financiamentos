@@ -578,7 +578,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
                 let userMessage = "Ocorreu um erro ao carregar a oferta.";
                 let errorCode = "UNKNOWN_ERROR";
-                let targetFallback = originPath; // Default para erros de negócio
+                let targetFallback = originPath; // Default para erros de negócio é voltar para a return_uri enviada
 
                 if (err.message.includes("OFFER_NOT_FOUND")) {
                     userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
