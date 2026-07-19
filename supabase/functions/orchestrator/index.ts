@@ -343,8 +343,9 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         const visitUpdateId = url.searchParams.get("visit_update_id");
         const simulationId = url.searchParams.get("simulation_id");
 
-        // 1. Defina o path de retorno aqui, no topo do escopo
+        // Define os patsh de retorno aqui, no topo do escopo
         const originPath = req.headers.get("x-original-url") || "/";
+        const loginFallbackUrl = req.headers.get("x-auth-fallback-url") || "/";
 
         if (!visitId) throw new Error("O parâmetro 'visit_id' é obrigatório.");
 
@@ -427,27 +428,33 @@ serve(withSecurity('orchestrator', async (req: Request) => {
                 debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
 
                 let userMessage = "Ocorreu um erro ao carregar a oferta.";
-                let errorCode = "UNKNOWN_ERROR"; 
+                let errorCode = "UNKNOWN_ERROR";
+                
+                // Escolha do Fallback baseada na natureza do erro
+                let targetFallback = originPath; 
 
                 if (err.message.includes("OFFER_NOT_FOUND")) {
                     userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
                     errorCode = "OFFER_NOT_FOUND";
+                    // Mantém originPath
                 } else if (err.message.includes("INVALID_RELATIONSHIP")) {
                     userMessage = "Você não tem permissão para acessar esta oferta.";
                     errorCode = "INVALID_RELATIONSHIP";
+                    // Mantém originPath
                 } else if (err.message.includes("SESSION_EXPIRED")) {
                     userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
                     errorCode = "SESSION_EXPIRED";
+                    // Direciona para o Login
+                    targetFallback = loginFallbackUrl; 
                 } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
                     userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
                     errorCode = "UPSTREAM_CONNECTION_ERROR";
+                    // Mantém originPath
                 }
 
                 const errorForUI = new Error(userMessage);
-                
-                // Injetando as propriedades para o catch global ler depois
                 (errorForUI as any).errorCode = errorCode; 
-                (errorForUI as any).fallback_url = visit.origin_url;
+                (errorForUI as any).fallback_url = targetFallback; 
                 
                 throw errorForUI; 
             }
@@ -466,7 +473,6 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           visit.product_id, 
           visitEntityData.document, 
         );
-
         
         if (!orchestratorConfigs) {
           throw new Error(`[resolveOrchestratorConfigs]: Configurações não localizadas para o perfil e contexto informados.`);
@@ -535,13 +541,13 @@ serve(withSecurity('orchestrator', async (req: Request) => {
     // PIPELINE DE ESCRITA (POST): Orquestração do Clique
     // =========================================================================
     if (req.method === "POST") {
-      // Escopo seguro para o fallback: protege o catch caso `req.json()` quebre.
-      let safeFallbackUrl = req.headers.get("x-original-url") || "/";
+      // Escopo seguro para o fallback
+      const originPath = req.headers.get("x-original-url") || "/";
+      const loginFallbackUrl = req.headers.get("x-auth-fallback-url") || "/";
+      let safeFallbackUrl = originPath;
       
       try {
         const payload: OrchestratorPayload = await req.json();
-
-        safeFallbackUrl = payload.origin_url || payload.interaction_context?.origin_url || safeFallbackUrl;
 
         // A: Captura de Contexto Nativo (Device/Geo)
         const infra = await captureInfrastructure(req);
@@ -580,6 +586,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
                 let userMessage = "Ocorreu um erro ao carregar a oferta.";
                 let errorCode = "UNKNOWN_ERROR";
+                let targetFallback = safeFallbackUrl; // Default para erros de negócio
 
                 if (err.message.includes("OFFER_NOT_FOUND")) {
                     userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
@@ -590,15 +597,15 @@ serve(withSecurity('orchestrator', async (req: Request) => {
                 } else if (err.message.includes("SESSION_EXPIRED")) {
                     userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
                     errorCode = "SESSION_EXPIRED";
+                    targetFallback = loginFallbackUrl; // Direciona para o login
                 } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
                     userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
                     errorCode = "UPSTREAM_CONNECTION_ERROR";
                 }
 
                 const errorForUI = new Error(userMessage);
-                
                 (errorForUI as any).errorCode = errorCode; 
-                (errorForUI as any).fallback_url = safeFallbackUrl;
+                (errorForUI as any).fallback_url = targetFallback; // Aplica o destino correto
                 
                 throw errorForUI; 
             }
