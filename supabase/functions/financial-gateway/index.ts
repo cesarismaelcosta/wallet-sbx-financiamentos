@@ -100,8 +100,6 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
         return { status: 405, data: { error: "Método HTTP não permitido." } };
       }
 
-      payload.offer.offer_id = "1111111";
-
       // ---------------------------------------------------------------------
       // 3. GATEKEEPER (Zero-Trust)
       // Impede chamadas para parceiros financeiros se o contexto for inválido.
