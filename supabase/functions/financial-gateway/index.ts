@@ -28,7 +28,7 @@ import { debugLog } from "../_shared/logger.ts";
 serve(withSecurity('financial-gateway', async (req: Request) => {
   // Descoberta da Origem
   const originPath = req.headers.get("x-original-url") || "/";
-  const authUrl = req.headers.get("x-auth-fallback-url");
+  const authPath = req.headers.get("x-auth-fallback-url");
 
   try { 
 
@@ -44,7 +44,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
 
         let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
         let finalCode = "UNAUTHORIZED";
-        let fallbackUrl = authUrl;
+        let fallbackUrl = authPath;
         let statusCode = 401;
 
         switch (errorCode) {
@@ -80,10 +80,6 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
       auth: { persistSession: false },
     });
-
-    // DEFINIÇÃO DAS VARIÁVEIS DE FALLBACK (Escopo do Gateway)
-    const originPath = req.headers.get("x-original-url") || "/";
-    const loginFallbackUrl = req.headers.get("x-auth-fallback-url") || "/";
 
     try {
 
@@ -150,7 +146,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       } else if (err.message.includes("SESSION_EXPIRED")) {
           userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
           errorCode = "SESSION_EXPIRED";
-          finalFallback = loginFallbackUrl; // LOGIN FALLBACK
+          finalFallback = authPath; // LOGIN FALLBACK
       } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
           userMessage = "O serviço de consulta da oferta está instável. Tente novamente.";
           errorCode = "UPSTREAM_CONNECTION_ERROR";
