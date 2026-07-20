@@ -401,33 +401,26 @@ function respondWithError(
     const encodedMsg = encodeURIComponent(message);
     const encodedUri = encodeURIComponent(safeReturnUri);
     
-    // 1. Tenta extrair a origem do safeReturnUri (se for absoluta)
     let frontendOrigin = "";
     if (safeReturnUri && (safeReturnUri.startsWith("http://") || safeReturnUri.startsWith("https://"))) {
-        try {
-            frontendOrigin = new URL(safeReturnUri).origin;
-        } catch (_) {}
+        try { frontendOrigin = new URL(safeReturnUri).origin; } catch (_) {}
     }
 
-    // 2. Se não conseguiu, extrai estritamente dos headers da requisição real
     if (!frontendOrigin) {
         const reqOrigin = req.headers.get("origin") || req.headers.get("referer");
         if (reqOrigin) {
-            try {
-                frontendOrigin = new URL(reqOrigin).origin;
-            } catch (_) {}
+            try { frontendOrigin = new URL(reqOrigin).origin; } catch (_) {}
         }
     }
 
-    // 3. Monta o destino final usando o que foi extraído da requisição do usuário
-    let targetUrl = safeReturnUri;
-    if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
-        targetUrl = `${frontendOrigin}${targetUrl.startsWith("/") ? "" : "/"}${targetUrl}`;
+    if (!frontendOrigin) {
+        return new Response(
+            JSON.stringify({ success: false, code: "CONFIG_ERROR", message: "Origem do front-end não identificada." }), 
+            { status: 500, headers: { "Content-Type": "application/json" } }
+        );
     }
 
-    // Monta a URL de erro direto no destino
-    const separator = targetUrl.includes("?") ? "&" : "?";
-    const errorUrl = `${targetUrl}${separator}status=error&code=${code}&message=${encodedMsg}`;
+    const errorUrl = `${frontendOrigin}/financialGatewayGate?status=error&code=${code}&message=${encodedMsg}&return_uri=${encodedUri}`;
     
     headers.set("Location", errorUrl);
     return new Response(null, { status: 302, headers });
