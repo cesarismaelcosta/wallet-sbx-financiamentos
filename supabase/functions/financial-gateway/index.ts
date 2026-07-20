@@ -22,7 +22,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { processSimulation } from "./simulation-handler.ts";
 import { validateRequest } from "../_shared/auth.ts";
 import { withSecurity } from "../_shared/server.ts";
-import { validateVisitOwnership, validateOfferIntegrity } from "../_shared/gatekeeper.ts";
+import { validateVisitAndOfferIntegrity, validateSimulationIntegrity } from "../_shared/gateKeeper.ts";
 import { debugLog } from "../_shared/logger.ts";
 
 serve(withSecurity('financial-gateway', async (req: Request) => {
@@ -101,45 +101,25 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       }
 
       // ---------------------------------------------------------------------
-      // 3. GATEKEEPER (Zero-Trust)
-      // Impede chamadas para parceiros financeiros se o contexto for inválido.
+      // 3. GATEKEEPERS AUTÔNOMOS (Zero-Trust)
       // ---------------------------------------------------------------------
       const targetVisitId = payload.visit_id || null;
-      const targetEntityId = payload.entity?.entity_id || null;
       
-      debugLog("🚨 [Gateway POST] Gatekeeper: Validando ownership:", targetVisitId);
-      await validateVisitOwnership(supabase, auth, targetVisitId, targetEntityId);
+      // 3.1: Valida a Visita Inteira e o Vínculo com a Oferta e Superbid
+      debugLog("🚨 [Gateway POST] Validando ownership e upstream...");
+      await validateVisitAndOfferIntegrity(supabase, auth, targetVisitId, {
+          entity_id: payload.entity?.entity_id || null,
+          offer_id: payload.offer?.offer_id || null
+      });
 
-      const offerId = payload.offer?.offer_id;
-      if (offerId) {
-          debugLog("🚨 [Gateway POST] Gatekeeper: Validando integridade da oferta:", offerId);
-          await validateOfferIntegrity(supabase, auth, targetVisitId, offerId);
-      } else {
-          debugLog("⚠️ [Gateway AVISO] Simulação solicitada sem offer_id.");
-      }
-
-      // =====================================================================
-      // 🚨 4. GATEKEEPER DE SIMULAÇÃO (ESCUDO CONTRA CONFUSED DEPUTY)
-      // Valida se a simulação enviada pertence ao usuário logado e à visita
-      // =====================================================================
-      const simulationId = payload.simulation_id;
-      if (simulationId) {
-          debugLog("🚨 [Gateway POST] Gatekeeper: Validando ownership da simulação:", simulationId);
-          
-          const { data: sim, error: simError } = await supabase
-            .from("simulations")
-            .select("id")
-            .eq("id", simulationId)
-            .eq("visit_id", targetVisitId)
-            .eq("entity_id", auth.user_id) 
-            .single();
-
-          // Se não encontrar ou erro de banco:
-          if (simError || !sim) {
-            debugLog(`🚨 [Security] Tentativa de acesso não autorizada a simulação: ${simulationId}`);
-            // Lança o erro com a tag para o catch capturar corretamente
-            throw new Error("INVALID_RELATIONSHIP: Você não tem permissão para acessar esta simulação."); 
-          }
+      // 3.2: Escudo Anti-Fraude e Cross-Tampering para Crédito
+      if (targetVisitId) {
+          debugLog("🚨 [Gateway POST] Validando simulação e fraudes cruzadas...");
+          await validateSimulationIntegrity(supabase, targetVisitId, {
+              simulation_id: payload.simulation_id || null,
+              entity_id: payload.entity?.entity_id || null,
+              offer_id: payload.offer?.offer_id || null
+          });
       }
 
       // ---------------------------------------------------------------------

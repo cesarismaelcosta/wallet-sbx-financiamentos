@@ -19,7 +19,7 @@ import { validateRequest } from "../_shared/auth.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { sql } from "../_shared/db.ts";
 import { withSecurity } from "../_shared/server.ts";
-import { validateVisitOwnership, validateOfferIntegrity } from "../_shared/gatekeeper.ts";
+import { validateVisitAndOfferIntegrity } from "../_shared/gateKeeper.ts";
 import { persistVisitData } from "./persist-data.ts";
 
 import {
@@ -387,77 +387,61 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
         if (visitError || !visit) throw new Error("Visita não encontrada ou expirada.");
 
-        // 🚨 VALIDAÇÃO DE PROPRIEDADE (Fail-Fast)
-        // Verifica se a entity_id retornada no JOIN pertence ao auth.user_id
-        const entityId = visit.visit_entities?.[0]?.entity_id;
-        if (!entityId || entityId !== auth.user_id) {
-            debugLog(`🚨 [Security] Tentativa de acesso não autorizado à visita: ${visitId} pelo usuário: ${auth.user_id}`);
-            
-            const err = new Error("Você não tem permissão para acessar esta visita.");
-            (err as any).errorCode = "INVALID_RELATIONSHIP"; // Mesmo padrão de erro
-            (err as any).fallback_url = originPath || "/";
-            throw err;
-        }
-
-        // C.1: Validação Triangular (Obrigatória para toda e qualquer visita)
-        await validateVisitOwnership(
-            supabase, 
-            auth, 
-            visitId
-        );
-
-        // C.2: Validação de Oferta (Condicional: Só valida se a offer_id existir)
+        // =====================================================================
+        // C: VALIDAÇÃO DE JORNADA (GATEKEEPER)
+        // O Gatekeeper unificado valida a propriedade da Visita e o Upstream da Oferta
+        // =====================================================================
+        const visitEntityData = visit.visit_entities?.[0] || {};
         const visitOfferData = visit.visit_offers?.[0] || {};
-        let offerId = visitOfferData.offer_id;
+        
+        const requestContext = {
+            entity_id: visitEntityData.entity_id,
+            offer_id: visitOfferData.offer_id
+        };
 
-        if (offerId) {
-            debugLog("🚨 [GET] Validando integridade da oferta:", offerId);
-            try {
-                const validatedOffer = await validateOfferIntegrity(
-                    supabase, 
-                    auth, 
-                    visitId, 
-                    offerId
-                );
-                // Só toca no objeto se a validação passar
+        try {
+            debugLog("🚨 [GET] Validando integridade da jornada (Visita + Oferta)...");
+            const validatedOffer = await validateVisitAndOfferIntegrity(
+                supabase, 
+                auth, 
+                visitId, 
+                requestContext
+            );
+            
+            // Se houver oferta e ela for validada na sbX, hidratamos o valor atualizado
+            if (validatedOffer) {
                 visitOfferData.offer_value = validatedOffer.offer.offer_value;
-            } catch (err: any) {
-                debugLog("🚨 [validateOfferIntegrity] Falha na validação:", err.message);
-
-                let userMessage = "Ocorreu um erro ao carregar a oferta.";
-                let errorCode = "UNKNOWN_ERROR";
-                
-                // Escolha do Fallback baseada na natureza do erro
-                let targetFallback = originPath; 
-
-                if (err.message.includes("OFFER_NOT_FOUND")) {
-                    userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
-                    errorCode = "OFFER_NOT_FOUND";
-                    // Mantém originPath
-                } else if (err.message.includes("INVALID_RELATIONSHIP")) {
-                    userMessage = "Você não tem permissão para acessar esta oferta.";
-                    errorCode = "INVALID_RELATIONSHIP";
-                    // Mantém originPath
-                } else if (err.message.includes("SESSION_EXPIRED")) {
-                    userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-                    errorCode = "SESSION_EXPIRED";
-                    // Direciona para o Login
-                    targetFallback = authPath; 
-                } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
-                    userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
-                    errorCode = "UPSTREAM_CONNECTION_ERROR";
-                    // Mantém originPath
-                }
-
-                const errorForUI = new Error(userMessage);
-                (errorForUI as any).errorCode = errorCode; 
-                (errorForUI as any).fallback_url = targetFallback; 
-                
-                throw errorForUI; 
             }
-        } else {
-            // Se não tem offerId, o fluxo ignora a validação e segue feliz
-            debugLog("ℹ️ Nenhuma oferta vinculada a esta visita. Pulando validação.");
+        } catch (err: any) {
+            debugLog("🚨 [Gatekeeper GET] Falha na validação:", err.message);
+
+            let userMessage = "Ocorreu um erro ao carregar a oferta.";
+            let errorCode = "UNKNOWN_ERROR";
+            let targetFallback = originPath; 
+
+            if (err.message.includes("OFFER_NOT_FOUND")) {
+                userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
+                errorCode = "OFFER_NOT_FOUND";
+            } else if (err.message.includes("INVALID_RELATIONSHIP")) {
+                userMessage = "Você não tem permissão para acessar esta oferta ou visita.";
+                errorCode = "INVALID_RELATIONSHIP";
+            } else if (err.message.includes("SESSION_EXPIRED")) {
+                userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+                errorCode = "SESSION_EXPIRED";
+                targetFallback = authPath; 
+            } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
+                userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+                errorCode = "UPSTREAM_CONNECTION_ERROR";
+            } else if (err.message.includes("FORBIDDEN") || err.message.includes("INVALID_PAYLOAD")) {
+                userMessage = "Inconsistência nos dados de segurança (Bloqueio).";
+                errorCode = "FORBIDDEN";
+            }
+
+            const errorForUI = new Error(userMessage);
+            (errorForUI as any).errorCode = errorCode; 
+            (errorForUI as any).fallback_url = targetFallback; 
+            
+            throw errorForUI; 
         }
 
         // D: Resolução de Regras e Parâmetros (Cascata Inversa)
