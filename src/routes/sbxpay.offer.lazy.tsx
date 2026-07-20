@@ -4,18 +4,18 @@
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
  * Visualização de detalhes de uma oferta (ativo) na sbxpay.
- * Atua apenas como "vitrine". A responsabilidade de orquestração foi 
- * delegada para o Gateway (/financialEntry).
- * * [RESPONSABILIDADES DA REFATORAÇÃO (SSR-Safe)]:
- * 1. Interface: Renderização do layout original (tabelas, carrossel, sem filtros).
- * 2. Visualização (BFF): Busca os dados da oferta apenas para exibição em tela.
- * 3. Delegação: Redireciona o usuário para o DMZ Gateway com os "documentos" (IDs e Token).
- * 4. [SECURITY]: Eliminação de inicialização síncrona de LocalStorage para prevenir crashes no Servidor.
+ * Atua apenas como "vitrine" (Mock da tela da Superbid). 
+ * 
+ * * [RESPONSABILIDADES DA REFATORAÇÃO (BFF & Edge Gateway)]:
+ * 1. Interface: Renderização do layout original (tabelas, carrossel).
+ * 2. Visualização (BFF): Busca os dados da oferta apenas para exibição local.
+ * 3. Delegação (O Pulo do Gato): Cria um Form POST invisível e submete para a 
+ *    Edge Function (financial-gateway-gate), delegando 100% da orquestração para a Borda.
  */
 
 import { useState, useMemo, useEffect, useContext, useRef } from "react";
 import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
-import { Loader2, CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react";
+import { CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
@@ -206,28 +206,43 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
     if (!activeOffer) return;
     setLoading(true);
 
-    // Ignorando o linter: O Gateway DMZ PRECISA do token na URL para orquestrar os ambientes.
     const tokenForGateway = localStorage.getItem('session_token') || sessionToken;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 
-    const searchPayload: any = {
+    // 1. Montamos o Payload de roteamento
+    const searchPayload: Record<string, string> = {
       environment: ambiente,
-      auth_token: tokenForGateway, 
-      offer_id: encodeURIComponent(String(targetOfferId)),
-      product_id: encodeURIComponent(String(currentFlow.product_id || '')),
-      return_uri: window.location.pathname + window.location.search,
+      auth_token: tokenForGateway || "", 
+      offer_id: String(targetOfferId),
+      product_id: String(currentFlow.product_id || ''),
+      return_uri: window.location.origin + window.location.pathname + window.location.search,
       utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
       utm_medium: "referral",
       utm_campaign: `flow_${flowKey?.toLowerCase()}`,
     };
     
     if (currentFlow.link !== "Banner" && activeOffer?.offer?.category_id) {
-      searchPayload.category_id = activeOffer.offer.category_id;
+      searchPayload.category_id = String(activeOffer.offer.category_id);
     }
 
-    navigate({
-      to: "/financialGatewayEntry",
-      search: searchPayload
+    // 2. Criamos o Formulário Invisível (Abordagem B / Form POST)
+    const form = document.createElement('form');
+    form.method = 'POST';
+    // Apontamos diretamente para a nova Edge Function na Borda
+    form.action = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
+
+    // 3. Populamos os inputs com os dados do Payload de forma segura
+    Object.entries(searchPayload).forEach(([key, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = value;
+      form.appendChild(input);
     });
+
+    // 4. Submetemos (O navegador assume a viagem e o redirecionamento 302 faz o resto)
+    document.body.appendChild(form);
+    form.submit();
   };
 
   // =========================================================================
