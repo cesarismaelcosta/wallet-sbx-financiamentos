@@ -58,10 +58,8 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   const integrationDetails = payload?.integration_details || {};
   
   // Chave de intefação
-  // const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY"); => antigo
-  const FANDI_API_KEY = integrationDetails.chaveAcesso;
+  const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
 
-  
   // CNPJ DE ACORDO COM O PRODUTO (LEVES E PESADOS)
   const CNPJ_LOJA = integrationDetails.cnpjLoja; 
 
