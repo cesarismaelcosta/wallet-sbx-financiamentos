@@ -358,7 +358,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         statusCode = 422;
     }
 
-    return respondWithError(isAjax, statusCode, errorCode, err.message, safeReturnUri);
+    return respondWithError(isAjax, statusCode, errorCode, err.message, safeReturnUri, req);
   }
 }));
 

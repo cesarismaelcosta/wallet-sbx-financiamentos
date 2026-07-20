@@ -396,7 +396,8 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         
         const requestContext = {
             entity_id: visitEntityData.entity_id,
-            offer_id: visitOfferData.offer_id
+            // offer_id: visitOfferData.offer_id
+            offer_id: "1111"
         };
 
         try {
@@ -417,7 +418,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
             let userMessage = "Ocorreu um erro ao carregar a oferta.";
             let errorCode = "UNKNOWN_ERROR";
-            let targetFallback = originPath; 
+            let targetFallback = visit?.origin_url || "/";
 
             if (err.message.includes("OFFER_NOT_FOUND")) {
                 userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
@@ -436,6 +437,8 @@ serve(withSecurity('orchestrator', async (req: Request) => {
                 userMessage = "Inconsistência nos dados de segurança (Bloqueio).";
                 errorCode = "FORBIDDEN";
             }
+
+            debugLog("fallback_url: ", targetFallback)
 
             const errorForUI = new Error(userMessage);
             (errorForUI as any).errorCode = errorCode; 
