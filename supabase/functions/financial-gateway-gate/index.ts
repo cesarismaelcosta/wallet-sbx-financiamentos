@@ -107,11 +107,11 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
       environment,
       origin_url: return_uri,
       product_id: product_id || "",
-      // entity: userProfile,
-      // offer: offerPayload.offer,
-      // seller: offerPayload.seller,
-      // event: offerPayload.event,
-      // manager: offerPayload.manager,
+      entity: userProfile,
+      offer: offerPayload.offer,
+      seller: offerPayload.seller,
+      event: offerPayload.event,
+      manager: offerPayload.manager,
       interaction_context: { utm_source, utm_medium, utm_campaign, origin_url: return_uri }
     };
 
