@@ -396,8 +396,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         
         const requestContext = {
             entity_id: visitEntityData.entity_id,
-            // offer_id: visitOfferData.offer_id
-            offer_id: "1111"
+            offer_id: visitOfferData.offer_id
         };
 
         try {
