@@ -25,56 +25,77 @@ interface FinancialHubLayoutProps {
 /**
  * @component ErrorCountdown
  * @description Componente interno de fallback para erros críticos da jornada (ex: 401, 403, 404).
- * Exibe um loader, o motivo contextual do erro e força o redirecionamento após o fim do contador.
  * 
- * @param {string} fallbackUrl - URL de destino para onde o usuário será redirecionado ao fim do timer ou no clique.
- * @param {string} [message] - Mensagem detalhada do erro (injetada direto da resposta da API).
- * @param {string} [title] - Título de destaque baseado no código do erro (ex: "Sessão Expirada").
+ * ============================================================================
+ * UNIFICAÇÃO VISUAL (Design System)
+ * ============================================================================
+ * Este componente foi atualizado para espelhar a exata mesma experiência 
+ * da tela de erro da Borda (financialGatewayGate.tsx). 
+ * Substituímos o antigo "spinner de loading" por um ícone de erro claro, 
+ * e o tempo de fuga foi padronizado para 5 segundos, mantendo a inteligência
+ * de exibir títulos semânticos de acordo com a resposta da API.
+ * 
+ * @param {string} fallbackUrl - URL segura para onde o usuário será ejetado ao fim do timer.
+ * @param {string} [message] - Mensagem descritiva do erro (injetada direto do contrato da API).
+ * @param {string} [title] - Título semântico mapeado pelo layout (ex: "Sessão Expirada", "Acesso Restrito").
  */
 function ErrorCountdown({ fallbackUrl, message, title }: { fallbackUrl: string, message?: string, title?: string }) {
-  // Estado que controla o cronômetro regressivo (inicia em 10 segundos)
-  const [countdown, setCountdown] = useState(10);
+  // ESTADO: Cronômetro regressivo padronizado para 5 segundos (igual ao Gateway).
+  // Evita prender o usuário em uma tela morta por muito tempo.
+  const [countdown, setCountdown] = useState(5);
 
-  // Efeito que gerencia o ciclo de vida do timer
+  // CICLO DE VIDA: Gerenciamento do timer e redirecionamento automático
   useEffect(() => {
-    // Quando o cronômetro zera, força o redirecionamento via BOM (Browser Object Model)
+    // 1. Condição de Escape: Se o timer zerar, ejeta o usuário via BOM (Browser Object Model).
+    // Usamos window.location.href para forçar uma navegação real, 
+    // limpando a memória/contexto do SPA e garantindo que ele caia na URL de origem de forma limpa.
     if (countdown === 0) {
       window.location.href = fallbackUrl;
       return;
     }
-    // Subtrai 1 segundo do contador atual
+    
+    // 2. Loop do Timer: Subtrai 1 segundo a cada ciclo de 1000ms.
     const timer = setInterval(() => setCountdown((prev) => prev - 1), 1000);
     
-    // Cleanup function: limpa o intervalo caso o componente desmonte antes de zerar
+    // 3. Cleanup: Evita memory leaks (vazamento de memória) se o componente desmontar antes do tempo.
     return () => clearInterval(timer);
   }, [countdown, fallbackUrl]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans'] p-6 text-center">
       
-      {/* Indicador visual de processamento/espera */}
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-6"></div>
+      {/* IDENTIDADE VISUAL: Imagem estática de erro.
+          Substitui o antigo "spinner", pois exibir um loader para um processo 
+          que já falhou passa a falsa sensação de que o sistema ainda está carregando. */}
+      <img 
+        src="/assets/error/error.png" 
+        alt="Erro na simulação" 
+        className="w-20 h-20 object-contain mb-6" 
+      />
 
-      {/* TÍTULO DINÂMICO: Recebe o contexto mapeado ou usa um texto genérico caso venha vazio */}
+      {/* TÍTULO CONTEXTUAL: Informa o status da falha de forma direta e semântica */}
       <h2 className="text-xl font-bold text-slate-800 mb-2">
         {title || "Ops! Tivemos um problema"}
       </h2>
       
-      {/* MENSAGEM DINÂMICA: Renderiza a mensagem REAL que a API devolveu e o Wrapper repassou */}
-      <p className="text-slate-500 font-medium text-sm mb-2">
-        {message || "Falha ao carregar simulação..."}
+      {/* MENSAGEM DO BACKEND: Renderiza a justificativa real vinda do Gatekeeper (Orquestrador) */}
+      <p className="text-slate-500 font-medium text-sm mb-2 max-w-md px-4">
+        {message || "Não foi possível carregar a simulação desta oferta."}
       </p>
       
-      {/* Feedback visual do timer para o usuário */}
-      <p className="text-slate-400 font-medium text-sm mb-6">Retornando em {countdown}s...</p>
+      {/* FEEDBACK DE SISTEMA: Mostra pro usuário que ele não está preso na tela */}
+      <p className="text-slate-400 font-medium text-xs mt-4 mb-6">
+        Retornando em {countdown}s...
+      </p>
       
-      {/* Botão de escape antecipado (bypass do timer) */}
+      {/* BOTÃO DE BYPASS: Permite ao usuário forçar a saída sem aguardar o timer.
+          Estilo padronizado com a identidade visual principal do produto (roxo). */}
       <button 
         onClick={() => window.location.href = fallbackUrl}
-        className="flex items-center text-primary font-semibold text-sm hover:opacity-80 transition-opacity"
+        className="flex items-center text-[#B400FF] font-semibold text-sm hover:opacity-80 transition-opacity"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
-        retornar agora
+        Retornar agora
       </button>
     </div>
   );
