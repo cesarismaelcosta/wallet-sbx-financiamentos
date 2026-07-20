@@ -17,6 +17,10 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
     methods: ['GET', 'POST'], 
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
   },
+    'financial-gateway-gate': { 
+    methods: ['POST'], 
+    requiredHeaders: [] 
+  },
   'financial-gateway-webhook': { 
     methods: ['POST'],  // Webhooks costumam ser POST
     requiredHeaders: [] // Webhooks de parceiros geralmente não mandam headers customizados
