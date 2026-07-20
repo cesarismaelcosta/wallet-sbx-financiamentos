@@ -536,56 +536,52 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         // =====================================================================
         const targetVisitId = payload.visit_id || null;
         const targetEntityId = payload.entity?.entity_id || null;
+        const targetOfferId = payload.offer?.offer_id || null;
         
-        debugLog("🚨 [validateVisitOwnership POST] Validando visita:", targetVisitId);
-        await validateVisitOwnership(
-            supabase, 
-            auth, 
-            targetVisitId, 
-            targetEntityId
-        );
+        const requestContext = {
+            entity_id: targetEntityId,
+            offer_id: targetOfferId
+        };
 
-        const offerId = payload.offer?.offer_id;
-        if (offerId) {
-            debugLog("🚨 [validateOfferIntegrity POST] Validando integridade da oferta:", offerId);
-            try {
-                await validateOfferIntegrity(
-                    supabase, 
-                    auth, 
-                    targetVisitId, 
-                    offerId
-                );
-                debugLog("✅ Oferta validada com sucesso.");
-            } catch (err: any) {
-                debugLog("🚨 [validateOfferIntegrity POST] Falha na validação:", err.message);
+        try {
+            debugLog("🚨 [Gateway POST] Validando ownership da visita e integridade da oferta...");
+            await validateVisitAndOfferIntegrity(
+                supabase, 
+                auth, 
+                targetVisitId, 
+                requestContext
+            );
+            debugLog("✅ Jornada validada com sucesso pelo Gatekeeper.");
+        } catch (err: any) {
+            debugLog("🚨 [Gatekeeper POST] Falha na validação:", err.message);
 
-                let userMessage = "Ocorreu um erro ao carregar a oferta.";
-                let errorCode = "UNKNOWN_ERROR";
-                let targetFallback = originPath; // Default para erros de negócio é voltar para a return_uri enviada
+            let userMessage = "Ocorreu um erro ao processar sua requisição.";
+            let errorCode = "UNKNOWN_ERROR";
+            let targetFallback = originPath; // Default para erros de negócio é voltar para a origem
 
-                if (err.message.includes("OFFER_NOT_FOUND")) {
-                    userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
-                    errorCode = "OFFER_NOT_FOUND";
-                } else if (err.message.includes("INVALID_RELATIONSHIP")) {
-                    userMessage = "Você não tem permissão para acessar esta oferta.";
-                    errorCode = "INVALID_RELATIONSHIP";
-                } else if (err.message.includes("SESSION_EXPIRED")) {
-                    userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-                    errorCode = "SESSION_EXPIRED";
-                    targetFallback = authPath; // Direciona para o login
-                } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
-                    userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
-                    errorCode = "UPSTREAM_CONNECTION_ERROR";
-                }
-
-                const errorForUI = new Error(userMessage);
-                (errorForUI as any).errorCode = errorCode; 
-                (errorForUI as any).fallback_url = targetFallback; // Aplica o destino correto
-                
-                throw errorForUI; 
+            if (err.message.includes("OFFER_NOT_FOUND")) {
+                userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
+                errorCode = "OFFER_NOT_FOUND";
+            } else if (err.message.includes("INVALID_RELATIONSHIP")) {
+                userMessage = "Você não tem permissão para acessar esta oferta ou visita.";
+                errorCode = "INVALID_RELATIONSHIP";
+            } else if (err.message.includes("SESSION_EXPIRED")) {
+                userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+                errorCode = "SESSION_EXPIRED";
+                targetFallback = authPath; // Direciona para o login
+            } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
+                userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+                errorCode = "UPSTREAM_CONNECTION_ERROR";
+            } else if (err.message.includes("FORBIDDEN") || err.message.includes("INVALID_PAYLOAD")) {
+                userMessage = "Inconsistência nos dados de segurança (Bloqueio).";
+                errorCode = "FORBIDDEN";
             }
-        } else {
-            debugLog("ℹ️ Nenhum offer_id fornecido. Pulando validação de integridade.");
+
+            const errorForUI = new Error(userMessage);
+            (errorForUI as any).errorCode = errorCode; 
+            (errorForUI as any).fallback_url = targetFallback; 
+            
+            throw errorForUI; 
         }
 
         // =====================================================================
