@@ -425,8 +425,9 @@ function respondWithError(
         targetUrl = `${frontendOrigin}${targetUrl.startsWith("/") ? "" : "/"}${targetUrl}`;
     }
 
+    // Monta a URL de erro direto no destino
     const separator = targetUrl.includes("?") ? "&" : "?";
-    const errorUrl = `${targetUrl}${separator}status=error&code=${code}&message=${encodedMsg}&return_uri=${encodedUri}`;
+    const errorUrl = `${targetUrl}${separator}status=error&code=${code}&message=${encodedMsg}`;
     
     headers.set("Location", errorUrl);
     return new Response(null, { status: 302, headers });
