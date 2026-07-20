@@ -219,7 +219,7 @@ export function sbXPAYHome() {
                         <div className="w-full lg:w-6/12 space-y-5 text-center lg:text-left">
                             <div className="flex justify-center lg:justify-start">
                                 <img 
-                                    src="/assets/home/sbxpay_r.png" 
+                                    src="/assets/home/sbxpay_p_sem_borda.png" 
                                     alt="sbX PAY" 
                                     className="h-14 md:h-14 w-auto object-contain" 
                                 />
