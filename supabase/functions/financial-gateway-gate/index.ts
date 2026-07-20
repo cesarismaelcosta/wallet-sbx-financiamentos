@@ -362,19 +362,72 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   }
 }));
 
-function respondWithError(isAjax: boolean, statusCode: number, code: string, message: string, safeReturnUri: string): Response {
+/**
+ * @fileoverview Utilitário de Resposta de Erro para Borda (Edge Gateway)
+ * @description Padroniza o despacho de erros suportando Content Negotiation 
+ * (AJAX/JSON vs. Navegação Nativa/Redirecionamento HTTP 302).
+ */
+
+/**
+ * Formata e despacha uma resposta de erro, garantindo que o redirecionamento 
+ * aponte estritamente para o Front-end e nunca para o domínio do Supabase.
+ * 
+ * @param {boolean} isAjax - Indica se a requisição originou-se de uma chamada AJAX/JSON.
+ * @param {number} statusCode - Código de status HTTP para a resposta (ex: 400, 401, 422).
+ * @param {string} code - Identificador semântico do erro (ex: SESSION_EXPIRED).
+ * @param {string} message - Mensagem descritiva detalhada do erro.
+ * @param {string} safeReturnUri - URI sanitizada de retorno enviada pelo cliente.
+ * @returns {Response} Objeto Response configurado com JSON ou Header Location (302).
+ */
+function respondWithError(
+    isAjax: boolean, 
+    statusCode: number, 
+    code: string, 
+    message: string, 
+    safeReturnUri: string,
+    req: Request
+): Response {
     const headers = new Headers();
     headers.set("Access-Control-Allow-Origin", "*");
 
     if (isAjax) {
         headers.set("Content-Type", "application/json");
-        return new Response(JSON.stringify({ success: false, code, message }), { status: statusCode, headers });
-    } else {
-        const encodedMsg = encodeURIComponent(message);
-        const encodedUri = encodeURIComponent(safeReturnUri);
-        const errorUrl = `/financialGatewayGateway?status=error&code=${code}&message=${encodedMsg}&return_uri=${encodedUri}`;
-        
-        headers.set("Location", errorUrl);
-        return new Response(null, { status: 302, headers });
+        return new Response(
+            JSON.stringify({ success: false, code, message }), 
+            { status: statusCode, headers }
+        );
+    } 
+
+    const encodedMsg = encodeURIComponent(message);
+    const encodedUri = encodeURIComponent(safeReturnUri);
+    
+    // 1. Tenta extrair a origem do safeReturnUri (se for absoluta)
+    let frontendOrigin = "";
+    if (safeReturnUri && (safeReturnUri.startsWith("http://") || safeReturnUri.startsWith("https://"))) {
+        try {
+            frontendOrigin = new URL(safeReturnUri).origin;
+        } catch (_) {}
     }
+
+    // 2. Se não conseguiu, extrai estritamente dos headers da requisição real
+    if (!frontendOrigin) {
+        const reqOrigin = req.headers.get("origin") || req.headers.get("referer");
+        if (reqOrigin) {
+            try {
+                frontendOrigin = new URL(reqOrigin).origin;
+            } catch (_) {}
+        }
+    }
+
+    // 3. Monta o destino final usando o que foi extraído da requisição do usuário
+    let targetUrl = safeReturnUri;
+    if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+        targetUrl = `${frontendOrigin}${targetUrl.startsWith("/") ? "" : "/"}${targetUrl}`;
+    }
+
+    const separator = targetUrl.includes("?") ? "&" : "?";
+    const errorUrl = `${targetUrl}${separator}status=error&code=${code}&message=${encodedMsg}&return_uri=${encodedUri}`;
+    
+    headers.set("Location", errorUrl);
+    return new Response(null, { status: 302, headers });
 }
