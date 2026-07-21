@@ -56,3 +56,39 @@ export const getSafeRedirectUrl = (url?: string | null): string => {
   // Failsafe Absoluto
   return "/";
 };
+
+/**
+ * @function getSafeCorsOrigin
+ * @description Prevenção contra falsificação de origem (CORS Spoofing).
+ *              Garante que requisições AJAX/Fetch só sejam aceitas se vierem
+ *              de domínios autorizados do ecossistema sbX.
+ *
+ * @param {string | null} origin - O header 'Origin' enviado pelo navegador.
+ * @returns {string} - A própria origem se for confiável, ou um fallback restrito.
+ */
+export const getSafeCorsOrigin = (origin?: string | null): string => {
+  // 1. Se não tem origin (ex: chamadas Server-to-Server, cURL, Postman)
+  // O CORS não se aplica aqui, então retornar vazio é perfeitamente seguro.
+  if (!origin) return "";
+
+  try {
+    // Se o curinga "*" estiver ativo, DEVOLVA A PRÓPRIA ORIGEM.
+    // O navegador exige que o Origin seja explícito (não "*") quando usamos Allow-Credentials: true
+    if (ALLOWED_DOMAINS.includes("*")) {
+        return origin;
+    }
+
+    const parsed = new URL(origin);
+
+    const isAllowed = ALLOWED_DOMAINS.some(domain => 
+      parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
+    );
+
+    if (isAllowed) return origin;
+
+    debugLog(`🚨 [Security] CORS Spoofing bloqueado na EDGE para a origem: ${origin}`);
+    return fallbackOrigin;
+  } catch (e) {
+    return fallbackOrigin;
+  }
+};
