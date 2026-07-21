@@ -302,12 +302,29 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     const orchestratorData = await orchestratorResponse.json();
     if (!orchestratorResponse.ok) throw new Error(`ORCHESTRATOR_FAIL: ${orchestratorData.message}`);
 
-    const targetUrl = orchestratorData.url;
+    let targetUrl = orchestratorData.url;
+
+    // Extração dinâmica da origem absoluta do front-end (Funciona para localhost e Lovable)
+    let frontendOrigin = "";
+    const reqOrigin = req.headers.get("origin") || req.headers.get("referer");
+    if (reqOrigin) {
+        try { frontendOrigin = new URL(reqOrigin).origin; } catch (_) {}
+    }
+    if (!frontendOrigin && return_uri && (return_uri.startsWith("http://") || return_uri.startsWith("https://"))) {
+        try { frontendOrigin = new URL(return_uri).origin; } catch (_) {}
+    }
+    if (!frontendOrigin) {
+        frontendOrigin = Deno.env.get("FRONTEND_URL") || ""; 
+    }
+
+    // Se o orquestrador retornar uma URL relativa, prefixa com a origem real capturada
+    if (targetUrl && targetUrl.startsWith('/') && frontendOrigin) {
+        targetUrl = `${frontendOrigin}${targetUrl}`;
+    }
 
     const responseHeaders = new Headers();
     responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
-    // Permite apenas URLs definidas em security.ts
-    responseHeaders.set("Access-Control-Allow-Origin", getSafeCorsOrigin(req.headers.get("origin") || req.headers.get("referer")))
+    responseHeaders.set("Access-Control-Allow-Origin", getSafeCorsOrigin(req.headers.get("origin") || req.headers.get("referer")));
 
     if (isAjax) {
         responseHeaders.set("Content-Type", "application/json");
@@ -412,6 +429,10 @@ function respondWithError(
         if (reqOrigin) {
             try { frontendOrigin = new URL(reqOrigin).origin; } catch (_) {}
         }
+    }
+
+    if (!frontendOrigin) {
+        frontendOrigin = Deno.env.get("FRONTEND_URL") || "";
     }
 
     if (!frontendOrigin) {

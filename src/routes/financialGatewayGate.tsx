@@ -1,8 +1,18 @@
 /**
- * @fileoverview financialGatewayGate (Front-end Error Fallback)
- * Front-end é "burro". Ele só carrega se o Edge Gateway falhar e 
- * fizer um Redirect 302 para cá.
-*/
+ * @fileoverview Rota: financialGatewayGate (Front-end Error Fallback & Resilient Recovery)
+ * @path src/routes/financialGatewayGate.tsx
+ * 
+ * =========================================================================
+ * [ARQUITETURA & CLEAN ARCHITECTURE: FALLBACK DE BORDA]
+ * =========================================================================
+ * 1. [RESPONSABILIDADE ÚNICA]: Atua como a tela receptora de erros disparados
+ *    pelo Edge Gateway via redirecionamento HTTP 302.
+ * 2. [HIGIENIZAÇÃO DE CONTEXTO]: Extrai query parameters de falha (status, code,
+ *    message, return_uri) de forma estrita e segura.
+ * 3. [RETORNO CONTEXTUAL]: Garante que o usuário seja devolvido para a origem
+ *    correta (`targetReturnUrl`) de forma atômica, eliminando loops ou saltos 
+ *    para a raiz global (/).
+ */
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from 'react';
@@ -17,6 +27,9 @@ interface SearchSchema {
 }
 
 export const Route = createFileRoute("/financialGatewayGate")({
+  // =====================================================================
+  // [VALIDAÇÃO DE PARÂMETROS]: Tipagem e saneamento da query string
+  // =====================================================================
   validateSearch: (search: Record<string, unknown>): SearchSchema => ({
     status: search.status as string | undefined,
     code: search.code as string | undefined,
@@ -28,7 +41,14 @@ export const Route = createFileRoute("/financialGatewayGate")({
     const { status, code, message, return_uri } = Route.useSearch();
     const [countdown, setCountdown] = useState(5);
 
-    // Se o usuário cair aqui, logamos o erro visualizado e aguardamos os 5 segundos
+    // =====================================================================
+    // [RESOLUÇÃO DE DESTINO]: Saneamento da URI de retorno para evitar rotas vazias
+    // =====================================================================
+    const targetReturnUrl = return_uri && return_uri !== "/" ? return_uri : "/";
+
+    // =====================================================================
+    // [AUDITORIA E TELEMETRIA]: Registro centralizado de falhas de jornada
+    // =====================================================================
     useEffect(() => {
       if (status === "error") {
         logSystemError("SESSION_N/A", {
@@ -40,34 +60,41 @@ export const Route = createFileRoute("/financialGatewayGate")({
       }
     }, [status, code, message, return_uri]);
 
-    // Timer regressivo
+    // =====================================================================
+    // [CONTROLE DE FLUXO]: Temporizador regressivo para redirecionamento automático
+    // =====================================================================
     useEffect(() => {
       if (countdown > 0) {
         const timer = setTimeout(() => setCountdown(prev => prev - 1), 1000);
         return () => clearTimeout(timer);
       }
       
-      // Auto-retorno ao zerar o contador (volta pra Superbid)
+      // Auto-retorno ao zerar o contador usando a URL de destino tratada
       if (countdown === 0) {
-        const target = return_uri || "/";
-        window.location.replace(target);
+        window.location.replace(targetReturnUrl);
       }
-    }, [countdown, return_uri]);
+    }, [countdown, targetReturnUrl]);
 
-    // 1. Tratamento Específico: Token Expirado
+    // =====================================================================
+    // [GUARDAS DE SEGURANÇA]: Interceptação de cenários específicos de sessão
+    // =====================================================================
     if (code === "SESSION_EXPIRED") {
-      const loginTarget = `/accounts/signin?redirect_uri=${encodeURIComponent(return_uri || "/")}`;
+      const loginTarget = `/accounts/signin?redirect_uri=${encodeURIComponent(targetReturnUrl)}`;
       window.location.replace(loginTarget);
       return null;
     }
 
-    // Tratamento para exibir apenas a mensagem limpa sem o código técnico na tela
+    // =====================================================================
+    // [TRATAMENTO DE MENSAGEM]: Higienização textual para exibição amigável
+    // =====================================================================
     const rawMessage = message || "Não foi possível carregar a simulação desta oferta.";
     const cleanMessage = rawMessage.includes(":") 
       ? rawMessage.substring(rawMessage.indexOf(":") + 1).trim() 
       : rawMessage;
 
-    // 2. UI Padrão de Falha (Oferta vendida, orchestrator falhou, etc)
+    // =====================================================================
+    // [RENDERIZAÇÃO DE INTERFACE]: UI Padrão de Falha e Recuperação
+    // =====================================================================
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
         
@@ -83,7 +110,7 @@ export const Route = createFileRoute("/financialGatewayGate")({
         <p className="text-slate-400 font-medium text-xs mt-4 mb-6">Retornando em {countdown}s...</p>
         
         <button 
-          onClick={() => window.location.replace(return_uri || "/")}
+          onClick={() => window.location.replace(targetReturnUrl)}
           className="flex items-center text-[#B400FF] font-semibold text-sm hover:opacity-80 transition-opacity"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
