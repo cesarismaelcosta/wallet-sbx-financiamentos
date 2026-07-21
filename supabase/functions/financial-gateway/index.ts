@@ -139,8 +139,9 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       let errorCode = "BUSINESS_ERROR";
       let userMessage = err.message;
       
-      // A LÓGICA CORRETA DAS DUAS VARIÁVEIS:
-      let finalFallback = payload?.origin_url || originPath || "/"; // Padrão é voltar para inicio da visita
+      // REGRA DE OURO: Tenta sempre ejetar para a Superbid (payload?.origin_url).
+      // Só usa o originPath (Tela do React) como fallback extremo se a origem da visita não existir.
+      let finalFallback = payload?.origin_url || originPath || "/";
 
       if (err.message.includes("OFFER_NOT_FOUND")) {
           userMessage = "Esta oferta não está mais disponível ou não foi encontrada para simulação.";
@@ -151,15 +152,13 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       } else if (err.message.includes("SESSION_EXPIRED")) {
           userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
           errorCode = "SESSION_EXPIRED";
-          finalFallback = authPath; // LOGIN FALLBACK
+          finalFallback = authPath; // Única exceção: Manda para o Login
       } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
           userMessage = "O serviço de consulta da oferta está instável. Tente novamente.";
           errorCode = "UPSTREAM_CONNECTION_ERROR";
-          finalFallback= originPath;  // volta para origem da chamada
       } else if (err.message.includes("FORBIDDEN_ACCESS") || err.message.includes("INVALID_PAYLOAD")) {
           userMessage = "Inconsistência nos dados de segurança.";
           errorCode = "FORBIDDEN";
-          finalFallback= originPath; // volta para origem da chamada
       }
 
       return {
@@ -186,7 +185,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
             success: false,
             code: "INTERNAL_SERVER_ERROR",
             message: "Ocorreu um erro interno inesperado. Tente novamente.",
-            fallback_url: payload.origin_url || originPath || "/" // Faz jornada voltar para a origem da visita ou se não existir origem da chamada.
+            fallback_url: payload?.origin_url || originPath || "/" // Faz jornada voltar para a origem da visita ou se não existir origem da chamada.
         }
     };
   } 
