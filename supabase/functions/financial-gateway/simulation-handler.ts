@@ -307,7 +307,7 @@ export async function processSimulation(req: Request, payload: SimulationPayload
           // Insere simulação
           const result = await insertSimulationData(sql, payload, infra, gatewayResult, action, action_description, payload.step)
           // Atualiza o payload com os IDs reais do banco
-          payload.simulation_update_id = String(result.simulation_update_idd);
+          payload.simulation_update_id = String(result.simulation_update_id);
           debugLog("após inserir em creditas", payload.simulation_id)
         } else {
           // EXECUTE_SIMULATION

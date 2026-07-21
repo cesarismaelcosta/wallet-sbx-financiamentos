@@ -11,7 +11,10 @@ export async function validateRequest(req: Request) {
   // =========================================================================
   // 1. EXTRAÇÃO HÍBRIDA (Header -> Cookie)
   // =========================================================================
-  let token = req.headers.get("x-session-token");
+  // API Polimórfica. Ela é inteligente o suficiente para aceitar requisições de duas formas:
+  // Padrão Customizado (x-session-token): Útil para o seu Front-end atual, onde você envia o token de forma explícita sem conflitar com a chave anônima (Anon Key) do Supabase.
+  // Padrão Universal (Authorization: Bearer): Se amanhã outro parceiro precisar chamar a sua API de forma programática (S2S), eles usarão o padrão de mercado (Bearer). A sua API vai olhar, arrancar a palavra "Bearer", pegar o token e validar perfeitamente.
+  let token = req.headers.get("x-session-token") || req.headers.get("Authorization")?.replace("Bearer ", "");
 
   if (!token) {
     const cookieHeader = req.headers.get("Cookie");

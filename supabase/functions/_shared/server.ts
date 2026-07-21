@@ -42,9 +42,18 @@ export const withSecurity = (
     }
 
     const corsHeaders = {
-      "Access-Control-Allow-Origin": allowedOrigin,
+      // 1. Blindagem dinâmica da Origem para permitir URLs de ALLOWED (Zero-Trust)
+      "Access-Control-Allow-Origin": getSafeCorsOrigin(req.headers.get("Origin")),
+      
+      // 2. Proteção de Cache (Diz aos proxies/CDNs que a resposta muda dependendo de quem pede)
+      "Vary": "Origin",
+      
+      // 3. Liberação de Métodos e Headers dinâmicos (Mantido o seu código)
       "Access-Control-Allow-Methods": [...config.methods, "OPTIONS"].join(", "),
       "Access-Control-Allow-Headers": allAllowedHeaders,
+      
+      // 4. A CHAVE MESTRA DOS COOKIES (Obrigatório para arquitetura HttpOnly via AJAX)
+      "Access-Control-Allow-Credentials": "true",
     };
 
     // 2. HANDSHAKE (PREFLIGHT) AUTOMÁTICO

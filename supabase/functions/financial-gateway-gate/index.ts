@@ -17,7 +17,7 @@ import { create, getNumericDate, verify } from "https://deno.land/x/djwt@v2.8/mo
 import { withSecurity } from "../_shared/server.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { debugLog } from "../_shared/logger.ts";
-import { getSafeRedirectUrl } from "../_shared/security.ts";
+import { getSafeRedirectUrl, getSafeCorsOrigin } from "../_shared/security.ts";
 import { BFFUserProfile, BFFOfferDetails } from "../_shared/types.ts";
 
 const ENV_URLS = {
@@ -306,7 +306,8 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
 
     const responseHeaders = new Headers();
     responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
-    responseHeaders.set("Access-Control-Allow-Origin", "*");
+    // Permite apenas URLs definidas em security.ts
+    headers.set("Access-Control-Allow-Origin", getSafeCorsOrigin(req.headers.get("origin")));
 
     if (isAjax) {
         responseHeaders.set("Content-Type", "application/json");

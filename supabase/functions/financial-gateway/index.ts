@@ -104,7 +104,12 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       // 3. GATEKEEPERS AUTÔNOMOS (Zero-Trust)
       // ---------------------------------------------------------------------
       const targetVisitId = payload.visit_id || null;
-      
+      const targetEntityId = payload.entity?.entity_id || null;
+
+      if (!targetVisitId || | targetEntityId) {
+        throw new Error("INVALID_PAYLOAD: O parâmetro visit_id é obrigatório para operações financeiras.");
+      }
+
       // 3.1: Valida a Visita Inteira e o Vínculo com a Oferta e Superbid
       debugLog("🚨 [Gateway POST] Validando ownership e upstream...");
       await validateVisitAndOfferIntegrity(supabase, auth, targetVisitId, {
