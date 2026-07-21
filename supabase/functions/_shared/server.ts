@@ -42,8 +42,8 @@ export const withSecurity = (
     }
 
     const corsHeaders = {
-      // 1. Blindagem dinâmica da Origem para permitir URLs de ALLOWED (Zero-Trust)
-      "Access-Control-Allow-Origin": getSafeCorsOrigin(req.headers.get("Origin")),
+      // 1. Blindagem dinâmica da Origem (Lê o Origin, ou o Referer caso o browser não mande o Origin)
+      "Access-Control-Allow-Origin": getSafeCorsOrigin(req.headers.get("Origin") || req.headers.get("Referer")),
       
       // 2. Proteção de Cache (Diz aos proxies/CDNs que a resposta muda dependendo de quem pede)
       "Vary": "Origin",

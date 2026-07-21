@@ -67,17 +67,20 @@ export const getSafeRedirectUrl = (url?: string | null): string => {
  * @returns {string} - A própria origem se for confiável, ou um fallback restrito.
  */
 export const getSafeCorsOrigin = (origin?: string | null): string => {
-  // 1. Se não tem origin (ex: chamadas Server-to-Server, cURL, Postman)
-  // O CORS não se aplica aqui, então retornar vazio é perfeitamente seguro.
+  // 1. Se não tem origin (ex: cURL, Postman, Server-to-Server)
   if (!origin) return "";
 
-  try {
-    // Se o curinga "*" estiver ativo, DEVOLVA A PRÓPRIA ORIGEM.
-    // O navegador exige que o Origin seja explícito (não "*") quando usamos Allow-Credentials: true
-    if (ALLOWED_DOMAINS.includes("*")) {
-        return origin;
-    }
+  // 2. Se o curinga "*" está ativo na Allowlist (Desenvolvimento / Ambiente Flexível),
+  // devolvemos a própria origem informada pelo cliente (seja localhost, lovable ou qualquer outra).
+  // Nota: O spec do CORS exige que com "Allow-Credentials: true", a resposta mande a origem exata, nunca "*".
+  if (ALLOWED_DOMAINS.includes("*")) {
+      return origin;
+  }
 
+  // 3. Se for a palavra literal "null" (iframes isolados), rejeitamos se não houver curinga
+  if (origin === "null") return "";
+
+  try {
     const parsed = new URL(origin);
 
     const isAllowed = ALLOWED_DOMAINS.some(domain => 
@@ -87,8 +90,8 @@ export const getSafeCorsOrigin = (origin?: string | null): string => {
     if (isAllowed) return origin;
 
     debugLog(`🚨 [Security] CORS Spoofing bloqueado na EDGE para a origem: ${origin}`);
-    return fallbackOrigin;
+    return "";
   } catch (e) {
-    return fallbackOrigin;
+    return "";
   }
 };
