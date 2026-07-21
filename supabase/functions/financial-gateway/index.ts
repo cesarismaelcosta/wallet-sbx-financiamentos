@@ -106,7 +106,8 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       const targetVisitId = payload.visit_id || null;
       const targetEntityId = payload.entity?.entity_id || null;
 
-      if (!targetVisitId || | targetEntityId) {
+      // 3.1: Valida infomações básicas para simulação
+      if (!targetVisitId || !targetEntityId) {
         throw new Error("INVALID_PAYLOAD: O parâmetro visit_id é obrigatório para operações financeiras.");
       }
 
