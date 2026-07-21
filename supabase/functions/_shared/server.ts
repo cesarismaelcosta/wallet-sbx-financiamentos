@@ -27,29 +27,41 @@ export const withSecurity = (
       return new Response(JSON.stringify({ error: "Configuração de segurança ausente" }), { status: 500 });
     }
 
-    // 1. MONTAGEM DINÂMICA DE CORS
+    // 1. MONTAGEM DINÂMICA DE CORS E CONTRATO DE ORIGEM
     // Junta os headers padrão (authorization, etc) com os headers exigidos pela função no registry
     const defaultHeaders = ["authorization", "x-client-info", "apikey", "content-type"];
     const allAllowedHeaders = [...new Set([...defaultHeaders, ...config.requiredHeaders])].join(", ");
     
-    // O Wrapper verifica se a função pediu um origin restrito. 
-    // Se não pediu, assume o "*" como default global.
-    let allowedOrigin = config.origin || "*";
+    // Captura a origem via Origin ou fallback de Referer caso o browser omita o header
+    const reqOrigin = req.headers.get("Origin") || req.headers.get("Referer") || "";
+    let finalAllowedOrigin = "";
 
-    if (allowedOrigin === 'self') {
-        // Puxa a URL do projeto atual do ambiente do Deno
+    // Se a função no registry.ts exige 'self', blindamos para aceitar apenas chamadas da própria URL do Supabase
+    if (config.origin === 'self') {
         const projectUrl = Deno.env.get('SUPABASE_URL');
-        allowedOrigin = projectUrl || "*"; 
+        if (projectUrl) {
+            try {
+                const parsedProject = new URL(projectUrl);
+                if (reqOrigin.startsWith(parsedProject.origin)) {
+                    finalAllowedOrigin = parsedProject.origin;
+                }
+            } catch {
+                finalAllowedOrigin = "";
+            }
+        }
+    } else {
+        // Caso contrário, aplica a blindagem padrão do security.ts (Allowlist / Curinga)
+        finalAllowedOrigin = getSafeCorsOrigin(reqOrigin);
     }
 
     const corsHeaders = {
-      // 1. Blindagem dinâmica da Origem (Lê o Origin, ou o Referer caso o browser não mande o Origin)
-      "Access-Control-Allow-Origin": getSafeCorsOrigin(req.headers.get("Origin") || req.headers.get("Referer")),
+      // 1. Blindagem dinâmica da Origem respeitando o registry.ts
+      "Access-Control-Allow-Origin": finalAllowedOrigin,
       
       // 2. Proteção de Cache (Diz aos proxies/CDNs que a resposta muda dependendo de quem pede)
       "Vary": "Origin",
       
-      // 3. Liberação de Métodos e Headers dinâmicos (Mantido o seu código)
+      // 3. Liberação de Métodos e Headers dinâmicos
       "Access-Control-Allow-Methods": [...config.methods, "OPTIONS"].join(", "),
       "Access-Control-Allow-Headers": allAllowedHeaders,
       

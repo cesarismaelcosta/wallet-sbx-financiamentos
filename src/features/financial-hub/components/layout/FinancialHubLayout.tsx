@@ -70,7 +70,7 @@ function ErrorCountdown({ fallbackUrl, message, title }: { fallbackUrl: string, 
       <img 
         src="/assets/error/error.png" 
         alt="Erro na simulação" 
-        className="w-20 h-20 object-contain mb-6" 
+        className="w-34 h-34 object-contain mb-6" 
       />
 
       {/* TÍTULO CONTEXTUAL: Informa o status da falha de forma direta e semântica */}
