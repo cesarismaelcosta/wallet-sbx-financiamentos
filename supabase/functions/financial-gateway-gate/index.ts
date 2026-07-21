@@ -307,7 +307,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     const responseHeaders = new Headers();
     responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
     // Permite apenas URLs definidas em security.ts
-    headers.set("Access-Control-Allow-Origin", getSafeCorsOrigin(req.headers.get("origin")));
+    responseHeaders.set("Access-Control-Allow-Origin", getSafeCorsOrigin(req.headers.get("origin") || req.headers.get("referer")))
 
     if (isAjax) {
         responseHeaders.set("Content-Type", "application/json");
