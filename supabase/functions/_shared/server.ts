@@ -6,6 +6,7 @@
  */
 
 import { FUNCTION_CONFIGS } from "./registry.ts";
+import { getSafeCorsOrigin } from "./security.ts";
 
 export interface StandardResponse {
   status: number;
