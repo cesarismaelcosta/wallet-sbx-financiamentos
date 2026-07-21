@@ -213,8 +213,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
     const searchPayload: Record<string, string> = {
       environment: ambiente,
       auth_token: tokenForGateway || "", 
-      // offer_id: String(targetOfferId),
-      offer_id: "1111",
+      offer_id: String(targetOfferId),
       product_id: String(currentFlow.product_id || ''),
       return_uri: window.location.origin + window.location.pathname + window.location.search,
       utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
