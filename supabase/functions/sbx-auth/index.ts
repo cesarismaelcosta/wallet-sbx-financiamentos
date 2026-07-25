@@ -118,7 +118,7 @@ serve(withSecurity('sbx-auth', async (req) => {
         sub: sbxData.userId,           // Subject (ID do usuário)
         jti: sessionToken,             // JWT ID (ID único da sessão no DB)
         environment: environment,      // 👈 CLAIM CUSTOMIZADA: "staging" | "production"
-        exp: getNumericDate(nossaExpiracao.getTime() / 1000) // Expiration Time
+        exp: getNumericDate(nossaExpiracao.getTime()) // Expiration Time
       },
       key
     );
