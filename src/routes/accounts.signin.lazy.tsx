@@ -5,17 +5,13 @@
  * Interface visual de autenticação que gerencia dinamicamente o ambiente de destino (`staging` | `production`)
  * e dispara a criação da sessão via Cookie HttpOnly através do Proxy de Autenticação (`sbx-auth`).
  *
- * REGRAS DE RESOLUÇÃO DE AMBIENTE (LÓGICA EM CASCATA):
- * 1. Prioridade 1 (Variável de Build - Vite): Se a variável `import.meta.env.VITE_APP_ENV` estiver
- *    configurada no arquivo `.env` do projeto, o ambiente fica travado (ex: Staging/Production)
- *    e o seletor visual da interface é OCULTADO.
- * 2. Prioridade 2 (Sessão Ativa / JWT): Em chamadas já autenticadas, a claim `environment` interna do JWT assume a regra.
- * 3. Fallback (UI Selector / URL Query): Se a variável `VITE_APP_ENV` NÃO estiver definida no build, o componente
- *    permite a escolha via parâmetro de URL (`?env=...`) ou exibe um seletor interativo na tela (STAGE / PRODUÇÃO)
- *    para o usuário definir o ambiente manualmente antes da submissão.
+ * REGRAS DE RESOLUÇÃO DE AMBIENTE (DELEGADAS AO SESSION.TS):
+ * A lógica de qual ambiente usar (e se o usuário pode alterá-lo) foi extraída para o serviço `session.ts`.
+ * O componente React atua apenas como uma camada de visualização (View), respeitando o "lock" imposto
+ * pelas variáveis de build e persistindo as preferências temporárias de DX via serviço.
  *
  * PRINCIPAIS GARANTIAS DE SEGURANÇA:
- * 1. Zero LocalStorage: Nenhuma chave de sessão, token JWT ou preferência de ambiente é gravada no armazenamento local do navegador.
+ * 1. Zero LocalStorage (Token): Nenhuma chave de sessão ou token JWT é gravada no armazenamento local do navegador.
  * 2. Autenticação Stateless no Client: Executa a função `autenticateWalletsbX` e injeta a sessão estritamente na memória React Context.
  * 3. Redirecionamento Sem Vazamento (Zero Token Leak): Navega para a `redirect_uri` preservando a estrutura
  *    da URL sem injetar query params sensíveis (`auth_token`), aproveitando o envio automático do cookie pelo navegador.
@@ -29,6 +25,11 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
+import { 
+  getDefaultSbxEnvironment, 
+  isEnvironmentLocked, 
+  setSbxEnvironmentPreference 
+} from "@/services/session";
 
 // =========================================================================
 // [HELPERS]: Validação e Formatação de Documentos (CPF / CNPJ)
@@ -77,7 +78,7 @@ export function CustomLogin() {
   const { setSession } = useFinancialAuth();
   const navigate = useNavigate();
   
-  // Hook do TanStack Router para capturar parâmetros de busca na URL (ex: ?redirect_uri=... & env=staging)
+  // Hook do TanStack Router para capturar parâmetros de busca na URL
   const search = useSearch({ from: '/accounts/signin' }) as { 
     redirect_uri?: string; 
     env?: "staging" | "production";
@@ -87,17 +88,22 @@ export function CustomLogin() {
   // [LÓGICA DE RESOLUÇÃO DE AMBIENTE CASCATA]
   // =========================================================================
   
-  // 1. Tenta resgatar a variável de ambiente injetada no build do Vite (.env)
-  const envFromVite = import.meta.env.VITE_APP_ENV as "staging" | "production" | undefined;
-  
-  // 2. Estado local para controle do seletor da UI (inicializado via URL query param ou 'production')
-  const [userSelectedEnv, setUserSelectedEnv] = useState<"staging" | "production">(
-    search.env || "production"
+  // 1. O componente delega a decisão de "lock" para o serviço especializado
+  const isEnvFixed = isEnvironmentLocked();
+
+  // 2. O estado inicial absorve o param da URL (se existir) ou a inteligência do session.ts
+  const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(
+    search.env || getDefaultSbxEnvironment()
   );
 
-  // 3. Determina se o ambiente está fixado via build ou se dependerá da escolha do usuário na interface
-  const ambienteAtivo: "staging" | "production" = envFromVite || userSelectedEnv;
-  const isEnvFixed = Boolean(envFromVite);
+  /**
+   * [HANDLER]: Troca Manual de Ambiente (Apenas em DEV)
+   * Atualiza o estado da UI e persiste a escolha no serviço para manter a DX nos reloads (F5).
+   */
+  const handleEnvChange = (env: "staging" | "production") => {
+    setAmbienteAtivo(env);
+    setSbxEnvironmentPreference(env);
+  };
 
   // =========================================================================
   // [ESTADOS DE FORMULÁRIO E CONTROLE DE UI]
@@ -153,14 +159,14 @@ export function CustomLogin() {
     try {
       // -----------------------------------------------------------------------
       // STEP 2: Disparo da requisição para o serviço de autenticação proxy
-      // Passa o ambiente ativo resolvido pela cascata (Vite Env ou UI Selector)
+      // O ambiente ativo foi resolvido com segurança na montagem ou escolha do usuário.
       // -----------------------------------------------------------------------
       const response = await autenticateWalletsbX(login, password, ambienteAtivo);
 
       if (response?.success) {
         // ---------------------------------------------------------------------
         // STEP 3: Atualização do estado global do usuário em memória
-        // O cookie HttpOnly já foi injetado pelo navegador através do Set-Cookie
+        // O transporte do Token (Cookie ou SessionStorage) já foi resolvido pela auth.ts
         // ---------------------------------------------------------------------
         setSession(response.userId);
 
@@ -214,7 +220,7 @@ export function CustomLogin() {
 
         {/* 
           SELETOR VISUAL DE AMBIENTE:
-          Exibido apenas quando a variável VITE_APP_ENV NÃO estiver travada no arquivo de build.
+          Exibido apenas quando a variável de ambiente não estiver travada (Lock = false).
           Permite que desenvolvedores e testadores alternem livremente antes de efetuar o login.
         */}
         {!isEnvFixed && (
@@ -226,7 +232,7 @@ export function CustomLogin() {
               <button
                 type="button"
                 disabled={isLoading}
-                onClick={() => setUserSelectedEnv("staging")}
+                onClick={() => handleEnvChange("staging")}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-full transition-all border ${
                   ambienteAtivo === "staging" 
                     ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm" 
@@ -238,7 +244,7 @@ export function CustomLogin() {
               <button
                 type="button"
                 disabled={isLoading}
-                onClick={() => setUserSelectedEnv("production")}
+                onClick={() => handleEnvChange("production")}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-full transition-all border ${
                   ambienteAtivo === "production" 
                     ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm" 

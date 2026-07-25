@@ -51,7 +51,7 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   // 3. AUTENTICAÇÃO E SESSÃO (BFFs)
   // ==========================================
   'sbx-auth': { 
-    methods: ['POST', 'PUT'], 
+    methods: ['POST'], 
     requiredHeaders: [] // Auth inicial não tem token ainda
   },
   'sbx-auth-exchange': { 

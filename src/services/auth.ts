@@ -1,11 +1,14 @@
+import { setSessionToken, setSessionMetadata, USE_COOKIE } from './session';
+
 /**
  * @fileoverview Serviço: Autenticação da Wallet sbX
  * @description Atua como cliente da Edge Function (sbx-auth). 
  * Isola a complexidade do fluxo OAuth2 da Superbid e mantém o JWT original
  * inacessível ao frontend (Padrão Cofre/Gateway Bypass).
- * * * [RESPONSABILIDADES]:
+ * 
+ * [RESPONSABILIDADES]:
  * 1. Proxy: Encapsula credenciais e ambiente, comunicando-se apenas com nosso servidor.
- * 2. Segurança: Recebe apenas o JWT Próprio e metadados temporais (expiração e desvio).
+ * 2. Segurança: Delega o token para o session.ts (Cookie em PROD, sessionStorage em DEV).
  * 3. Sincronia: Calcula e persiste o Clock Drift para validação local de sessão.
  */
 
@@ -45,24 +48,26 @@ export const autenticateWalletsbX = async (
     if (response.ok) {
       const data = await response.json();
 
-      if (data.session_token) {
+      // [SECURITY]: O token vem no payload (DEV) ou via Set-Cookie invisível (PROD)
+      if (data.session_token || USE_COOKIE) {
+        
         // -----------------------------------------------------------------------
-        // [SECURITY]: Cálculo e persistência de compensação de relógio (Clock Drift)
-        // O servidor fornece a hora dele e o limite da sessão. O front compara.
+        // [STORAGE]: Armazenamento Híbrido Consciente e Clock Drift
         // -----------------------------------------------------------------------
         try {
+          // 1. Transporte do Token (Delega a decisão de ambiente para session.ts)
+          if (data.session_token) {
+            setSessionToken(data.session_token);
+          }
+
+          // 2. Cálculo e persistência de compensação de relógio (Clock Drift)
           if (data.server_now_ms && data.expires_at) {
             const serverTimeMs = data.server_now_ms;
             const localTimeMs = Date.now();
             const timeDelta = serverTimeMs - localTimeMs;
             
-            // Armazena informações críticas de sessão no localStorage para uso do Gateway e Guards
-            // Tokens próprio e sbx_access_token são armazenados para chamadas subsequentes
-            localStorage.setItem('session_token', data.session_token);
-            // Persiste o Delta para uso dos Guards (financiamentos.lazy, etc)
-            localStorage.setItem('time_delta', timeDelta.toString());
-            // Persiste o limite de validade absoluta (já com margem T-15m)
-            localStorage.setItem('session_expires_at', data.expires_at.toString());
+            // Persiste metadados inofensivos no localStorage para os Guards da UI
+            setSessionMetadata(data.expires_at, timeDelta);
           }
         } catch (err) {
           console.warn("⚠️ [auth.ts] Falha ao processar metadados temporais da sessão.", err);
@@ -70,7 +75,8 @@ export const autenticateWalletsbX = async (
 
         return { 
           success: true, 
-          session_token: data.session_token,  // JWT Próprio (Cofre)
+          // Retorna null em PROD para garantir que a UI não manipule a string da sessão
+          session_token: data.session_token || null, 
           userId: data.user_id                // Identificador público do usuário
         };
       } else {

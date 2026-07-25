@@ -3,12 +3,13 @@
  *
  * ARQUITETURA DE SEGURANÇA E CONTEXTO (BFF Contract):
  * Este módulo atua como o gatekeeper de segurança responsável por extrair,
- * validar e verificar o cookie HttpOnly ('session_token') enviado pelo navegador,
- * auditando a integridade do JWT de sessão e confirmando a validade da sessão
- * na tabela SSOT ('session_tokens') do Supabase.
+ * validar e verificar a sessão de forma híbrida:
+ * - Em DEV / Lovable: Lê o token enviado via Header (`x-session-token`).
+ * - Em Produção: Lê o token enviado via Cookie HttpOnly (`session_token`).
+ * Audita a integridade do JWT e confirma a validade na SSOT (`session_tokens`).
  *
  * @author César Ismael Pereira da Costa
- * @version 3.0.0
+ * @version 3.1.0 (Hybrid Ready)
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
@@ -24,16 +25,22 @@ export interface ValidatedSession {
 
 export async function validateRequest(req: Request): Promise<ValidatedSession> {
   // -----------------------------------------------------------------------
-  // FASE 1: EXTRAÇÃO DO COOKIE HTTPONLY DE SESSÃO
+  // FASE 1: EXTRAÇÃO HÍBRIDA DO TOKEN DE SESSÃO
+  // Ordem de prioridade: 1. Header (DEV/Lovable), 2. Cookie HttpOnly (PROD)
   // -----------------------------------------------------------------------
-  const cookieHeader = req.headers.get("cookie") || "";
-  const match = cookieHeader.match(/session_token=([^;]+)/);
+  let jwtToken = req.headers.get("x-session-token");
 
-  if (!match || !match[1]) {
-    throw new Error("UNAUTHORIZED: Cookie de sessão (session_token) não encontrado na requisição.");
+  if (!jwtToken) {
+    const cookieHeader = req.headers.get("cookie") || "";
+    const match = cookieHeader.match(/session_token=([^;]+)/);
+    if (match && match[1]) {
+      jwtToken = match[1];
+    }
   }
 
-  const jwtToken = match[1];
+  if (!jwtToken) {
+    throw new Error("UNAUTHORIZED: Token de sessão não encontrado (Header x-session-token ou Cookie session_token ausentes).");
+  }
 
   // -----------------------------------------------------------------------
   // FASE 2: VALIDAÇÃO CRIPTOGRÁFICA DO JWT DE SESSÃO
