@@ -142,3 +142,12 @@ export function isEnvironmentLocked(): boolean {
 export function setSbxEnvironmentPreference(env: "staging" | "production") {
   localStorage.setItem('sbx_env_pref', env);
 }
+
+/**
+ * Recupera o token para injeção manual em payloads (Ex: Form POST invisível).
+ * @returns {string} O token em DEV/Lovable, ou vazio em PROD (onde o Cookie age sozinho).
+ */
+export function getTokenForPayload(): string {
+  if (USE_COOKIE) return ""; // Bloqueio de segurança: deixa o Cookie fazer o trabalho.
+  return sessionStorage.getItem(TOKEN_KEY) || "";
+}

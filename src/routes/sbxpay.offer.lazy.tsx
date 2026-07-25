@@ -22,6 +22,7 @@ import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { UserDataContext } from "./sbxpay.lazy";
 import { fetchOfferDetails } from "@/services/offer";
 import { logSystemError } from "@/services/systemNotification";
+import { getDefaultSbxEnvironment, getTokenForPayload } from "@/services/session";
 
 // =========================================================================
 // [FORMATTERS]: Utilitários de Apresentação
@@ -146,46 +147,44 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [loading, setLoading] = useState(false);
   const [activeOffer, setActiveOffer] = useState<any>(null);
-  
+
   // =========================================================================
-  // [AMBIENTE & HIDRATAÇÃO]: Proteção contra Erros de SSR
+  // [AMBIENTE & HIDRATAÇÃO]: Resolução via padrão centralizado do session.ts
   // =========================================================================
-  const [ambiente, setAmbiente] = useState<"staging" | "production">(() => {
-    return (localStorage.getItem("sbx_environment") as "staging" | "production") || "production";
+  const [ambiente] = useState<"staging" | "production">(() => {
+    return getDefaultSbxEnvironment();
   });
-  
-  const [fetchError, setFetchError] = useState<'TECHNICAL_INSTABILITY' | null>(null);
-  const [countdown, setCountdown] = useState(5);
 
   const targetOfferId = ambiente === "production" ? currentFlow.offer_id.production : currentFlow.offer_id.staging;
   const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
 
+  const [fetchError, setFetchError] = useState<'TECHNICAL_INSTABILITY' | null>(null);
+  const [countdown, setCountdown] = useState(5);
+
   // =========================================================================
-  // [FETCH VISUAL]: Busca dados com proteção rígida de concorrência
+  // [FETCH VISUAL]: Busca dados com AbortController nativo (Sem travas de ref que quebram o Strict Mode)
   // =========================================================================
   useEffect(() => {
-    // [CORREÇÃO]: Removido o "reset" inútil de isFetching aqui que destruía a trava
-
     if (!targetOfferId || !sessionToken) return;
 
-    // A trava verdadeira
-    if (hasInitialized.current || isFetching.current || fetchError) return;
+    if (fetchError) return;
+
+    const controller = new AbortController();
 
     const loadOffer = async () => {
-      // [CORREÇÃO]: Ativa a trava ANTES de fazer a requisição
-      isFetching.current = true;
-      hasInitialized.current = true;
       setLoading(true);
       setFetchError(null);
 
       try {
-        // (offerId, { signal })
         const data = await fetchOfferDetails(targetOfferId, { signal: controller.signal });
         if (!controller.signal.aborted) {
           setActiveOffer(data);
         }
       } catch (error: any) {
-        // [CORREÇÃO]: Usar userId em vez de sessionToken no log (Vazamento de Credencial)
+        if (error.name === 'AbortError' || controller.signal.aborted) {
+          return;
+        }
+
         console.error("[OFFER_FETCH_ERROR]:", error);
         logSystemError(userId || "UNAUTHENTICATED", {
           context: 'sbxpay-OFFER-FETCH',
@@ -197,12 +196,17 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
 
         setFetchError('TECHNICAL_INSTABILITY');
       } finally {
-        setLoading(false);
-        isFetching.current = false;
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
     loadOffer();
+
+    return () => {
+      controller.abort();
+    };
   }, [targetOfferId, sessionToken, ambiente, fetchError, userId]);
 
   // [UX FALLBACK]: Contador regressivo dinâmico para a Redirect URI
@@ -249,13 +253,12 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
     if (!activeOffer) return;
     setLoading(true);
 
-    const tokenForGateway = localStorage.getItem('session_token') || sessionToken;
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 
-    // 1. Montamos o Payload de roteamento
+    // 1. Montamos o Payload de roteamento usando o helper seguro
     const searchPayload: Record<string, string> = {
       environment: ambiente,
-      auth_token: tokenForGateway || "", 
+      auth_token: getTokenForPayload(), 
       offer_id: String(targetOfferId),
       product_id: String(currentFlow.product_id || ''),
       return_uri: window.location.origin + window.location.pathname + window.location.search,

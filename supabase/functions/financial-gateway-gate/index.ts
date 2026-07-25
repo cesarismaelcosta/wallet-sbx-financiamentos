@@ -45,13 +45,30 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
       payload = await req.json();
     }
   } catch (e) {
-    return respondWithError(isAjax, 400, "BAD_REQUEST", "Payload inválido ou vazio.", payload?.return_uri || originPath);
+    // Adicionado o parâmetro 'req' no final para não dar crash na função de erro
+    return respondWithError(isAjax, 400, "BAD_REQUEST", "Payload inválido ou vazio.", payload?.return_uri || originPath, req);
   }
 
-  const { auth_token, environment = "production", offer_id, product_id, return_uri = originPath, utm_source, utm_medium, utm_campaign } = payload;
+  const { environment = "production", offer_id, product_id, return_uri = originPath, utm_source, utm_medium, utm_campaign } = payload;
 
+  // =====================================================================
+  // FALLBACK HÍBRIDO (Payload da Superbid/DEV vs Cookie Interno em PROD)
+  // =====================================================================
+  let auth_token = payload.auth_token;
+
+  // Se o JS não mandou no payload (ex: seu frontend em modo seguro de produção)
   if (!auth_token) {
-    return respondWithError(isAjax, 400, "BAD_REQUEST", "Credencial (auth_token) ausente.", return_uri);
+      const cookieHeader = req.headers.get("cookie") || "";
+      const cookieMatch = cookieHeader.match(/session_token=([^;]+)/);
+      if (cookieMatch) {
+          auth_token = cookieMatch[1];
+      }
+  }
+
+  // Se realmente não tiver token em lugar nenhum
+  if (!auth_token) {
+    // Adicionado o parâmetro 'req' no final
+    return respondWithError(isAjax, 400, "BAD_REQUEST", "Credencial (auth_token) ausente no payload e nos cookies.", return_uri, req);
   }
 
   const urls = ENV_URLS[environment as keyof typeof ENV_URLS] || ENV_URLS.production;
