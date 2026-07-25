@@ -345,7 +345,11 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
 
     if (isAjax) {
         responseHeaders.set("Content-Type", "application/json");
-        return new Response(JSON.stringify({ success: true, redirect_url: targetUrl }), { status: 200, headers: responseHeaders });
+        return new Response(JSON.stringify({ 
+            success: true, 
+            redirect_url: targetUrl,
+            session_token: finalJwt // ✅ Devolvendo o token para abastecer o session.ts no Front
+        }), { status: 200, headers: responseHeaders });
     } else {
         responseHeaders.set("Location", targetUrl);
         return new Response(null, { status: 302, headers: responseHeaders });
