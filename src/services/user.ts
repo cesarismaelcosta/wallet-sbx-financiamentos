@@ -1,24 +1,14 @@
 /**
  * @fileoverview Serviço: User Profile (Client Service)
- * * =========================================================================
+ * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
  * Busca os dados do usuário autenticado através da Edge Function sbx-user.
- * Centraliza a chamada para garantir compliance e segurança.
- * 
- * * [RESPONSABILIDADES]:
- * 1. Interface de comunicação: O front-end envia apenas o session_token (JWT Próprio),
- *    mantendo os tokens reais da API da Superbid protegidos no servidor.
- * 2. Gateway Bypass: Utiliza a Anon Key do Supabase para transpor o Kong Gateway.
- * 3. SSOT Compliance: Omitiu o envio de `x-sbx-env` pois a Edge Function resolve 
- *    o ambiente 100% via banco de dados (Zero Trust Frontend).
- * 4. Error Handling: Intercepta o novo contrato de erro padronizado ({ code, message, fallback_url })
- *    e propaga para a Action/Loader do React Router ou dispara a Amnésia.
- * 
- * @version 3.0.0 (Adequação ao novo contrato SSOT e Padronização de Erros BFF)
+ * Totalmente integrado ao Gerenciador Híbrido de Sessão (session.ts).
  */
 
 import { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
+import { fetchOptions, authHeaders } from "@/services/session";
 
 // =========================================================================
 // [CONTRATO DE ERRO PADRONIZADO (BFF)]
@@ -30,54 +20,50 @@ export interface BFFErrorResponse {
   fallback_url: string;
 }
 
+interface FetchProfileOptions {
+  signal?: AbortSignal;
+  originUrl?: string;
+}
+
 // =========================================================================
 // [SERVIÇO CORE]: Abstração de Chamada HTTP e Telemetria
 // =========================================================================
 
 /**
- * Busca o perfil do usuário no servidor.
- * @param sessionToken O JWT Próprio de sessão gerado pelo nosso backend.
- * @param originUrl [NOVO] A URL atual da página, para ser enviada no header 'x-original-url'
+ * Busca o perfil do usuário no servidor respeitando o modelo híbrido (Cookie / Header).
+ * @param options Opções contendo AbortSignal e/ou URL de origem opcional.
  * @throws {BFFErrorResponse} Objeto de erro padronizado para consumo do React Router.
  */
 export const fetchMyProfile = async (
-  sessionToken: string, 
-  originUrl?: string
+  optionsArg?: FetchProfileOptions | string
 ): Promise<BFFUserProfile> => {
   
+  // Retrocompatibilidade caso algum lugar ainda chame passando string ou objeto
+  const signal = typeof optionsArg === 'object' ? optionsArg.signal : undefined;
+  const originUrl = typeof optionsArg === 'object' ? optionsArg.originUrl : (typeof optionsArg === 'string' ? optionsArg : undefined);
+
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
   const url = `${supabaseUrl}/functions/v1/sbx-user`;
 
-  // -----------------------------------------------------------------------
-  // Fallback dinâmico para a URL de origem
-  // Se o frontend não passou o originUrl, tentamos pegar do navegador ou assumimos "/"
-  // -----------------------------------------------------------------------
   const currentUrl = originUrl || (typeof window !== 'undefined' ? window.location.href : "/");
   const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(currentUrl)}`;
 
-  // -----------------------------------------------------------------------
-  // Configuração da Requisição
-  // -----------------------------------------------------------------------
-  // Nota: x-sbx-env foi removido. A responsabilidade de descobrir o ambiente
-  // é exclusiva da Edge Function, consultando a tabela `session_tokens` (SSOT).
-  const options: RequestInit = {
-    method: "GET",
-    headers: {
-      "Authorization": `Bearer ${supabaseAnonKey}`,
-      "x-session-token": sessionToken,
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-      // Mapeia a URL de origem
-      ...(originUrl && { "x-original-url": originUrl }),
-      // Mapeia a URL de fallback para o contrato esperado pelo backend
-      ...(loginFallbackUrl && { "x-auth-fallback-url": loginFallbackUrl })
-    }
-  };
-
   try {
-    // [NETWORK]: Chamada segura para a Edge Function via API REST
-    const response = await fetch(url, options);
+    // [NETWORK]: Chamada segura utilizando a infraestrutura híbrida do session.ts
+    const response = await fetch(url, {
+      method: "GET",
+      signal,
+      ...fetchOptions, // 👈 Em PROD: injeta 'credentials: include' para o Cookie HttpOnly viajar sozinho
+      headers: {
+        "Authorization": `Bearer ${supabaseAnonKey}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        ...authHeaders(), // 👈 Em DEV: injeta o x-session-token do sessionStorage. Em PROD: retorna {}
+        ...(originUrl && { "x-original-url": originUrl }),
+        ...(loginFallbackUrl && { "x-auth-fallback-url": loginFallbackUrl })
+      }
+    });
 
     // -----------------------------------------------------------------------
     // [INTERCEPTAÇÃO DE ERRO]: Leitura do Contrato Padronizado
@@ -86,7 +72,6 @@ export const fetchMyProfile = async (
       let bffError: BFFErrorResponse;
       
       try {
-        // Tenta parsear o contrato exato que construímos na Edge Function
         const jsonError = await response.json();
         bffError = {
             success: false,
@@ -94,8 +79,7 @@ export const fetchMyProfile = async (
             message: jsonError.message || `HTTP ${response.status} ${response.statusText}`,
             fallback_url: jsonError.fallback_url || "/"
         };
-      } catch (parseError) {
-        // Fallback de infraestrutura (Ex: Supabase fora do ar ou 502 do Nginx)
+      } catch {
         bffError = {
             success: false,
             code: "INFRASTRUCTURE_ERROR",
@@ -104,30 +88,26 @@ export const fetchMyProfile = async (
         };
       }
 
-      // [SECURITY]: Gatilho do Protocolo de Amnésia global (Retrocompatibilidade)
-      // Só dispara o evento na janela se estivermos rodando no navegador (CSR).
+      // [SECURITY]: Gatilho do Protocolo de Amnésia global
       if (bffError.code === "SESSION_EXPIRED" || bffError.code === "UNAUTHORIZED") {
-          const isBrowser = typeof window !== 'undefined';
-          if (isBrowser) {
+          if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('session_expired'));
           }
       }
 
-      // [CRITICAL FIX]: Interrompe a execução lançando o objeto formatado.
-      // Componentes e Loaders não devem lidar com strings, mas com este objeto.
       throw bffError;
     }
 
     // [DATA]: Retorna os dados hidratados garantindo a tipagem do contrato BFF
-    return await response.json();
+    const result = await response.json();
+    return result.data || result;
 
   } catch (error: any) {
-    // Se o erro já for o nosso BFFErrorResponse (lançado no if !response.ok acima), propaga direto.
     if (error && "code" in error) {
       throw error;
     }
     
-    // [FALLBACK CATASTRÓFICO]: Erro de rede (Ex: Cliente sem internet ou CORS block)
+    // [FALLBACK CATASTRÓFICO]: Erro de rede físico
     throw {
         success: false,
         code: "NETWORK_ERROR",

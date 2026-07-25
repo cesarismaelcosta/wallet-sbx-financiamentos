@@ -116,6 +116,10 @@ export function sbXPAYLayOut() {
     }; 
   }, [isLoading, sessionToken, navigate]);
 
+  // =========================================================================
+  // [RENDERIZAÇÃO DE ESTADOS]
+  // =========================================================================
+
   // [CENA 1]: Carregamento inicial do contexto ou reidratação do perfil
   if (isLoading || isVerifying) {
     return <Spinner msg="Validando seus dados na Wallet sbX..." />;

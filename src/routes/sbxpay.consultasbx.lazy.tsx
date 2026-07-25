@@ -99,7 +99,7 @@ export function OfferDetailsNewSBXPAY() {
         setUserData(user);
         
         // Passo B: Resgate dos metadados da oferta e vendedor
-        const offer = await fetchOfferDetails(sessionToken, offerId);
+        const offer = await fetchOfferDetails(offerId);
         setOfferData(offer);
 
       } catch (err: any) {

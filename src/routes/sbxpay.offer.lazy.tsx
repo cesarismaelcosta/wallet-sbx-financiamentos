@@ -179,8 +179,11 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
       setFetchError(null);
 
       try {
-        const data = await fetchOfferDetails(sessionToken, targetOfferId);
-        setActiveOffer(data);
+        // (offerId, { signal })
+        const data = await fetchOfferDetails(targetOfferId, { signal: controller.signal });
+        if (!controller.signal.aborted) {
+          setActiveOffer(data);
+        }
       } catch (error: any) {
         // [CORREÇÃO]: Usar userId em vez de sessionToken no log (Vazamento de Credencial)
         console.error("[OFFER_FETCH_ERROR]:", error);
