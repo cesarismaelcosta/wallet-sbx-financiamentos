@@ -32,7 +32,8 @@ const apiHost = supabaseUrl ? new URL(supabaseUrl).hostname : '';
 // Ativa o modo seguro (Cookie) APENAS se for build de Produção E estiver no mesmo domínio pai.
 export const USE_COOKIE = import.meta.env.PROD && isSameSite(window.location.hostname, apiHost);
 
-const TOKEN_KEY = 'sbx_session_token';
+// Padronizado estritamente como 'session_token' para bater com o cookie e a tabela do banco
+const TOKEN_KEY = 'session_token';
 
 // =========================================================================
 // [STORAGE]: GERENCIAMENTO DO TOKEN (TRANSPORTE)
@@ -105,7 +106,7 @@ export const fetchOptions: RequestInit = {
  * @description Abstrai a lógica de fallback da interface, aplicando a hierarquia:
  * 1. Variável de ambiente (Hard lock)
  * 2. Preferência salva na máquina local (Memória de DX)
- * 3. 'staging' (Segurança/Fallback)
+ * 3. 'production' (Fallback padrão configurado)
  * @returns {"staging" | "production"}
  */
 export function getDefaultSbxEnvironment(): "staging" | "production" {
