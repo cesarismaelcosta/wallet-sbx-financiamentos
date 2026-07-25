@@ -8,6 +8,8 @@
  * - Centraliza autenticação (Bearer) e headers.
  */
 
+import { authHeaders, fetchOptions } from "@/services/session";
+
 /**
  * Função auxiliar para capturar o JWT do usuário ativo.
  * No futuro poderá ser usado cookies ou outro mecanismo de armazenamento seguro.
@@ -64,13 +66,13 @@ export async function callOrchestrator(
 
   const options: RequestInit = {
     method: method,
+    ...fetchOptions, // ✅ Em prod, isso ativa { credentials: 'include' } pra enviar o Cookie HttpOnly
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       "x-original-url": currentPath,
-      // ✅ Envia a URL de login COMPLETA e montada para o backend
       "x-auth-fallback-url": loginFallbackUrl,
-      ...(sessionToken ? { "x-session-token": sessionToken } : {})
+      ...authHeaders(), // ✅ Em dev, puxa do sessionStorage. Em prod, retorna vazio (deixa pro Cookie)
     },
   };
 
@@ -144,13 +146,13 @@ export async function callSimulation(
 
   const response = await fetch(url, {
     method: "POST",
+    ...fetchOptions, // ✅ Em prod, isso ativa { credentials: 'include' } pra enviar o Cookie HttpOnly 
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       "x-original-url": currentPath,
-      // ✅ Envia a URL de login COMPLETA e montada para o backend
       "x-auth-fallback-url": loginFallbackUrl,
-      ...(sessionToken ? { "x-session-token": sessionToken } : {})
+      ...authHeaders(), // ✅ Em dev, puxa do sessionStorage. Em prod, retorna vazio (deixa pro Cookie) 
     },
     body: JSON.stringify({
       ...payload,
