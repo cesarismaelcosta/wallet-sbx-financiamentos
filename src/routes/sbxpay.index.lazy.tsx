@@ -1,6 +1,9 @@
 /**
  * @fileoverview Componente: sbXPAYHome (Rota: /sbxpay/)
- * Ponto de entrada do ambiente de homologação e testes do Financial Hub.
+ * @path src/routes/sbxpay/index.tsx
+ * @description Ponto de entrada principal do ambiente de homologação e testes do Financial Hub (sbxpay).
+ * Gerencia a listagem de jornadas de produtos, roteamento dinâmico inteligente (fluxos de vitrine
+ * e fluxos diretos via Gateway), e validação de sessão sob o princípio estrito de **Zero LocalStorage**.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -9,19 +12,42 @@ import { Loader2, LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Build
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Button } from "@/components/ui/button";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
+import { getDefaultSbxEnvironment } from "@/services/session"; // 👈 Importação adicionada para resolução segura de ambiente (Zero LocalStorage)
 
 export const Route = createLazyFileRoute('/sbxpay/')({
     component: sbXPAYHome,
 });
 
-// Configuração centralizada das jornadas
+// =========================================================================
+// [CONFIGURAÇÃO]: Mapeamento Centralizado de Jornadas e Produtos
+// =========================================================================
 const flowsConfig = {
     // Fluxos de Vitrine (Passam por /sbxpay/offer)
-    cartao: { route: "/sbxpay/offer", flowKey: "Cartão", disabled: false },
-    carros: { route: "/sbxpay/offer", flowKey: "Carros", disabled: false },
-    caminhoes: { route: "/sbxpay/offer", flowKey: "Caminhões", disabled: false },
-    imoveis: { route: "/sbxpay/offer", flowKey: "Imóveis", disabled: true },
-    floorPlan: { route: "/sbxpay/offer", flowKey: "Vendedor", disabled: true },
+    cartao: { 
+        route: "/sbxpay/offer", 
+        flowKey: "Cartão", 
+        disabled: false 
+    },
+    carros: { 
+        route: "/sbxpay/offer", 
+        flowKey: "Carros", 
+        disabled: false 
+    },
+    caminhoes: { 
+        route: "/sbxpay/offer", 
+        flowKey: "Caminhões", 
+        disabled: false 
+    },
+    imoveis: { 
+        route: "/sbxpay/offer", 
+        flowKey: "Imóveis", 
+        disabled: true 
+    },
+    floorPlan: { 
+        route: "/sbxpay/offer", 
+        flowKey: "Vendedor", 
+        disabled: true 
+    },
     
     // =========================================================================
     // [FLUXOS DIRETOS]: Redirecionam para o Gateway APENAS com o product_id
@@ -56,6 +82,9 @@ const flowsConfig = {
     },
 };
 
+// =========================================================================
+// [COMPONENTE PRINCIPAL]: Home do Financial Hub sbXPAY
+// =========================================================================
 export function sbXPAYHome() {
     const navigate = useNavigate();
     const { sessionToken, logout } = useFinancialAuth();
@@ -71,7 +100,7 @@ export function sbXPAYHome() {
     }, []);
 
     // =========================================================================
-    // [HANDLERS]: Lógica Inteligente de Roteamento
+    // [HANDLERS]: Lógica Inteligente de Roteamento com Correção Zero LocalStorage
     // =========================================================================
     const handleProductClick = async (configKey: keyof typeof flowsConfig) => {
         setLoading(true);
@@ -90,12 +119,13 @@ export function sbXPAYHome() {
 
         try {
             if ('isDirect' in config && config.isDirect) {
-                const sessionToken = localStorage.getItem('session_token') || "";
-                const ambiente = localStorage.getItem('sbx_environment') || "production";
+                // 🔑 CORREÇÃO CRÍTICA [Zero LocalStorage]: Utiliza o state do contexto/sessionStorage e getDefaultSbxEnvironment()
+                const currentSessionToken = sessionToken || sessionStorage.getItem('session_token') || "";
+                const ambiente = getDefaultSbxEnvironment();
                 
                 const searchPayload: any = {
                     environment: ambiente,
-                    auth_token: sessionToken,
+                    auth_token: currentSessionToken,
                     product_id: encodeURIComponent(config.productId),
                     return_uri: window.location.pathname + window.location.search,
                     utm_source: "landing",
@@ -418,14 +448,12 @@ export function sbXPAYHome() {
             <section id="investidores" className="py-16 md:py-20 bg-white border-b border-gray-100 overflow-hidden relative">
                 <div className="max-w-7xl mx-auto px-6 relative z-10">
                     <div className="flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-12">
-                        {/* 🚨 CORREÇÃO AQUI: Removido 'text-center lg:text-left' */}
                         <div className="w-full lg:w-6/12 space-y-5">
                             <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
                                 <i className="fa-solid fa-money-bill-trend-up"></i>
                                 <span>TAXAS DIFERENCIADAS PARA VOCÊ INVESTIR</span>
                             </div>
                             <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Transforme ativos em investimento.</h2>
-                            {/* 🚨 CORREÇÃO AQUI: Removido 'mx-auto lg:mx-0' */}
                             <p className="text-sm md:text-base text-slate-600 leading-relaxed max-w-2xl">Use seu próprio imóvel ou carro como garantia e consiga empréstimos com taxas reduzidas para comprar ativos únicos na sbX. Tenha prazos de até 240x para aproveitar nossas oportunidades.</p>
                             <div className="flex flex-col md:flex-row gap-4 w-full max-w-2xl">
                                 {renderButton("Crédito usando seu carro", Car, "equityCarro")}

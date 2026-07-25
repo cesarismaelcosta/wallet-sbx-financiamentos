@@ -1,8 +1,10 @@
 /**
  * @fileoverview Contexto: FinancialAuthContext
+ * @path src/integrations/auth/FinancialAuthContext.tsx
  * @description Contexto de autenticação exclusivo para o sbXPAY/Financial Hub.
  * Lê, gerencia e propaga o session_token e user_id utilizando estritamente 
- * sessionStorage (Zero localStorage).
+ * sessionStorage (Zero localStorage), com preservação de preferência de ambiente 
+ * na expiração automática (amnésia) e limpeza total no logout manual.
  */
 
 import React, { createContext, useContext, useState, useEffect } from "react";
@@ -23,19 +25,58 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   const [isLoading, setIsLoading] = useState(true);
 
   // -----------------------------------------------------------------------
-  // [SECURITY]: Protocolo de Amnésia
+  // [ACTIONS]: Métodos de Mutação e Gestão de Sessão
+  // -----------------------------------------------------------------------
+
+  /**
+   * Armazena o token e opcionalmente o ID do usuário no sessionStorage
+   * e atualiza o estado reativo do contexto.
+   */
+  const setSession = (token: string, newUserId?: string) => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem("session_token", token);
+      if (newUserId) {
+        sessionStorage.setItem("user_id", newUserId);
+        setUserId(newUserId);
+      }
+    }
+    setSessionToken(token);
+  };
+
+  /**
+   * Protocolo de Amnésia (Expiração automática / Timeout):
+   * Remove apenas os tokens e metadados de sessão, mantendo 'sbx_env_pref' intacto.
+   */
+  const handleAmnesia = () => {
+    console.warn("🚨 [SECURITY] Sessão expirada. Protocolo de Amnésia ativado.");
+    
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem("session_token");
+      sessionStorage.removeItem("user_id");
+      sessionStorage.removeItem("session_expires_at");
+      sessionStorage.removeItem("time_delta");
+    }
+
+    setSessionToken(null);
+    setUserId(null);
+  };
+
+  /**
+   * Logout manual (Clique no botão de Sair):
+   * Executa limpeza total do sessionStorage, apagando tudo inclusive o 'sbx_env_pref'.
+   */
+  const logout = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.clear(); // Apaga tudo, inclusive o 'sbx_env_pref'
+    }
+    setSessionToken(null);
+    setUserId(null);
+  };
+
+  // -----------------------------------------------------------------------
+  // [SECURITY]: Listener Global do Protocolo de Amnésia
   // -----------------------------------------------------------------------
   useEffect(() => {
-    const handleAmnesia = () => {
-      console.warn("🚨 [SECURITY] Sessão expirada. Protocolo de Amnésia ativado.");
-      
-      // Limpeza restrita ao sessionStorage (Zero localStorage)
-      sessionStorage.clear();
-
-      setSessionToken(null);
-      setUserId(null);
-    };
-
     window.addEventListener('session_expired', handleAmnesia);
     return () => window.removeEventListener('session_expired', handleAmnesia);
   }, []);
@@ -56,25 +97,6 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     
     setIsLoading(false);
   }, []);
-
-  // -----------------------------------------------------------------------
-  // [ACTIONS]: Métodos de Mutação
-  // -----------------------------------------------------------------------
-  const setSession = (newToken: string, newUserId?: string) => {
-    sessionStorage.setItem("session_token", newToken);
-    setSessionToken(newToken);
-    
-    if (newUserId) {
-      sessionStorage.setItem("user_id", newUserId);
-      setUserId(newUserId);
-    }
-  };
-
-  const logout = () => {
-    sessionStorage.clear();
-    setSessionToken(null);
-    setUserId(null);
-  };
 
   return (
     <FinancialAuthContext.Provider value={{ sessionToken, userId, isLoading, setSession, logout }}>

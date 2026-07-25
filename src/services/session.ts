@@ -2,13 +2,14 @@
  * @fileoverview Serviço: Gerenciador Híbrido de Sessão (session.ts)
  * @description Centraliza a estratégia de armazenamento e injeção de tokens.
  * Implementa o padrão "Híbrido Consciente" para garantir segurança máxima em produção
- * e fluidez no desenvolvimento local/Lovable.
+ * e fluidez no desenvolvimento local/Lovable, operando estritamente sob o princípio
+ * de **Zero LocalStorage** para evitar persistência indelével de dados sensíveis ou de sessão.
  * 
  * [RESPONSABILIDADES]:
  * 1. Detecção de Ambiente: Avalia se o contexto permite Cookies (Same-Site) ou exige fallback.
  * 2. Segurança (PROD): Bloqueia o acesso do JS ao token (Mitigação de XSS), delegando ao Cookie HttpOnly.
- * 3. DX (DEV): Gerencia o token em sessionStorage para suportar reloads (F5/HMR) sem deslogar.
- * 4. Sincronia: Persiste metadados não-sensíveis (Clock Drift) para os Guards do React.
+ * 3. DX (DEV): Gerencia o token e preferências em sessionStorage para suportar reloads (F5/HMR) sem deslogar.
+ * 4. Sincronia: Persiste metadados temporários (Clock Drift e Preferência de Ambiente) estritamente no sessionStorage da aba.
  * 5. Upstream Config: Resolve e isola a definição do ambiente alvo (Staging/Prod da Superbid).
  */
 
@@ -51,30 +52,41 @@ export function setSessionToken(token: string) {
 }
 
 // =========================================================================
-// [METADATA]: GERENCIAMENTO DE TEMPO E ESTADO LOCAL
+// [METADATA]: GERENCIAMENTO DE TEMPO E ESTADO LOCAL (ZERO LOCALSTORAGE)
 // =========================================================================
 
 /**
  * Salva os metadados temporais necessários para o frontend fazer logoff proativo.
- * @description Dados inofensivos (não-sensíveis) salvos no localStorage para 
- * informar os Guards da UI sobre a validade da sessão, independentemente do transporte.
+ * @description Dados inofensivos salvos estritamente no sessionStorage (eliminando o localStorage) 
+ * para informar os Guards da UI sobre a validade da sessão durante o ciclo de vida da aba.
  * @param expiresAt Timestamp absoluto de expiração da sessão no servidor.
  * @param timeDelta Diferença em milissegundos entre o servidor e o cliente (Clock Drift).
  */
 export function setSessionMetadata(expiresAt: number, timeDelta: number) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('session_expires_at', expiresAt.toString());
-  localStorage.setItem('time_delta', timeDelta.toString());
+  sessionStorage.setItem('session_expires_at', expiresAt.toString());
+  sessionStorage.setItem('time_delta', timeDelta.toString());
 }
 
 /**
  * Purgador universal de sessão (Usado no Logoff ou Expiração).
+ * @description Garante a limpeza atômica de todas as chaves de sessão e preferências
+ * associadas no sessionStorage, cumprindo o escopo estrito de Zero LocalStorage.
  */
 export function clearSession() {
   if (typeof window === 'undefined') return;
   sessionStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem('session_expires_at');
-  localStorage.removeItem('time_delta');
+  sessionStorage.removeItem('session_expires_at');
+  sessionStorage.removeItem('time_delta');
+}
+
+/**
+ * @fileoverview Purgador completo para Logout Manual intencional (Limpa tudo, incluindo o ambiente).
+ */
+export function manualLogout() {
+  if (typeof window === 'undefined') return;
+  clearSession();
+  sessionStorage.removeItem('sbx_env_pref'); // 👈 Só apaga a preferência no clique do botão de sair
 }
 
 // =========================================================================
@@ -101,14 +113,14 @@ export const fetchOptions: RequestInit = {
 };
 
 // =========================================================================
-// [UPSTREAM_ENV]: RESOLUÇÃO DE AMBIENTE ALVO (SUPERBID)
+// [UPSTREAM_ENV]: RESOLUÇÃO DE AMBIENTE ALVO (SUPERBID - ZERO LOCALSTORAGE)
 // =========================================================================
 
 /**
  * Determina o ambiente inicial que deve ser assumido para a autenticação.
  * @description Abstrai a lógica de fallback da interface, aplicando a hierarquia:
  * 1. Variável de ambiente (Hard lock)
- * 2. Preferência salva na máquina local (Memória de DX)
+ * 2. Preferência salva no sessionStorage da aba (Memória de DX isolada)
  * 3. 'production' (Fallback padrão configurado)
  * @returns {"staging" | "production"}
  */
@@ -122,7 +134,8 @@ export function getDefaultSbxEnvironment(): "staging" | "production" {
     return "production";
   }
 
-  const savedPref = localStorage.getItem('sbx_env_pref');
+  // [SECURITY & DX]: Lido do sessionStorage para evitar persistência em disco (Zero LocalStorage)
+  const savedPref = sessionStorage.getItem('sbx_env_pref');
   if (savedPref === "production" || savedPref === "staging") {
     return savedPref;
   }
@@ -142,13 +155,14 @@ export function isEnvironmentLocked(): boolean {
 
 /**
  * Persiste a seleção manual do ambiente no client-side.
- * @description Melhora a DX mantendo a escolha do desenvolvedor/QA ativa após reloads (F5).
+ * @description Melhora a DX mantendo a escolha do desenvolvedor/QA ativa após reloads da aba (F5),
+ * mas respeitando o isolamento do sessionStorage (purgado no logout ou fechamento da aba).
  * Não tem efeito se `isEnvironmentLocked()` for verdadeiro.
  * @param env {"staging" | "production"}
  */
 export function setSbxEnvironmentPreference(env: "staging" | "production") {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('sbx_env_pref', env);
+  sessionStorage.setItem('sbx_env_pref', env);
 }
 
 /**
@@ -159,3 +173,12 @@ export function getTokenForPayload(): string {
   if (USE_COOKIE || typeof window === 'undefined') return ""; // Bloqueio de segurança: deixa o Cookie fazer o trabalho.
   return sessionStorage.getItem(TOKEN_KEY) || "";
 }
+
+/**
+ * Recupera o ambiente
+ * @returns {boolean} 
+ */
+export const hasSbxEnvironmentPreference = (): boolean => {
+  if (typeof window === "undefined") return false; // Proteção contra SSR
+  return !!sessionStorage.getItem("sbx_env_pref");
+};

@@ -3,7 +3,8 @@
  * @author Cesar Ismael
  * @description Módulo responsável pela orquestração do pipeline de crédito com o parceiro Fandi.
  * Implementa o ciclo de vida completo: Identificação (GUID) -> Autorização (Token) -> Proposta (Simulação) -> Registro (Inclusão).
- * * * --- WORKFLOW DE INTEGRAÇÃO ---
+ * 
+ * --- WORKFLOW DE INTEGRAÇÃO ---
  * 1. OBTENÇÃO DE GUID: Handshake inicial para abertura de sessão de checkout.
  * 2. RECUPERAÇÃO DE CONTEXTO: Captura dinâmica de parâmetros do PDV (Ponto de Venda) e Token JWT.
  * 3. SIMULAÇÃO ATIVA: Disparo da proposta para o motor de crédito da Fandi.
@@ -45,7 +46,7 @@ import { debugLog } from "../_shared/logger.ts";
 /**
  * FLUXO PRINCIPAL DE SIMULAÇÃO E INCLUSÃO
  * @param payload Dados sanitizados vindos do simulation_handler
- * * @returns {Promise<SimulationResponse>} Retorno envelopado estritamente aderente ao contrato técnico do core..
+ * @returns {Promise<SimulationResponse>} Retorno envelopado estritamente aderente ao contrato técnico do core..
  */
 export async function processSimulationFandi(payload: any): Promise<SimulationResponse> {
 
@@ -58,10 +59,12 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   const integrationDetails = payload?.integration_details || {};
   
   // Chave de intefação
-  const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
+  // const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
+  const FANDI_API_KEY = "56a9a219-8af8-43dd-8d1f-98af724a3704"
 
   // CNPJ DE ACORDO COM O PRODUTO (LEVES E PESADOS)
-  const CNPJ_LOJA = integrationDetails.cnpjLoja; 
+  // const CNPJ_LOJA = integrationDetails.cnpjLoja; 
+  const CNPJ_LOJA = "15314890000183"; 
 
   // Registra log no Supabase se ligado
   debugLog("DEBUG payload:", payload);
@@ -77,7 +80,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
 
   // Gera valores para string que será "lacrada" (visit_id + simulation_id)
   const simulationId = payload.simulation_id;
-  const simulationUpdateId =  crypto.randomUUID();
+  const simulationUpdateId = crypto.randomUUID();
   const timestamp = Date.now().toString(); // Ex: "1784332805001"
 
   // Lacramos os três: a identidade da simulação, o novo ID do update da simulação e o momento do envio
@@ -100,7 +103,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   // Registra log no Supabase se ligado
   debugLog("DEBUG PAYLOAD RECEBIDO:", JSON.stringify(payload, null, 2));
 
-  const GUID_URL = 'https://core.fandi.com.br/v1/checkout/obter-guid';
+  const GUID_URL = 'https://core.fandi.com.br/v2/checkout/obter-guid';
 
   /**
    * PASSO 1: SOLICITAÇÃO DE GUID
@@ -110,13 +113,14 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     config: { 
       chaveAcesso: FANDI_API_KEY, 
       cnpjLoja: CNPJ_LOJA, 
+      urlCallback: WEBHOOK_URL,
       confirmarDados: [], 
       exibeTelaFinalizacao: false
     },
     cliente: {
       // Agora acessamos via payload.entity
       nome: entity.name,
-      cpf: entity.document,
+      cpfCnpj: (entity.document || "").replace(/\D/g, ""), // ✅ Corrigido para cpfCnpj (minúsculo)
       dataNascimento: entity.birth_date, 
       celular: (entity.phone || "").replace(/\D/g, ""),
       sexo: entity.gender || "M",
@@ -210,24 +214,32 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   const guid = guidResult.retorno;
 
   // Registra log no Supabase se ligado
-  debugLog("RETORNO CONSULTA GUID: ", bodyGuid);
+  debugLog("RETORNO CONSULTA GUID: ", guidResult);
 
   /**
-   * PASSO 3: OBTENÇÃO DE CONTEXTO E TOKEN
+   * PASSO 2: OBTENÇÃO DE CONTEXTO E TOKEN
    * Recupera o endpoint específico da Fandi e o Token de Autorização JWT para esta sessão.
    */
   let contextData;
   try {
-    const contextResponse = await fetch(`https://core.fandi.com.br/v1/checkout/${guid}`, {
+    const contextResponse = await fetch(`https://core.fandi.com.br/v2/checkout`, {
       method: 'GET',
       headers: { 
         'Content-Type': 'application/json', 
         'fandi-tipo-servico': 'checkout', 
-        "chave-acesso": FANDI_API_KEY! 
+        'apikey': guid
       }
     });
 
-    contextData = await contextResponse.json();
+    const responseText = await contextResponse.text();
+    debugLog("STATUS HTTP CONTEXTO FANDI:", contextResponse.status);
+    debugLog("RESPOSTA PURA CONTEXTO FANDI:", responseText);
+
+    if (!contextResponse.ok) {
+      throw new Error(`FANDI_HTTP_${contextResponse.status}: ${responseText}`);
+    }
+
+    contextData = JSON.parse(responseText);
   } catch (error: any) {
     // Erro de conexão ou parse do JSON
     debugLog("Erro de conexão ao recuperar contexto Fandi." , bodyGuid);
@@ -293,7 +305,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     cliente: {
       nome: entity.name || "",
       celular: (entity.phone || "").replace(/\D/g, ""), 
-      cpf: (entity.document || "").replace(/\D/g, ""),
+      cpfCnpj: (entity.document || "").replace(/\D/g, ""), // ✅ Corrigido para cpfCnpj (minúsculo)
       email: entity.email || "",
       sexo: entity.gender || "M",
       dataNascimento: entity.birth_date, 
@@ -319,7 +331,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
       modeloId: dr.veiculo?.modelo?.modeloId,
       placa: "",
       quilometragem: 0,
-      renavam: "",       
+      renavam: "",      
       valor: simulation.requested_value,
       zeroKm: false,
       fipe: offer.vehicle_details?.fipe_code, 
@@ -334,12 +346,12 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   // 4.1. RECEBIMENTO E VALIDAÇÃO INICIAL
   let simResult;
   try {
-      const simResponse = await fetch(`${urlFandi}/v1/checkout/simulacao`, {
+      const simResponse = await fetch(`${urlFandi}/v2/checkout/simulacao`, { // ✅ Rota atualizada para /v2/
           method: 'POST',
           headers: { 
-            "Content-Type": "application/json",
-            "fandi-tipo-servico": "checkout",
-            Authorization: tokenAcesso,
+            'Content-Type': 'application/json',
+            'fandi-tipo-servico': 'checkout',
+            'ApiKey': guid
           },
           body: JSON.stringify(bodySimulacao)
       });
@@ -439,10 +451,10 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     };
 
       return { 
-            success: dadosSimulacao.status_id === 2, // true se for negada de negócio, false se for falha técnica (8)
-            message: dadosSimulacao.mensagem,
-            consults: [consultaNegadaOuFalha],
-            raw: { simulacao: simResult }
+          success: dadosSimulacao.status_id === 2, // true se for negada de negócio, false se for falha técnica (8)
+          message: dadosSimulacao.mensagem,
+          consults: [consultaNegadaOuFalha],
+          raw: { simulacao: simResult }
       } as SimulationResponse;
   }
 
@@ -496,17 +508,17 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
               ...(retSimulacao?.institucional?.vendedorId ? { vendedorId: Number(retSimulacao.institucional.vendedorId) } : {})
           }
       };
-
       
       // Registra log no Supabase se ligado
       debugLog("ENVIO INCLUSÃO:", bodyInclusao);
 
-      const incResponse = await fetch(`${urlFandi}/v1/checkout/inclusao`, {
+      const incResponse = await fetch(`${urlFandi}/v2/checkout/inclusao`, { // ✅ Rota atualizada para /v2/
           method: 'POST',
           headers: {
               'Content-Type': 'application/json',
               'fandi-tipo-servico': 'checkout',
-              'Authorization': tokenAcesso
+              'ApiKey': guid,
+              'Authorization': `Bearer ${tokenAcesso}` // ✅ Corrigido para crases (interpolando a variável corretamente)
           },
           body: JSON.stringify(bodyInclusao)
       });
@@ -541,7 +553,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   // Definimos a consulta individual
   const consultaIndividual: Consultation = {
     status_id: dadosSimulacao.status_id,
-    is_selected: true,                            // Como só temos uma opção com a Fandi, esta é a selecionada por definição
+    is_selected: true,                      // Como só temos uma opção com a Fandi, esta é a selecionada por definição
     external_operation_id: externalOperationId,
     message: dadosSimulacao.mensagem,
 

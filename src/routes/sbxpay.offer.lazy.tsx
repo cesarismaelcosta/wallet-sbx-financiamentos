@@ -1,19 +1,21 @@
 /**
  * @fileoverview Componente: OfferDetailsSBXPAY (Rota: /sbxpay/offer)
- * * =========================================================================
+ * @path src/routes/sbxpay/offer.tsx
+ * 
+ * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
  * Visualização de detalhes de uma oferta (ativo) na sbxpay.
  * Atua apenas como "vitrine" (Mock da tela da Superbid). 
  * 
- * * [RESPONSABILIDADES DA REFATORAÇÃO (BFF & Edge Gateway)]:
- * 1. Interface: Renderização do layout original (tabelas, carrossel).
- * 2. Visualização (BFF): Busca os dados da oferta apenas para exibição local.
- * 3. Delegação (O Pulo do Gato): Cria um Form POST invisível e submete para a 
- *    Edge Function (financial-gateway-gate), delegando 100% da orquestração para a Borda.
+ * [RESPONSABILIDADES DA REFATORAÇÃO (BFF & Edge Gateway)]
+ * 1. Interface: Renderização fiel do layout original (tabelas, carrossel, banners).
+ * 2. Visualização (BFF): Busca os dados da oferta apenas para exibição local na tela.
+ * 3. Delegação Segura: Submete via AJAX (fetch) para a Edge Function 
+ *    (financial-gateway-gate), delegando a orquestração e autenticação à Borda.
  */
 
-import { useState, useMemo, useEffect, useContext, useRef } from "react";
+import { useState, useMemo, useEffect, useContext } from "react";
 import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
 import { CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
@@ -25,14 +27,24 @@ import { logSystemError } from "@/services/systemNotification";
 import { getDefaultSbxEnvironment, setSessionToken, getTokenForPayload } from "@/services/session";
 
 // =========================================================================
-// [FORMATTERS]: Utilitários de Apresentação
+// [FORMATTERS & UTILS]: Utilitários de Apresentação e Validação de Segurança
 // =========================================================================
+
+/** Formata uma string de CPF para o padrão brasileiro (000.000.000-00) */
 const formatCPF = (cpf: string) => cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+
+/** Formata e limpa o número de telefone removendo DDI se presente */
 const formatPhone = (phone: string) => {
   const cleaned = phone.replace(/^55/, "");
   return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
 };
-const isInternal = (url: string) => url.startsWith('/') || url.startsWith(window.location.origin);
+
+/** 
+ * Validação segura contra Open Redirect. 
+ * Bloqueia caminhos maliciosos do tipo protocolo-relativo (ex: //evil.com).
+ */
+const isInternal = (url: string) => 
+  (url.startsWith('/') && !url.startsWith('//')) || url.startsWith(window.location.origin);
 
 // =========================================================================
 // [CONFIGURAÇÃO DE FLUXOS]: Mapeamento de Ambiente (Staging vs Production)
@@ -99,16 +111,18 @@ const FLOW_MAP: Record<string, {
   },
 };
 
+// Carregamento dinâmico de assets estáticos via glob import do Vite
 const allFiles = import.meta.glob("/src/assets/sbxpay/**/*.{jpg,jpeg,png,gif}", { eager: true });
 const formatarCaminho = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "").toLowerCase();
 
 // =========================================================================
-// CONFIGURAÇÃO DA ROTA
+// CONFIGURAÇÃO DA ROTA (TanStack Router Wrapper)
 // =========================================================================
 function OfferDetailsSBXPage() {
   const search = Route.useSearch() as any;
   const flow = search.flow; 
 
+  // Validação preventiva caso o parâmetro de query '?flow=' não seja informado na URL
   if (!flow) {
     console.warn("🚨 [ROUTER]: O parâmetro '?flow=' não chegou na URL!");
     return (
@@ -118,7 +132,7 @@ function OfferDetailsSBXPage() {
     );
   }
 
-  return <OfferDetailsSBXPAY key={flow} flowKey={flow as any} />;
+  return <OfferDetailsSBXPAY flowKey={flow} />;
 }
 
 export const Route = createLazyFileRoute("/sbxpay/offer")({
@@ -129,28 +143,25 @@ export const Route = createLazyFileRoute("/sbxpay/offer")({
 // [COMPONENTE PRINCIPAL]
 // =========================================================================
 export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {  
+  // Contexto de autenticação para extração do ID e rastreio de sessão
   const { userId, sessionToken } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = Route.useSearch() as any;
 
-  // [CORREÇÃO]: REGRA DOS HOOKS - Garantir um fluxo seguro para evitar crash nos hooks abaixo
+  // Mapeia o fluxo atual ou aplica fallback seguro para evitar crash
   const requestedFlow = FLOW_MAP[flowKey as any];
-  const currentFlow = requestedFlow || FLOW_MAP["Carros"]; // Fallback silencioso apenas para os hooks
+  const currentFlow = requestedFlow || FLOW_MAP["Carros"];
 
+  // Contexto de dados do usuário logado na esteira
   const context = useContext(UserDataContext);
   const { userData, performLogout } = context || {};
 
-  // [SEGURANÇA]: Trava estrita contra loops de concorrência de renderização
-  const hasInitialized = useRef(false);
-  const isFetching = useRef(false);
-
+  // Estados de controle visual da vitrine
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const [loading, setLoading] = useState(false);
   const [activeOffer, setActiveOffer] = useState<any>(null);
 
-  // =========================================================================
-  // [AMBIENTE & HIDRATAÇÃO]: Resolução via padrão centralizado do session.ts
-  // =========================================================================
+  // [AMBIENTE & HIDRATAÇÃO]: Resolução via padrão centralizado do session.ts (Staging vs Production)
   const [ambiente] = useState<"staging" | "production">(() => {
     return getDefaultSbxEnvironment();
   });
@@ -158,16 +169,15 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   const targetOfferId = ambiente === "production" ? currentFlow.offer_id.production : currentFlow.offer_id.staging;
   const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
 
+  // Estados para tratamento de falhas e fallback de UX
   const [fetchError, setFetchError] = useState<'TECHNICAL_INSTABILITY' | null>(null);
   const [countdown, setCountdown] = useState(5);
 
   // =========================================================================
-  // [FETCH VISUAL]: Busca dados com AbortController nativo (Sem travas de ref que quebram o Strict Mode)
+  // [FETCH VISUAL]: Busca de detalhes do ativo com AbortController nativo
   // =========================================================================
   useEffect(() => {
     if (!targetOfferId || !sessionToken) return;
-
-    if (fetchError) return;
 
     const controller = new AbortController();
 
@@ -181,6 +191,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
           setActiveOffer(data);
         }
       } catch (error: any) {
+        // Ignora erros gerados pelo abortamento intencional do effect
         if (error.name === 'AbortError' || controller.signal.aborted) {
           return;
         }
@@ -204,12 +215,13 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
 
     loadOffer();
 
+    // Cleanup: Aborta a requisição HTTP pendente caso o componente seja desmontado
     return () => {
       controller.abort();
     };
-  }, [targetOfferId, sessionToken, ambiente, fetchError, userId]);
+  }, [targetOfferId, sessionToken, ambiente]);
 
-  // [UX FALLBACK]: Contador regressivo dinâmico para a Redirect URI
+  // [UX FALLBACK]: Temporizador regressivo dinâmico para redirecionamento em caso de erro
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     
@@ -228,6 +240,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
     return () => clearTimeout(timer);
   }, [fetchError, countdown, navigate, dynamicReturnUri]);
 
+  // Processamento e ordenação das fotos da oferta (destaque primeiro)
   const imagens = useMemo(() => {
     if (!activeOffer?.offer?.photos) return [];
     return [...activeOffer.offer.photos]
@@ -235,35 +248,44 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
       .map((p: any) => p.link);
   }, [activeOffer]);
 
-  // =========================================================================
-  // [CORREÇÃO]: EARLY RETURN SEGURO (Abaixo de todos os hooks)
-  // =========================================================================
+  // Validação final de rota caso o fluxo solicitado não exista
   useEffect(() => {
     if (!requestedFlow) {
       navigate({ to: "/", replace: true });
     }
   }, [requestedFlow, navigate]);
 
-  if (!requestedFlow) return null; // Evita quebrar a tela enquanto redireciona
+  if (!requestedFlow) return null;
 
   // =========================================================================
-  // [HANDLERS]: Ação de Delegação para o Gateway (AJAX)
+  // [HANDLERS]: Ação de Delegação para o Gateway (AJAX com AbortController e Safety Timeout)
   // =========================================================================
   const handleSimulacao = async () => { 
     if (!activeOffer) return;
     setLoading(true);
 
-    // CORREÇÃO: Pega o token real exclusivamente do sessionStorage via helper ou chave direta
-    const tokenForGateway = getTokenForPayload() || sessionStorage.getItem('session_token');
+    // Recupera o token de forma segura através do helper centralizado do session.ts
+    const tokenForGateway = getTokenForPayload();
+    if (!tokenForGateway) {
+      setFetchError('TECHNICAL_INSTABILITY');
+      setLoading(false);
+      return;
+    }
+
+    // Configura controle de tempo limite (Timeout de 10s) para evitar travamento da UI
+    const controller = new AbortController();
+    const safetyTimeout = setTimeout(() => controller.abort(), 10000);
+
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 
-    // 1. Montamos o Payload de roteamento
+    // Montagem estrita do payload sanitizado para envio à Edge Function da Borda
     const searchPayload: Record<string, string> = {
       environment: ambiente,
-      auth_token: tokenForGateway || "", 
+      auth_token: tokenForGateway, 
       offer_id: String(targetOfferId),
       product_id: String(currentFlow.product_id || ''),
-      return_uri: window.location.origin + window.location.pathname + window.location.search,
+      // [SEGURANÇA]: Sanitizado para expor apenas origin e pathname (remove query params confidenciais)
+      return_uri: window.location.origin + window.location.pathname,
       utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
       utm_medium: "referral",
       utm_campaign: `flow_${flowKey?.toLowerCase()}`,
@@ -273,19 +295,30 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
       searchPayload.category_id = String(activeOffer.offer.category_id);
     }
 
-    // 2. Requisição AJAX (Fetch) Híbrida
     try {
+      // Disparo do POST AJAX híbrido para a Edge Function de gateway
       const response = await fetch(`${supabaseUrl}/functions/v1/financial-gateway-gate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(searchPayload)
+        body: JSON.stringify(searchPayload),
+        signal: controller.signal
       });
+
+      clearTimeout(safetyTimeout);
 
       const data = await response.json();
 
+      // Tratamento granular para sessões expiradas ou erros de autenticação na Borda (401)
+      if (response.status === 401 || data.code === 'SESSION_EXPIRED') {
+        sessionStorage.clear();
+        navigate({ to: "/sbxpay" as any, replace: true });
+        return;
+      }
+
+      // Se bem-sucedido, rotaciona o token opcionalmente e executa o redirecionamento
       if (data.success && data.redirect_url) {
         if (data.session_token) {
           setSessionToken(data.session_token); 
@@ -295,16 +328,23 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
         setFetchError('TECHNICAL_INSTABILITY');
         setLoading(false);
       }
-    } catch (err) {
-      console.error("[OFFER_SIMULATION_ERROR]:", err);
+    } catch (err: any) {
+      clearTimeout(safetyTimeout);
+      if (err.name === 'AbortError') {
+        console.error("[OFFER_SIMULATION_TIMEOUT]: Requisição abortada por tempo limite.");
+      } else {
+        console.error("[OFFER_SIMULATION_ERROR]:", err);
+      }
       setFetchError('TECHNICAL_INSTABILITY');
       setLoading(false);
     }
   };
 
   // =========================================================================
-  // [VIEW 1]: Erro (Padronizado com imagem)
+  // [VIEWS]: Tratamento de Erros, Loading e Renderização de Sucesso
   // =========================================================================
+  
+  // VIEW 1: Estado de Erro Crítico
   if (fetchError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center font-['Plus_Jakarta_Sans']">
@@ -336,9 +376,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
     );
   }
 
-  // =========================================================================
-  // [VIEW 2]: Carregamento
-  // =========================================================================
+  // VIEW 2: Estado de Carregamento Inicial
   if (loading || (!activeOffer && !fetchError)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
@@ -348,9 +386,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
     );
   }
 
-  // =========================================================================
-  // [VIEW 3]: Renderização de Sucesso
-  // =========================================================================
+  // VIEW 3: Layout de Vitrine de Sucesso Completo
   return (
     <div className="min-h-screen bg-white">
       <style>{`:root { --brand-primary: #B300FF; }`}</style>
@@ -392,7 +428,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
         </div>
       </header>
 
-      {/* BANNER PROMOCIONAL */}
+      {/* BANNER PROMOCIONAL (Exibido condicionalmente para fluxos do tipo Banner) */}
       {currentFlow.link === "Banner" && (
         <div style={{ maxWidth: "1160px", margin: "20px auto", padding: "0 20px" }}>
             <button 
@@ -409,10 +445,10 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
         </div>
       )}
 
-      {/* CONTEÚDO PRINCIPAL */}
+      {/* CONTEÚDO PRINCIPAL DA VITRINE */}
       <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "40px 20px", fontFamily: "'Inter', sans-serif" }}>
         
-        {/* TÍTULO E LOGO NO TOPO */}
+        {/* TÍTULO E LOGOTIPO DO EVENTO NO TOPO */}
         <div style={{ marginBottom: "24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
               {activeOffer.event.event_image_url && (
@@ -433,6 +469,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
 
         <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
           <div className="w-full lg:w-2/3 flex flex-col gap-8">
+            
+            {/* CARROSSEL DE FOTOS DO ATIVO */}
             <div className="relative w-full aspect-[825/502] bg-black rounded-md overflow-hidden">
                 {currentFlow.link.trim() !== "Banner" && (
                     <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-2 bg-white rounded shadow-md z-10">
@@ -454,6 +492,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
               <button onClick={() => setFotoAtiva(p => (p + 1) % imagens.length)} className="absolute right-2 top-1/2 bg-black/50 text-white p-2">&gt;</button>
             </div>
             
+            {/* BOX DE AÇÃO PARA SIMULAÇÃO (Financiamento ou Parcelamento) */}
             <div className="w-full">
               {currentFlow.link === "Box Financiamento" && (
                 <div className="p-5 border border-gray-200 bg-white rounded-md shadow-sm">
@@ -502,7 +541,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
               )}
             </div>
 
-            {/* TABELA DE DADOS DETALHADA */}
+            {/* TABELA DE DADOS DETALHADA DO LOTE */}
             <div className="w-full mt-4">
                 <h2 className="text-lg font-bold uppercase border-b border-black pb-2">Informações do lote</h2>
                 <table className="w-full mt-4 border-collapse text-sm">
@@ -528,6 +567,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
             </div>
           </div>
 
+          {/* ASIDE LATERAL: RESUMO DO LANCE E PERFIL DO USUÁRIO */}
           <aside className="w-full lg:w-1/3">
             <div className="border border-slate-200 rounded-lg bg-white shadow-sm overflow-hidden sticky top-24">
               <div className="p-5 border-b border-slate-100">

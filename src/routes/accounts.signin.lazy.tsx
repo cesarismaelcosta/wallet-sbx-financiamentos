@@ -28,7 +28,8 @@ import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { 
   getDefaultSbxEnvironment, 
   isEnvironmentLocked, 
-  setSbxEnvironmentPreference 
+  setSbxEnvironmentPreference,
+  hasSbxEnvironmentPreference // 👈 Puxamos a responsabilidade do serviço correto
 } from "@/services/session";
 
 // =========================================================================
@@ -154,6 +155,9 @@ export function CustomLogin() {
 
     if (hasError) return;
 
+    // Garante que o ambiente ativo seja persistido usando o serviço
+    setSbxEnvironmentPreference(ambienteAtivo);
+
     setIsLoading(true);
 
     try {
@@ -167,8 +171,9 @@ export function CustomLogin() {
         // ---------------------------------------------------------------------
         // STEP 3: Atualização do estado global do usuário em memória
         // O transporte do Token (Cookie ou SessionStorage) já foi resolvido pela auth.ts
+        // O token real vai no primeiro argumento, o userId no segundo
         // ---------------------------------------------------------------------
-        setSession(response.userId);
+        setSession(response.session_token, response.user_id);
 
         // ---------------------------------------------------------------------
         // STEP 4: Processamento de Redirecionamento Limpo
@@ -220,10 +225,10 @@ export function CustomLogin() {
 
         {/* 
           SELETOR VISUAL DE AMBIENTE:
-          Exibido apenas quando a variável de ambiente não estiver travada (Lock = false).
-          Permite que desenvolvedores e testadores alternem livremente antes de efetuar o login.
+          Exibido apenas quando a variável de ambiente não estiver travada (Lock = false)
+          E NÃO houver nenhuma preferência validada pelo session.ts.
         */}
-        {!isEnvFixed && (
+        {!isEnvFixed && !hasSbxEnvironmentPreference() && (
           <div className="mb-6 p-3 bg-slate-50 border border-slate-200 rounded-xl">
             <p className="text-xs text-slate-500 font-medium mb-2 text-center">
               Selecione o ambiente de destino:
