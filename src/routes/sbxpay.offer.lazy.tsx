@@ -44,13 +44,58 @@ const FLOW_MAP: Record<string, {
   info: string; 
   link: "Box Financiamento" | "Box Parcelamento" | "Banner" 
 }> = {
-  Carros: { name: "Financiamento de Carros", offer_id: { staging: "4789138", production: "4789138" }, category: "Carros & Motos", info: "Entity, Event, Manager, Offer, Vehicle", link: "Box Financiamento" },
-  Caminhões: { name: "Financiamento de Caminhões", offer_id: { staging: "4680825", production: "4680825" }, category: "Caminhões & Ônibus", info: "Entity, Event, Manager, Offer, Vehicle", link: "Box Financiamento" },
-  Imóveis: { name: "Financiamento de Imóveis", offer_id: { staging: "4680825", production: "4680825" }, category: "Imóveis", info: "Entity, Event, Manager, Offer, RealEstate", link: "Box Financiamento" },
-  Cartão: { name: "Parcelamento com Cartão", offer_id: { staging: "4739764", production: "4739764" }, category: "Informática", product_id: "8", info: "Entity, Event, Manager, Offer", link: "Box Parcelamento" },
-  Vendedor: { name: "Parcelamento do vendedor VRental", offer_id: { staging: "4492361", production: "4492361" }, category: "Máquinas Amarelas", info: "Entity, Event, Manager, Offer", link: "Box Financiamento" },
-  AutoEquity: { name: "Auto Equity", offer_id: { staging: "4753216", production: "4753216" }, category: "Carros & Motos", product_id: "7", info: "Entity", link: "Banner" },
-  SeguroAuto: { name: "Seguro Auto", offer_id: { staging: "4753216", production: "4753216" }, category: "Carros & Motos", product_id: "9", info: "Entity", link: "Banner" },
+  Carros: { 
+    name: "Financiamento de Carros", 
+    category: "Carros & Motos", 
+    offer_id: { staging: "2969794", production: "4789138" }, 
+    info: "Entity, Event, Manager, Offer, Vehicle", 
+    link: "Box Financiamento" 
+  },
+  Caminhões: { 
+    name: "Financiamento de Caminhões", 
+    category: "Caminhões & Ônibus", 
+    offer_id: { staging: "4680825", production: "4680825" }, 
+    info: "Entity, Event, Manager, Offer, Vehicle", 
+    link: "Box Financiamento" 
+  },
+  Imóveis: { 
+    name: "Financiamento de Imóveis", 
+    category: "Imóveis", 
+    offer_id: { staging: "4680825", production: "4680825" }, 
+    info: "Entity, Event, Manager, Offer, RealEstate", 
+    link: "Box Financiamento" 
+  },
+  Cartão: { 
+    name: "Parcelamento com Cartão", 
+    category: "Informática", 
+    product_id: "8", 
+    offer_id: { staging: "4739764", production: "4739764" }, 
+    info: "Entity, Event, Manager, Offer", 
+    link: "Box Parcelamento" 
+  },
+  Vendedor: { 
+    name: "Parcelamento do vendedor VRental", 
+    category: "Máquinas Amarelas", 
+    offer_id: { staging: "4492361", production: "4492361" }, 
+    info: "Entity, Event, Manager, Offer", 
+    link: "Box Financiamento" 
+  },
+  AutoEquity: { 
+    name: "Auto Equity", 
+    category: "Carros & Motos", 
+    product_id: "7", 
+    offer_id: { staging: "4753216", production: "4753216" }, 
+    info: "Entity", 
+    link: "Banner" 
+  },
+  SeguroAuto: { 
+    name: "Seguro Auto", 
+    category: "Carros & Motos", 
+    product_id: "9", 
+    offer_id: { staging: "4753216", production: "4753216" }, 
+    info: "Entity", 
+    link: "Banner" 
+  },
 };
 
 const allFiles = import.meta.glob("/src/assets/sbxpay/**/*.{jpg,jpeg,png,gif}", { eager: true });
@@ -105,14 +150,9 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   // =========================================================================
   // [AMBIENTE & HIDRATAÇÃO]: Proteção contra Erros de SSR
   // =========================================================================
-  const [ambiente, setAmbiente] = useState<"staging" | "production">("production");
-
-  useEffect(() => {
-    const savedEnv = localStorage.getItem("sbx_environment") as "staging" | "production";
-    if (savedEnv) {
-      setAmbiente(savedEnv);
-    }
-  }, []);
+  const [ambiente, setAmbiente] = useState<"staging" | "production">(() => {
+    return (localStorage.getItem("sbx_environment") as "staging" | "production") || "production";
+  });
   
   const [fetchError, setFetchError] = useState<'TECHNICAL_INSTABILITY' | null>(null);
   const [countdown, setCountdown] = useState(5);
@@ -246,22 +286,34 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   };
 
   // =========================================================================
-  // [VIEW 1]: Erro
+  // [VIEW 1]: Erro (Padronizado com imagem)
   // =========================================================================
   if (fetchError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center font-['Inter']">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Erro de Carregamento</h2>
-        <p className="text-sm text-gray-600 mb-8 max-w-sm">Esta oferta não foi encontrada ou não está disponível.</p>
-        <p className="text-xs text-gray-400 mb-8">Redirecionando em {countdown} segundos...</p>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center font-['Plus_Jakarta_Sans']">
+        <img 
+          src="/assets/error/error.png" 
+          alt="Erro" 
+          className="w-34 h-34 object-contain mb-6" 
+        />
+        <p className="text-slate-800 font-bold text-lg mb-2">Ops! Algo deu errado.</p>
+        <p className="text-slate-500 font-medium text-sm text-center max-w-md px-4">
+          Esta oferta não foi encontrada ou não está disponível.
+        </p>
+        <p className="text-slate-400 font-medium text-xs mt-4 mb-6">Redirecionando em {countdown}s...</p>
+        
         <button 
           onClick={() => {
-            hasInitialized.current = false;
-            window.location.reload();
+            if (isInternal(dynamicReturnUri)) {
+              window.location.href = dynamicReturnUri;
+            } else {
+              navigate({ to: "/sbxpay" as any, replace: true });
+            }
           }}
-          className="text-sm font-bold text-[#B300FF] hover:underline cursor-pointer border-none bg-transparent"
+          className="flex items-center text-[#B400FF] font-semibold text-sm hover:opacity-80 transition-opacity cursor-pointer border-none bg-transparent"
         >
-          Tentar novamente
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Retornar agora
         </button>
       </div>
     );
