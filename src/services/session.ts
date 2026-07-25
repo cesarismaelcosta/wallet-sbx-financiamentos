@@ -27,10 +27,11 @@ function isSameSite(frontendHost: string, apiHost: string) {
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const apiHost = supabaseUrl ? new URL(supabaseUrl).hostname : '';
+const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
 
 // [STATE]: Flag global que dita o comportamento de toda a camada de rede.
 // Ativa o modo seguro (Cookie) APENAS se for build de Produção E estiver no mesmo domínio pai.
-export const USE_COOKIE = import.meta.env.PROD && isSameSite(window.location.hostname, apiHost);
+export const USE_COOKIE = import.meta.env.PROD && currentHostname ? isSameSite(currentHostname, apiHost) : false;
 
 // Padronizado estritamente como 'session_token' para bater com o cookie e a tabela do banco
 const TOKEN_KEY = 'session_token';
@@ -45,7 +46,7 @@ const TOKEN_KEY = 'session_token';
  */
 export function setSessionToken(token: string) {
   // [SECURITY]: Em PROD, ignoramos o token pois a Edge Function já enviou via 'Set-Cookie'.
-  if (USE_COOKIE) return; 
+  if (USE_COOKIE || typeof window === 'undefined') return; 
   sessionStorage.setItem(TOKEN_KEY, token);
 }
 
@@ -61,6 +62,7 @@ export function setSessionToken(token: string) {
  * @param timeDelta Diferença em milissegundos entre o servidor e o cliente (Clock Drift).
  */
 export function setSessionMetadata(expiresAt: number, timeDelta: number) {
+  if (typeof window === 'undefined') return;
   localStorage.setItem('session_expires_at', expiresAt.toString());
   localStorage.setItem('time_delta', timeDelta.toString());
 }
@@ -69,6 +71,7 @@ export function setSessionMetadata(expiresAt: number, timeDelta: number) {
  * Purgador universal de sessão (Usado no Logoff ou Expiração).
  */
 export function clearSession() {
+  if (typeof window === 'undefined') return;
   sessionStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem('session_expires_at');
   localStorage.removeItem('time_delta');
@@ -83,7 +86,7 @@ export function clearSession() {
  * @returns Headers contendo o token (DEV) ou um objeto vazio (PROD, onde o browser age sozinho).
  */
 export function authHeaders(): HeadersInit {
-  if (USE_COOKIE) return {}; // O navegador anexa o cookie automaticamente
+  if (USE_COOKIE || typeof window === 'undefined') return {}; // O navegador anexa o cookie automaticamente
   
   const token = sessionStorage.getItem(TOKEN_KEY);
   return token ? { 'x-session-token': token } : {};
@@ -115,6 +118,10 @@ export function getDefaultSbxEnvironment(): "staging" | "production" {
     return envConfig;
   }
 
+  if (typeof window === 'undefined') {
+    return "production";
+  }
+
   const savedPref = localStorage.getItem('sbx_env_pref');
   if (savedPref === "production" || savedPref === "staging") {
     return savedPref;
@@ -140,6 +147,7 @@ export function isEnvironmentLocked(): boolean {
  * @param env {"staging" | "production"}
  */
 export function setSbxEnvironmentPreference(env: "staging" | "production") {
+  if (typeof window === 'undefined') return;
   localStorage.setItem('sbx_env_pref', env);
 }
 
@@ -148,6 +156,6 @@ export function setSbxEnvironmentPreference(env: "staging" | "production") {
  * @returns {string} O token em DEV/Lovable, ou vazio em PROD (onde o Cookie age sozinho).
  */
 export function getTokenForPayload(): string {
-  if (USE_COOKIE) return ""; // Bloqueio de segurança: deixa o Cookie fazer o trabalho.
+  if (USE_COOKIE || typeof window === 'undefined') return ""; // Bloqueio de segurança: deixa o Cookie fazer o trabalho.
   return sessionStorage.getItem(TOKEN_KEY) || "";
 }

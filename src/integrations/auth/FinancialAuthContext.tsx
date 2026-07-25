@@ -1,21 +1,14 @@
 /**
  * @fileoverview Contexto: FinancialAuthContext
  * @description Contexto de autenticação exclusivo para o sbXPAY/Financial Hub.
- * Lê, gerencia e propaga o session_token e user_id para toda a aplicação.
- * * [ARQUITETURA DE SEGURANÇA - BFF & JWT PRÓPRIO]:
- * - O frontend opera exclusivamente com um JWT Próprio (session_token), assinado pelo 
- * nosso backend. Este JWT próprio embute a validade sincronizada com a Superbid.
- * * [RESPONSABILIDADES]:
- * 1. State Management: Propaga o token da sessão pela árvore de componentes.
- * 2. Hidratação (Mount): Recupera dados do localStorage após reloads (F5).
- * 3. Kill Switch (Amnésia): Escuta ativamente por violações de tempo ou rede e 
- * destrói a sessão puramente no estado, delegando o roteamento aos Gatekeepers.
+ * Lê, gerencia e propaga o session_token e user_id utilizando estritamente 
+ * sessionStorage (Zero localStorage).
  */
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 interface FinancialAuthContextType {
-  sessionToken: string | null; // Nosso session_token (JWT Próprio do App)
+  sessionToken: string | null;
   userId: string | null;
   isLoading: boolean;
   setSession: (token: string, userId?: string) => void; 
@@ -27,79 +20,58 @@ const FinancialAuthContext = createContext<FinancialAuthContextType | undefined>
 export function FinancialAuthProvider({ children }: { children: React.ReactNode }) {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  
-  // Começa como true para evitar renderizar rotas protegidas antes de ler o storage
   const [isLoading, setIsLoading] = useState(true);
 
   // -----------------------------------------------------------------------
-  // [SECURITY]: Protocolo de Amnésia (Escuta Global)
+  // [SECURITY]: Protocolo de Amnésia
   // -----------------------------------------------------------------------
   useEffect(() => {
     const handleAmnesia = () => {
       console.warn("🚨 [SECURITY] Sessão expirada. Protocolo de Amnésia ativado.");
       
-      // 1. LIMPEZA TOTAL AGRESSIVA (Evita Cross-User Data Leak na esteira de crédito)
-      localStorage.clear();
+      // Limpeza restrita ao sessionStorage (Zero localStorage)
       sessionStorage.clear();
 
-      // 2. RESETA O ESTADO GLOBAL
-      // Ao removermos o redirecionamento forçado que existia aqui, o React re-renderiza 
-      // a árvore instantaneamente. Os Gatekeepers de cada rota (ex: sbXPAYLayout)
-      // vão interceptar a falta de token e rotear o usuário da forma correta.
       setSessionToken(null);
       setUserId(null);
     };
 
-    // Abre os ouvidos para escutar os disparos dos Guards (financiamentos.lazy) e API (user.ts)
     window.addEventListener('session_expired', handleAmnesia);
-    
     return () => window.removeEventListener('session_expired', handleAmnesia);
   }, []);
 
   // -----------------------------------------------------------------------
-  // [STATE]: Hidratação Inicial (Mount)
+  // [STATE]: Hidratação Inicial (Mount via SessionStorage)
   // -----------------------------------------------------------------------
   useEffect(() => {
-    // [SAFETY]: Verifica se estamos no navegador antes de tocar no storage
     if (typeof window === 'undefined') return;
     
-    // [BUSINESS LOGIC]: Hidratação segura dos dados persistidos no cliente
-    const storedToken = localStorage.getItem("session_token");
-    const storedUserId = localStorage.getItem("user_id");
+    const storedToken = sessionStorage.getItem("session_token");
+    const storedUserId = sessionStorage.getItem("user_id");
 
     if (storedToken) {
       setSessionToken(storedToken);
       setUserId(storedUserId);
     }
     
-    // [COMPLIANCE]: Desliga o carregador apenas após garantir que o state absorveu o storage
     setIsLoading(false);
   }, []);
 
   // -----------------------------------------------------------------------
   // [ACTIONS]: Métodos de Mutação
   // -----------------------------------------------------------------------
-  // Função para logar (salva no state e no storage simultaneamente)
   const setSession = (newToken: string, newUserId?: string) => {
-    localStorage.setItem("session_token", newToken);
+    sessionStorage.setItem("session_token", newToken);
     setSessionToken(newToken);
     
     if (newUserId) {
-      localStorage.setItem("user_id", newUserId);
+      sessionStorage.setItem("user_id", newUserId);
       setUserId(newUserId);
     }
   };
 
-  // Função para deslogar (A Opção Nuclear Pura)
   const logout = () => {
-    // 1. Limpeza agressiva da sessão
-    // Não tentamos mais "salvar" a variável de ambiente aqui. 
-    // O ambiente morre junto com a sessão para forçar a re-escolha no Gatekeeper.
-    localStorage.clear();
     sessionStorage.clear();
-
-    // 2. Reseta o estado para null 
-    // (Isso dispara os hooks nos Layouts, sem forçar navegação de URL)
     setSessionToken(null);
     setUserId(null);
   };
@@ -111,7 +83,6 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   );
 }
 
-// Hook personalizado para usar em qualquer componente
 export function useFinancialAuth() {
   const context = useContext(FinancialAuthContext);
   if (context === undefined) {

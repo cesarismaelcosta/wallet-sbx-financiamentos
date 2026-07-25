@@ -48,7 +48,7 @@ const FLOW_MAP: Record<string, {
   Carros: { 
     name: "Financiamento de Carros", 
     category: "Carros & Motos", 
-    offer_id: { staging: "2969794", production: "4789138" }, 
+    offer_id: { staging: "2969794", production: "4858961" }, 
     info: "Entity, Event, Manager, Offer, Vehicle", 
     link: "Box Financiamento" 
   },
@@ -70,7 +70,7 @@ const FLOW_MAP: Record<string, {
     name: "Parcelamento com Cartão", 
     category: "Informática", 
     product_id: "8", 
-    offer_id: { staging: "4739764", production: "4739764" }, 
+    offer_id: { staging: "4739764", production: "4846218" }, 
     info: "Entity, Event, Manager, Offer", 
     link: "Box Parcelamento" 
   },
@@ -249,11 +249,12 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   // =========================================================================
   // [HANDLERS]: Ação de Delegação para o Gateway (AJAX)
   // =========================================================================
-  const handleSimulacao = async () => { // ✅ AJUSTE: Tornou-se async
+  const handleSimulacao = async () => { 
     if (!activeOffer) return;
     setLoading(true);
 
-    const tokenForGateway = sessionToken;
+    // CORREÇÃO: Pega o token real exclusivamente do sessionStorage via helper ou chave direta
+    const tokenForGateway = getTokenForPayload() || sessionStorage.getItem('session_token');
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 
     // 1. Montamos o Payload de roteamento
@@ -278,7 +279,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json' // Garante que a Edge Function devolva JSON e não Redirect
+          'Accept': 'application/json'
         },
         body: JSON.stringify(searchPayload)
       });
@@ -286,15 +287,10 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
       const data = await response.json();
 
       if (data.success && data.redirect_url) {
-        
-        // [ARQUITETURA]: Em DEV, salva no sessionStorage. Em PROD, a função ignora e confia no Cookie!
         if (data.session_token) {
           setSessionToken(data.session_token); 
         }
-        
-        // O navegador assume a viagem já com o token garantido
         window.location.href = data.redirect_url;
-        
       } else {
         setFetchError('TECHNICAL_INSTABILITY');
         setLoading(false);

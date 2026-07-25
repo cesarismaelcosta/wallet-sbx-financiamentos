@@ -28,6 +28,19 @@ const ENV_URLS = {
 serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   const originPath = req.headers.get("origin") || req.headers.get("referer") || "/";
 
+  // 🔍 [INSPEÇÃO CIRÚRGICA DE ENTRADA] - Vê exatamente o que entrou na porta
+  console.log("🔥 [GATEWAY-INSPECT] Método:", req.method);
+  console.log("🔥 [GATEWAY-INSPECT] URL:", req.url);
+  console.log("🔥 [GATEWAY-INSPECT] Content-Type:", req.headers.get("content-type"));
+  
+  try {
+    const cloned = req.clone();
+    const textBody = await cloned.text();
+    console.log("🔥 [GATEWAY-INSPECT] Raw Body recebido:", textBody);
+  } catch (e) {
+    console.log("🔥 [GATEWAY-INSPECT] Impossível ler raw body:", e);
+  }
+  
   // =====================================================================
   // 1. NEGOCIAÇÃO DE CONTEÚDO (Content Negotiation)
   // =====================================================================
