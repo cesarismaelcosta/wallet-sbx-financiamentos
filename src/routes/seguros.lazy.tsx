@@ -23,8 +23,12 @@ import { USE_COOKIE } from "@/services/session"; // Importação vital para a in
  * Interrompe a renderização caso o usuário não esteja autenticado ou a sessão tenha expirado.
  */
 const SegurosGuard = () => {
-  // [ARQUITETURA]: sessionToken será populado em DEV/Lovable, mas retornará VAZIO em PROD (HttpOnly).
-  const { sessionToken, isLoading } = useFinancialAuth();
+  // [ARQUITETURA]: sessionToken do contexto global
+  const { sessionToken: contextToken, isLoading } = useFinancialAuth();
+  
+  // 🔑 Resgata o token injetado pelo HTML Interceptor da Borda no sessionStorage
+  const sessionToken = contextToken || (typeof window !== 'undefined' ? sessionStorage.getItem('session_token') : null);
+
   const navigate = useNavigate();
   const location = useLocation();
 

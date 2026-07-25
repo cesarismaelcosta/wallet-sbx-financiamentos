@@ -343,7 +343,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     responseHeaders.set("Access-Control-Allow-Origin", getSafeCorsOrigin(req.headers.get("origin") || req.headers.get("referer")));
 
     if (isAjax) {
-        // Fluxo AJAX (Retorna JSON puro com token e URL)
+        // Fluxo AJAX (Retorna JSON puro)
         responseHeaders.set("Content-Type", "application/json");
         responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
         
@@ -352,10 +352,8 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
             redirect_url: targetUrl 
         }), { status: 200, headers: responseHeaders });
     } else {
-        // Fluxo Form POST Nativo (Cross-Domain Bridge):
-        // Como o navegador bloqueia o cookie 302 entre a Borda e o Lovable/Localhost,
-        // esta micro-página intercepta a resposta, injeta o token no sessionStorage com segurança 
-        // e redireciona instantaneamente para a tela de destino sem expor credenciais na URL.
+        // Fluxo Form POST Nativo (HTML Bridge / Interceptor)
+        // A Borda responde 200 com HTML para gravar o token no sessionStorage antes de navegar
         const html = `
         <!DOCTYPE html>
         <html>
@@ -375,7 +373,6 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         `;
 
         responseHeaders.set("Content-Type", "text/html; charset=utf-8");
-        // Opcional: define o cookie também na resposta HTML caso o navegador permita
         responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
         
         return new Response(html, { status: 200, headers: responseHeaders });

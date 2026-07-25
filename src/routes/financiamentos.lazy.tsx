@@ -31,8 +31,12 @@ import { jwtDecode } from "jwt-decode";
 import { USE_COOKIE } from "@/services/session"; // Importação vital para a inteligência híbrida
 
 const FinanciamentosGuard = () => {
-  // [ARQUITETURA]: sessionToken será populado em DEV/Lovable, mas retornará VAZIO em PROD (HttpOnly).
-  const { sessionToken, isLoading } = useFinancialAuth();
+  // [ARQUITETURA]: sessionToken do contexto global
+  const { sessionToken: contextToken, isLoading } = useFinancialAuth();
+  // Se o contexto ainda não pegou, mas o token já foi 
+  // gravado no sessionStorage pelo HTML Interceptor da Borda, resgatamos ele aqui.
+  const sessionToken = contextToken || (typeof window !== 'undefined' ? sessionStorage.getItem('session_token') : null);
+
   const navigate = useNavigate();
   const location = useLocation();
   const productConsult = useProductConsult();
