@@ -38,7 +38,7 @@ export const autenticateWalletsbX = async (
       body: JSON.stringify({
         username: user,
         password: pass,
-        environment: environment
+        sbx_environment: environment
       }),
     });
 

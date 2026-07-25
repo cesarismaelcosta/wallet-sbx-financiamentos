@@ -119,7 +119,7 @@ export function getDefaultSbxEnvironment(): "staging" | "production" {
     return savedPref;
   }
 
-  return "staging";
+  return "production";
 }
 
 /**
