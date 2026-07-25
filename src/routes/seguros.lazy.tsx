@@ -3,6 +3,11 @@
  * @description Wrapper de segurança e layout para as jornadas de seguros.
  * @context Garante a integridade da sessão do usuário antes de renderizar qualquer sub-rota de seguro.
  * @compliance Proteção de acesso e controle de sessão (Auth Guard) para evitar exposição de dados.
+ * 
+ * * [ATUALIZAÇÃO DE ARQUITETURA - Híbrido Consciente]:
+ * O Route Guard agora respeita a flag `USE_COOKIE`. Em produção, o token 
+ * fica inacessível ao JS (HttpOnly). Logo, o Guard confia no backend para 
+ * validar a sessão, evitando expulsões prematuras por falta de token no storage.
  */
 
 import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
@@ -10,6 +15,7 @@ import { FinancialHubLayout } from "@/features/financial-hub/components/layout/F
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
 import { jwtDecode } from "jwt-decode"; 
+import { USE_COOKIE } from "@/services/session"; // Importação vital para a inteligência híbrida
 
 /**
  * SegurosGuard
@@ -17,7 +23,7 @@ import { jwtDecode } from "jwt-decode";
  * Interrompe a renderização caso o usuário não esteja autenticado ou a sessão tenha expirado.
  */
 const SegurosGuard = () => {
-  // [CORREÇÃO]: Apenas 'sessionToken' (JWT Próprio) é acessível no front.
+  // [ARQUITETURA]: sessionToken será populado em DEV/Lovable, mas retornará VAZIO em PROD (HttpOnly).
   const { sessionToken, isLoading } = useFinancialAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,8 +32,10 @@ const SegurosGuard = () => {
     // 0. Ignora validações enquanto o estado inicial está hidratando
     if (isLoading) return;
 
-    // 1. [BUSINESS LOGIC]: Se não houver token, bloqueio imediato.
-    if (!sessionToken && location.pathname !== '/accounts/signin') {
+    // 1. [BUSINESS LOGIC]: Bloqueio proativo de acesso não autenticado (Somente em DEV).
+    // Se USE_COOKIE for true (Prod), o token não estará no JS. Confiamos que o backend (gateway)
+    // devolverá 401 se o cookie for inválido, e o próprio interceptor fará o redirect.
+    if (!USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
       navigate({ 
         to: '/accounts/signin',
         search: { redirect_uri: location.pathname + location.search}
@@ -36,7 +44,8 @@ const SegurosGuard = () => {
     }
 
     // 2. [SECURITY]: Validação Passiva de Expiração (UX Guard)
-    // Valida o seu JWT localmente, usando o Clock Drift para evitar requests falhos (401).
+    // Se o JS tiver acesso ao token (DEV/Lovable), realiza a validação de Clock Drift.
+    // Em Produção, essa validação será feita exclusivamente na Borda (Edge Function).
     if (sessionToken) {
       try {
         const decoded = jwtDecode<{ exp?: number }>(sessionToken);
@@ -70,8 +79,10 @@ const SegurosGuard = () => {
     );
   }
 
-  // [COMPLIANCE]: Fail-safe de renderização.
-  if (!sessionToken) return null;
+  // [COMPLIANCE]: Fail-safe de renderização (Apenas em DEV).
+  // Em PROD (USE_COOKIE = true), permitimos renderizar o <Outlet /> para que a chamada
+  // fetch ao gateway dispare enviando o cookie e descubra a real situação da sessão.
+  if (!USE_COOKIE && !sessionToken) return null;
 
   return (
     <FinancialHubLayout>
