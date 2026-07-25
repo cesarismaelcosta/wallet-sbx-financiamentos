@@ -1,95 +1,92 @@
 /**
- * @fileoverview Utilitário de Autenticação Compartilhado (Zero-Trust Gatekeeper)
- *
- * ARQUITETURA DE SEGURANÇA E CONTEXTO (BFF Contract):
- * Este módulo atua como o gatekeeper de segurança responsável por extrair,
- * validar e verificar o cookie HttpOnly ('session_token') enviado pelo navegador,
- * auditando a integridade do JWT de sessão e confirmando a validade da sessão
- * na tabela SSOT ('session_tokens') do Supabase.
- *
- * @author César Ismael Pereira da Costa
- * @version 3.0.0
+ * @fileoverview Serviço: Autenticação da Wallet sbX
+ * @description Atua como cliente da Edge Function (sbx-auth). 
+ * Isola a complexidade do fluxo OAuth2 da Superbid e mantém o JWT original
+ * inacessível ao frontend (Padrão Cofre/Gateway Bypass).
+ * * * [RESPONSABILIDADES]:
+ * 1. Proxy: Encapsula credenciais e ambiente, comunicando-se apenas com nosso servidor.
+ * 2. Segurança: Recebe apenas o JWT Próprio e metadados temporais (expiração e desvio).
+ * 3. Sincronia: Calcula e persiste o Clock Drift para validação local de sessão.
  */
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
+// =========================================================================
+// FUNÇÃO: autenticateWalletsbX
+// =========================================================================
+export const autenticateWalletsbX = async (
+  user: string, 
+  pass: string, 
+  environment: "staging" | "production" = "staging"
+) => {
 
-export interface ValidatedSession {
-  session_token: string;
-  user_id: string;
-  sbx_access_token: string;
-  environment: "staging" | "production";
-  expires_at: string;
-}
+  // [STATE]: Resgate de variáveis de ambiente
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export async function validateRequest(req: Request): Promise<ValidatedSession> {
-  // -----------------------------------------------------------------------
-  // FASE 1: EXTRAÇÃO DO COOKIE HTTPONLY DE SESSÃO
-  // -----------------------------------------------------------------------
-  const cookieHeader = req.headers.get("cookie") || "";
-  const match = cookieHeader.match(/session_token=([^;]+)/);
-
-  if (!match || !match[1]) {
-    throw new Error("UNAUTHORIZED: Cookie de sessão (session_token) não encontrado na requisição.");
-  }
-
-  const jwtToken = match[1];
-
-  // -----------------------------------------------------------------------
-  // FASE 2: VALIDAÇÃO CRIPTOGRÁFICA DO JWT DE SESSÃO
-  // -----------------------------------------------------------------------
-  const jwtSecret = Deno.env.get("JWT_SECRET");
-  if (!jwtSecret) {
-    throw new Error("INTERNAL_ERROR: JWT_SECRET não configurado no ambiente do Supabase.");
-  }
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(jwtSecret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["verify"]
-  );
-
-  let payload: any;
   try {
-    payload = await verify(jwtToken, key);
-  } catch {
-    throw new Error("SESSION_EXPIRED: Assinatura do token de sessão é inválida ou expirou.");
+    // [NETWORK]: Chamada dinâmica usando a URL do seu ambiente
+    const response = await fetch(`${supabaseUrl}/functions/v1/sbx-auth`, {
+      method: "POST",
+      credentials: "include", // 👈 Adicionado para permitir o recebimento e envio do Cookie HttpOnly
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseAnonKey}`,
+        "apikey": supabaseAnonKey,
+      },
+      body: JSON.stringify({
+        username: user,
+        password: pass,
+        environment: environment
+      }),
+    });
+
+    // ---------------------------------------------------------------------------
+    // TRATAMENTO DA RESPOSTA E SEGURANÇA
+    // ---------------------------------------------------------------------------
+    if (response.ok) {
+      const data = await response.json();
+
+      if (data.session_token) {
+        // -----------------------------------------------------------------------
+        // [SECURITY]: Cálculo e persistência de compensação de relógio (Clock Drift)
+        // O servidor fornece a hora dele e o limite da sessão. O front compara.
+        // -----------------------------------------------------------------------
+        try {
+          if (data.server_now_ms && data.expires_at) {
+            const serverTimeMs = data.server_now_ms;
+            const localTimeMs = Date.now();
+            const timeDelta = serverTimeMs - localTimeMs;
+            
+            // Armazena informações críticas de sessão no localStorage para uso do Gateway e Guards
+            // Tokens próprio e sbx_access_token são armazenados para chamadas subsequentes
+            localStorage.setItem('session_token', data.session_token);
+            // Persiste o Delta para uso dos Guards (financiamentos.lazy, etc)
+            localStorage.setItem('time_delta', timeDelta.toString());
+            // Persiste o limite de validade absoluta (já com margem T-15m)
+            localStorage.setItem('session_expires_at', data.expires_at.toString());
+          }
+        } catch (err) {
+          console.warn("⚠️ [auth.ts] Falha ao processar metadados temporais da sessão.", err);
+        }
+
+        return { 
+          success: true, 
+          session_token: data.session_token,  // JWT Próprio (Cofre)
+          userId: data.user_id                // Identificador público do usuário
+        };
+      } else {
+        console.error("Proxy validado (200), mas sem token na resposta:", data);
+        return { success: false, message: "Token ausente na resposta do servidor" };
+      }
+    } else {
+      const errorData = await response.json().catch(() => ({}));
+      return { 
+        success: false, 
+        message: errorData.error || "Login ou senha inválidos" 
+      };
+    }
+
+  } catch (error) {
+    console.error("Erro crítico na comunicação com o Proxy de Autenticação:", error);
+    return { success: false, message: "Erro de rede ao contatar o servidor interno" };
   }
-
-  const sessionId = payload.jti;
-  if (!sessionId) {
-    throw new Error("UNAUTHORIZED: Payload do token de sessão malformado.");
-  }
-
-  // -----------------------------------------------------------------------
-  // FASE 3: VALIDAÇÃO DA SESSÃO NA TABELA SSOT (session_tokens)
-  // -----------------------------------------------------------------------
-  const supabaseAdmin = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-  );
-
-  const { data: session, error } = await supabaseAdmin
-    .from("session_tokens")
-    .select("session_token, user_id, sbx_access_token, environment, expires_at")
-    .eq("session_token", sessionId)
-    .single();
-
-  if (error || !session) {
-    throw new Error("SESSION_EXPIRED: Sessão revogada ou inexistente no banco de dados.");
-  }
-
-  if (new Date(session.expires_at) < new Date()) {
-    throw new Error("SESSION_EXPIRED: Sessão expirada.");
-  }
-
-  return {
-    session_token: session.session_token,
-    user_id: session.user_id,
-    sbx_access_token: session.sbx_access_token,
-    environment: session.environment,
-    expires_at: session.expires_at,
-  };
-}
+};
