@@ -171,10 +171,8 @@ serve(withSecurity('sbx-auth-exchange', async (req: Request) => {
     // -----------------------------------------------------------------------
     // STEP 5: MONTAGEM DO COOKIE HTTPONLY E RESPOSTA NATIVA
     // -----------------------------------------------------------------------
-    const isProd = Deno.env.get("ENVIRONMENT") === "production";
-    const cookieHeader = `session_token=${jwt}; Path=/; HttpOnly; SameSite=Lax${
-      isProd ? "; Domain=.superbid.net; Secure" : ""
-    }`;
+    // Configuração de cookie compatível com chamadas Cross-Origin (Localhost / Lovable -> Supabase)
+    const cookieHeader = `session_token=${jwt}; Path=/; HttpOnly; SameSite=None; Secure`;
 
     // Retorna a Response HTTP nativa para garantir a preservação do header Set-Cookie pelo Deno
     return new Response(JSON.stringify({

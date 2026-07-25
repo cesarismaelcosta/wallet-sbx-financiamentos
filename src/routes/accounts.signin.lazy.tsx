@@ -311,25 +311,27 @@ export function CustomLogin() {
             {loginError && <span className="text-[#C13535] text-[11px] pl-5 font-medium mt-1">{loginError}</span>}
           </div>
 
-          {/* Campo de Senha com Alternador de Visibilidade (Eye/EyeOff) */}
-          <div className="relative flex flex-col gap-1.5">
-            <input
-              type={showPassword ? "text" : "password"}
-              disabled={isLoading}
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(""); }}
-              className={`w-full h-12 border rounded-full pl-5 pr-12 text-sm outline-none transition-all ${
-                passwordError ? "border-[#C13535] focus:ring-1 focus:ring-[#C13535]" : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
-              } disabled:bg-gray-50 disabled:text-gray-500 ${isLoading ? "cursor-wait" : "cursor-text"}`}
-              placeholder="Senha"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-[#14px] text-gray-400 hover:text-gray-600 outline-none focus:outline-none"
-            >
-              {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
-            </button>
+          {/* Campo de Senha */}
+          <div className="flex flex-col gap-1.5">
+            <div className="relative flex items-center w-full">
+              <input
+                type={showPassword ? "text" : "password"}
+                disabled={isLoading}
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(""); }}
+                className={`w-full h-12 border rounded-full pl-5 pr-12 text-sm outline-none transition-all ${
+                  passwordError ? "border-[#C13535] focus:ring-1 focus:ring-[#C13535]" : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
+                } disabled:bg-gray-50 disabled:text-gray-500 ${isLoading ? "cursor-wait" : "cursor-text"}`}
+                placeholder="Senha"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 outline-none focus:outline-none flex items-center justify-center"
+              >
+                {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+              </button>
+            </div>
             {passwordError && <span className="text-[#C13535] text-[11px] pl-5 font-medium mt-1">{passwordError}</span>}
           </div>
 
