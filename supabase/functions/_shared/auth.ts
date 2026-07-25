@@ -1,19 +1,45 @@
+/**
+ * @fileoverview Utilitário de Middleware: Validação Própria de Requisições HTTP (Zero-Trust)
+ *
+ * ARQUITETURA E FLUXO DE SEGURANÇA:
+ * Executa a verificação em 2 fatores (Criptográfica + Stateful DB) das chamadas direcionadas
+ * às Edge Functions. Suporta múltiplos meios de transporte de token e valida o isolamento de ambientes.
+ *
+ * PRINCIPAIS RESPONSABILIDADES:
+ * 1. Extração Híbrida de Tokens: Lê a sessão do header `x-session-token`, do padrão `Authorization: Bearer` 
+ *    ou do Cookie `HttpOnly` (`session_token=...`), nesta exata ordem de precedência.
+ * 2. Validação Criptográfica (JWT): Assinatura HMAC-SHA256 validada com o `JWT_SECRET`. Extrai o `jti` (UUID da sessão)
+ *    e a claim customizada `environment` ("staging" | "production").
+ * 3. Validação do Estado no Banco (SSOT): Consulta a tabela `session_tokens` no Supabase via Service Role Key
+ *    para checar revogações manuais ou expiração absoluta.
+ * 4. Validação Cruzada de Ambiente: Impede que um token gerado em Staging seja aceito no banco se for diferente.
+ */
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verify } from "https://deno.land/x/djwt@v2.8/mod.ts";
 
 /**
- * Valida a sessão do usuário baseada no token opaco/JWT fornecido na requisição.
- * * @param req - Objeto de requisição HTTP original.
- * @returns {Promise<any>} Dados da sessão encontrada no banco.
+ * Interface que define o retorno estruturado da sessão validada.
+ */
+export interface ValidatedSession {
+  session_token: string;
+  user_id: string;
+  sbx_access_token: string;
+  environment: "staging" | "production";
+  expires_at: string;
+}
+
+/**
+ * Valida a sessão do usuário baseada no token JWT fornecido na requisição.
+ * 
+ * @param req - Objeto de requisição HTTP original
+ * @returns {Promise<ValidatedSession>} Dados da sessão autenticada
  * @throws {Error} Lança erros tipados via string (UNAUTHORIZED, SESSION_EXPIRED, INTERNAL_ERROR)
  */
-export async function validateRequest(req: Request) {
+export async function validateRequest(req: Request): Promise<ValidatedSession> {
   // =========================================================================
-  // 1. EXTRAÇÃO HÍBRIDA (Header -> Cookie)
+  // 1. EXTRAÇÃO HÍBRIDA (x-session-token -> Bearer -> Cookie HttpOnly)
   // =========================================================================
-  // API Polimórfica. Ela é inteligente o suficiente para aceitar requisições de duas formas:
-  // Padrão Customizado (x-session-token): Útil para o seu Front-end atual, onde você envia o token de forma explícita sem conflitar com a chave anônima (Anon Key) do Supabase.
-  // Padrão Universal (Authorization: Bearer): Se amanhã outro parceiro precisar chamar a sua API de forma programática (S2S), eles usarão o padrão de mercado (Bearer). A sua API vai olhar, arrancar a palavra "Bearer", pegar o token e validar perfeitamente.
   let token = req.headers.get("x-session-token") || req.headers.get("Authorization")?.replace("Bearer ", "");
 
   if (!token) {
@@ -24,17 +50,18 @@ export async function validateRequest(req: Request) {
       ?.split('=')[1] || null;
   }
 
-  // Se o token não foi enviado na requisição
   if (!token) {
     throw new Error("UNAUTHORIZED: Token de sessão ausente nos headers e nos cookies.");
   }
 
   try {
     // =========================================================================
-    // 2. VERIFICAÇÃO CRIPTOGRÁFICA (JWT)
+    // 2. VERIFICAÇÃO CRIPTOGRÁFICA DO JWT & EXTRAÇÃO DAS CLAIMS
     // =========================================================================
     const jwtSecret = Deno.env.get("JWT_SECRET");
-    if (!jwtSecret) throw new Error("INTERNAL_ERROR: Configuração de segurança (JWT_SECRET) ausente.");
+    if (!jwtSecret) {
+      throw new Error("INTERNAL_ERROR: Configuração de segurança (JWT_SECRET) ausente.");
+    }
 
     const key = await crypto.subtle.importKey(
       "raw", 
@@ -44,14 +71,16 @@ export async function validateRequest(req: Request) {
       ["verify"]
     );
 
+    // O djwt valida a assinatura e a claim 'exp' automaticamente
     const payload = await verify(token, key);
+    
     const sessionId = payload.jti as string;
+    const jwtEnvironment = payload.environment as "staging" | "production";
 
-    console.log(`[DEBUG] JTI extraído do JWT: ${sessionId}`);
+    console.log(`[DEBUG] JWT Validado -> JTI: ${sessionId} | Environment: ${jwtEnvironment}`);
 
     // =========================================================================
-    // 3. CONSULTA AO BANCO DE DADOS (Stateful Validation)
-    // Buscamos APENAS pelo ID, sem filtrar a data no SQL para podermos diferenciar
+    // 3. CONSULTA AO BANCO DE DADOS (Stateful DB Validation)
     // =========================================================================
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '', 
@@ -60,22 +89,28 @@ export async function validateRequest(req: Request) {
 
     const { data, error } = await supabaseAdmin
       .from('session_tokens')
-      .select('session_token, user_id, environment, expires_at')
+      .select('session_token, user_id, sbx_access_token, environment, expires_at')
       .eq('session_token', sessionId)
-      .maybeSingle(); // Retorna null se não encontrar, sem estourar erro PGRST116
+      .maybeSingle();
 
     if (error) {
       console.error("[DEBUG] Erro de consulta ao banco:", error);
       throw new Error("INTERNAL_ERROR: Falha ao buscar sessão no banco de dados.");
     }
 
-    // Cenário A: O token não existe no banco (foi revogado/deletado ou é inválido)
+    // Cenário A: Token revogado ou inexistente na tabela
     if (!data) {
       console.warn(`[DEBUG] Token inexistente no banco para o ID: ${sessionId}`);
       throw new Error("UNAUTHORIZED: Token de sessão inexistente ou revogado.");
     }
 
-    // Cenário B: O token existe, mas vamos validar a expiração na aplicação
+    // Cenário B: Divergência entre o ambiente do JWT e do Banco (Cross-Environment Guard)
+    if (jwtEnvironment && data.environment !== jwtEnvironment) {
+      console.error(`[SECURITY] Divergência de Ambiente -> JWT: ${jwtEnvironment} | DB: ${data.environment}`);
+      throw new Error("UNAUTHORIZED: Token utilizado em ambiente incompatível.");
+    }
+
+    // Cenário C: Expiração no banco de dados
     const expiresAt = new Date(data.expires_at).getTime();
     const now = Date.now();
 
@@ -84,27 +119,40 @@ export async function validateRequest(req: Request) {
       throw new Error("SESSION_EXPIRED: Sessão expirada.");
     }
 
-    // Sessão totalmente válida e ativa
-    return data;
+    // =========================================================================
+    // 4. RETORNO ENRIQUECIDO
+    // =========================================================================
+    return {
+      session_token: data.session_token,
+      user_id: data.user_id,
+      sbx_access_token: data.sbx_access_token,
+      environment: data.environment,
+      expires_at: data.expires_at
+    };
 
   } catch (err: any) {
     console.error(`[DEBUG] Falha na validação de request: ${err.message}`);
     
-    // Captura erros nativos da biblioteca de JWT (ex: assinatura inválida)
+    // Tratamento de expiração nativa da biblioteca djwt
+    if (err.message.includes("expired")) {
+      throw new Error("SESSION_EXPIRED: Token JWT expirado.");
+    }
+
+    // Tratamento de assinatura inválida ou estrutura corrompida
     if (err.message.includes("signature") || err.message.includes("jwt")) {
-       throw new Error("UNAUTHORIZED: Token inválido, corrompido ou malformado.");
+      throw new Error("UNAUTHORIZED: Token inválido, corrompido ou malformado.");
     }
     
-    // Propaga os erros que já foram envelopados com nossas flags customizadas
+    // Propaga erros já envelopados com flags conhecidas
     if (
       err.message.includes("UNAUTHORIZED") || 
       err.message.includes("SESSION_EXPIRED") || 
       err.message.includes("INTERNAL_ERROR")
     ) {
-       throw err; 
+      throw err; 
     }
 
-    // Failsafe: Reduz o raio de explosão
+    // Failsafe genérico
     throw new Error(`UNAUTHORIZED: Erro de segurança estrutural - ${err.message}`);
   }
 }

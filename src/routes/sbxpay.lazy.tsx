@@ -1,19 +1,26 @@
 /**
- * @fileoverview Componente: sbXPAYLayOut
- * * Esqueleto mestre de segurança da sbxpay.
- * * [RESPONSABILIDADES]:
- * 1. Pre-Login Gate: Intercepta utilizadores sem sessão para configurar o ambiente (HML/PRD).
- * 2. Gatekeeper: Valida a integridade da sessão no servidor (Edge Function) uma única vez.
- * 3. Provedor de Dados: Hidrata o estado do usuário e compartilha via Outlet context.
- * 4. Prevenção de Leak: Controla o estado de montagem e evita chamadas duplicadas.
- * 5. Segurança Passiva: Valida o JWT localmente antes de engatilhar chamadas de rede.
+ * @fileoverview Componente: sbXPAYLayOut (Esqueleto Mestre e Gatekeeper do Hub Financeiro)
+ *
+ * ARQUITETURA E FLUXO DE SEGURANÇA:
+ * Funciona como o Gatekeeper de Sessão e Provedor de Contexto do Hub Financeiro (sbxpay).
+ * Toda a responsabilidade de escolha de ambiente (Pre-Login Gate) foi REMOVIDA deste layout,
+ * delegando essa definição para as variáveis de build (`VITE_APP_ENV`) ou para a UI do Login.
+ *
+ * PRINCIPAIS RESPONSABILIDADES:
+ * 1. Gatekeeper de Redirecionamento: Intercepta qualquer tentativa de acesso sem sessão ativa
+ *    e redireciona o usuário para `/accounts/signin` preservando a rota de origem (`redirect_uri`).
+ * 2. Hidratação da Sessão (`fetchMyProfile`): Valida a sessão diretamente no servidor (BFF)
+ *    através de Cookies HttpOnly (`credentials: "include"`), sem ler dados de `localStorage`.
+ * 3. Gerenciamento de Estado em Memória (`UserDataContext`): Provê os dados do perfil hidratado
+ *    (`BFFUserProfile`) e a ação de `performLogout` para todas as rotas filhas via `<Outlet />`.
+ * 4. Prevenção de Memory Leaks e Abort Control: Cancela requisições pendentes via `AbortController`
+ *    caso o componente seja desmontado durante a validação.
  */
 
 import { createContext, useState, useEffect, useRef } from "react";
 import { createLazyFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchMyProfile } from "@/services/user";
-import { jwtDecode } from "jwt-decode"; 
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 
@@ -26,9 +33,12 @@ export const UserDataContext = createContext<{
   performLogout: () => void; 
 } | null>(null);
 
+/**
+ * Componente visual de indicação de carregamento/reidratação de estado.
+ */
 const Spinner = ({ msg }: { msg: string }) => (
   <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-4"></div>
     <p className="text-slate-500 font-medium text-sm">{msg}</p>
   </div>
 );
@@ -37,148 +47,81 @@ export function sbXPAYLayOut() {
   const { sessionToken, isLoading, logout } = useFinancialAuth();
   const navigate = useNavigate();
   const logoutRef = useRef(logout);
-  useEffect(() => { logoutRef.current = logout; }, [logout]);
 
-  // Controla logout sem perder o ambiente escolhido antes do login
-  const performLogout = () => {
-    const env = localStorage.getItem("sbx_environment");
-    logoutRef.current(); // Usa a referência para evitar stale closure
-    if (env) localStorage.setItem("sbx_environment", env);
-  };
+  // Mantém a referência atualizada da função de logout para evitar stale closures em async effects
+  useEffect(() => { 
+    logoutRef.current = logout; 
+  }, [logout]);
 
-  const [envPreLogin, setEnvPreLogin] = useState<"staging" | "production">("production");
   const [userData, setUserData] = useState<BFFUserProfile | null>(null);
   const [isVerifying, setIsVerifying] = useState(true);
 
-  // 1. [SYNC - AMBIENTE]: Carrega o estado inicial do localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedEnv = (localStorage.getItem("sbx_environment") as "staging" | "production") || "production";
-      if (savedEnv) setEnvPreLogin(savedEnv);
-    }
-  }, []);
+  /**
+   * Encapsula o encerramento da sessão limpando o estado em memória e acionando o contexto global
+   */
+  const performLogout = () => {
+    setUserData(null);
+    logoutRef.current();
+  };
 
-  // [GATEKEEPER]: Validação Contínua
+  // =========================================================================
+  // [GATEKEEPER & REHYDRATION]: Redirecionamento Direto ou Validação de Perfil
+  // =========================================================================
   useEffect(() => {
-    let isMounted = true; // [CORREÇÃO]: Evita memory leak se desmontar durante o fetch
+    let isMounted = true;
 
+    // Aguarda a inicialização do contexto de autenticação antes de tomar decisões
     if (isLoading) return; 
 
+    // CENÁRIO A: Usuário não autenticado -> Redireciona imediatamente para o Login
     if (!sessionToken) {
       if (isMounted) setIsVerifying(false); 
+      
+      const currentPath = typeof window !== "undefined" 
+        ? `${window.location.pathname}${window.location.search}` 
+        : "/sbxpay";
+
+      navigate({ 
+        to: '/accounts/signin', 
+        search: { redirect_uri: currentPath } as any,
+        replace: true
+      });
       return;
     }
 
+    // CENÁRIO B: Usuário com sessão ativa -> Inicia hidratação do perfil via BFF
     if (isMounted) setIsVerifying(true); 
     const controller = new AbortController();
-    
-    // [CORREÇÃO]: Narrowing de tipagem - Garante que 'token' é sempre string
-    const token = sessionToken;
-    const syncedCurrentTimeInSeconds = Math.floor(Date.now() / 1000);
 
-    // [SECURITY]: Validação Local Passiva
-    try {
-      const decoded = jwtDecode<{ exp?: number }>(token);
-      if (decoded.exp && decoded.exp < syncedCurrentTimeInSeconds) {
-        window.dispatchEvent(new CustomEvent('session_expired'));
-        return;
-      }
-    } catch {
-      window.dispatchEvent(new CustomEvent('session_expired'));
-      return;
-    }
-
-    async function validate() {
+    async function validateSession() {
       try {
-        const profile = await fetchMyProfile(token, { signal: controller.signal });
+        const profile = await fetchMyProfile({ signal: controller.signal });
         if (isMounted) {
           setUserData(profile);
           setIsVerifying(false);
         }
       } catch (err: any) {
         if (err.name !== 'AbortError') {
-          console.error("🔒 [Gatekeeper] Falha:", err);
-          logoutRef.current(); 
+          console.error("🔒 [Gatekeeper] Falha na validação do perfil:", err);
+          performLogout(); 
         }
       }
     }
 
-    validate();
+    validateSession();
+
     return () => { 
       isMounted = false; 
       controller.abort(); 
     }; 
-  }, [isLoading, sessionToken]);
+  }, [isLoading, sessionToken, navigate]);
 
-  // =========================================================================
-  // [UI/UX - CENA 1]: Auth Context inicializando
-  // =========================================================================
-  if (isLoading) {
-    return <Spinner msg="Validando seus dados na Wallet sbX..."/>;
+  // [CENA 1]: Carregamento inicial do contexto ou reidratação do perfil
+  if (isLoading || isVerifying) {
+    return <Spinner msg="Validando seus dados na Wallet sbX..." />;
   }
 
-  // =========================================================================
-  // [UI/UX - CENA 2]: Pre-Login Gate (Sem Sessão)
-  // =========================================================================
-  if (!sessionToken) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-['Plus_Jakarta_Sans']">
-        <div className="w-full max-w-[400px] bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
-          <div className="flex justify-center mb-6"><WalletLogo size="md" /></div>
-          
-          <h1 className="text-lg font-semibold text-slate-600 mb-2 tracking-tight">Jornadas de Simulação</h1>
-          <p className="text-sm text-slate-500 mb-8">
-            Selecione o ambiente para carregar as ofertas. O login segue o fluxo real.
-          </p>
-
-          <div className="flex bg-gray-100 rounded-full p-1 mb-8 border border-gray-200">
-            <button
-              onClick={() => setEnvPreLogin("staging")}
-              className={`flex-1 py-2.5 text-xs font-bold rounded-full transition-all border ${
-                envPreLogin === "staging" ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm" : "text-gray-400 border-transparent hover:text-gray-600"
-              }`}
-            >
-              STAGE
-            </button>
-            <button
-              onClick={() => setEnvPreLogin("production")}
-              className={`flex-1 py-2.5 text-xs font-bold rounded-full transition-all border ${
-                envPreLogin === "production" ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm" : "text-gray-400 border-transparent hover:text-gray-600"
-              }`}
-            >
-              PRODUÇÃO
-            </button>
-          </div>
-
-          <button
-            onClick={() => {
-               localStorage.setItem("sbx_environment", envPreLogin);
-               navigate({ 
-                 to: '/accounts/signin', 
-                 search: { 
-                   redirect_uri: (typeof window !== "undefined" ? (window.location.pathname + window.location.search) : "/") || "/"
-                 } as any // Evita erro de typescript de navegação estrita
-               });
-            }}
-            className="w-full h-12 bg-[#B400FF] hover:bg-[#9a00db] text-white font-bold rounded-full transition-colors"
-          >
-            Avançar para Login
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // =========================================================================
-  // [UI/UX - CENA 3]: Reidratação em curso
-  // =========================================================================
-  if (isVerifying) {
-    return <Spinner msg="Validando seus dados na Wallet sbX..."/>;
-  }
-
-  // =========================================================================
-  // [UI/UX - CENA 4]: Acesso Concedido
-  // =========================================================================
+  // [CENA 2]: Sessão Validada -> Renderização do Shell e Sub-rotas
   return (
     <div className="sbxpay-shell min-h-screen bg-white">
       <UserDataContext.Provider value={{ userData, performLogout }}>
