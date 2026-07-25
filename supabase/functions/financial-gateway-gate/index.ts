@@ -340,19 +340,45 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     }
 
     const responseHeaders = new Headers();
-    responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
     responseHeaders.set("Access-Control-Allow-Origin", getSafeCorsOrigin(req.headers.get("origin") || req.headers.get("referer")));
 
     if (isAjax) {
+        // Fluxo AJAX (Retorna JSON puro com token e URL)
         responseHeaders.set("Content-Type", "application/json");
+        responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
+        
         return new Response(JSON.stringify({ 
             success: true, 
-            redirect_url: targetUrl,
-            session_token: finalJwt // ✅ Devolvendo o token para abastecer o session.ts no Front
+            redirect_url: targetUrl 
         }), { status: 200, headers: responseHeaders });
     } else {
-        responseHeaders.set("Location", targetUrl);
-        return new Response(null, { status: 302, headers: responseHeaders });
+        // Fluxo Form POST Nativo (Cross-Domain Bridge):
+        // Como o navegador bloqueia o cookie 302 entre a Borda e o Lovable/Localhost,
+        // esta micro-página intercepta a resposta, injeta o token no sessionStorage com segurança 
+        // e redireciona instantaneamente para a tela de destino sem expor credenciais na URL.
+        const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Autenticando...</title>
+        </head>
+        <body>
+            <script>
+                try {
+                    sessionStorage.setItem('session_token', '${finalJwt}');
+                } catch (e) {}
+                window.location.replace('${targetUrl}');
+            </script>
+        </body>
+        </html>
+        `;
+
+        responseHeaders.set("Content-Type", "text/html; charset=utf-8");
+        // Opcional: define o cookie também na resposta HTML caso o navegador permita
+        responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
+        
+        return new Response(html, { status: 200, headers: responseHeaders });
     }
 
 } catch (err: any) {

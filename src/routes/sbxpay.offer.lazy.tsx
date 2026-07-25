@@ -22,7 +22,7 @@ import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { UserDataContext } from "./sbxpay.lazy";
 import { fetchOfferDetails } from "@/services/offer";
 import { logSystemError } from "@/services/systemNotification";
-import { getDefaultSbxEnvironment, getTokenForPayload } from "@/services/session";
+import { getDefaultSbxEnvironment, setSessionToken, getTokenForPayload } from "@/services/session";
 
 // =========================================================================
 // [FORMATTERS]: Utilitários de Apresentação
@@ -247,18 +247,19 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   if (!requestedFlow) return null; // Evita quebrar a tela enquanto redireciona
 
   // =========================================================================
-  // [HANDLERS]: Ação de Delegação para o Gateway
+  // [HANDLERS]: Ação de Delegação para o Gateway (AJAX)
   // =========================================================================
-  const handleSimulacao = () => {
+  const handleSimulacao = async () => { // ✅ AJUSTE: Tornou-se async
     if (!activeOffer) return;
     setLoading(true);
 
+    const tokenForGateway = sessionToken;
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 
-    // 1. Montamos o Payload de roteamento usando o helper seguro
+    // 1. Montamos o Payload de roteamento
     const searchPayload: Record<string, string> = {
       environment: ambiente,
-      auth_token: getTokenForPayload(), 
+      auth_token: tokenForGateway || "", 
       offer_id: String(targetOfferId),
       product_id: String(currentFlow.product_id || ''),
       return_uri: window.location.origin + window.location.pathname + window.location.search,
@@ -271,24 +272,38 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
       searchPayload.category_id = String(activeOffer.offer.category_id);
     }
 
-    // 2. Criamos o Formulário Invisível (Abordagem B / Form POST)
-    const form = document.createElement('form');
-    form.method = 'POST';
-    // Apontamos diretamente para a nova Edge Function na Borda
-    form.action = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
+    // 2. Requisição AJAX (Fetch) Híbrida
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/financial-gateway-gate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json' // Garante que a Edge Function devolva JSON e não Redirect
+        },
+        body: JSON.stringify(searchPayload)
+      });
 
-    // 3. Populamos os inputs com os dados do Payload de forma segura
-    Object.entries(searchPayload).forEach(([key, value]) => {
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = key;
-      input.value = value;
-      form.appendChild(input);
-    });
+      const data = await response.json();
 
-    // 4. Submetemos (O navegador assume a viagem e o redirecionamento 302 faz o resto)
-    document.body.appendChild(form);
-    form.submit();
+      if (data.success && data.redirect_url) {
+        
+        // [ARQUITETURA]: Em DEV, salva no sessionStorage. Em PROD, a função ignora e confia no Cookie!
+        if (data.session_token) {
+          setSessionToken(data.session_token); 
+        }
+        
+        // O navegador assume a viagem já com o token garantido
+        window.location.href = data.redirect_url;
+        
+      } else {
+        setFetchError('TECHNICAL_INSTABILITY');
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error("[OFFER_SIMULATION_ERROR]:", err);
+      setFetchError('TECHNICAL_INSTABILITY');
+      setLoading(false);
+    }
   };
 
   // =========================================================================
