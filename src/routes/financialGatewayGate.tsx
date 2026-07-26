@@ -51,14 +51,23 @@ export const Route = createFileRoute("/financialGatewayGate")({
     // =====================================================================
     useEffect(() => {
       if (status === "error") {
-        // Disparo de e-email de alerta
+        // [TELEMETRIA DE ERRO]: Disparo estruturado enriquecido com metadados de borda
         logSystemError({
-          context: "Edge Gateway Redirect (financialGatewayGate)",
-          subject: `Erro de Jornada: ${code}`,
+          context: "Gateway Redirect (financialGatewayGate)",
+          subject: `Erro de Jornada: ${code || 'UNKNOWN'}`,
           message: message || "Falha não especificada.",
           payload: { 
             session_status: "SESSION_N/A",
-            return_uri 
+            error_code: code || null,
+            return_uri: return_uri || null,
+            // [METADADOS ENRIQUECIDOS]: Padronizados com o mesmo contrato da vitrine
+            metadata: {
+              page: window.location.pathname,
+              code: code || "UNKNOWN",
+              return_uri: return_uri || "/",
+              visit_id: null,
+              simulation_id: null
+            }
           }
         });
       }
