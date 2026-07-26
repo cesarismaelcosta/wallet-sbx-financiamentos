@@ -82,8 +82,7 @@ const FLOW_MAP: Record<string, {
     name: "Parcelamento com Cartão", 
     category: "Informática", 
     product_id: "8", 
-    //offer_id: { staging: "3064406", production: "4846218" }, 
-    offer_id: { staging: "4739764", production: "4846218" }, 
+    offer_id: { staging: "3064406", production: "4846218" }, 
     info: "Entity, Event, Manager, Offer", 
     link: "Box Parcelamento" 
   },
