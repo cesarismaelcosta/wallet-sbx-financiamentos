@@ -335,8 +335,9 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     debugLog("Iniciando Orquestração de Rota...");
     const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(return_uri)}`;
 
-    // Captura o IP que chegou no gateway vindo do cliente/Kong
+    // Captura os dados reais vindos do cliente
     const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "0.0.0.0";
+    const clientUa = req.headers.get("user-agent") || "";
 
     const orchestratorResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/orchestrator`, {
         method: "POST",
@@ -346,8 +347,9 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
             "x-session-token": finalJwt, 
             "x-original-url": return_uri,
             "x-auth-fallback-url": loginFallbackUrl,
-            // REPASSA O IP REAL DO CLIENTE PARA A PRÓXIMA EDGE FUNCTION:
+            // Repassa a identidade real do navegador para a próxima Edge Function
             "x-forwarded-for": clientIp,
+            "user-agent": clientUa,
         },
         body: JSON.stringify(rehydratedPayload),
     });
