@@ -49,12 +49,13 @@ async function ensureAdmin(authHeader: string | null) {
     return { ok: false as const, error: "missing_authorization" };
   }
   
+  const token = authHeader.replace(/bearer\s+/i, "").trim();
+  
   const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
   
-  const { data: { user }, error: authError } = await supabaseAuthClient.auth.getUser(token);
+  const { data: { user }, error: authError } = await userClient.auth.getUser(token);
   
   if (authError || !user) {
     debugLog("DEBUG [ensureAdmin]: Erro Auth ->", authError);
