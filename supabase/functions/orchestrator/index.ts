@@ -379,7 +379,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           .from("visits")
           .select(`
             id, product_id, partner_id, utm_source, utm_medium, utm_campaign, origin_url, target_url,
-            visit_entities ( entity_id, name, document, phone, email, birth_date, gender, entity_details ),
+            visit_entities ( entity_id, entity_type, name, document, phone, email, birth_date, gender, entity_details ),
             visit_offers ( offer_id, offer_value, manager_details, seller_details, event_details, offer_details, category_id )
           `)
           .eq("id", visitId)
