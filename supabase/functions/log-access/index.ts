@@ -33,23 +33,27 @@ serve(withSecurity('login-history', async (req: Request) => {
         };
     }
 
+    // Sanitização pesada do token para evitar falhas de formatação ("Bearer" duplicado, espaços, etc)
+    const token = authHeader.replace(/bearer\s+/i, "").trim();
+
+    // Injeta o token perfeitamente formatado no cliente Supabase
     const supabaseAuthClient = createClient(
         Deno.env.get('SUPABASE_URL')!,
         Deno.env.get('SUPABASE_ANON_KEY')!,
-        { global: { headers: { Authorization: authHeader } } }
+        { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
 
     const { data: { user }, error: authError } = await supabaseAuthClient.auth.getUser();
     
-    // Se o token for falso, expirado ou inválido, a execução morre aqui imediatamente
+    // Se falhar, printa o erro EXATO do Supabase no console da Edge Function
     if (authError || !user) {
+        console.error("🚨 [AUTH-ERROR]:", authError?.message || "Usuário não encontrado. Token:", token.substring(0, 10) + "...");
         return { 
             status: 403, 
-            data: { success: false, error: "Acesso Negado: Token inválido ou expirado." } 
+            data: { success: false, error: `Acesso Negado: ${authError?.message || 'Token inválido ou expirado'}` } 
         };
     }
 
-    // Identidade real extraída criptograficamente do Token do Google Workspace
     const verifiedEmail = user.email || "email_desconhecido";
 
     // =========================================================================
@@ -76,13 +80,11 @@ serve(withSecurity('login-history', async (req: Request) => {
     // 4. PERSISTÊNCIA AUDITADA (Service Role Bypass)
     // =========================================================================
     const { error: dbError } = await supabaseAdmin.from('login_history').insert({
-      // Usamos o verifiedEmail do Token. O atacante não pode mais fingir ser outra pessoa.
       email: verifiedEmail.toLowerCase().trim(),
-      
       origin_page: body.origin_page || null,
       origin_function: body.origin_function || null,
       event: body.event,
-      success: body.success ?? true, // Se chegou até aqui com token válido, o login foi bem-sucedido
+      success: body.success ?? true,
       failure_reason: body.reason || null,
       ip_address: infra.ip_address,
       country: sanitize(infra.country),
@@ -91,8 +93,7 @@ serve(withSecurity('login-history', async (req: Request) => {
       user_agent: infra.user_agent,
       device_type: infra.device_type,
       operating_system: infra.operating_system,
-      
-      is_trusted: true, // Auditoria 100% confiável garantida por criptografia
+      is_trusted: true,
       origin_details: body
     });
 
