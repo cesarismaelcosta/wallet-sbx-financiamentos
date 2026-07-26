@@ -47,14 +47,12 @@ export function parseUserAgent(ua: string) {
 export async function captureInfrastructure(req: Request): Promise<OriginDetails> {
   const ua = req.headers.get("user-agent") || "";
   
-  // Captura de IP: Prioriza headers de proxy reverso e Supabase Edge, com fallback seguro
-  const rawIp = req.headers.get("x-real-ip") || 
+  // Captura de IP: O x-forwarded-for DEVE vir primeiro, pois o x-real-ip estava capturando o IP do gateway do Supabase (18.231.222.216)
+  const rawIp = req.headers.get("x-forwarded-for")?.split(",")[0] || 
                 req.headers.get("cf-connecting-ip") || 
-                req.headers.get("x-forwarded-for")?.split(",")[0] || 
+                req.headers.get("x-real-ip") || 
                 req.headers.get("x-client-ip") || 
                 "0.0.0.0";
-
-  const ip = rawIp.trim();
   
   const { os, device } = parseUserAgent(ua);
 
