@@ -180,3 +180,46 @@ export interface OrchestratorPayload {
   origin_url?:string;
   target_url?:string;
 }
+
+
+// src/types/user.ts
+
+/**
+ * @interface BFFUserProfile
+ * @description Contrato estrito entre o Backend (Edge Function) e o Frontend.
+ * Todas as alterações na estrutura de dados do usuário devem ser refletidas aqui.
+ */
+export interface BFFUserProfile {
+  // Identificador único da entidade no banco de dados (UUID/String)
+  entity_id: string;
+  entity_type: "F" | "J";    // "F" para Pessoa Física, "J" para Pessoa Jurídica
+  
+  // Dados Pessoais
+  name: string;
+  document: string;         // CPF formatado ou bruto conforme definido na Edge
+  document_rg?: string;     // Opcional: Nem todas as jornadas capturam RG
+  email: string;
+  phone: string;
+  birth_date: string;       // ISO Date string
+  gender: string;
+  login: string;            // Login sistêmico
+  mothers_name: string;
+
+  // Objeto de Endereço (nullable caso o usuário não tenha completado onboarding)
+  address: {
+    street: string;
+    number: string;
+    complement: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    country: string;
+  } | null;
+
+  // Dados de auditoria e telemetria inseridos pelo BFF
+  metadata?: {
+    processedAt: string;    // Timestamp do processamento no BFF
+    originIp: string;       // IP de origem do request para fins de segurança
+  };
+}

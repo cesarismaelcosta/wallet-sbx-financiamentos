@@ -161,6 +161,7 @@ async function resolveDestination(
   categoryId?: number,
   productId?: number,
   entityDocument?: string,
+  entityType?: "F" | "J" | string, // 👈 Aceita "F", "J" ou qualquer string genérica / undefined
 ) {
   debugLog(`RESOLVE DESTINATION: Ação ${action}. category: ${categoryId} | product_id: ${productId}`);
 
@@ -171,7 +172,7 @@ async function resolveDestination(
   }
 
   const cleanDoc = String(entityDocument || "").replace(/\D/g, "");
-  const currentProfile = cleanDoc.length === 14 ? "PJ" : "PF";
+  const currentProfile = entityType === "J" ? "PJ" : "PF";
 
   const priorities = [
     { type: "PRODUCT", id: productId ? Number(productId) : undefined },
@@ -182,7 +183,7 @@ async function resolveDestination(
 
   for (const priority of priorities) {
     if (priority.id && !isNaN(priority.id)) {
-      debugLog(`Tentando query: ${priority.type} com ID: ${priority.id} para Perfil: ${currentProfile}`);
+      debugLog(`Tentando query: ${priority.type} com ID: ${priority.id} para Perfil: ${entityType}`);
       const { data, error } = await supabaseClient
         .from("orchestrator_configs")
         .select("id, page_url, partner_id, is_integrated, integration_method, integration_details, entity_type")
@@ -226,9 +227,10 @@ async function resolveOrchestratorConfigs(
   categoryId?: any,
   productId?: any,
   entityDocument?: string,
+  entityType?: "F" | "J" | string, // 👈 Aceita "F", "J" ou qualquer string genérica / undefined
 ) {
   const cleanDoc = String(entityDocument || "").replace(/\D/g, "");
-  const currentProfile = cleanDoc.length === 14 ? "PJ" : "PF";
+  const currentProfile = entityType === "J" ? "PJ" : "PF";
 
   const priorities = [
     { type: "PRODUCT", id: productId },
@@ -454,6 +456,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           visitOfferData.category_id, 
           visit.product_id, 
           visitEntityData.document, 
+          visitEntityData.entity_type,
         );
         
         if (!orchestratorConfigs) {
@@ -598,6 +601,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           category_id,
           product_id,
           payload.entity?.document, 
+          payload.entity?.entity_type, 
         );
 
         // E: Enriquecimento do Payload com a Rota Resolvida
