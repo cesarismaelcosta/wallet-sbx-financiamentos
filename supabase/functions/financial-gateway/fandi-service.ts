@@ -12,6 +12,7 @@
  * 
  * DOCUMENTAÇÕES DISPONÍVEIS:
  * https://doc.clickup.com/3006379/p/h/2vqxb-44723/6811ecf4e4aafcf
+ * https://doc.clickup.com/3006379/p/h/2vqxb-456857/926a4c28b7c5df4
  * https://api-hml.fandi.com.br/comercial/swagger/index.html
  * 
  * CHECKOUT DE TESTE:
