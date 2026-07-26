@@ -21,7 +21,6 @@ const SbxpayLazyRouteImport = createFileRoute('/sbxpay')()
 const FinanciamentosLazyRouteImport = createFileRoute('/financiamentos')()
 const BackofficeLazyRouteImport = createFileRoute('/backoffice')()
 const SbxpayIndexLazyRouteImport = createFileRoute('/sbxpay/')()
-const LandingIndexLazyRouteImport = createFileRoute('/landing/')()
 const BackofficeIndexLazyRouteImport = createFileRoute('/backoffice/')()
 const SegurosAutoLazyRouteImport = createFileRoute('/seguros/auto')()
 const SbxpayOfferLazyRouteImport = createFileRoute('/sbxpay/offer')()
@@ -103,11 +102,6 @@ const SbxpayIndexLazyRoute = SbxpayIndexLazyRouteImport.update({
   path: '/',
   getParentRoute: () => SbxpayLazyRoute,
 } as any).lazy(() => import('./routes/sbxpay.index.lazy').then((d) => d.Route))
-const LandingIndexLazyRoute = LandingIndexLazyRouteImport.update({
-  id: '/landing/',
-  path: '/landing/',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/landing.index.lazy').then((d) => d.Route))
 const BackofficeIndexLazyRoute = BackofficeIndexLazyRouteImport.update({
   id: '/',
   path: '/',
@@ -253,7 +247,6 @@ export interface FileRoutesByFullPath {
   '/sbxpay/offer': typeof SbxpayOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
-  '/landing/': typeof LandingIndexLazyRoute
   '/sbxpay/': typeof SbxpayIndexLazyRoute
 }
 export interface FileRoutesByTo {
@@ -279,7 +272,6 @@ export interface FileRoutesByTo {
   '/sbxpay/offer': typeof SbxpayOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice': typeof BackofficeIndexLazyRoute
-  '/landing': typeof LandingIndexLazyRoute
   '/sbxpay': typeof SbxpayIndexLazyRoute
 }
 export interface FileRoutesById {
@@ -308,7 +300,6 @@ export interface FileRoutesById {
   '/sbxpay/offer': typeof SbxpayOfferLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
-  '/landing/': typeof LandingIndexLazyRoute
   '/sbxpay/': typeof SbxpayIndexLazyRoute
 }
 export interface FileRouteTypes {
@@ -338,7 +329,6 @@ export interface FileRouteTypes {
     | '/sbxpay/offer'
     | '/seguros/auto'
     | '/backoffice/'
-    | '/landing/'
     | '/sbxpay/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -364,7 +354,6 @@ export interface FileRouteTypes {
     | '/sbxpay/offer'
     | '/seguros/auto'
     | '/backoffice'
-    | '/landing'
     | '/sbxpay'
   id:
     | '__root__'
@@ -392,7 +381,6 @@ export interface FileRouteTypes {
     | '/sbxpay/offer'
     | '/seguros/auto'
     | '/backoffice/'
-    | '/landing/'
     | '/sbxpay/'
   fileRoutesById: FileRoutesById
 }
@@ -407,7 +395,6 @@ export interface RootRouteChildren {
   ApiLoginhistoryRoute: typeof ApiLoginhistoryRoute
   AccountsSigninLazyRoute: typeof AccountsSigninLazyRoute
   BackofficeLoginLazyRoute: typeof BackofficeLoginLazyRoute
-  LandingIndexLazyRoute: typeof LandingIndexLazyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -467,13 +454,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/sbxpay/'
       preLoaderRoute: typeof SbxpayIndexLazyRouteImport
       parentRoute: typeof SbxpayLazyRoute
-    }
-    '/landing/': {
-      id: '/landing/'
-      path: '/landing'
-      fullPath: '/landing/'
-      preLoaderRoute: typeof LandingIndexLazyRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/backoffice/': {
       id: '/backoffice/'
@@ -677,7 +657,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLoginhistoryRoute: ApiLoginhistoryRoute,
   AccountsSigninLazyRoute: AccountsSigninLazyRoute,
   BackofficeLoginLazyRoute: BackofficeLoginLazyRoute,
-  LandingIndexLazyRoute: LandingIndexLazyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

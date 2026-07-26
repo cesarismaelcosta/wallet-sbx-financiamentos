@@ -447,15 +447,15 @@ function PropostasPage() {
                   {/* COLUNA: PARCEIRO / BANCO */}
                   <td className="px-3 py-3 w-[140px]">
                     <div className="flex items-center gap-1.5">
-                      {/* Parceiro */}
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-muted/20 border border-border/40" title={r.partners?.name}>
+                      
+                      {/* Logo do Parceiro */}
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-muted/25 border border-border/40" title={r.partners?.name}>
                         {r.partners?.logo_url ? (
                           <img 
                             src={r.partners.logo_url} 
                             className="h-full w-full object-contain p-1" 
                             alt={r.partners.name || "Parceiro"}
                             onError={(e) => {
-                              // Fallback visual caso a URL da imagem quebre
                               e.currentTarget.style.display = 'none';
                             }}
                           />
@@ -471,15 +471,19 @@ function PropostasPage() {
                         <>
                           <span className="text-muted-foreground/20 text-xs">/</span>
                           
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-transparent overflow-hidden" title={r.financial_institutions?.name}>
+                          {/* Logo do Banco */}
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-muted/25 border border-border/40" title={r.financial_institutions?.name}>
                             {r.financial_institutions?.logo_url ? (
                               <img 
                                 src={r.financial_institutions.logo_url} 
-                                className="h-full w-full object-cover" 
-                                alt={r.financial_institutions.name}
+                                className="h-full w-full object-contain p-1" 
+                                alt={r.financial_institutions.name || "Banco"}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
                               />
                             ) : (
-                              <Camera className="h-5 w-5 text-muted-foreground/50" />
+                              <Camera className="h-4 w-4 text-muted-foreground/50" />
                             )}
                           </div>
                         </>
