@@ -49,17 +49,15 @@ export async function captureInfrastructure(req: Request): Promise<OriginDetails
   
   /**
    * IP:
-   * O x-forwarded-for DEVE vir em primeiro lugar. 
-   * É nele que o Gateway do Supabase (Kong) repassa o IP real do navegador do cliente.
-   * Se colocarmos o x-real-ip na frente, ele captura o IP interno do proxy da nuvem (ex: 18.231...).
+   * O x-client-ip DEVE vir em primeiro lugar porque enviamos no financial-gateway-gate
    */
-  const rawIp = req.headers.get("x-forwarded-for")?.split(",")[0] || 
+  const rawIp = req.headers.get("x-client-ip") || 
+                req.headers.get("x-forwarded-for")?.split(",")[0] || 
                 req.headers.get("cf-connecting-ip") || 
                 req.headers.get("x-real-ip") || 
-                req.headers.get("x-client-ip") || 
                 "0.0.0.0";
   
-  // CORREÇÃO CRÍTICA: Declaração e higienização correta da variável ip que estava faltando
+  // Declaração e higienização da variável ip que estava faltando
   const ip = rawIp.trim();
   
   const { os, device } = parseUserAgent(ua);

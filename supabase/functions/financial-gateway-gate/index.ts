@@ -336,7 +336,8 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(return_uri)}`;
 
     // Captura os dados reais vindos do cliente
-    const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "0.0.0.0";
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0] || 
+                     req.headers.get("x-real-ip") || "0.0.0.0";
     const clientUa = req.headers.get("user-agent") || "";
 
     const orchestratorResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/orchestrator`, {
@@ -347,9 +348,9 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
             "x-session-token": finalJwt, 
             "x-original-url": return_uri,
             "x-auth-fallback-url": loginFallbackUrl,
-            // Repassa a identidade real do navegador para a próxima Edge Function
-            "x-forwarded-for": clientIp,
             "user-agent": clientUa,
+            // Header customizado que o Kong NÃO SOBRESCREVE:
+            "x-client-ip": clientIp.trim(),
         },
         body: JSON.stringify(rehydratedPayload),
     });
