@@ -54,7 +54,7 @@ async function ensureAdmin(authHeader: string | null) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   
-  const { data: { user }, error: authError } = await userClient.auth.getUser();
+  const { data: { user }, error: authError } = await supabaseAuthClient.auth.getUser(token);
   
   if (authError || !user) {
     debugLog("DEBUG [ensureAdmin]: Erro Auth ->", authError);

@@ -43,7 +43,7 @@ serve(withSecurity('login-history', async (req: Request) => {
         { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
 
-    const { data: { user }, error: authError } = await supabaseAuthClient.auth.getUser();
+    const { data: { user }, error: authError } = await supabaseAuthClient.auth.getUser(token);
     
     // Se falhar, printa o erro EXATO do Supabase no console da Edge Function
     if (authError || !user) {
