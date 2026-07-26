@@ -414,15 +414,16 @@ export interface EmailTemplateResult {
 // [1] USUÁRIO: Perfil Identitário
 // =========================================================================
 export interface BFFUserProfile {
-  entity_id: string; // ID único do usuário no ecossistema
-  name: string;      // Nome completo
-  document: string;  // CPF/CNPJ (Mapeado)
-  email: string;     // E-mail principal de contato
-  phone: string;     // Telefone formatado
-  birth_date: string;// Data de nascimento ISO
-  gender: "M" | "F"; // Gênero
-  login: string;     // Usuário de login
-  mothers_name: string;
+  entity_id: string;      // ID único do usuário no ecossistema
+  entity_type: "F" | "J"; // Tipo de entidade: "F" (Física) ou "J" (Jurídica)
+  name: string;           // Nome completo
+  document: string;       // CPF/CNPJ (Mapeado)
+  email: string;          // E-mail principal de contato
+  phone: string;          // Telefone formatado
+  birth_date: string;     // Data de nascimento ISO
+  gender: "M" | "F";      // Gênero
+  login: string;          // Usuário de login
+  mothers_name: string;   // Nome da mãe
   address: {
     street: string;
     number: string;
