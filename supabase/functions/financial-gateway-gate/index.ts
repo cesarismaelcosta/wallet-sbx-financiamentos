@@ -1,14 +1,28 @@
 /**
- * @fileoverview EDGE GATEWAY DE ENTRADA (Híbrido: Form POST & AJAX)
+ * @fileoverview EDGE GATEWAY DE ENTRADA (Autenticação Híbrida & Roteamento)
  * @path supabase/functions/financial-gateway-gate/index.ts
  * 
  * =========================================================================
  * [ARQUITETURA BFF & CONTENT NEGOTIATION]
  * =========================================================================
- * 1. HÍBRIDO: Aceita JSON (AJAX) ou x-www-form-urlencoded (Form POST Nativo).
- * 2. AUTH: Troca o token da Superbid por um JWT nativo seguro (Set-Cookie).
- * 3. ORQUESTRAÇÃO & HIDRATAÇÃO: Busca dados na Superbid e consulta o 'orchestrator'.
- * 4. REDIRECT: Se for Form POST, responde 302 direto para a Fandi (ou tela de Erro).
+ * Este endpoint atua como a porta de entrada (Front Door) para usuários vindos de 
+ * sistemas legados (via Form POST) ou do próprio SPA (via chamadas AJAX/JSON).
+ * 
+ * RESPONSABILIDADES:
+ * 1. NEGOCIAÇÃO DE CONTEÚDO: Adapta-se automaticamente à origem (Formulário vs. API Client).
+ * 2. AUTENTICAÇÃO: Troca o token bruto da Superbid por um JWT nativo seguro da nossa infraestrutura.
+ * 3. HIDRATAÇÃO (BFF): Enriquece o perfil do usuário consultando as APIs upstream da Superbid.
+ * 4. ORQUESTRAÇÃO: Consulta o serviço `orchestrator` para definir a rota de destino baseada no contexto.
+ * 
+ * =========================================================================
+ * [SEGURANÇA E ZERO LOCALSTORAGE (SMART DELIVERY)]
+ * =========================================================================
+ * O Gateway alinha-se à política de segurança do front-end (`session.ts`):
+ * - PRODUÇÃO (Same-Site): Opera sob segurança máxima. O JWT é entregue EXCLUSIVAMENTE via 
+ *   cookie `HttpOnly`. O front-end fica "cego" para o token, blindando o sistema contra XSS.
+ * - DESENVOLVIMENTO (Cross-Origin): O cookie falharia devido a regras estritas do navegador (CORS/Lax). 
+ *   Neste cenário, o Gateway expõe o token de forma controlada para o React gravar no 
+ *   `sessionStorage`, mantendo a fluidez da DX (Developer Experience) localmente.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -28,7 +42,9 @@ const ENV_URLS = {
 serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   const originPath = req.headers.get("origin") || req.headers.get("referer") || "/";
 
-  // 🔍 [INSPEÇÃO CIRÚRGICA DE ENTRADA] - Vê exatamente o que entrou na porta
+  // =====================================================================
+  // [TELEMETRIA] Inspeção de Entrada na Borda
+  // =====================================================================
   console.log("🔥 [GATEWAY-INSPECT] Método:", req.method);
   console.log("🔥 [GATEWAY-INSPECT] URL:", req.url);
   console.log("🔥 [GATEWAY-INSPECT] Content-Type:", req.headers.get("content-type"));
@@ -42,8 +58,10 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   }
   
   // =====================================================================
-  // 1. NEGOCIAÇÃO DE CONTEÚDO (Content Negotiation)
+  // [STEP 1] NEGOCIAÇÃO DE CONTEÚDO (Content Negotiation)
   // =====================================================================
+  // Avalia o Content-Type para decidir como extrair os dados, permitindo 
+  // que a mesma rota atenda SPAs (JSON) e sistemas legados (Form POST).
   const contentType = req.headers.get("content-type") || "";
   const accept = req.headers.get("accept") || "";
   const isAjax = contentType.includes("application/json") || accept.includes("application/json");
@@ -58,18 +76,18 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
       payload = await req.json();
     }
   } catch (e) {
-    // Adicionado o parâmetro 'req' no final para não dar crash na função de erro
     return respondWithError(isAjax, 400, "BAD_REQUEST", "Payload inválido ou vazio.", payload?.return_uri || originPath, req);
   }
 
   const { environment = "production", offer_id, product_id, return_uri = originPath, utm_source, utm_medium, utm_campaign } = payload;
 
   // =====================================================================
-  // FALLBACK HÍBRIDO (Payload da Superbid/DEV vs Cookie Interno em PROD)
+  // [STEP 2] RESOLUÇÃO DE CREDENCIAIS HÍBRIDA (Payload vs Cookie)
   // =====================================================================
   let auth_token = payload.auth_token;
 
-  // Se o JS não mandou no payload (ex: seu frontend em modo seguro de produção)
+  // Se o client-side operou em modo blindado (Produção), o token não virá no payload.
+  // Neste caso, o Gateway atua como BFF e pesca a sessão automaticamente dos cookies.
   if (!auth_token) {
       const cookieHeader = req.headers.get("cookie") || "";
       const cookieMatch = cookieHeader.match(/session_token=([^;]+)/);
@@ -78,9 +96,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
       }
   }
 
-  // Se realmente não tiver token em lugar nenhum
   if (!auth_token) {
-    // Adicionado o parâmetro 'req' no final
     return respondWithError(isAjax, 400, "BAD_REQUEST", "Credencial (auth_token) ausente no payload e nos cookies.", return_uri, req);
   }
 
@@ -93,7 +109,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     );
 
     // =====================================================================
-    // 2. DUAL-MODE AUTH (Token Bruto vs JWT Interno)
+    // [STEP 3] DUAL-MODE AUTH (Validação de Token Bruto vs JWT Interno)
     // =====================================================================
     let sbx_access_token = auth_token;
     const isJwt = auth_token.split('.').length === 3;
@@ -117,12 +133,14 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         .single();
 
       if (sessionError || !sessionData) throw new Error("SESSION_UPSTREAM_EXPIRED: JWT expirado no banco.");
+      
+      // Resgata o token real da Superbid do cofre para chamadas upstream
       sbx_access_token = sessionData.sbx_access_token;
       userId = sessionData.user_id;
     }
 
     // =====================================================================
-    // 3. EXTRAÇÃO DE DADOS UPSTREAM (Superbid API - User /me)
+    // [STEP 4] EXTRAÇÃO DE DADOS UPSTREAM (Superbid API - User /me)
     // =====================================================================
     const userRes = await fetch(`${urls.api}/account/v2/user/me`, {
       method: "GET",
@@ -141,7 +159,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     userId = String(account?.id);
 
     // =====================================================================
-    // 4. HIDRATAÇÃO DE PERFIL (BFF Mapping)
+    // [STEP 5] HIDRATAÇÃO DE PERFIL (BFF Mapping)
     // =====================================================================
     const userProfile: BFFUserProfile = {
       entity_id: userId,
@@ -168,7 +186,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     };
 
     // =====================================================================
-    // 5. BUSCA E MAPEAMENTO DE OFERTA
+    // [STEP 6] BUSCA E MAPEAMENTO DE OFERTA
     // =====================================================================
     let offerPayload: BFFOfferDetails | null = null;
     
@@ -280,7 +298,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     }
 
     // =====================================================================
-    // 6. PERSISTÊNCIA DA SESSÃO E JWT
+    // [STEP 7] PERSISTÊNCIA DA SESSÃO E GERAÇÃO DE JWT
     // =====================================================================
     if (!isJwt) {
         debugLog("Gerando nova sessão e JWT...");
@@ -298,7 +316,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     }
 
     // =====================================================================
-    // 7. MONTAGEM DO PAYLOAD E CHAMADA AO ORQUESTRADOR
+    // [STEP 8] ORQUESTRAÇÃO DE ROTAS (Target Discovery)
     // =====================================================================
     const rehydratedPayload = {
       action: "CONSULT",
@@ -334,7 +352,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
 
     let targetUrl = orchestratorData.url;
 
-    // Extração dinâmica da origem absoluta do front-end (Funciona para localhost e Lovable)
+    // Resolução dinâmica da origem do Front-end (Localhost vs Produção)
     let frontendOrigin = "";
     const reqOrigin = req.headers.get("origin") || req.headers.get("referer");
     if (reqOrigin) {
@@ -347,26 +365,48 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         frontendOrigin = Deno.env.get("FRONTEND_URL") || ""; 
     }
 
-    // Se o orquestrador retornar uma URL relativa, prefixa com a origem real capturada
+    // Prefixa URLs relativas com a origem real
     if (targetUrl && targetUrl.startsWith('/') && frontendOrigin) {
         targetUrl = `${frontendOrigin}${targetUrl}`;
     }
+
+    // =====================================================================
+    // [STEP 9] SMART DELIVERY E SEGURANÇA FINAL (HttpOnly vs Storage)
+    // =====================================================================
+    // [SECURITY]: Alinhamento com as regras de 'Zero LocalStorage' do Front-end.
+    
+    // Identifica o domínio do Gateway (Supabase) e do Front-end (React)
+    const apiHost = new URL(Deno.env.get('SUPABASE_URL') || '').hostname;
+    const frontendHost = frontendOrigin ? new URL(frontendOrigin).hostname : "";
+    
+    // Calcula o TLD+1 para validar a regra de Same-Site
+    const eTLDplus1 = (h: string) => h.split('.').slice(-2).join('.');
+    
+    // Se isSameSite = TRUE (Ambiente de Produção), o Cookie HttpOnly cobrirá as requisições.
+    // Portanto, cortamos a exposição do JWT no payload para anular riscos de XSS.
+    const isSameSite = (frontendHost && apiHost) ? eTLDplus1(frontendHost) === eTLDplus1(apiHost) : false;
+    const safeTokenToReturn = isSameSite ? "" : finalJwt;
 
     const responseHeaders = new Headers();
     responseHeaders.set("Access-Control-Allow-Origin", getSafeCorsOrigin(req.headers.get("origin") || req.headers.get("referer")));
 
     if (isAjax) {
-        // Fluxo AJAX (Retorna JSON puro)
+        // [FLUXO AJAX]: Devolve JSON estruturado (Consumido por Axios/Fetch)
         responseHeaders.set("Content-Type", "application/json");
         responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
         
         return new Response(JSON.stringify({ 
             success: true, 
-            redirect_url: targetUrl 
+            redirect_url: targetUrl,
+            environment: environment,
+            // O token só viaja no Body se o Client precisar dele para o sessionStorage (Modo DEV)
+            ...(safeTokenToReturn ? { session_token: safeTokenToReturn } : {})
         }), { status: 200, headers: responseHeaders });
     } else {
-        // Fluxo Form POST Nativo (HTML Bridge / Interceptor)
-        // A Borda responde 200 com HTML para gravar o token no sessionStorage antes de navegar
+        // [FLUXO NATIVO]: Interceptor HTML Bridge (Consumido por Form POST do Navegador)
+        responseHeaders.set("Content-Type", "text/html; charset=utf-8");
+        responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
+        
         const html = `
         <!DOCTYPE html>
         <html>
@@ -377,16 +417,20 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         <body>
             <script>
                 try {
-                    sessionStorage.setItem('session_token', '${finalJwt}');
+                    // [SECURITY]: Injeção condicional. Em Produção, 'safeTokenToReturn' é vazio 
+                    // e o token não toca na API do Storage.
+                    ${safeTokenToReturn ? `sessionStorage.setItem('session_token', '${safeTokenToReturn}');` : ''}
+                    
+                    // A preferência de ambiente sempre é persistida para orientar o UI State no Front-end.
+                    sessionStorage.setItem('sbx_env_pref', '${environment}');
                 } catch (e) {}
+                
+                // Redirecionamento forçado no Client-Side, mantendo o histórico de rede limpo.
                 window.location.replace('${targetUrl}');
             </script>
         </body>
         </html>
         `;
-
-        responseHeaders.set("Content-Type", "text/html; charset=utf-8");
-        responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
         
         return new Response(html, { status: 200, headers: responseHeaders });
     }
@@ -399,6 +443,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     let statusCode = 400;
     const msg = (err.message || "").toUpperCase();
 
+    // De/Para semântico para padronização de erros na UI do Front-end
     if (msg.includes("UPSTREAM_USER_ERROR")) {
         errorCode = "SBX_LOADER_FAIL_USER";
         statusCode = 422;
@@ -465,6 +510,7 @@ function respondWithError(
     const headers = new Headers();
     headers.set("Access-Control-Allow-Origin", "*");
 
+    // [FLUXO AJAX]: Devolve o erro estruturado para o Client HTTP gerenciar
     if (isAjax) {
         headers.set("Content-Type", "application/json");
         return new Response(
@@ -473,6 +519,7 @@ function respondWithError(
         );
     } 
 
+    // [FLUXO NATIVO]: Redireciona via Header Location (302) para a tela de erro do Front-end
     const encodedMsg = encodeURIComponent(message);
     const encodedUri = encodeURIComponent(safeReturnUri);
     

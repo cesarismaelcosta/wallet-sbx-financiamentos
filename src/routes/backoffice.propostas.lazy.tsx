@@ -447,18 +447,21 @@ function PropostasPage() {
                   {/* COLUNA: PARCEIRO / BANCO */}
                   <td className="px-3 py-3 w-[140px]">
                     <div className="flex items-center gap-1.5">
-                      
                       {/* Parceiro */}
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-transparent overflow-hidden" title={r.partners?.name}>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-muted/20 border border-border/40" title={r.partners?.name}>
                         {r.partners?.logo_url ? (
                           <img 
                             src={r.partners.logo_url} 
-                            className="h-full w-full object-cover" 
-                            alt={r.partners.name}
+                            className="h-full w-full object-contain p-1" 
+                            alt={r.partners.name || "Parceiro"}
+                            onError={(e) => {
+                              // Fallback visual caso a URL da imagem quebre
+                              e.currentTarget.style.display = 'none';
+                            }}
                           />
                         ) : (
-                          <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase">
-                            {r.partners?.name?.slice(0, 3)}
+                          <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase text-muted-foreground">
+                            {r.partners?.name?.slice(0, 3) || "—"}
                           </span>
                         )}
                       </div>

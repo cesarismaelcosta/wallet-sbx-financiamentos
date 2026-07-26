@@ -8,13 +8,14 @@
  */
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { manualLogout, clearSession } from "@/services/session";
 
 interface FinancialAuthContextType {
   sessionToken: string | null;
   userId: string | null;
   isLoading: boolean;
   setSession: (token: string, userId?: string) => void; 
-  logout: () => void;
+  logout: (opts?: { purgeEnv?: boolean }) => void;
 }
 
 const FinancialAuthContext = createContext<FinancialAuthContextType | undefined>(undefined);
@@ -62,13 +63,19 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   };
 
   /**
-   * Logout manual (Clique no botão de Sair):
-   * Executa limpeza total do sessionStorage, apagando tudo inclusive o 'sbx_env_pref'.
+   * Encerra a sessão atual. 
+   * Se purgeEnv for true (logout manual explícito), limpa também a preferência de ambiente.
+   * Se for falso ou omitido (expiração/timeout), preserva o sbx_env_pref.
    */
-  const logout = () => {
+  const logout = (opts?: { purgeEnv?: boolean }) => {
     if (typeof window !== 'undefined') {
-      sessionStorage.clear(); // Apaga tudo, inclusive o 'sbx_env_pref'
+      if (opts?.purgeEnv) {
+        manualLogout(); // Limpa tokens e apaga sbx_env_pref (Logout manual explícito)
+      } else {
+        clearSession(); // Limpa apenas tokens, preservando o sbx_env_pref (Expiração/Timeout)
+      }
     }
+
     setSessionToken(null);
     setUserId(null);
   };

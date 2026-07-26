@@ -1,5 +1,3 @@
-import { setSessionToken, setSessionMetadata, USE_COOKIE } from './session';
-
 /**
  * @fileoverview Serviço: Autenticação da Wallet sbX
  * @description Atua como cliente da Edge Function (sbx-auth). 
@@ -11,6 +9,8 @@ import { setSessionToken, setSessionMetadata, USE_COOKIE } from './session';
  * 2. Segurança: Delega o token para o session.ts (Cookie em PROD, sessionStorage em DEV).
  * 3. Sincronia: Calcula e persiste o Clock Drift para validação local de sessão.
  */
+
+import { setSessionToken, setSessionMetadata } from "@/services/session";
 
 // =========================================================================
 // FUNÇÃO: autenticateWalletsbX

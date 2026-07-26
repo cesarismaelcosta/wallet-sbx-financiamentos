@@ -5,10 +5,11 @@
  * Interface visual de autenticação que gerencia dinamicamente o ambiente de destino (`staging` | `production`)
  * e dispara a criação da sessão via Cookie HttpOnly através do Proxy de Autenticação (`sbx-auth`).
  *
- * REGRAS DE RESOLUÇÃO DE AMBIENTE (DELEGADAS AO SESSION.TS):
- * A lógica de qual ambiente usar (e se o usuário pode alterá-lo) foi extraída para o serviço `session.ts`.
- * O componente React atua apenas como uma camada de visualização (View), respeitando o "lock" imposto
- * pelas variáveis de build e persistindo as preferências temporárias de DX via serviço.
+ * ANTI-FLICKER & SSR SAFETY:
+ * Todo estado derivado de `sessionStorage` ou de variáveis de build é gateado por `mounted`.
+ * O SSR e o primeiro paint do client renderizam exatamente o mesmo HTML neutro, eliminando
+ * qualquer divergência de hidratação (Hydration Mismatch) e o efeito "pisca" do seletor.
+ * Renderização condicional limpa: aparece instantaneamente se necessário ou não ocupa espaço algum.
  *
  * PRINCIPAIS GARANTIAS DE SEGURANÇA:
  * 1. Zero LocalStorage (Token): Nenhuma chave de sessão ou token JWT é gravada no armazenamento local do navegador.
@@ -20,7 +21,7 @@
  */
 
 import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react"; 
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
@@ -29,7 +30,7 @@ import {
   getDefaultSbxEnvironment, 
   isEnvironmentLocked, 
   setSbxEnvironmentPreference,
-  hasSbxEnvironmentPreference // 👈 Puxamos a responsabilidade do serviço correto
+  hasSbxEnvironmentPreference 
 } from "@/services/session";
 
 // =========================================================================
@@ -86,16 +87,33 @@ export function CustomLogin() {
   };
   
   // =========================================================================
-  // [LÓGICA DE RESOLUÇÃO DE AMBIENTE CASCATA]
+  // [LÓGICA DE RESOLUÇÃO DE AMBIENTE CASCATA & ANTI-FLICKER]
   // =========================================================================
-  
-  // 1. O componente delega a decisão de "lock" para o serviço especializado
-  const isEnvFixed = isEnvironmentLocked();
 
-  // 2. O estado inicial absorve o param da URL (se existir) ou a inteligência do session.ts
+  // Flag de montagem para garantir paridade exata entre SSR e primeiro paint do client
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // O estado default utiliza o parâmetro da URL ou um fallback seguro durante o SSR
   const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(
-    search.env || getDefaultSbxEnvironment()
+    search.env || "production"
   );
+
+  // Sincroniza o ambiente real após a montagem no client (lendo sessionStorage/env)
+  useEffect(() => {
+    if (!mounted) return;
+    setAmbienteAtivo(search.env || getDefaultSbxEnvironment());
+  }, [mounted, search.env]);
+
+  // Propriedades derivadas estritamente ativas após a hidratação no client
+  const isEnvFixed = mounted && isEnvironmentLocked();
+  const hasPref = mounted && (hasSbxEnvironmentPreference() || !!search.env);
+
+  // Condicionais visuais controladas pelo gate de montagem
+  const showEnvSelector = mounted && !isEnvFixed && !hasPref;
+  const showStageBadge = mounted && ambienteAtivo === "staging" && isEnvFixed;
 
   /**
    * [HANDLER]: Troca Manual de Ambiente (Apenas em DEV)
@@ -173,7 +191,7 @@ export function CustomLogin() {
         // O transporte do Token (Cookie ou SessionStorage) já foi resolvido pela auth.ts
         // O token real vai no primeiro argumento, o userId no segundo
         // ---------------------------------------------------------------------
-        setSession(response.session_token, response.user_id);
+        setSession(response.session_token, response.userId);
 
         // ---------------------------------------------------------------------
         // STEP 4: Processamento de Redirecionamento Limpo
@@ -216,31 +234,35 @@ export function CustomLogin() {
         <div className="flex justify-between items-center mb-6">
           <WalletLogo size="md" withTagline />
           {/* Badge de indicação visual caso o ambiente STAGE esteja fixado via build (.env) */}
-          {ambienteAtivo === 'staging' && isEnvFixed && (
-            <span className="text-[10px] uppercase font-bold px-2 py-1 rounded-full border bg-red-50 text-red-600 border-red-200">
-              STAGE
-            </span>
-          )}
+          <span 
+            className={`text-[10px] uppercase font-bold px-2 py-1 rounded-full border bg-red-50 text-red-600 border-red-200 transition-opacity duration-150 ${
+              showStageBadge ? "opacity-100" : "opacity-0 pointer-events-none"
+            }`}
+            aria-hidden={!showStageBadge}
+          >
+            STAGE
+          </span>
         </div>
 
         {/* 
-          SELETOR VISUAL DE AMBIENTE:
-          Exibido apenas quando a variável de ambiente não estiver travada (Lock = false)
-          E NÃO houver nenhuma preferência validada pelo session.ts.
+          SELETOR DE AMBIENTE
+          - Sem fade, sem min-height fixo.
+          - Enquanto !mounted, nada é renderizado (SSR/1º paint = neutro).
+          - Após mount, se `showEnvSelector` for true, aparece INSTANTANEAMENTE
+            no seu tamanho natural. Se false, não ocupa espaço algum.
         */}
-        {!isEnvFixed && !hasSbxEnvironmentPreference() && (
-          <div className="mb-6 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-            <p className="text-xs text-slate-500 font-medium mb-2 text-center">
+        {mounted && showEnvSelector && (
+          <div className="mb-4">
+            <p className="text-[11px] uppercase font-bold text-gray-500 mb-2 text-center tracking-wide">
               Selecione o ambiente de destino:
             </p>
-            <div className="flex bg-gray-200 rounded-full p-1 border border-gray-300">
+            <div className="flex bg-gray-100 rounded-full p-1">
               <button
                 type="button"
-                disabled={isLoading}
                 onClick={() => handleEnvChange("staging")}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-full transition-all border ${
-                  ambienteAtivo === "staging" 
-                    ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm" 
+                  ambienteAtivo === "staging"
+                    ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm"
                     : "text-gray-500 border-transparent hover:text-gray-700"
                 }`}
               >
@@ -248,11 +270,10 @@ export function CustomLogin() {
               </button>
               <button
                 type="button"
-                disabled={isLoading}
                 onClick={() => handleEnvChange("production")}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-full transition-all border ${
-                  ambienteAtivo === "production" 
-                    ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm" 
+                  ambienteAtivo === "production"
+                    ? "bg-white text-[#B400FF] border-[#B400FF] shadow-sm"
                     : "text-gray-500 border-transparent hover:text-gray-700"
                 }`}
               >

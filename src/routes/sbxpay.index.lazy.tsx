@@ -230,7 +230,7 @@ export function sbXPAYHome() {
                     <div className="hidden md:flex items-center space-x-3">
                         <a href="/backoffice" className={ghostBtn}>Backoffice</a>
                         {sessionToken ? (
-                            <button onClick={logout} className={`flex items-center gap-2 ${ghostBtn}`}>
+                            <button onClick={() => logout({ purgeEnv: true })} className={`flex items-center gap-2 ${ghostBtn}`}>
                                 Sair <LogOut className="w-3 h-3" />
                             </button>
                         ) : (
