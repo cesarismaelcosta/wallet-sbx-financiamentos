@@ -10,7 +10,7 @@
  * [RESPONSABILIDADES]:
  * 1. Sanitização: Normaliza headers de requisição vindos de CDNs, Proxies e Supabase Edge.
  * 2. Fingerprinting: Gera a assinatura básica para identificar o contexto da requisição.
- * 3. Resiliência: Implementa fallback de IP-API com suporte a IPs locais/loopback.
+ * 3. Resiliência: Implementa fallback de IP-API com tratamento estrito de IPs locais/loopback.
  * 
  * @author Cesar Ismael Pereira da Costa
  */
@@ -65,18 +65,28 @@ export async function captureInfrastructure(req: Request): Promise<OriginDetails
     city: req.headers.get("x-vercel-ip-city") || req.headers.get("cf-ipcity"),
   };
 
-  // Se for IP local/loopback em ambiente de desenvolvimento, tenta forçar resolução pública ou assume N/A limpo
+  // Identificação de IP local, loopback ou redes privadas de desenvolvimento
   const isLocalIp = ip === "0.0.0.0" || ip === "127.0.0.1" || ip.startsWith("192.168.") || ip.startsWith("10.");
 
-  // Fallback Agressivo de Geolocation via IP-API (caso CDN não proveja dados ou IP seja interno)
-  if (!geo.country || geo.country === "XX" || !geo.city || isLocalIp) {
+  /**
+   * =========================================================================
+   * [CORREÇÃO CRÍTICA DE GEO-LOCALIZAÇÃO]
+   * =========================================================================
+   * ANTES: Se o IP fosse local, o código passava string vazia ("") para a API externa.
+   * RESULTADO: A API externa rastreava o servidor de execução (Supabase Edge na AWS SP) 
+   * e cravava "São Paulo" indevidamente para qualquer teste em localhost.
+   * 
+   * AGORA: Se for IP local/privado, o script ABORTA a chamada externa (`ip-api`), 
+   * evitando poluir o banco com a localização do datacenter e mantendo o fallback 
+   * limpo como "N/A" (ou dados fornecidos diretamente pela CDN, se houver).
+   */
+  if ((!geo.country || geo.country === "XX" || !geo.city) && !isLocalIp) {
     try {
-      // Se for IP local, passamos vazio para a ip-api detectar o IP público atual do servidor/execução
-      const queryIp = isLocalIp ? "" : ip;
-      const res = await fetch(`http://ip-api.com/json/${queryIp}?fields=countryCode,regionName,city`);
+      const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,countryCode,regionName,city`);
       const fallback = await res.json();
 
-      if (fallback?.countryCode) {
+      // Validação estrita: Só aceita o payload se a API retornar status de sucesso legítimo
+      if (fallback?.status === "success" && fallback?.countryCode) {
         geo = {
           country: fallback.countryCode,
           state: fallback.regionName || "N/A",
@@ -91,9 +101,9 @@ export async function captureInfrastructure(req: Request): Promise<OriginDetails
   // Montagem do payload de telemetria
   return {
     ip_address: ip,
-    country: geo.country || "N/A",
-    state: geo.state || "N/A",
-    city: geo.city || "N/A",
+    country: isLocalIp ? "LOCAL" : (geo.country || "N/A"),
+    state: isLocalIp ? "Ambiente Local" : (geo.state || "N/A"),
+    city: isLocalIp ? "Localhost" : (geo.city || "N/A"),
     user_agent: ua,
     device_type: device,
     operating_system: os,
