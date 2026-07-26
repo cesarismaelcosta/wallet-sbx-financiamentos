@@ -96,10 +96,10 @@ export function CustomLogin() {
     setMounted(true);
   }, []);
 
-  // O estado default utiliza o parâmetro da URL ou um fallback seguro durante o SSR
-  const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(
-    search.env || "production"
-  );
+  // O estado default utiliza o parâmetro da URL ou o default seguro do environment
+  const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() => {
+    return search.env || getDefaultSbxEnvironment();
+  });
 
   // Sincroniza o ambiente real após a montagem no client (lendo sessionStorage/env)
   useEffect(() => {
@@ -111,17 +111,16 @@ export function CustomLogin() {
   const isEnvFixed = mounted && isEnvironmentLocked();
   const hasPref = mounted && (hasSbxEnvironmentPreference() || !!search.env);
 
-  // Condicionais visuais controladas pelo gate de montagem
+  // O seletor só aparece se não estiver travado e se NENHUMA preferência tiver sido definida ainda
   const showEnvSelector = mounted && !isEnvFixed && !hasPref;
   const showStageBadge = mounted && ambienteAtivo === "staging" && isEnvFixed;
 
   /**
-   * [HANDLER]: Troca Manual de Ambiente (Apenas em DEV)
-   * Atualiza o estado da UI e persiste a escolha no serviço para manter a DX nos reloads (F5).
+   * [HANDLER]: Troca Manual de Ambiente
+   * Atualiza o estado, persiste a escolha no session storage.
    */
   const handleEnvChange = (env: "staging" | "production") => {
     setAmbienteAtivo(env);
-    setSbxEnvironmentPreference(env);
   };
 
   // =========================================================================

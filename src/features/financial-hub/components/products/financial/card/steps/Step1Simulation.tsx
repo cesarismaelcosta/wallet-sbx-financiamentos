@@ -33,17 +33,10 @@ export function Step1Simulation() {
   const hasAttempted = useRef(false); 
   const { execute } = useSafeCall();
 
-  if (!state || !state.data) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-primary)]" />
-      </div>
-    );
-    
-  }
-
-  const offerValue = state.data?.offer?.offer_value;
-  const simResult = state.data?.simulationResult;
+  // CORREÇÃO CRÍTICA DE HOOKS: Extração e useEffect movidos para o topo, 
+  // ANTES de qualquer return condicional, obedecendo às regras do React.
+  const offerValue = state?.data?.offer?.offer_value;
+  const simResult = state?.data?.simulationResult;
 
   useEffect(() => {
     // Só dispara se houver oferta, se não houver resultado E se nunca tentou antes
@@ -53,7 +46,7 @@ export function Step1Simulation() {
   }, [offerValue, simResult]);
 
   const handleSimular = async () => {
-    if (hasAttempted.current) return; // Segurança extra contra dupla execução
+    if (hasAttempted.current || !state?.data) return; // Segurança extra contra dupla execução
     
     isSimulating.current = true;
     hasAttempted.current = true; // Trava a requisição para sempre nesta montagem
@@ -96,6 +89,15 @@ export function Step1Simulation() {
     }
   };
 
+  // RETORNOS CONDICIONAIS: Posicionados APÓS todos os hooks do componente.
+  if (!state || !state.data) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-primary)]" />
+      </div>
+    );
+  }
+
   if (loading || !state.data.simulationResult) {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
@@ -119,13 +121,13 @@ export function Step1Simulation() {
             <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
           </div>
           
-          {/* flex-1 min-w-0 são essenciais para o 'truncate' com 3 pontinhos funcionar dentro do flex */}
-          <div className="space-y-1 flex-1 min-w-0">
+          {/* w-0 flex-1 obriga o container a respeitar o limite e cortar com "..." */}
+          <div className="space-y-1 flex-1 w-0">
             <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">
               Simulação de parcelamento*!
             </h3>
             
-            {/* BLOCO AJUSTADO: Sem negrito, apenas o truncate para cortar com ... */}
+            {/* O truncate vai cortar com "..." sem quebrar a linha */}
             <p className="text-xs text-muted-foreground truncate">
               {offer?.offer_description 
                 ? offer.offer_description.replace(/[.,]+$/, "") 
@@ -133,7 +135,6 @@ export function Step1Simulation() {
             </p>
             
             <p className="flex items-baseline gap-1 mt-1">
-              {/* BLOCO AJUSTADO: Sem font-black, deixando a fonte normal para não pesar */}
               <span className="text-slate-900 text-sm">{BRL(offerValue || 0)}</span>
             </p>
           </div>
