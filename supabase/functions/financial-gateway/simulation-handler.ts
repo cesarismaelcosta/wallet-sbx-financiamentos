@@ -336,6 +336,24 @@ export async function processSimulation(req: Request, payload: SimulationPayload
 
     default:
       throw new Error(`Parceiro ${payload.partner_id} não suportado.`);
+  } // Fim do switch (payload.partner_id)
+
+  // =========================================================================
+  // PASSO 4: ATUALIZAÇÃO DO FUNIL DE VISITAS
+  // =========================================================================
+  if (payload.visit_id) {
+    try {
+      await updateVisitStatus(
+        supabase,
+        payload.visit_id,
+        'SIMULATE',
+        payload.action_description || 'SIMULATE_CONDITIONS',
+        payload
+      );
+      debugLog(`✅ Funil atualizado: Visita ${payload.visit_id} convertida em SIMULATE.`);
+    } catch (err: any) {
+      console.error(`🚨 [FUNIL DE CONVERSÃO] Falha ao amarrar visita à simulação: ${err.message}`);
+    }
   }
 
   // Logo antes de montar o JSON de resposta
