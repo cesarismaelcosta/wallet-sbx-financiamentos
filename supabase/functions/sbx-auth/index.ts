@@ -1,17 +1,24 @@
 /**
  * @fileoverview Edge Function: Auth SBX (Login Proxy, JWT Signer & Cookie Issuer)
- *
- * ARQUITETURA DE SEGURANÇA E CONTEXTO:
- * Esta função atua como um proxy seguro de autenticação para a API da Superbid (SBX).
- * Ela oculta credenciais upstream, gera sessões persistentes no banco de dados e emite
- * um JWT assinado com claims de contexto (User ID, Session ID e Ambiente) via Cookie HttpOnly.
- *
+ * @path supabase/functions/sbx-auth/index.ts
+ * 
+ * =========================================================================
+ * [ARQUITETURA BFF & SEGURANÇA DE IDENTIDADE]
+ * =========================================================================
+ * Atua como o ponto de entrada oficial para autenticação de usuários via credenciais 
+ * diretas (Username/Password), abstraindo a comunicação com o OAuth2 upstream da Superbid.
+ * 
  * RESPONSABILIDADES:
- * 1. Seleção Dinâmica de Ambiente ('staging' ou 'production').
- * 2. Requisição OAuth2 Upstream com credenciais protegidas no servidor.
- * 3. Gravação da Sessão Única (SSOT) no banco de dados (`session_tokens`).
- * 4. Assinatura do JWT Próprio (HMAC-SHA256) incluindo a claim `environment`.
- * 5. Emissão do Header `Set-Cookie` com flags `HttpOnly`, `SameSite` e `Secure`.
+ * 1. Roteamento Multi-Environment: Direciona o handshake para o ambiente correto 
+ *    (`staging` ou `production`) com base na preferência fornecida.
+ * 2. Proxy OAuth2 Seguro: Executa a troca de credenciais de forma isolada no servidor,
+ *    impedindo a exposição de client IDs e tokens de acesso brutos no client-side.
+ * 3. SSOT (Single Source of Truth): Persiste a sessão intermediária na tabela `session_tokens` 
+ *    do Supabase associando o IP, metadados de infraestrutura e o token upstream.
+ * 4. Assinatura Criptográfica (JWT): Gera um token interno próprio (HMAC-SHA256) com claims 
+ *    customizadas (incluindo o contexto de `environment`) e TTL gerenciado.
+ * 5. Smart Delivery de Sessão: Emite o token por meio de um Cookie HttpOnly seguro e 
+ *    retorna os metadados estruturados para o ecossistema do front-end.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -21,19 +28,27 @@ import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
 
+/**
+ * Mapeamento centralizado de URLs base da API de Contas da Superbid por ambiente
+ */
 const ENV_URLS = {
   production: "https://api.s4bdigital.net",
   staging: "https://stgapi.s4bdigital.net"
 };
 
+// =========================================================================
+// HANDLER PRINCIPAL (Envelopado pelo Wrapper Central de Segurança)
+// =========================================================================
 serve(withSecurity('sbx-auth', async (req) => {
+  // Captura o IP real do cliente com fallback seguro
   const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0] || '0.0.0.0';
 
   try {
+    // Extrai as credenciais e o ambiente alvo do payload JSON enviado pelo Front
     const { username, password, environment = 'staging' } = await req.json();
 
     // -----------------------------------------------------------------------
-    // [INTEGRAÇÃO]: Handshake OAuth2 com a Superbid (Upstream)
+    // [STEP 1] INTEGRAÇÃO UPSTREAM: Handshake OAuth2 com a Superbid
     // -----------------------------------------------------------------------
     const sbxBaseUrl = ENV_URLS[environment as keyof typeof ENV_URLS];
     const details = new URLSearchParams();
@@ -51,6 +66,7 @@ serve(withSecurity('sbx-auth', async (req) => {
 
     const rawResponse = await sbxLoginResponse.text();
     
+    // Tratamento de falha de autenticação upstream
     if (!sbxLoginResponse.ok) {
       debugLog("[sbx-auth] ERRO REAL DA SBX:", {
         status: sbxLoginResponse.status,
@@ -62,17 +78,17 @@ serve(withSecurity('sbx-auth', async (req) => {
     const sbxData = JSON.parse(rawResponse);
 
     // -----------------------------------------------------------------------
-    // [ESTADO]: Cálculo de Expiração e Geração de UUID da Sessão
+    // [STEP 2] GESTÃO DE ESTADO: Cálculo de TTL e Geração de UUID
     // -----------------------------------------------------------------------
     const agora = new Date();
     const expiraEmSegundos = sbxData.expires_in || 18000;
-    const margemSegurancaMs = 15 * 60 * 1000; // Margem T-15m
+    const margemSegurancaMs = 15 * 60 * 1000; // Margem de segurança preventiva (T-15m)
     const nossaExpiracao = new Date(agora.getTime() + (expiraEmSegundos * 1000) - margemSegurancaMs);
 
     const sessionToken = crypto.randomUUID();
 
     // -----------------------------------------------------------------------
-    // [PERSISTÊNCIA]: Gravação da Sessão (SSOT)
+    // [STEP 3] PERSISTÊNCIA (SSOT): Gravação da Sessão no Banco de Dados
     // -----------------------------------------------------------------------
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '', 
@@ -104,50 +120,61 @@ serve(withSecurity('sbx-auth', async (req) => {
     }
 
     // -----------------------------------------------------------------------
-    // [SECURITY]: Assinatura do JWT Próprio com Claim de Ambiente
+    // [STEP 4] SEGURANÇA: Assinatura do JWT Interno (HMAC-SHA256)
     // -----------------------------------------------------------------------
     const jwtSecret = Deno.env.get("JWT_SECRET"); 
+    if (!jwtSecret) throw new Error("INTERNAL_CONFIG_ERROR: JWT_SECRET não configurado.");
+
     const key = await crypto.subtle.importKey(
       "raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
     );
 
-    // Payload do JWT com claims padronizadas RFC 7519 + Custom Claims
+    // Constrói o token JWT contendo claims padronizadas e o contexto de ambiente
     const jwt = await create(
       { alg: "HS256", typ: "JWT" },
       { 
-        sub: sbxData.userId,           // Subject (ID do usuário)
-        jti: sessionToken,             // JWT ID (ID único da sessão no DB)
-        environment: environment,      // 👈 CLAIM CUSTOMIZADA: "staging" | "production"
-        exp: getNumericDate(nossaExpiracao.getTime() / 1000) // Expiration Time
+        sub: sbxData.userId,           // Subject (Identificador do usuário)
+        jti: sessionToken,             // JWT ID (Vinculado ao registro da sessão no DB)
+        environment: environment,      // Claim customizada para roteamento multi-stage
+        exp: getNumericDate(nossaExpiracao.getTime() / 1000) // Timestamp de expiração
       },
       key
     );
 
+    // Configuração estrita do Cookie HttpOnly para mitigação de ataques XSS
     const isProd = Deno.env.get("ENVIRONMENT") === "production";
     const cookieHeader = `session_token=${jwt}; Path=/; HttpOnly; SameSite=Lax${
       isProd ? "; Domain=.superbid.net; Secure" : ""
     }`;
 
     // -----------------------------------------------------------------------
-    // [OUTPUT]: Retorno HTTP com o Cookie HttpOnly e Dados de UI em Memória
+    // [STEP 5] OUTPUT: Contrato Padronizado para o Wrapper de Segurança
     // -----------------------------------------------------------------------
-    return new Response(JSON.stringify({
-      success: true,
-      session_token: jwt,
-      user_id: sbxData.userId,
-      environment: environment,       // Retorna no JSON apenas para confirmação do contexto de UI
-      expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
-      server_now_ms: agora.getTime()
-    }), { 
-      status: 200, 
-      headers: { 
-        'Content-Type': 'application/json',
-        'Set-Cookie': cookieHeader 
-      } 
-    });
+    return {
+      status: 200,
+      data: {
+        success: true,
+        session_token: jwt,
+        user_id: sbxData.userId,
+        environment: environment,
+        expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
+        server_now_ms: agora.getTime()
+      },
+      headers: {
+        'Set-Cookie': cookieHeader
+      }
+    };
 
   } catch (err: any) {
-    console.error("[sbx-auth] Erro no fluxo de login:", err);
-    return { status: 500, error: err.message };
+    debugLog("[sbx-auth] Erro no fluxo de login:", err);
+    
+    // Retorno padronizado de erro em conformidade com o ecossistema BFF
+    return { 
+      status: 500, 
+      data: { 
+        success: false, 
+        message: err.message 
+      } 
+    };
   }
 }));
