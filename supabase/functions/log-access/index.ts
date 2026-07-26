@@ -93,7 +93,6 @@ serve(withSecurity('login-history', async (req: Request) => {
       user_agent: infra.user_agent,
       device_type: infra.device_type,
       operating_system: infra.operating_system,
-      is_trusted: true,
       origin_details: body
     });
 
