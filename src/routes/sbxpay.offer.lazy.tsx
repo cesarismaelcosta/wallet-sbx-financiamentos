@@ -198,12 +198,29 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
         }
 
         console.error("[OFFER_FETCH_ERROR]:", error);
-        logSystemError(userId || "UNAUTHENTICATED", {
-          context: 'sbxpay-OFFER-FETCH',
+
+        // [TELEMETRIA DE ERRO]: Disparo de email de log
+        logSystemError({
+          context: 'sbxpay/offer.lazy.tsx',
+          subject: `Erro na Busca de Oferta (${flowKey || 'Geral'})`,
           message: error?.message || "Erro na busca de oferta",
           details: { name: error?.name, message: error?.message, stack: error?.stack },
-          payload: { offer_id: targetOfferId, flow_key: flowKey, environment: ambiente },
-          visit_id: null, simulation_id: null
+          payload: { 
+            user_id: userId || "UNAUTHENTICATED", 
+            offer_id: targetOfferId, 
+            flow_key: flowKey, 
+            environment: ambiente,
+            // [METADADOS ENRIQUECIDOS]: Página, Produto e Parceiro rastreados
+            metadata: {
+              page: window.location.pathname, // Caminho da página atual (ex: /sbxpay/offer)
+              product: currentFlow?.name || flowKey || "Desconhecido", // Nome oficial do produto
+              partner: activeOffer?.seller?.trade_name || "N/A", // Nome do parceiro/vendedor (se carregado)
+              visit_id: null,
+              simulation_id: null
+            }
+          },
+          visit_id: null, 
+          simulation_id: null
         });
 
         setFetchError('TECHNICAL_INSTABILITY');

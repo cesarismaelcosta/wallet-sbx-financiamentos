@@ -11,34 +11,64 @@
  * - Em Desenvolvimento: Injeta os headers de token manualmente via `authHeaders()`.
  * 
  * @author Cesar Ismael Pereira da Costa
- * @version 2.0.0
+ * @version 2.1.0
  */
 
 import { fetchOptions, authHeaders } from './session.ts';
 
 export interface SystemErrorPayload {
   context: string;
-  subject: string;
+  subject?: string;
   message?: any;
   payload?: any;
   visit_id?: string | null;
   visit_update_id?: string | null;
   simulation_id?: string | null;
   simulation_update_id?: string | null;
+  details?: any;
 }
 
 /**
  * Envia um payload de erro para o serviço de notificação centralizado de forma assíncrona.
+ * Suporta tanto o envio direto por objeto quanto a assinatura estendida (status/usuário + payload).
  * 
- * @param {SystemErrorPayload} errorData - Objeto contendo os detalhes do erro e IDs de rastreio.
+ * @param {string | SystemErrorPayload} arg1 - Status da sessão/usuário ou o objeto completo de erro.
+ * @param {SystemErrorPayload} [arg2] - Objeto detalhado do erro (caso o primeiro argumento seja uma string).
  */
 export const logSystemError = async (
-  errorData: SystemErrorPayload
+  arg1: string | SystemErrorPayload,
+  arg2?: SystemErrorPayload
 ): Promise<void> => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) return;
+
+  // =========================================================================
+  // [NORMALIZAÇÃO CONTRATUAL]: Compatibiliza chamadas legadas e diretas
+  // =========================================================================
+  let errorData: SystemErrorPayload;
+
+  if (typeof arg1 === 'string') {
+    // Caso seja chamado com 2 argumentos: logSystemError("STATUS", { context, message, ... })
+    errorData = {
+      context: arg2?.context || 'UNKNOWN_CONTEXT',
+      subject: arg2?.subject || 'Alerta de Erro no Sistema',
+      message: arg2?.message || 'Falha não especificada.',
+      ...(arg2 || {}),
+      payload: {
+        auth_status_or_user: arg1,
+        ...(arg2?.payload || {})
+      }
+    };
+  } else {
+    // Caso seja chamado com 1 argumento (Objeto direto): logSystemError({ context, message, ... })
+    errorData = arg1;
+  }
+
+  // [FAILSAFE DE BORDA]: Garante que os campos contratuais obrigatórios nunca vão nulos
+  if (!errorData.context) errorData.context = 'UNKNOWN_CONTEXT';
+  if (!errorData.message) errorData.message = 'Falha não especificada na requisição.';
 
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/notification-system-message`, {

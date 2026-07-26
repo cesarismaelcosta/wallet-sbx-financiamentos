@@ -51,11 +51,15 @@ export const Route = createFileRoute("/financialGatewayGate")({
     // =====================================================================
     useEffect(() => {
       if (status === "error") {
-        logSystemError("SESSION_N/A", {
+        // Disparo de e-email de alerta
+        logSystemError({
           context: "Edge Gateway Redirect (financialGatewayGate)",
           subject: `Erro de Jornada: ${code}`,
           message: message || "Falha não especificada.",
-          payload: { return_uri }
+          payload: { 
+            session_status: "SESSION_N/A",
+            return_uri 
+          }
         });
       }
     }, [status, code, message, return_uri]);
