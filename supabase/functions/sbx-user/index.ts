@@ -145,6 +145,7 @@ serve(withSecurity('sbx-user', async (req: Request) => {
     // Mapeamento sanitizado e estruturado para o frontend
     const enrichedData = {
       entity_id: String(account?.id || auth.user_id),
+      entity_type: account?.type,
       name: account?.basicInfo?.fullName || "N/A",
       document: cleanDocument,
       document_rg: account?.documents?.find((doc: any) => doc.typeName === "rg")?.number || "",
