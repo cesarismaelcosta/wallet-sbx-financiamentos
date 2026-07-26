@@ -59,6 +59,9 @@ export async function captureInfrastructure(req: Request): Promise<OriginDetails
                 req.headers.get("x-client-ip") || 
                 "0.0.0.0";
   
+  // CORREÇÃO CRÍTICA: Declaração e higienização correta da variável ip que estava faltando
+  const ip = rawIp.trim();
+  
   const { os, device } = parseUserAgent(ua);
 
   // Inicialização de Geo com metadados da CDN/Edge
