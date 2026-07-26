@@ -134,6 +134,7 @@ serve(withSecurity('sbx-loader', async (req: Request) => {
 
     const userProfile: BFFUserProfile = {
       entity_id: userId,
+      entity_type: account?.type,
       name: account?.basicInfo?.fullName || "N/A",
       document: cleanDocument,
       document_rg: account?.documents?.find((doc: any) => doc.typeName === 'rg')?.number || "",
