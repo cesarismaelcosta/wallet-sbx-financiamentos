@@ -47,7 +47,12 @@ export function parseUserAgent(ua: string) {
 export async function captureInfrastructure(req: Request): Promise<OriginDetails> {
   const ua = req.headers.get("user-agent") || "";
   
-  // Captura de IP: O x-forwarded-for DEVE vir primeiro, pois o x-real-ip estava capturando o IP do gateway do Supabase (18.231.222.216)
+  /**
+   * IP:
+   * O x-forwarded-for DEVE vir em primeiro lugar. 
+   * É nele que o Gateway do Supabase (Kong) repassa o IP real do navegador do cliente.
+   * Se colocarmos o x-real-ip na frente, ele captura o IP interno do proxy da nuvem (ex: 18.231...).
+   */
   const rawIp = req.headers.get("x-forwarded-for")?.split(",")[0] || 
                 req.headers.get("cf-connecting-ip") || 
                 req.headers.get("x-real-ip") || 
