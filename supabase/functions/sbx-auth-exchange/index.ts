@@ -80,12 +80,14 @@ serve(withSecurity('sbx-auth-exchange', async (req: Request) => {
     if (!verifyResponse.ok) {
       throw new Error(`[sbx-auth-exchange] UPSTREAM_API_UNAVAILABLE (${verifyResponse.status})`);
     }
-
+    
     const upstreamData = await verifyResponse.json();
     const account = upstreamData.userAccounts?.[0];
-    const userId = String(account?.id);
+    
+    // Extração segura suportando diferentes níveis do payload upstream
+    const userId = account?.id ? String(account.id) : (upstreamData?.userAccounts?.find((acc: any) => acc?.id)?.id ? String(upstreamData.userAccounts.find((acc: any) => acc?.id).id) : "");
 
-    if (!userId || userId === "undefined") {
+    if (!userId) {
       throw new Error("[sbx-auth-exchange] USER_NOT_FOUND: Falha ao extrair identidade do upstream.");
     }
 
