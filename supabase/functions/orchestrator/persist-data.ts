@@ -140,8 +140,8 @@ export async function persistVisitData(
 
       // 5. Persistência de Dados de Negócio (Entidades, Ofertas, Consentimentos)
       if (payload.entity?.entity_id && !hasEntity) {
-        await t`INSERT INTO visit_entities (visit_id, entity_id, document, name, phone, email, birth_date, gender, entity_details) 
-                VALUES (${visitId}, ${payload.entity.entity_id.toString()}, ${payload.entity.document}, ${payload.entity.name}, ${payload.entity.phone}, ${payload.entity.email}, ${payload.entity.birth_date}, ${payload.entity.gender}, ${payload.entity}::jsonb)`;
+        await t`INSERT INTO visit_entities (visit_id, entity_id, entity_type, document, name, phone, email, birth_date, gender, entity_details) 
+                VALUES (${visitId}, ${payload.entity.entity_id.toString()}, ${payload.entity.entity_type}, ${payload.entity.document}, ${payload.entity.name}, ${payload.entity.phone}, ${payload.entity.email}, ${payload.entity.birth_date}, ${payload.entity.gender}, ${payload.entity}::jsonb)`;
       }
 
       if (payload.offer?.offer_id && !hasOffer) {

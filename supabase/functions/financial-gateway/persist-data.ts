@@ -154,13 +154,13 @@ export async function insertSimulationData(
       const [sim] = await t`
         INSERT INTO simulations (
           id, visit_id, is_integrated, integration_method, partner_id, product_id,
-          entity_id, document, name, phone, email, birth_date, gender, entity_details,
+          entity_id, entity_type, document, name, phone, email, birth_date, gender, entity_details,
           financial_institution_id, requested_value, down_payment_amount, down_payment_percentage,
           financed_amount, installments, cet_rate, installment_value, simulation_details,
           stage_id, status_id, result_partner_id, external_operation_id, raw_payload
         ) VALUES (
           ${payload.simulation_id}, ${payload.visit_id}, ${payload.is_integrated ?? false}, ${payload.integration_method}, ${payload.partner_id}, ${payload.product_id},
-          ${entity.entity_id}, ${entity.document}, ${entity.name}, ${entity.phone}, ${entity.email}, ${entity.birth_date}, ${entity.gender}, ${entity}::jsonb,
+          ${entity.entity_id}, ${entity.entity_type}, ${entity.document}, ${entity.name}, ${entity.phone}, ${entity.email}, ${entity.birth_date}, ${entity.gender}, ${entity}::jsonb,
           ${bestConsult.financial_institution_id}, ${bestConsult.requested_value}, ${bestConsult.down_payment_amount}, ${bestConsult.down_payment_percentage},
           ${bestConsult.financed_amount}, ${bestConsult.installments}, ${bestConsult.cet_rate}, ${bestConsult.installment_value}, ${bestConsult}::jsonb,
           ${stageId}, ${bestConsult.status_id}, ${mainResultPartnerId}, ${bestConsult.external_operation_id}, ${payload}::jsonb
