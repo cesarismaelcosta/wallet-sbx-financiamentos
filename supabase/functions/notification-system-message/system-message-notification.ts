@@ -54,15 +54,17 @@ export function generateSystemErrorEmailHtml(data: SystemErrorPayload): EmailTem
   
   const logoSrc = "cid:logo-wallet";
 
-  // Serialização e estruturação dos dados
-  // Consolidamos os IDs de rastreamento com o payload para visibilidade total no dump técnico
+  // =========================================================================
+  // [SERIALIZAÇÃO INTELIGENTE]: Preserva o metadata completo e consolida IDs
+  // =========================================================================
   const technicalData = {
     ... (data.payload || {}),
     metadata: {
-      visit_id: data.visit_id,
-      visit_update_id: data.visit_update_id,
-      simulation_id: data.simulation_id,
-      simulation_update_id: data.simulation_update_id
+      ...(data.payload?.metadata || {}), // Preserva page, product, partner, etc. enviados pelo front
+      visit_id: data.visit_id || data.payload?.metadata?.visit_id || null,
+      visit_update_id: data.visit_update_id || data.payload?.metadata?.visit_update_id || null,
+      simulation_id: data.simulation_id || data.payload?.metadata?.simulation_id || null,
+      simulation_update_id: data.simulation_update_id || data.payload?.metadata?.simulation_update_id || null
     }
   };
 
