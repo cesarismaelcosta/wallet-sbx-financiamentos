@@ -117,20 +117,32 @@ serve(withSecurity('sbx-loader', async (req: Request) => {
     const userId = String(account?.id);
 
     // =========================================================================
-    // HIDRATAÇÃO DE PERFIL (BFF Mapping)
+    // HIDRATAÇÃO DE PERFIL (BFF Mapping - Suporte Nativo PF / PJ)
     // =========================================================================
-    // Limpa a estrutura complexa da Superbid para o formato enxuto que o Front-end precisa
+    const isJuridica = account?.type === "J";
+
+    // Extrai CNPJ se PJ, ou CPF se Pessoa Física, limpando a máscara
+    const targetDocTypeName = isJuridica ? "cnpj" : "cpf";
+    const rawDocument = account?.documents?.find((doc: any) => doc.typeName === targetDocTypeName)?.number || "";
+    const cleanDocument = rawDocument.replace(/\D/g, '');
+
+    // Extração segura da data de nascimento (para PJ, busca do representante legal)
+    const rawBirthDate = isJuridica 
+      ? account?.companyRepresentative?.dateOfBirth 
+      : account?.birthDate;
+    const formattedBirthDate = rawBirthDate ? String(rawBirthDate).split('T')[0] : "";
+
     const userProfile: BFFUserProfile = {
       entity_id: userId,
       name: account?.basicInfo?.fullName || "N/A",
-      document: account?.documents?.find((doc: any) => doc.typeName === "cpf")?.number || "",
+      document: cleanDocument,
       document_rg: account?.documents?.find((doc: any) => doc.typeName === 'rg')?.number || "",
       email: account?.basicInfo?.email?.address || "",
       phone: account?.phones?.find((p: any) => p.type === 3)?.fullPhoneNumber || "",
-      birth_date: account?.birthDate?.split('T')[0] || "",
-      gender: account?.gender === "M" ? "M" : "F",
+      birth_date: formattedBirthDate,
+      gender: isJuridica ? (account?.companyRepresentative?.gender || "M") : (account?.gender === "M" ? "M" : "F"),
       login: account?.credentials?.login || "",
-      mothers_name: account?.mothersName || "",
+      mothers_name: isJuridica ? (account?.companyRepresentative?.mothersName || "") : (account?.mothersName || ""),
       address: mainAddress ? {
         street: mainAddress.addressLine1 || "",
         number: mainAddress.number || "",
