@@ -6,11 +6,13 @@
  * Centraliza a extração de metadados, geolocalização e identificação de 
  * dispositivo. Opera como uma "Fonte da Verdade" (Single Source of Truth) para
  * telemetria em todo o ecossistema sbX.
- * * [RESPONSABILIDADES]:
- * 1. Sanitização: Normaliza headers de requisição vindos de CDNs (Cloudflare/Vercel).
+ * 
+ * [RESPONSABILIDADES]:
+ * 1. Sanitização: Normaliza headers de requisição vindos de CDNs, Proxies e Supabase Edge.
  * 2. Fingerprinting: Gera a assinatura básica para identificar o contexto da requisição.
- * 3. Resiliência: Implementa fallback de IP-API caso a CDN falhe na geolocalização.
- * * @author Cesar Ismael Pereira da Costa
+ * 3. Resiliência: Implementa fallback de IP-API com suporte a IPs locais/loopback.
+ * 
+ * @author Cesar Ismael Pereira da Costa
  */
 
 import type { OriginDetails } from "./types.ts";
@@ -38,39 +40,49 @@ export function parseUserAgent(ua: string) {
  * @description Captura telemetria e geolocalização do lead com sistema de Fallback.
  * @description Opera como um motor de "Context Awareness", essencial para segurança 
  * de sessão e prevenção de Session Hijacking.
- * * @param {Request} req - Objeto de requisição HTTP original.
+ * 
+ * @param {Request} req - Objeto de requisição HTTP original.
  * @returns {Promise<OriginDetails>} - Snapshot completo da infraestrutura do cliente.
  */
 export async function captureInfrastructure(req: Request): Promise<OriginDetails> {
   const ua = req.headers.get("user-agent") || "";
   
-  // Captura de IP: Tenta headers de proxy (CF/Vercel) antes do fallback
-  const ip = req.headers.get("x-real-ip") || 
-             req.headers.get("cf-connecting-ip") || 
-             req.headers.get("x-forwarded-for")?.split(",")[0] || 
-             "0.0.0.0";
+  // Captura de IP: Prioriza headers de proxy reverso e Supabase Edge, com fallback seguro
+  const rawIp = req.headers.get("x-real-ip") || 
+                req.headers.get("cf-connecting-ip") || 
+                req.headers.get("x-forwarded-for")?.split(",")[0] || 
+                req.headers.get("x-client-ip") || 
+                "0.0.0.0";
+
+  const ip = rawIp.trim();
   
   const { os, device } = parseUserAgent(ua);
 
-  // Inicialização de Geo com metadados da CDN
+  // Inicialização de Geo com metadados da CDN/Edge
   let geo = {
     country: req.headers.get("x-vercel-ip-country") || req.headers.get("cf-ipcountry"),
     state: req.headers.get("x-vercel-ip-country-region") || req.headers.get("cf-region"),
     city: req.headers.get("x-vercel-ip-city") || req.headers.get("cf-ipcity"),
   };
 
-  // Fallback Agressivo de Geolocation via IP-API (caso CDN não proveja dados)
-  if (!geo.country || geo.country === "XX" || !geo.city) {
+  // Se for IP local/loopback em ambiente de desenvolvimento, tenta forçar resolução pública ou assume N/A limpo
+  const isLocalIp = ip === "0.0.0.0" || ip === "127.0.0.1" || ip.startsWith("192.168.") || ip.startsWith("10.");
+
+  // Fallback Agressivo de Geolocation via IP-API (caso CDN não proveja dados ou IP seja interno)
+  if (!geo.country || geo.country === "XX" || !geo.city || isLocalIp) {
     try {
-      const queryIp = ip === "0.0.0.0" || ip === "127.0.0.1" ? "" : ip;
+      // Se for IP local, passamos vazio para a ip-api detectar o IP público atual do servidor/execução
+      const queryIp = isLocalIp ? "" : ip;
       const res = await fetch(`http://ip-api.com/json/${queryIp}?fields=countryCode,regionName,city`);
       const fallback = await res.json();
 
-      geo = {
-        country: fallback?.countryCode || geo.country || "N/A",
-        state: fallback?.regionName || geo.state || "N/A",
-        city: fallback?.city || geo.city || "N/A",
-      };
+      if (fallback?.countryCode) {
+        geo = {
+          country: fallback.countryCode,
+          state: fallback.regionName || "N/A",
+          city: fallback.city || "N/A",
+        };
+      }
     } catch (e) {
       console.warn("[sbX Infrastructure] Falha no fallback de Geo:", e.message);
     }

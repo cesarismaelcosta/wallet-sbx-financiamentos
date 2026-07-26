@@ -1,11 +1,10 @@
 /**
  * ============================================================================
- * @fileoverview Monitor de Propostas (Backoffice)
- * @route /backoffice/propostas
- * * @description
- * Tela de acompanhamento e esteira de trabalho operacional. Exibe todas as 
- * simulações criadas, permitindo cruzar filtros de parceiros, produtos, 
- * situação atual e datas.
+ * @fileoverview Monitor de Consultas e Visitas (Backoffice)
+ * @route /backoffice/consults
+ * @description
+ * Tela de acompanhamento da esteira de visitas, rastreando ações de consulta,
+ * redirecionamentos para sites parceiros e conversões em simulações.
  * ============================================================================
  */
 
@@ -17,7 +16,6 @@ import {
   Filter,
   Download,
   ChevronDown,
-  Camera, // <-- Importado para atuar como fallback de imagem ausente
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
@@ -31,8 +29,8 @@ import { Calendar } from "@/components/ui/calendar";
 // Conexão com Banco de Dados
 import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createLazyFileRoute("/backoffice/propostas")({
-  component: PropostasPage,
+export const Route = createLazyFileRoute("/backoffice/consults")({
+  component: ConsultsPage,
 });
 
 // ============================================================================
@@ -40,17 +38,13 @@ export const Route = createLazyFileRoute("/backoffice/propostas")({
 // ============================================================================
 
 const STATUS_STYLES: Record<string, string> = {
-  simulacao: "bg-primary/10 text-primary",
-  "em análise": "bg-amber-500/10 text-amber-600",
-  analise: "bg-amber-500/10 text-amber-600",
-  aprovada: "bg-success/15 text-success",
-  recusada: "bg-destructive/10 text-destructive",
-  "pendente docs": "bg-muted text-muted-foreground",
-  default: "bg-muted text-muted-foreground",
+  "simulacao": "bg-primary/10 text-primary",
+  "consulta": "bg-blue-500/10 text-blue-600",
+  "site parceiro": "bg-amber-500/10 text-amber-600",
+  "default": "bg-muted text-muted-foreground",
 };
 
-function statusClass(status: string | null) {
-  if (!status) return STATUS_STYLES.default;
+function statusClass(status: string) {
   const key = status.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   return STATUS_STYLES[key] ?? STATUS_STYLES.default;
 }
@@ -70,10 +64,9 @@ function formatDate(iso: string | null) {
 // ============================================================================
 // COMPONENTE PRINCIPAL
 // ============================================================================
-function PropostasPage() {
+function ConsultsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const [statusOptions, setStatusOptions] = useState<string[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>("Todos");
   const [dateRange, setDateRange] = useState<"30" | "90" | "all" | "custom">("30");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
@@ -96,54 +89,111 @@ function PropostasPage() {
   }, []);
 
   async function load() {
-    const [{ data: simData }, { data: statusData }] = await Promise.all([
-      supabase.from("simulations").select(`
-        *, 
-        financial_institutions(name, logo_url),
-        product_types(name),
-        stage_types(name),
-        status_types(name),
-        partners(name, logo_url), 
-        simulation_offers (
-          offer_description,
-          event_id,
-          event_description,
-          offer_value,
-          event_end_date
-        )
-      `),
-      supabase.from("status_types").select("name")
-    ]);
+    try {
+      // 1. Busca visits utilizando os relacionamentos oficiais por FK do banco
+      const { data: visitsData, error: visitError } = await supabase
+        .from("visits")
+        .select(`
+          *,
+          product_types(name),
+          partners(name, logo_url),
+          visit_entities(name, document, phone, email),
+          visit_offers(offer_description, offer_value, event_id, event_description, event_end_date)
+        `)
+        .order('created_at', { ascending: false });
 
-    if (simData) setRows(simData);
-    if (statusData) setStatusOptions(statusData.map(s => s.name));
+      if (visitError) {
+        console.error("Erro ao carregar visits:", visitError.message);
+        setRows([]);
+        return;
+      }
+
+      if (!visitsData || visitsData.length === 0) {
+        setRows([]);
+        return;
+      }
+
+      const visitIds = visitsData.map(v => v.id);
+
+      // 2. Busca simulações e todos os visit_updates (1 para N) em paralelo
+      const [
+        { data: simsData, error: simError },
+        { data: updatesData, error: updateError }
+      ] = await Promise.all([
+        supabase.from("simulations").select("id, visit_id").in("visit_id", visitIds),
+        supabase.from("visit_updates").select("visit_id, action, created_at").in("visit_id", visitIds)
+      ]);
+
+      if (simError) console.error("Erro ao carregar simulations:", simError.message);
+      if (updateError) console.error("Erro ao carregar visit_updates:", updateError.message);
+
+      // Mapeia se possui simulação
+      const simSet = new Set(simsData?.map(s => s.visit_id).filter(Boolean) || []);
+      
+      // Mapeia a relação 1 para N: se QUALQUER update da visita tiver "CONTACT", marca como verdadeiro
+      const contactSet = new Set(
+        updatesData
+          ?.filter(u => (u.action || "").toUpperCase().includes("CONTACT"))
+          .map(u => u.visit_id)
+          .filter(Boolean) || []
+      );
+
+      // 3. Normaliza os dados e injeta as flags nas linhas
+      const normalized = visitsData.map(v => ({
+        ...v,
+        has_simulation: simSet.has(v.id),
+        has_contact: contactSet.has(v.id),
+        visit_entities: Array.isArray(v.visit_entities) ? v.visit_entities[0] || null : v.visit_entities,
+        visit_offers: Array.isArray(v.visit_offers) ? v.visit_offers[0] || null : v.visit_offers,
+      }));
+
+      setRows(normalized);
+    } catch (err) {
+      console.error("Erro crítico ao carregar dados:", err);
+      setRows([]);
+    }
   }
 
   useEffect(() => { load(); }, []);
 
+  // Determina a situação com base na regra de negócio solicitada
+  function getVisitStatus(r: any): string {
+    if (r.has_simulation) return "SIMULAÇÃO";
+
+    const act = (r.action ?? "").toUpperCase();
+    if (act.includes("CONSULT")) return "CONSULTA";
+    if (act.includes("REDIRECT")) return "SITE PARCEIRO";
+    
+    return r.action || "CONSULTA";
+  }
+
+  const statusOptions = ["SIMULAÇÃO", "CONSULTA", "SITE PARCEIRO"];
+
   const totals = useMemo(() => {
-    const t = { total: rows.length, simulacao: 0, analise: 0, aprovada: 0, volume: 0 };
+    const t = { total: rows.length, simulacao: 0, consulta: 0, siteParceiro: 0 };
     rows.forEach(r => {
-      const s = (r.status_types?.name ?? "").toLowerCase();
-      if (s.includes("simul")) t.simulacao++;
-      else if (s.includes("anal")) t.analise++;
-      else if (s.includes("aprov")) { t.aprovada++; t.volume += r.financed_amount ?? 0; }
+      const s = getVisitStatus(r);
+      if (s === "SIMULAÇÃO") t.simulacao++;
+      else if (s === "CONSULTA") t.consulta++;
+      else if (s === "SITE PARCEIRO") t.siteParceiro++;
     });
     return t;
   }, [rows]);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
-      const statusName = r.status_types?.name ?? "—";
+      const statusName = getVisitStatus(r);
       const matchStatus = selectedStatus === "Todos" || statusName === selectedStatus;
       
+      const entity = Array.isArray(r.visit_entities) ? r.visit_entities[0] : (r.visit_entities || {});
+      const clientName = entity?.name ?? "";
+      const rowDoc = entity?.document?.replace(/\D/g, "") || "";
       const rawSearch = search.toLowerCase().trim();
       const rawDocSearch = search.replace(/\D/g, "");
-      const rowDoc = r.document?.replace(/\D/g, "") || "";
       
       const matchSearch = 
         rawSearch === "" || 
-        (r.name ?? "").toLowerCase().includes(rawSearch) || 
+        clientName.toLowerCase().includes(rawSearch) || 
         (rawDocSearch !== "" && rowDoc.includes(rawDocSearch));
 
       const matchPartner = selectedPartners.length === 0 || selectedPartners.includes(String(r.partner_id));
@@ -171,8 +221,8 @@ function PropostasPage() {
       {/* HEADER DA TELA */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Monitor de Propostas</h1>
-          <p className="text-sm text-muted-foreground">Acompanhe simulações, análises e aprovações em tempo real.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Monitor de Consultas e Visitas</h1>
+          <p className="text-sm text-muted-foreground">Acompanhe acessos, consultas, redirecionamentos e conversões em tempo real.</p>
         </div>
         <div className="flex items-center gap-2">
             <Button variant="outline" className="rounded-xl"><Download className="mr-2 h-4 w-4" /> Exportar</Button>
@@ -181,13 +231,12 @@ function PropostasPage() {
       </div>
 
       {/* BLOCO DE KPIS */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-            { label: "Total de propostas", value: totals.total, highlight: false },
-            { label: "Em simulação", value: totals.simulacao, highlight: false },
-            { label: "Em análise", value: totals.analise, highlight: false },
-            { label: "Aprovadas", value: totals.aprovada, highlight: false },
-            { label: "Volume aprovado", value: BRL(totals.volume), highlight: true }
+            { label: "Total de visitas", value: totals.total, highlight: false },
+            { label: "Consultas", value: totals.consulta, highlight: false },
+            { label: "Sites parceiros", value: totals.siteParceiro, highlight: false },
+            { label: "Simulações geradas", value: totals.simulacao, highlight: true }
         ].map((t) => (
             <div key={t.label} className={`rounded-2xl border p-5 ${t.highlight ? "bg-[#fdf2f8] border-[#fbcfe8] text-[#d946ef]" : "border-border bg-card text-card-foreground"}`}>
                 <div className={`text-xs font-semibold uppercase ${t.highlight ? "text-[#d946ef]" : "text-muted-foreground"}`}>{t.label}</div>
@@ -200,10 +249,10 @@ function PropostasPage() {
       <div className="rounded-2xl border border-border bg-card overflow-x-auto">
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
           
-          {/* Busca unificada expansível (flex-1) */}
+          {/* Busca unificada */}
           <div className="relative flex-1 min-w-[240px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar nome ou CPF..." className="h-10 rounded-xl pl-9" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente ou CPF/CNPJ..." className="h-10 rounded-xl pl-9" />
           </div>
 
           {/* Filtro Múltiplo: Parceiros */}
@@ -354,140 +403,107 @@ function PropostasPage() {
           <thead>
             <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               <th className="px-3 py-3 w-[80px]">Data</th>
-              <th className="px-3 py-3 w-[150px]">Cliente</th>
-              <th className="px-3 py-3 w-[150px]">Estágio/Produto</th>
-              <th className="px-3 py-3 w-[200px]">Oferta</th>
-              <th className="px-3 py-3 w-[140px] text-right">Financiado</th>
+              <th className="px-3 py-3 w-[180px]">Cliente</th>
+              <th className="px-3 py-3 w-[150px]">Produto</th>
+              <th className="px-3 py-3 w-[220px]">Oferta</th>
               <th className="px-3 py-3 w-[160px]">Situação</th>
-              <th className="px-3 py-3 w-[140px]">Parceiro / Banco</th>
+              <th className="px-3 py-3 w-[140px]">Parceiro</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((r) => {
               const created = formatDate(r.created_at);
-              const updated = formatDate(r.updated_at);
-              const statusName = r.status_types?.name ?? "—";
-              const stageName = r.stage_types?.name ?? "—";
+              const entity = Array.isArray(r.visit_entities) ? r.visit_entities[0] : (r.visit_entities || {});
+              const offer = Array.isArray(r.visit_offers) ? r.visit_offers[0] : (r.visit_offers || {});
               const productName = r.product_types?.name ?? "—";
-              const parcela = r.installments && r.installment_value ? `${r.installments}x ${BRL(r.installment_value)}` : "—";
-              const offer = Array.isArray(r.simulation_offers) ? r.simulation_offers[0] : (r.simulation_offers || {});
-              const endEvent = offer?.event_end_date ? new Date(offer.event_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
+              const statusName = getVisitStatus(r);
               
-              const rawDoc = r.document?.replace(/\D/g, "") || "";
+              const rawDoc = entity?.document?.replace(/\D/g, "") || "";
               const doc = rawDoc.length === 14 
                 ? rawDoc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
                 : rawDoc.length === 11 
                 ? rawDoc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")
-                : r.document || "—";
+                : entity?.document || "—";
               
-              const phone = r.phone?.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3") ?? "";
-              
+              const phone = entity?.phone?.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3") ?? "";
+              const endEvent = offer?.event_end_date ? new Date(offer.event_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
+
               return (
                 <tr key={r.id} className="border-b border-border/60 hover:bg-accent/40">
                   <td className="px-3 py-3 w-[80px]"><div className="font-semibold">{created.d}</div><div className="text-xs text-muted-foreground">{created.h}</div></td>
                   
                   {/* CLIENTE */}
-                  <td className="px-3 py-3 w-[220px]">
-                    <div className="font-semibold text-[#d946ef] truncate" title={r.name}>{r.name || "—"}</div>
+                  <td className="px-3 py-3 w-[180px]">
+                    <div className="font-semibold text-[#d946ef] truncate" title={entity?.name}>{entity?.name || "—"}</div>
                     <div className="text-sm text-muted-foreground">{doc}</div>
                     <div className="text-sm text-muted-foreground">{phone || "—"}</div>
                   </td>
 
                   {/* PRODUTO */}
                   <td className="px-3 py-3 w-[150px]">
-                    <div className="font-semibold">{stageName}</div>
-                    <div className="text-xs text-muted-foreground">{productName}</div>
-                    <div className="text-[10px] font-bold text-muted-foreground mt-0.5 uppercase tracking-tighter">{r.partners?.name || "—"}</div>
+                    {/* Nome do Produto */}
+                    <div className="font-semibold">{productName}</div>
+
+                    {/* UTM Source em maiúscula */}
+                    <div className="text-[10px] text-muted-foreground font-medium uppercase mt-0.5">
+                      ORIGEM: {r.utm_source ? r.utm_source : "—"}
+                    </div>
+
+                    {/* State em maiúscula */}
+                    <div className="text-[10px] text-muted-foreground font-medium uppercase mt-0.5">
+                      {r.state ? r.state : "—"}
+                    </div>
+
+                    {/* Contato com parceiro como o último item */}
+                    {r.has_contact && (
+                      <div className="text-[10px] text-emerald-600 font-semibold uppercase mt-0.5">
+                        CONTATO C/ PARCEIRO
+                      </div>
+                    )}
                   </td>
 
                   {/* OFERTA */}
-                  <td className="px-3 py-3 max-w-[200px] sm:max-w-[250px]">
-                    {/* Nome do veículo/oferta (Com truncate) */}
-                    <div 
-                      className="font-semibold truncate" 
-                      title={offer?.offer_description}
-                    >
+                  <td className="px-3 py-3 max-w-[220px]">
+                    <div className="font-semibold truncate" title={offer?.offer_description}>
                       {offer?.offer_description || "—"}
                     </div>
-
-                    {/* Nome do Evento/Leilão (Com truncate) */}
-                    <div 
-                      className="text-xs text-muted-foreground truncate mt-0.5" 
-                      title={offer?.event_description}
-                    >
-                      {offer?.event_id || "—"} - {offer?.event_description || "—"}
+                    <div className="text-xs text-muted-foreground truncate mt-0.5" title={offer?.event_description}>
+                      {offer?.event_id ? `${offer.event_id} - ` : ""} {offer?.event_description || "—"}
                     </div>
-
                     <div className="text-[11px] text-muted-foreground font-medium mt-0.5">
                       {BRL(offer?.offer_value)} {endEvent ? `(Fim: ${endEvent})` : ""}
                     </div>
                   </td>
 
-                  {/* FINANCIAMENTO */}
-                  <td className="px-3 py-3 w-[140px] text-right">
-                    <div className="font-semibold">{BRL(r.financed_amount)}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {r.down_payment_percentage === 0 
-                        ? "Sem entrada" 
-                        : r.down_payment_percentage != null 
-                        ? `Entrada: ${r.down_payment_percentage.toFixed(0)}%` 
-                        : "—"}
-                    </div>
-                    <div className="text-[10px] font-medium text-muted-foreground">{parcela}</div>
-                  </td>
-
                   {/* SITUAÇÃO */}
                   <td className="px-3 py-3 w-[160px]">
                     <div className="flex flex-col items-start gap-1">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(statusName)}`}>{statusName}</span>
-                      <span className="text-[10px] text-muted-foreground">{updated.d} {updated.h}</span>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(statusName)}`}>
+                        {statusName}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">{created.d} {created.h}</span>
                     </div>
                   </td>
 
-                  {/* COLUNA: PARCEIRO / BANCO */}
+                  {/* PARCEIRO */}
                   <td className="px-3 py-3 w-[140px]">
                     <div className="flex items-center gap-1.5">
-                      
-                      {/* Logo do Parceiro */}
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-muted/25 border border-border/40" title={r.partners?.name}>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-transparent overflow-hidden" title={r.partners?.name}>
                         {r.partners?.logo_url ? (
                           <img 
                             src={r.partners.logo_url} 
-                            className="h-full w-full object-contain p-1" 
-                            alt={r.partners.name || "Parceiro"}
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                            }}
+                            className="h-full w-full object-cover" 
+                            alt={r.partners.name}
                           />
                         ) : (
-                          <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase text-muted-foreground">
+                          <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase">
                             {r.partners?.name?.slice(0, 3) || "—"}
                           </span>
                         )}
                       </div>
-
-                      {/* Renderiza Banco apenas se ele existir */}
-                      {r.financial_institutions && (
-                        <>
-                          <span className="text-muted-foreground/20 text-xs">/</span>
-                          
-                          {/* Logo do Banco */}
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-muted/25 border border-border/40" title={r.financial_institutions?.name}>
-                            {r.financial_institutions?.logo_url ? (
-                              <img 
-                                src={r.financial_institutions.logo_url} 
-                                className="h-full w-full object-contain p-1" 
-                                alt={r.financial_institutions.name || "Banco"}
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                            ) : (
-                              <Camera className="h-4 w-4 text-muted-foreground/50" />
-                            )}
-                          </div>
-                        </>
-                      )}
+                      <span className="text-xs font-medium text-foreground truncate" title={r.partners?.name}>
+                        {r.partners?.name || "—"}
+                      </span>
                     </div>
                   </td>
                 </tr>
