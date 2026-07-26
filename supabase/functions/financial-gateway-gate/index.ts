@@ -335,6 +335,9 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     debugLog("Iniciando Orquestração de Rota...");
     const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(return_uri)}`;
 
+    // Captura o IP que chegou no gateway vindo do cliente/Kong
+    const clientIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "0.0.0.0";
+
     const orchestratorResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/orchestrator`, {
         method: "POST",
         headers: {
@@ -342,7 +345,9 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
             "Authorization": `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
             "x-session-token": finalJwt, 
             "x-original-url": return_uri,
-            "x-auth-fallback-url": loginFallbackUrl
+            "x-auth-fallback-url": loginFallbackUrl,
+            // REPASSA O IP REAL DO CLIENTE PARA A PRÓXIMA EDGE FUNCTION:
+            "x-forwarded-for": clientIp,
         },
         body: JSON.stringify(rehydratedPayload),
     });
