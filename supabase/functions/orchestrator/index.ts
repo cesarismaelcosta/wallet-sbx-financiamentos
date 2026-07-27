@@ -636,7 +636,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           category_id,
           payload.action,
           payload.origin_url,
-          payload.target_url,,
+          payload.target_url,
           payload.visit_id,
           payload.target_url,
         );
