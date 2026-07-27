@@ -594,6 +594,8 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         // =====================================================================
         // Se for VISIT, REDIRECT ou CONTACT acata o que o front envia,
         // Caso contrario busca a configuração em orchestrator_configs
+        let destination;
+        
         if (!["VISIT", "REDIRECT", "CONTACT"].includes(action)) {
           const destination = await resolveDestination(
             supabase,
