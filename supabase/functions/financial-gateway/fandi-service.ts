@@ -60,12 +60,12 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   const integrationDetails = payload?.integration_details || {};
   
   // Chave de intefação
-  // const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
-  const FANDI_API_KEY = "56a9a219-8af8-43dd-8d1f-98af724a3704"
+  // const FANDI_API_KEY = "56a9a219-8af8-43dd-8d1f-98af724a3704"
+  const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
 
   // CNPJ DE ACORDO COM O PRODUTO (LEVES E PESADOS)
-  // const CNPJ_LOJA = integrationDetails.cnpjLoja; 
-  const CNPJ_LOJA = "15314890000183"; 
+  // const CNPJ_LOJA = "15314890000183"; 
+  const CNPJ_LOJA = integrationDetails.cnpjLoja; 
 
   // Registra log no Supabase se ligado
   debugLog("DEBUG payload:", payload);
