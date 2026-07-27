@@ -638,7 +638,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           payload.origin_url,
           payload.target_url,
           payload.visit_id,
-          payload.target_url,
+          orchestratorConfigId,
         );
 
         // G: Montagem do Payload de Retorno (Command: REDIRECT)
