@@ -82,8 +82,8 @@ export async function persistVisitData(
       if (visitId && action !== 'CONTACT') {
         const updatedRows = await t`
           UPDATE visits SET 
-            product_id = ${payload?.product_id || null},
-            partner_id = ${payload?.partner_id || null},
+            product_id = COALESCE(${payload?.product_id || null}, product_id),
+            partner_id = COALESCE(${payload?.partner_id || null}, partner_id), -- <--- BLINDADO: Se vier nulo, mantém o anterior!
             action = ${payload.action},
             target_url = ${ (targetUrl || "").split('?')[0] }
           WHERE id = ${visitId}

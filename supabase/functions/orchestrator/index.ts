@@ -592,12 +592,16 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         // =====================================================================
         // D: Motor de Decisão (Onde o usuário vai pousar?)
         // =====================================================================
-        // Se for VISIT, REDIRECT ou CONTACT acata o que o front envia,
-        // Caso contrario busca a configuração em orchestrator_configs
-        let destination;
-        
-        if (!["VISIT", "REDIRECT", "CONTACT"].includes(action)) {
-          const destination = await resolveDestination(
+        let orchestratorConfigId = null;
+
+        if (["VISIT", "REDIRECT", "CONTACT"].includes(action)) {
+          if (!payload.target_url) {
+            throw new Error(`Para ações de '${action}', a target_url é obrigatória no payload.`);
+          }
+          // Para navegação direta, o payload já tem a URL e o partner_id. Só garantimos que não está vazia.
+        } else {
+          // Se for simulação ou consulta, busca no banco e já injeta no payload
+          const resolved = await resolveDestination(
             supabase,
             action,
             payload.target_url,
@@ -609,12 +613,14 @@ serve(withSecurity('orchestrator', async (req: Request) => {
             payload.entity?.entity_type, 
           );
 
-          // E: Enriquecimento do Payload com a Rota Resolvida
-          payload.target_url = destination.url; 
-          payload.is_integrated = destination.is_integrated; 
-          payload.integration_method = destination.integration_method;
-          payload.integration_details = destination.integration_details;
-          payload.partner_id = destination.partner_id; 
+          payload.target_url = resolved.url; 
+          if (resolved.is_integrated !== undefined) payload.is_integrated = resolved.is_integrated; 
+          if (resolved.integration_method !== undefined) payload.integration_method = resolved.integration_method;
+          if (resolved.integration_details !== undefined) payload.integration_details = resolved.integration_details;
+          if (resolved.partner_id !== undefined && resolved.partner_id !== null) {
+            payload.partner_id = resolved.partner_id;
+          }
+          orchestratorConfigId = resolved.orchestrator_config_id;
         }
 
         debugLog("Origem: ", payload.origin_url);
@@ -630,9 +636,9 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           category_id,
           payload.action,
           payload.origin_url,
-          destination.url,
+          payload.target_url,,
           payload.visit_id,
-          destination.orchestrator_config_id,
+          payload.target_url,
         );
 
         // G: Montagem do Payload de Retorno (Command: REDIRECT)
