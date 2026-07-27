@@ -800,7 +800,7 @@ function ConsultsPage() {
                       {offer.manager_name && (
                         <div>
                           <span className="text-muted-foreground block">Organizador:</span>
-                          <strong className="text-slate-800">{offer.manager_name}</strong>
+                          <strong className="text-slate-800">{offer.manager_name} {managerDetails.manager_id ? ` (${managerDetails.manager_id})` : ""}</strong>
                         </div>
                       )}
                       {offer.seller_id && (

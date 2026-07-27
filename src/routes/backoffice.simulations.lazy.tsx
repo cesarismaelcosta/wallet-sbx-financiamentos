@@ -739,7 +739,7 @@ function PropostasPage() {
                       {offerRow.manager_name && (
                         <div>
                           <span className="text-muted-foreground block">Organizador:</span>
-                          <strong className="text-slate-800">{offerRow.manager_name}</strong>
+                          <strong className="text-slate-800">{offerRow.manager_name} {offerRow.manager_details?.manager_id ? ` (${offerRow.manager_details.manager_id})` : ""}</strong>
                         </div>
                       )}
                       {offerRow.seller_id && (
