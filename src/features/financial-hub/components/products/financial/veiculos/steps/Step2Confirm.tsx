@@ -24,8 +24,11 @@ export function Step2Confirm() {
   const config = state.data?.integration_details;
   const whatsappContact = config?.urlWhatsApp || config?.whatsapp_number;
 
+  // Validação do tipo de pessoa PJ via entity_type do payload
+  const isPJ = state.data?.entity_type === 'PJ';
+
   console.log("Resultado da simulação:", result);
-  console.log("Dados do estado:", isApproved, financiado, mainConsult);
+  console.log("Dados do estado:", isApproved, financiado, mainConsult, "É PJ?", isPJ);
 
   return (
     // Max-w-lg e mx-auto centralizam e dão respiro lateral em telas grandes
@@ -40,8 +43,12 @@ export function Step2Confirm() {
                  <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
               </div>
               <div className="space-y-1">
-                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Oferta encontrada!</h3>
-                <p className="text-sm text-slate-500">Temos uma proposta pré-aprovada para você.</p>
+                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">
+                  {isPJ ? "Referência de preço encontrada!" : "Oferta encontrada!"}
+                </h3>
+                <p className="text-sm text-slate-500">
+                  {isPJ ? "Temos uma referência de preço para você." : "Temos uma proposta pré-aprovada para você."}
+                </p>
               </div>
             </div>
 
@@ -87,7 +94,11 @@ export function Step2Confirm() {
 
             {/* Disclaimer */}
             <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-              *As condições apresentadas não são garantia de aprovação. Fale com nossos especialistas para seguirmos com a análise da sua linha de crédito.
+              {isPJ ? (
+                "*O valor de parcela é baseado em taxas de referência para financiamentos com nosso parceiro e não representa garantia de aprovação. Fale com nossos especialistas para seguirmos com a análise de crédito e buscarmos as melhores condições para você financiar essa oferta."
+              ) : (
+                "*As condições apresentadas não são garantia de aprovação. Fale com nossos especialistas para seguirmos com a análise da sua linha de crédito."
+              )}
             </p>
 
             {/* Botões: Layout Horizontal com estilo Auto-Equity */}

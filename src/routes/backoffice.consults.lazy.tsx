@@ -8,15 +8,16 @@
  * Este módulo atua como a torre de controle da esteira de topo de funil.
  * Ele consolida e exibe em tempo real as interações dos leads (visitas, 
  * consultas, contatos com parceiros e conversões em simulação) antes da 
- * efetivação do crédito.
+ * efetivação do crédito. Inclui painel lateral (Drawer/Sheet) para auditoria
+ * completa dos dados relacionais e objetos JSONB (entidade, oferta, gerente, etc.).
  * 
  * @architecture
- * - Data Fetching: Relacional direto via Supabase (PostgREST) com junção de tabelas (inner/left joins).
+ * - Data Fetching: Relacional direto via Supabase (PostgREST) com junção de tabelas.
  * - State Management: Gerenciamento local via hooks padrão (useState).
  * - Otimização (Memoization): Uso ostensivo de `useMemo` para evitar re-cálculos 
  *   pesados de KPIs e paginação/filtragem da tabela a cada re-render.
  * - Performance Algorítmica: Implementa `Set` objects para cruzamento de dados 
- *   (relação 1:N) garantindo complexidade de busca O(1) ao invés de loops aninhados O(N²).
+ *   (relação 1:N) garantindo complexidade de busca O(1).
  * ============================================================================
  */
 
@@ -28,6 +29,14 @@ import {
   Filter,
   Download,
   ChevronDown,
+  Building2,
+  User,
+  Calendar as CalendarIcon,
+  CreditCard,
+  MapPin,
+  Smartphone,
+  Briefcase,
+  Store,
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
@@ -37,10 +46,14 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 // Camada de Persistência (BaaS)
 import { supabase } from "@/integrations/supabase/client";
 
+// ============================================================================
+// [REGISTRO DA ROTA TANSTACK ROUTER]
+// ============================================================================
 export const Route = createLazyFileRoute("/backoffice/consults")({
   component: ConsultsPage,
 });
@@ -83,13 +96,13 @@ const BRL = (n: number | null | undefined) =>
 /**
  * @function formatDate
  * @description Converte timestamps ISO-8601 em um objeto destruturado contendo
- * a Data curta (DD/MM) e a Hora (HH:MM) para quebra visual de linhas na tabela.
+ * a Data curta e a Hora para quebra visual de linhas na tabela.
  */
 function formatDate(iso: string | null) {
   if (!iso) return { d: "—", h: "" };
   const dt = new Date(iso);
   return {
-    d: dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+    d: dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }),
     h: dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
   };
 }
@@ -118,6 +131,9 @@ function ConsultsPage() {
   const [partnersList, setPartnersList] = useState<any[]>([]);
   const [productsList, setProductsList] = useState<any[]>([]);
 
+  // Estado para controle do Painel Lateral de Detalhes (Sheet / Drawer)
+  const [activeConsult, setActiveConsult] = useState<any | null>(null);
+
   /**
    * INICIALIZAÇÃO: Busca listas de domínio (Parceiros e Produtos) 
    * que alimentarão os seletores dinâmicos de filtro.
@@ -137,12 +153,6 @@ function ConsultsPage() {
    * @async
    * @function load
    * @description Pipeline de busca, consolidação e normalização da árvore de dados do Supabase.
-   * 
-   * ESTRATÉGIA DE FETCH OTIMIZADO:
-   * 1. Busca master-data (`visits`) anexando Foreign Keys num único round-trip.
-   * 2. Extrai um array mapeado apenas com os IDs das visitas.
-   * 3. Busca histórica (`visit_updates`) utilizando cláusula "IN ()" baseada nos IDs master.
-   * 4. Efetua a fusão client-side (normalização) das flags secundárias (Ex: "Contato") na linha principal.
    */
   async function load() {
     try {
@@ -153,8 +163,8 @@ function ConsultsPage() {
           *,
           product_types(name),
           partners(name, logo_url),
-          visit_entities(name, document, phone, email),
-          visit_offers(offer_description, offer_value, event_id, event_description, event_end_date)
+          visit_entities(*),
+          visit_offers(*)
         `)
         .order('created_at', { ascending: false });
 
@@ -181,7 +191,6 @@ function ConsultsPage() {
       if (updateError) console.error("Erro ao carregar visit_updates:", updateError.message);
 
       // 3. ESTRUTURAÇÃO OTIMIZADA: Cria um Set para consultas O(1) de existência de Contato.
-      // Filtra atualizações do tipo "CONTACT" e mapeia apenas os IDs de visita únicos.
       const contactSet = new Set(
         updatesData
           ?.filter(u => (u.action || "").toUpperCase().includes("CONTACT"))
@@ -192,7 +201,7 @@ function ConsultsPage() {
       // 4. NORMALIZAÇÃO: Achata os arrays do PostgREST e injeta as flags derivadas.
       const normalized = visitsData.map(v => ({
         ...v,
-        has_contact: contactSet.has(v.id), // Lookup O(1) no Set instanciado acima
+        has_contact: contactSet.has(v.id),
         visit_entities: Array.isArray(v.visit_entities) ? v.visit_entities[0] || null : v.visit_entities,
         visit_offers: Array.isArray(v.visit_offers) ? v.visit_offers[0] || null : v.visit_offers,
       }));
@@ -210,26 +219,19 @@ function ConsultsPage() {
   /**
    * @function getVisitStatus
    * @description Resolve o Label de visualização do funil lendo a coluna `action` da visita.
-   * Centraliza a inteligência de tradução do Banco (Inglês Técnico) -> Tela (Português Comercial).
-   * @param {any} r - Objeto da linha da visita.
    */
   function getVisitStatus(r: any): string {
     const act = (r.action ?? "").toUpperCase();
-    
-    // Captura as strings provenientes da Edge Function "log-access" ou do Gateway
     if (act.includes("SIMULATE") || act.includes("SIMULATION")) return "SIMULAÇÃO";
     if (act.includes("CONSULT")) return "CONSULTA";
     if (act.includes("REDIRECT")) return "SITE PARCEIRO";
-    
-    return r.action || "CONSULTA"; // Fallback de integridade
+    return r.action || "CONSULTA";
   }
 
   const statusOptions = ["SIMULAÇÃO", "CONSULTA", "SITE PARCEIRO"];
 
   /**
    * MOTOR DE KPI: Totalizadores baseados na amostra carregada.
-   * Utiliza `useMemo` para evitar iterar o array inteiro caso o render 
-   * tenha sido engatilhado por algo irrelevante (como abrir um dropdown).
    */
   const totals = useMemo(() => {
     const t = { total: rows.length, simulacao: 0, consulta: 0, siteParceiro: 0 };
@@ -244,32 +246,26 @@ function ConsultsPage() {
 
   /**
    * MOTOR DE FILTRAGEM MULTI-CRITÉRIO
-   * Aplica todos os filtros selecionados pelo usuário em tempo real sobre o array local.
-   * Utiliza memoização (useMemo) onde o gatilho de re-cálculo é a alteração de qualquer estado de filtro.
    */
   const filtered = useMemo(() => {
     return rows.filter((r) => {
-      // 1. Filtro de Situação (Funil)
       const statusName = getVisitStatus(r);
       const matchStatus = selectedStatus === "Todos" || statusName === selectedStatus;
       
-      // 2. Extração segura para o Filtro de Busca (Texto livre)
       const entity = Array.isArray(r.visit_entities) ? r.visit_entities[0] : (r.visit_entities || {});
       const clientName = entity?.name ?? "";
       const rowDoc = entity?.document?.replace(/\D/g, "") || "";
       const rawSearch = search.toLowerCase().trim();
-      const rawDocSearch = search.replace(/\D/g, ""); // Extrai apenas números da busca para comparar CPFs
+      const rawDocSearch = search.replace(/\D/g, "");
       
       const matchSearch = 
         rawSearch === "" || 
         clientName.toLowerCase().includes(rawSearch) || 
         (rawDocSearch !== "" && rowDoc.includes(rawDocSearch));
 
-      // 3. Filtros Multi-Select (Parceiros e Produtos)
       const matchPartner = selectedPartners.length === 0 || selectedPartners.includes(String(r.partner_id));
       const matchProduct = selectedProducts.length === 0 || selectedProducts.includes(String(r.product_id));
       
-      // 4. Filtro de Lapso Temporal (Timeline)
       let matchDate = true;
       const rowDate = new Date(r.created_at);
       
@@ -282,7 +278,6 @@ function ConsultsPage() {
         matchDate = rowDate >= limitDate;
       }
       
-      // A linha só entra na tela se passar com sucesso em todos os funis simultaneamente
       return matchSearch && matchStatus && matchDate && matchPartner && matchProduct;
     });
   }, [rows, search, selectedStatus, dateRange, customRange, selectedPartners, selectedProducts]);
@@ -290,9 +285,7 @@ function ConsultsPage() {
   return (
     <div className="font-sans space-y-6">
       
-      {/* =====================================================================
-          HEADER DA TELA E CONTROLES GLOBAIS
-      ===================================================================== */}
+      {/* HEADER DA TELA E CONTROLES GLOBAIS */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Monitor de Consultas e Visitas</h1>
@@ -304,15 +297,13 @@ function ConsultsPage() {
         </div>
       </div>
 
-      {/* =====================================================================
-          PAINEL DE KPIS SUPERIORES (Totalizadores)
-      ===================================================================== */}
+      {/* PAINEL DE KPIS SUPERIORES (Totalizadores) */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
             { label: "Total de visitas", value: totals.total, highlight: false },
             { label: "Consultas", value: totals.consulta, highlight: false },
             { label: "Sites parceiros", value: totals.siteParceiro, highlight: false },
-            { label: "Simulações geradas", value: totals.simulacao, highlight: true } // Destaca o objetivo primário do funil
+            { label: "Simulações geradas", value: totals.simulacao, highlight: true }
         ].map((t) => (
             <div key={t.label} className={`rounded-2xl border p-5 ${t.highlight ? "bg-[#fdf2f8] border-[#fbcfe8] text-[#d946ef]" : "border-border bg-card text-card-foreground"}`}>
                 <div className={`text-xs font-semibold uppercase ${t.highlight ? "text-[#d946ef]" : "text-muted-foreground"}`}>{t.label}</div>
@@ -321,19 +312,15 @@ function ConsultsPage() {
         ))}
       </div>
 
-      {/* =====================================================================
-          BARRA DE FERRAMENTAS E TABELA DE DADOS
-      ===================================================================== */}
+      {/* BARRA DE FERRAMENTAS E TABELA DE DADOS */}
       <div className="rounded-2xl border border-border bg-card overflow-x-auto">
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
           
-          {/* BARRA DE BUSCA: Atua como Full-text (Nome) e Numérica (CPF) simultaneamente */}
           <div className="relative flex-1 min-w-[240px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente ou CPF/CNPJ..." className="h-10 rounded-xl pl-9" />
           </div>
 
-          {/* FILTRO: Múltipla Escolha -> Parceiros */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-muted/50 border border-border transition-colors">
@@ -379,7 +366,6 @@ function ConsultsPage() {
             </PopoverContent>
           </Popover>
 
-          {/* FILTRO: Múltipla Escolha -> Produtos */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-muted/50 border border-border transition-colors">
@@ -425,7 +411,6 @@ function ConsultsPage() {
             </PopoverContent>
           </Popover>
 
-          {/* FILTRO: Escolha Única Simples -> Situação do Funil */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-10 rounded-xl bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
@@ -448,7 +433,6 @@ function ConsultsPage() {
             </PopoverContent>
           </Popover>
           
-          {/* FILTRO: Janela Temporal (Recortes Predefinidos e Calendário) */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-10 rounded-xl hover:bg-[#fce7f3] transition-colors">
@@ -476,9 +460,7 @@ function ConsultsPage() {
           
         </div>
 
-        {/* =====================================================================
-            CORPO DA TABELA DE RESULTADOS (DATAGRID)
-        ===================================================================== */}
+        {/* TABELA ORIGINAL INTACTA */}
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -492,48 +474,45 @@ function ConsultsPage() {
           </thead>
           <tbody>
             {filtered.map((r) => {
-              // PREPARAÇÃO DE DADOS PARA A LINHA
               const created = formatDate(r.created_at);
               const entity = Array.isArray(r.visit_entities) ? r.visit_entities[0] : (r.visit_entities || {});
               const offer = Array.isArray(r.visit_offers) ? r.visit_offers[0] : (r.visit_offers || {});
               const productName = r.product_types?.name ?? "—";
               const statusName = getVisitStatus(r);
               
-              // Expressões Regulares (Regex) para higienização e máscara visual de documentos
               const rawDoc = entity?.document?.replace(/\D/g, "") || "";
               const doc = rawDoc.length === 14 
-                ? rawDoc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")  // CNPJ
+                ? rawDoc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
                 : rawDoc.length === 11 
-                ? rawDoc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")          // CPF
+                ? rawDoc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")
                 : entity?.document || "—";
               
               const phone = entity?.phone?.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3") ?? "";
               const endEvent = offer?.event_end_date ? new Date(offer.event_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
 
               return (
-                <tr key={r.id} className="border-b border-border/60 hover:bg-accent/40">
+                <tr 
+                  key={r.id} 
+                  onClick={() => setActiveConsult(r)}
+                  className="border-b border-border/60 hover:bg-accent/40 cursor-pointer transition-colors"
+                  title="Clique para ver os detalhes completos da visita"
+                >
                   <td className="px-3 py-3 w-[80px]"><div className="font-semibold">{created.d}</div><div className="text-xs text-muted-foreground">{created.h}</div></td>
                   
-                  {/* COLUNA: CLIENTE (Identificação e Dados de Contato) */}
                   <td className="px-3 py-3 w-[180px]">
                     <div className="font-semibold text-[#d946ef] truncate" title={entity?.name}>{entity?.name || "—"}</div>
                     <div className="text-sm text-muted-foreground">{doc}</div>
                     <div className="text-sm text-muted-foreground">{phone || "—"}</div>
                   </td>
 
-                  {/* COLUNA: PRODUTO (Contexto e Origem de Acesso) */}
                   <td className="px-3 py-3 w-[150px]">
                     <div className="font-semibold">{productName}</div>
-
                     <div className="text-[10px] text-muted-foreground font-medium uppercase mt-0.5">
                       ORIGEM: {r.utm_source ? r.utm_source : "—"}
                     </div>
-
                     <div className="text-[10px] text-muted-foreground font-medium uppercase mt-0.5">
                       {r.state ? r.state : "—"}
                     </div>
-
-                    {/* Badge Condicional: Flaga se o cliente acionou contato com o Parceiro */}
                     {r.has_contact && (
                       <div className="text-[10px] text-emerald-600 font-semibold uppercase mt-0.5">
                         CONTATO C/ PARCEIRO
@@ -541,7 +520,6 @@ function ConsultsPage() {
                     )}
                   </td>
 
-                  {/* COLUNA: OFERTA (Financeiro e Campanha) */}
                   <td className="px-3 py-3 max-w-[220px]">
                     <div className="font-semibold truncate" title={offer?.offer_description}>
                       {offer?.offer_description || "—"}
@@ -554,26 +532,22 @@ function ConsultsPage() {
                     </div>
                   </td>
 
-                  {/* COLUNA: SITUAÇÃO (Badges Visuais) */}
                   <td className="px-3 py-3 w-[160px]">
                     <div className="flex flex-col items-start gap-1">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(statusName)}`}>
-                        {statusName}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${statusClass(statusName)}`}>
+                          {statusName}
+                        </span>
+                      </div>
                       <span className="text-[10px] text-muted-foreground">{created.d} {created.h}</span>
                     </div>
                   </td>
 
-                  {/* COLUNA: PARCEIRO (Logo da Instituição ou Placeholder fallback) */}
                   <td className="px-3 py-3 w-[140px]">
                     <div className="flex items-center gap-1.5">
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-transparent overflow-hidden" title={r.partners?.name}>
                         {r.partners?.logo_url ? (
-                          <img 
-                            src={r.partners.logo_url} 
-                            className="h-full w-full object-cover" 
-                            alt={r.partners.name}
-                          />
+                          <img src={r.partners.logo_url} className="h-full w-full object-cover" alt={r.partners.name} />
                         ) : (
                           <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase">
                             {r.partners?.name?.slice(0, 3) || "—"}
@@ -591,6 +565,266 @@ function ConsultsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* ===================================================================== */}
+      {/* PAINEL LATERAL DE DETALHES (SHEET / DRAWER) COM DADOS COMPLETOS       */}
+      {/* ===================================================================== */}
+      <Sheet open={!!activeConsult} onOpenChange={(open) => !open && setActiveConsult(null)}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+          {activeConsult && (() => {
+            const sim = activeConsult;
+            const created = formatDate(sim.created_at);
+            const entity = sim.visit_entities || {};
+            const entityDetails = entity.entity_details || {};
+            const offer = sim.visit_offers || {};
+            const offerDetails = offer.offer_details || {};
+            const managerDetails = offer.manager_details || {};
+            const sellerDetails = offer.seller_details || {};
+            const eventDetails = offer.event_details || {};
+            const statusName = getVisitStatus(sim);
+            
+            const rawDoc = entity?.document?.replace(/\D/g, "") || entityDetails.document?.replace(/\D/g, "") || "";
+            const doc = rawDoc.length === 14 
+              ? rawDoc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
+              : rawDoc.length === 11 
+              ? rawDoc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")
+              : entity?.document || "—";
+
+            const isPJ = entity?.entity_type === "J" || entityDetails.entity_type === "J" || rawDoc.length === 14;
+            const addr = entityDetails.address || {};
+            const fullAddress = [addr.street, addr.number, addr.complement, addr.neighborhood, addr.city, addr.state, addr.zip_code, addr.country]
+              .filter(Boolean)
+              .join(", ");
+
+            return (
+              <div className="space-y-6 pt-4">
+                
+                {/* 1. HEADER INSTITUCIONAL */}
+                <SheetHeader className="border-b pb-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-md overflow-hidden border bg-white">
+                        {sim.partners?.logo_url ? (
+                          <img src={sim.partners.logo_url} className="h-full w-full object-cover" alt={sim.partners?.name} />
+                        ) : (
+                          <span className="text-[9px] font-bold">{sim.partners?.name?.slice(0, 3)}</span>
+                        )}
+                      </div>
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                        {sim.partners?.name || "Parceiro N/A"}
+                      </span>
+                    </div>
+
+                    <span className="text-xs font-mono text-muted-foreground">ID: {sim.id}</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
+                          {sim.product_types?.name || "Consulta / Visita"}
+                        </span>
+                        
+                        <div className="flex items-center gap-1.5">
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${statusClass(statusName)}`}>
+                            {statusName}
+                          </span>
+                          {sim.has_contact && (
+                            <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold bg-slate-200 text-slate-700">
+                              CONTATO
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <SheetTitle className="text-xl font-bold text-slate-900 mt-1">{entity?.name || "Lead sem nome"}</SheetTitle>
+                    </div>
+                  </div>
+                </SheetHeader>
+
+                {/* 2. ORIGEM & VISITA */}
+                <div className="rounded-xl border bg-slate-50 p-4 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <CalendarIcon className="h-3.5 w-3.5 text-primary" /> Origem & Visita
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    {/* PRIMEIRO BLOCO: VISITA */}
+                    <div>
+                      <span className="text-muted-foreground block">Data de Acesso:</span>
+                      <strong className="text-slate-800">{created.d} às {created.h}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">UTM Source / Campaign:</span>
+                      <strong className="text-slate-800 font-mono truncate block">{sim.utm_source || "—"} / {sim.utm_campaign || "—"}</strong>
+                    </div>
+                  </div>
+
+                  {/* SEGUNDO BLOCO: LOCALIZAÇÃO E DEVICE */}
+                  <div className="pt-2 border-t grid grid-cols-1 gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span><strong>Localização:</strong> {sim.country || "BR"} / {sim.state || "—"} / {sim.city || "—"}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <Smartphone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span><strong>IP / Device:</strong> {sim.ip_address || "—"} / {sim.operating_system || "—"} ({sim.device_type || "Desktop"})</span>
+                    </div>
+                  </div>
+
+                  {/* TERCEIRO BLOCO: ORIGEM E DESTINO (URLs) */}
+                  <div className="pt-2 border-t space-y-2 text-xs">
+                    <div className="overflow-hidden">
+                      <span className="text-muted-foreground block">Origem (URL):</span>
+                      <span className="text-slate-800 font-mono truncate block" title={sim.origin_url || "—"}>
+                        {sim.origin_url || "—"}
+                      </span>
+                    </div>
+                    <div className="overflow-hidden">
+                      <span className="text-muted-foreground block">Destino (URL):</span>
+                      <span className="text-slate-800 font-mono truncate block" title={sim.target_url || "—"}>
+                        {sim.target_url || "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. DADOS CADASTRAIS (Com entity_details completo) */}
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <User className="h-3.5 w-3.5 text-primary" /> Dados do Lead ({isPJ ? "Pessoa Jurídica" : "Pessoa Física"})
+                  </h4>
+                  
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-muted-foreground block">{isPJ ? "CNPJ:" : "CPF:"}</span>
+                      <strong className="text-slate-800 font-mono">{doc}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">{isPJ ? "Data de Fundação:" : "Data de Nascimento:"}</span>
+                      <strong className="text-slate-800">{entity?.birth_date || entityDetails.birth_date ? new Date(entity.birth_date || entityDetails.birth_date).toLocaleDateString("pt-BR") : "—"}</strong>
+                    </div>
+
+                    <div>
+                      <span className="text-muted-foreground block">Telefone:</span>
+                      <strong className="text-slate-800">{entity?.phone || entityDetails.phone || "—"}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Login / Gênero:</span>
+                      <strong className="text-slate-800">{entityDetails.login || "—"} / {entity?.gender || entityDetails.gender || "—"}</strong>
+                    </div>
+
+                    {!isPJ && (
+                      <>
+                        <div>
+                          <span className="text-muted-foreground block">RG:</span>
+                          <strong className="text-slate-800">{entityDetails.document_rg || "—"}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">Nome da Mãe:</span>
+                          <strong className="text-slate-800">{entityDetails.mothers_name || "—"}</strong>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="col-span-2 pt-2 border-t">
+                      <span className="text-muted-foreground block">E-mail:</span>
+                      <strong className="text-slate-800 truncate block">{entity?.email || entityDetails.email || "—"}</strong>
+                    </div>
+                  </div>
+
+                  {fullAddress && (
+                    <div className="mt-3 pt-3 border-t text-xs">
+                      <span className="text-muted-foreground block">Endereço Completo:</span>
+                      <strong className="text-slate-800 font-normal">{fullAddress}</strong>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. OFERTA / LOTE (Com offer_details, event_details, etc.) */}
+                {offer?.offer_description && (
+                  <div className="rounded-xl border bg-card p-4 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                      <CreditCard className="h-3.5 w-3.5 text-primary" /> Oferta / Lote Vinculado
+                    </h4>
+                    
+                    <div className="space-y-3 text-xs">
+                      <div>
+                        <span className="text-muted-foreground block">Descrição da Oferta:</span>
+                        <strong className="text-slate-900 text-sm font-semibold">{offer.offer_description}</strong>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-1 border-t items-center">
+                        <div>
+                          <span className="text-muted-foreground block">Categoria:</span>
+                          <strong className="text-slate-800">{offerDetails.category || "—"} {offerDetails.sub_category ? `(${offerDetails.sub_category})` : ""}</strong>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-muted-foreground block">Número:</span>
+                          <strong className="text-slate-800 font-mono">Lote #{offerDetails.lot_number || "—"} / Oferta #{offer.offer_id || "—"}</strong>
+                        </div>
+                      </div>
+
+                      {(offer.event_description || eventDetails.event_description) && (
+                        <div className="pt-1 border-t">
+                          <span className="text-muted-foreground block">Evento / Leilão:</span>
+                          <strong className="text-slate-800">[{offer.event_id}] {offer.event_description || eventDetails.event_description}</strong>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            Início: {offer.event_start_date ? new Date(offer.event_start_date).toLocaleDateString("pt-BR") : "—"} | Término: {offer.event_end_date ? new Date(offer.event_end_date).toLocaleDateString("pt-BR") : "—"}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="pt-1 border-t flex items-center justify-between">
+                        <div>
+                          <span className="text-muted-foreground block text-[10px]">Valor da Oferta:</span>
+                          <strong className="text-slate-900 font-bold">{BRL(offer.offer_value)}</strong>
+                        </div>
+                        {sim.has_contact && (
+                          <div>
+                            <span className="text-emerald-600 font-semibold text-[10px] uppercase">Contato Realizado</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. VENDEDOR E ORGANIZADOR (Caso preenchidos) */}
+                {(offer.manager_name || offer.legal_name || Object.keys(managerDetails).length > 0 || Object.keys(sellerDetails).length > 0) && (
+                  <div className="rounded-xl border bg-slate-50 p-4 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                      <Briefcase className="h-3.5 w-3.5 text-primary" /> Organizador & Vendedor
+                    </h4>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      {offer.manager_name && (
+                        <div>
+                          <span className="text-muted-foreground block">Organizador:</span>
+                          <strong className="text-slate-800">{offer.manager_name}</strong>
+                        </div>
+                      )}
+                      {offer.seller_id && (
+                        <div>
+                          <span className="text-muted-foreground block">Seller ID:</span>
+                          <strong className="text-slate-800 font-mono">{offer.seller_id}</strong>
+                        </div>
+                      )}
+                      {offer.legal_name && (
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground block">Razão Social (Vendedor):</span>
+                          <strong className="text-slate-800">{offer.legal_name} ({offer.trade_name || "—"})</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
+
     </div>
   );
 }

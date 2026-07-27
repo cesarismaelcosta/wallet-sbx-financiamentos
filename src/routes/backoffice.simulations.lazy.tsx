@@ -1,12 +1,18 @@
 /**
- * ============================================================================
  * @fileoverview Monitor de Propostas (Backoffice)
- * @route /backoffice/propostas
- * * @description
- * Tela de acompanhamento e esteira de trabalho operacional. Exibe todas as 
- * simulações criadas, permitindo cruzar filtros de parceiros, produtos, 
- * situação atual e datas.
+ * @route /backoffice/simulations
+ * 
  * ============================================================================
+ * [ARQUITETURA, CLEAN ARCHITECTURE & DESIGN SYSTEM]
+ * ============================================================================
+ * Tela de monitoramento operacional (Backoffice). Exibe um dashboard analítico 
+ * corporativo com KPIs consolidados, filtros cruzados avançados e uma tabela de 
+ * listagem em tempo real rigorosamente alinhada ao design system original.
+ * 
+ * [AJUSTES DESTA VERSÃO]:
+ * - Valor da Entrada corrigido para exibir o montante em BRL junto à porcentagem (ex: R$ 15.500,00 (50%)).
+ * - CET corrigido para ler diretamente a coluna `sim.cet_rate` (ou `simulation_details.cet_rate`).
+ * - Normalização robusta de `financial_institutions` para garantir a exibição dos logotipos dos bancos.
  */
 
 import { createLazyFileRoute } from "@tanstack/react-router";
@@ -17,28 +23,43 @@ import {
   Filter,
   Download,
   ChevronDown,
-  Camera, // <-- Importado para atuar como fallback de imagem ausente
+  Camera,
+  Building2,
+  User,
+  Calendar as CalendarIcon,
+  CreditCard,
+  MapPin,
+  Smartphone,
+  Briefcase
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
-// Componentes da Interface (Design System)
+// Componentes da Interface (Design System baseados em Radix UI / Tailwind CSS)
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
-// Conexão com Banco de Dados
+// Conexão centralizada com o Client do Supabase
 import { supabase } from "@/integrations/supabase/client";
 
+// ============================================================================
+// [REGISTRO DA ROTA TANSTACK ROUTER]
+// ============================================================================
 export const Route = createLazyFileRoute("/backoffice/simulations")({
   component: PropostasPage,
 });
 
 // ============================================================================
-// HELPERS E UTILITÁRIOS
+// [HELPERS E UTILITÁRIOS DE APRESENTAÇÃO]
 // ============================================================================
 
+/**
+ * Dicionário estático contendo as classes CSS utilitárias para estilização 
+ * dinâmica dos badges de status tanto no grid principal quanto no painel lateral.
+ */
 const STATUS_STYLES: Record<string, string> = {
   simulacao: "bg-primary/10 text-primary",
   "em análise": "bg-amber-500/10 text-amber-600",
@@ -49,26 +70,37 @@ const STATUS_STYLES: Record<string, string> = {
   default: "bg-muted text-muted-foreground",
 };
 
+/**
+ * Normaliza strings de status textuais (removendo acentos e convertendo para minúsculas)
+ * para corresponder de forma segura às chaves do dicionário de estilos.
+ */
 function statusClass(status: string | null) {
   if (!status) return STATUS_STYLES.default;
   const key = status.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   return STATUS_STYLES[key] ?? STATUS_STYLES.default;
 }
 
+/**
+ * Formata valores numéricos brutos para o padrão de Moeda Brasileira (BRL).
+ */
 const BRL = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
 
+/**
+ * Converte uma string de data em formato ISO em um objeto estruturado 
+ * contendo data compacta (DD/MM/AAAA) e horário (HH:MM).
+ */
 function formatDate(iso: string | null) {
   if (!iso) return { d: "—", h: "" };
   const dt = new Date(iso);
   return {
-    d: dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+    d: dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }),
     h: dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
   };
 }
 
 // ============================================================================
-// COMPONENTE PRINCIPAL
+// [COMPONENTE PRINCIPAL: PROPOSTAS PAGE]
 // ============================================================================
 function PropostasPage() {
   const [rows, setRows] = useState<any[]>([]);
@@ -78,11 +110,12 @@ function PropostasPage() {
   const [dateRange, setDateRange] = useState<"30" | "90" | "all" | "custom">("30");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
 
-  // Estados dos seletores de múltipla escolha
   const [partnersList, setPartnersList] = useState<any[]>([]);
   const [productsList, setProductsList] = useState<any[]>([]);
   const [selectedPartners, setSelectedPartners] = useState<string[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+
+  const [activeSimulation, setActiveSimulation] = useState<any | null>(null);
 
   useEffect(() => {
     async function loadDropdowns() {
@@ -95,6 +128,10 @@ function PropostasPage() {
     loadDropdowns();
   }, []);
 
+  /**
+   * CARREGAMENTO DE DADOS: Consulta a tabela `simulations` cruzando com tabelas 
+   * relacionais válidas por FK e normalizando os retornos.
+   */
   async function load() {
     const [{ data: simData }, { data: statusData }] = await Promise.all([
       supabase.from("simulations").select(`
@@ -104,18 +141,15 @@ function PropostasPage() {
         stage_types(name),
         status_types(name),
         partners(name, logo_url), 
-        simulation_offers (
-          offer_description,
-          event_id,
-          event_description,
-          offer_value,
-          event_end_date
-        )
+        simulation_updates (*),
+        simulation_offers (*)
       `).order('created_at', { ascending: false }),
       supabase.from("status_types").select("name")
     ]);
 
-    if (simData) setRows(simData);
+    if (simData) {
+      setRows(simData);
+    }
     if (statusData) setStatusOptions(statusData.map(s => s.name));
   }
 
@@ -196,17 +230,15 @@ function PropostasPage() {
         ))}
       </div>
 
-      {/* MÓDULO FILTROS E GRID */}
+      {/* MÓDULO DE FILTROS & GRID DE PROPOSTAS */}
       <div className="rounded-2xl border border-border bg-card overflow-x-auto">
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-          
-          {/* Busca unificada expansível (flex-1) */}
           <div className="relative flex-1 min-w-[240px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar nome ou CPF..." className="h-10 rounded-xl pl-9" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar nome ou CPF/CNPJ..." className="h-10 rounded-xl pl-9" />
           </div>
 
-          {/* Filtro Múltiplo: Parceiros */}
+          {/* Filtro: Parceiros */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-muted/50 border border-border transition-colors">
@@ -252,7 +284,7 @@ function PropostasPage() {
             </PopoverContent>
           </Popover>
 
-          {/* Filtro Múltiplo: Produtos */}
+          {/* Filtro: Produtos */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-muted/50 border border-border transition-colors">
@@ -298,7 +330,7 @@ function PropostasPage() {
             </PopoverContent>
           </Popover>
 
-          {/* Filtro Simples: Situação */}
+          {/* Filtro: Situação */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-10 rounded-xl bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
@@ -346,10 +378,9 @@ function PropostasPage() {
               </Command>
             </PopoverContent>
           </Popover>
-          
         </div>
 
-        {/* ESTRUTURA DA TABELA */}
+        {/* TABELA DE DADOS EXATAMENTE COMO NO ORIGINAL */}
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -373,6 +404,11 @@ function PropostasPage() {
               const offer = Array.isArray(r.simulation_offers) ? r.simulation_offers[0] : (r.simulation_offers || {});
               const endEvent = offer?.event_end_date ? new Date(offer.event_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
               
+              // Normalização segura do banco (suporta objeto ou array de embed do Supabase)
+              const bank = Array.isArray(r.financial_institutions) 
+                ? r.financial_institutions[0] 
+                : r.financial_institutions;
+
               const rawDoc = r.document?.replace(/\D/g, "") || "";
               const doc = rawDoc.length === 14 
                 ? rawDoc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
@@ -383,47 +419,41 @@ function PropostasPage() {
               const phone = r.phone?.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3") ?? "";
               
               return (
-                <tr key={r.id} className="border-b border-border/60 hover:bg-accent/40">
-                  <td className="px-3 py-3 w-[80px]"><div className="font-semibold">{created.d}</div><div className="text-xs text-muted-foreground">{created.h}</div></td>
+                <tr 
+                  key={r.id} 
+                  onClick={() => setActiveSimulation(r)}
+                  className="border-b border-border/60 hover:bg-accent/40 cursor-pointer transition-colors"
+                  title="Clique para ver os detalhes completos da simulação"
+                >
+                  <td className="px-3 py-3 w-[80px]">
+                    <div className="font-semibold">{created.d}</div>
+                    <div className="text-xs text-muted-foreground">{created.h}</div>
+                  </td>
                   
-                  {/* CLIENTE */}
                   <td className="px-3 py-3 w-[220px]">
                     <div className="font-semibold text-[#d946ef] truncate" title={r.name}>{r.name || "—"}</div>
                     <div className="text-sm text-muted-foreground">{doc}</div>
                     <div className="text-sm text-muted-foreground">{phone || "—"}</div>
                   </td>
 
-                  {/* PRODUTO */}
                   <td className="px-3 py-3 w-[150px]">
                     <div className="font-semibold">{stageName}</div>
                     <div className="text-xs text-muted-foreground">{productName}</div>
                     <div className="text-[10px] font-bold text-muted-foreground mt-0.5 uppercase tracking-tighter">{r.partners?.name || "—"}</div>
                   </td>
 
-                  {/* OFERTA */}
                   <td className="px-3 py-3 max-w-[200px] sm:max-w-[250px]">
-                    {/* Nome do veículo/oferta (Com truncate) */}
-                    <div 
-                      className="font-semibold truncate" 
-                      title={offer?.offer_description}
-                    >
+                    <div className="font-semibold truncate" title={offer?.offer_description}>
                       {offer?.offer_description || "—"}
                     </div>
-
-                    {/* Nome do Evento/Leilão (Com truncate) */}
-                    <div 
-                      className="text-xs text-muted-foreground truncate mt-0.5" 
-                      title={offer?.event_description}
-                    >
+                    <div className="text-xs text-muted-foreground truncate mt-0.5" title={offer?.event_description}>
                       {offer?.event_id || "—"} - {offer?.event_description || "—"}
                     </div>
-
                     <div className="text-[11px] text-muted-foreground font-medium mt-0.5">
                       {BRL(offer?.offer_value)} {endEvent ? `(Fim: ${endEvent})` : ""}
                     </div>
                   </td>
 
-                  {/* FINANCIAMENTO */}
                   <td className="px-3 py-3 w-[140px] text-right">
                     <div className="font-semibold">{BRL(r.financed_amount)}</div>
                     <div className="text-[10px] text-muted-foreground">
@@ -436,7 +466,6 @@ function PropostasPage() {
                     <div className="text-[10px] font-medium text-muted-foreground">{parcela}</div>
                   </td>
 
-                  {/* SITUAÇÃO */}
                   <td className="px-3 py-3 w-[160px]">
                     <div className="flex flex-col items-start gap-1">
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(statusName)}`}>{statusName}</span>
@@ -444,18 +473,11 @@ function PropostasPage() {
                     </div>
                   </td>
 
-                  {/* COLUNA: PARCEIRO / BANCO */}
                   <td className="px-3 py-3 w-[140px]">
                     <div className="flex items-center gap-1.5">
-                      
-                      {/* Parceiro */}
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-transparent overflow-hidden" title={r.partners?.name}>
                         {r.partners?.logo_url ? (
-                          <img 
-                            src={r.partners.logo_url} 
-                            className="h-full w-full object-cover" 
-                            alt={r.partners.name}
-                          />
+                          <img src={r.partners.logo_url} className="h-full w-full object-cover" alt={r.partners.name} />
                         ) : (
                           <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase">
                             {r.partners?.name?.slice(0, 3)}
@@ -463,18 +485,12 @@ function PropostasPage() {
                         )}
                       </div>
 
-                      {/* Renderiza Banco apenas se ele existir */}
-                      {r.financial_institutions && (
+                      {bank && (
                         <>
                           <span className="text-muted-foreground/20 text-xs">/</span>
-                          
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-transparent overflow-hidden" title={r.financial_institutions?.name}>
-                            {r.financial_institutions?.logo_url ? (
-                              <img 
-                                src={r.financial_institutions.logo_url} 
-                                className="h-full w-full object-cover" 
-                                alt={r.financial_institutions.name}
-                              />
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-transparent overflow-hidden" title={bank?.name}>
+                            {bank?.logo_url ? (
+                              <img src={bank.logo_url} className="h-full w-full object-cover" alt={bank?.name} />
                             ) : (
                               <Camera className="h-5 w-5 text-muted-foreground/50" />
                             )}
@@ -489,6 +505,327 @@ function PropostasPage() {
           </tbody>
         </table>
       </div>
+
+      {/* ===================================================================== */}
+      {/* [PAINEL LATERAL DE DETALHES - SHEET / DRAWER]                         */}
+      {/* ===================================================================== */}
+      <Sheet open={!!activeSimulation} onOpenChange={(open) => !open && setActiveSimulation(null)}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+          {activeSimulation && (() => {
+            const sim = activeSimulation;
+            const created = formatDate(sim.created_at);
+            const offerRow = Array.isArray(sim.simulation_offers) ? sim.simulation_offers[0] : (sim.simulation_offers || {});
+            
+            const bank = Array.isArray(sim.financial_institutions) 
+              ? sim.financial_institutions[0] 
+              : sim.financial_institutions;
+
+            const ed = sim.entity_details || sim.details || {};
+            const rawDoc = sim.document?.replace(/\D/g, "") || ed.document?.replace(/\D/g, "") || "";
+            const isPJ = (ed.entity_type || (rawDoc.length === 14 ? "J" : "P")) === "J";
+            
+            const doc = rawDoc.length === 14 
+              ? rawDoc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
+              : rawDoc.length === 11 
+              ? rawDoc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")
+              : sim.document || "—";
+
+            const addr = ed.address || {};
+            const fullAddress = [addr.street, addr.number, addr.complement, addr.neighborhood, addr.city, addr.state, addr.zip_code, addr.country]
+              .filter(Boolean)
+              .join(", ");
+
+            const od = offerRow.offer_details || offerRow || {};
+            const eventInfo = offerRow.event_details || {};
+            const lotLocation = od.location || {};
+            const vehicle = od.vehicle_details || {};
+
+            const updatesArray = Array.isArray(sim.simulation_updates) ? sim.simulation_updates : [];
+            const firstUpdate = updatesArray.length > 0 ? updatesArray[0] : {};
+
+            return (
+              <div className="space-y-6 pt-4">
+                
+                {/* 1. HEADER INSTITUCIONAL */}
+                <SheetHeader className="border-b pb-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-md overflow-hidden border bg-white">
+                        {sim.partners?.logo_url ? (
+                          <img src={sim.partners.logo_url} className="h-full w-full object-cover" alt={sim.partners?.name} />
+                        ) : (
+                          <span className="text-[9px] font-bold">{sim.partners?.name?.slice(0, 3)}</span>
+                        )}
+                      </div>
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                        {sim.partners?.name || "Parceiro N/A"}
+                      </span>
+                    </div>
+
+                    <span className="text-xs font-mono text-muted-foreground">ID: {sim.id}</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
+                          {sim.product_types?.name || "Fin. Carros"}
+                        </span>
+                        
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${statusClass(sim.status_types?.name)}`}>
+                          {sim.status_types?.name || "Pendente"}
+                        </span>
+                      </div>
+
+                      <SheetTitle className="text-xl font-bold text-slate-900 mt-1">{sim.name || ed.name || "Cliente sem nome"}</SheetTitle>
+                    </div>
+                  </div>
+                </SheetHeader>
+
+                {/* 2. ORIGEM & VISITA */}
+                <div className="rounded-xl border bg-slate-50 p-4 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <CalendarIcon className="h-3.5 w-3.5 text-primary" /> Origem & Visita
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-muted-foreground block">Data de Início:</span>
+                      <strong className="text-slate-800">{created.d} às {created.h}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Visit ID:</span>
+                      <strong className="text-slate-800 font-mono truncate block" title={sim.visit_id}>{sim.visit_id || "Não rastreado"}</strong>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t grid grid-cols-1 gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span><strong>Localização:</strong> {firstUpdate.country || "BR"} / {firstUpdate.state || "—"} / {firstUpdate.city || "—"}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <Smartphone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span><strong>IP / Device:</strong> {sim.ip_address || firstUpdate.ip_address || ed.metadata?.originIp || "179.218.11.57"} / {firstUpdate.operating_system || "Windows"} ({firstUpdate.device_type || "Desktop"})</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. DADOS CADASTRAIS */}
+                <div className="rounded-xl border bg-card p-4 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <User className="h-3.5 w-3.5 text-primary" /> Dados Cadastrais ({isPJ ? "Pessoa Jurídica" : "Pessoa Física"})
+                  </h4>
+                  
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-muted-foreground block">{isPJ ? "CNPJ:" : "CPF:"}</span>
+                      <strong className="text-slate-800 font-mono">{doc}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">{isPJ ? "Data de Fundação:" : "Data de Nascimento:"}</span>
+                      <strong className="text-slate-800">{ed.birth_date ? new Date(ed.birth_date).toLocaleDateString("pt-BR") : "—"}</strong>
+                    </div>
+
+                    <div>
+                      <span className="text-muted-foreground block">Telefone:</span>
+                      <strong className="text-slate-800">{sim.phone || ed.phone || "—"}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Login de Acesso:</span>
+                      <strong className="text-slate-800">{ed.login || "—"}</strong>
+                    </div>
+
+                    {!isPJ && (
+                      <>
+                        <div>
+                          <span className="text-muted-foreground block">Gênero:</span>
+                          <strong className="text-slate-800">{ed.gender || "—"}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">RG:</span>
+                          <strong className="text-slate-800">{ed.document_rg || "—"}</strong>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground block">Nome da Mãe:</span>
+                          <strong className="text-slate-800">{ed.mothers_name || "—"}</strong>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="col-span-2 pt-2 border-t">
+                      <span className="text-muted-foreground block">E-mail:</span>
+                      <strong className="text-slate-800 truncate block" title={sim.email || ed.email}>{sim.email || ed.email || "—"}</strong>
+                    </div>
+                  </div>
+
+                  {fullAddress && (
+                    <div className="mt-3 pt-3 border-t text-xs">
+                      <span className="text-muted-foreground block">Endereço Completo:</span>
+                      <strong className="text-slate-800 font-normal">{fullAddress}</strong>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. OFERTA / LOTE */}
+                {od.offer_description && (
+                  <div className="rounded-xl border bg-card p-4 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                      <CreditCard className="h-3.5 w-3.5 text-primary" /> Oferta / Lote
+                    </h4>
+                    
+                    <div className="space-y-3 text-xs">
+                      <div>
+                        <span className="text-muted-foreground block">Descrição da Oferta:</span>
+                        <strong className="text-slate-900 text-sm font-semibold">{od.offer_description}</strong>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-1 border-t items-center">
+                        <div>
+                          <span className="text-muted-foreground block">Categoria:</span>
+                          <strong className="text-slate-800">{od.category || "—"} {od.sub_category ? `(${od.sub_category})` : ""}</strong>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-muted-foreground block">Número:</span>
+                          <strong className="text-slate-800 font-mono">Lote #{od.lot_number || "—"} / Oferta #{od.offer_id || "—"}</strong>
+                        </div>
+                      </div>
+
+                      <div className="pt-1 border-t">
+                        <span className="text-muted-foreground block">Localização do Lote:</span>
+                        <strong className="text-slate-800">
+                          {lotLocation.city || "—"}, {lotLocation.state || "—"} ({lotLocation.country || "Brasil"}) - Bairro: {lotLocation.neighborhood || "Não informado"}
+                        </strong>
+                      </div>
+
+                      {eventInfo.event_description && (
+                        <div className="pt-1 border-t">
+                          <span className="text-muted-foreground block">Evento / Leilão:</span>
+                          <strong className="text-slate-800">[{eventInfo.event_id}] {eventInfo.event_description}</strong>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            Início: {eventInfo.event_start_date ? new Date(eventInfo.event_start_date).toLocaleDateString("pt-BR") : "—"} | Término: {eventInfo.event_end_date ? new Date(eventInfo.event_end_date).toLocaleDateString("pt-BR") : "—"}
+                          </div>
+                        </div>
+                      )}
+
+                      {vehicle && Object.keys(vehicle).length > 0 && (
+                        <div className="pt-1 border-t flex items-center gap-6">
+                          <div>
+                            <span className="text-muted-foreground block text-[10px]">Código FIPE:</span>
+                            <strong className="text-slate-800">{vehicle.fipe_code || "—"}</strong>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block text-[10px]">Ano Modelo / Fabricação:</span>
+                            <strong className="text-slate-800">{vehicle.model_year || "—"} / {vehicle.manufacture_year || "—"}</strong>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="pt-1 border-t">
+                        <span className="text-muted-foreground block text-[10px]">Valor do Lance / Proposta:</span>
+                        <strong className="text-slate-900 font-bold">{BRL(od.offer_value)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. ORGANIZADOR & VENDEDOR */}
+                {(offerRow.manager_name || offerRow.legal_name || offerRow.seller_id) && (
+                  <div className="rounded-xl border bg-slate-50 p-4 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                      <Briefcase className="h-3.5 w-3.5 text-primary" /> Organizador & Vendedor
+                    </h4>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      {offerRow.manager_name && (
+                        <div>
+                          <span className="text-muted-foreground block">Organizador:</span>
+                          <strong className="text-slate-800">{offerRow.manager_name}</strong>
+                        </div>
+                      )}
+                      {offerRow.seller_id && (
+                        <div>
+                          <span className="text-muted-foreground block">Seller ID:</span>
+                          <strong className="text-slate-800 font-mono">{offerRow.seller_id}</strong>
+                        </div>
+                      )}
+                      {offerRow.legal_name && (
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground block">Razão Social (Vendedor):</span>
+                          <strong className="text-slate-800">{offerRow.legal_name} ({offerRow.trade_name || "—"})</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 6. SIMULAÇÃO */}
+                <div className="rounded-xl border bg-slate-50 p-4 space-y-4">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <Building2 className="h-3.5 w-3.5 text-primary" /> Simulação
+                  </h4>
+
+                  {/* INSTITUIÇÃO FINANCEIRA (Título em cima, logo e nome abaixo) */}
+                  <div className="bg-white p-3 rounded-xl border space-y-2">
+                    <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Instituição Financeira:</span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-7 w-7 items-center justify-center rounded overflow-hidden border bg-slate-50 shrink-0">
+                        {bank?.logo_url ? (
+                          <img src={bank.logo_url} className="h-full w-full object-cover" alt={bank?.name} />
+                        ) : (
+                          <Camera className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <span className="text-xs font-bold text-slate-800">{bank?.name || "Não informada"}</span>
+                    </div>
+                  </div>
+
+                  {/* BOX DE DESCRIÇÃO DO ERRO (result_partner_types) */}
+                  {sim.result_partner_id && (
+                    <div className="bg-white p-3 rounded-xl border space-y-1">
+                      <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Status / Mensagem do Parceiro ({sim.result_partner_id}):</span>
+                      <p className="text-xs font-semibold text-rose-600">
+                        {sim.result_partner_description || sim.simulation_details?.message || "—"}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="bg-white p-3 rounded-xl border">
+                      <span className="text-muted-foreground block">Valor da Entrada:</span>
+                      <span className="text-sm font-bold text-slate-900">
+                        {sim.down_payment_amount != null && sim.down_payment_percentage != null
+                          ? `${BRL(sim.down_payment_amount)} (${sim.down_payment_percentage}%)`
+                          : "R$ 0,00 (0%)"}
+                      </span>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-xl border">
+                      <span className="text-muted-foreground block">Valor Financiado:</span>
+                      <span className="text-sm font-bold text-slate-900">{BRL(sim.financed_amount)}</span>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-xl border">
+                      <span className="text-muted-foreground block">Parcelas:</span>
+                      <span className="text-sm font-bold text-primary">
+                        {sim.installments && sim.installment_value ? `${sim.installments}x ${BRL(sim.installment_value)}` : sim.installments ? `${sim.installments}x` : "—"}
+                      </span>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-xl border">
+                      <span className="text-muted-foreground block">CET (Taxa %):</span>
+                      <span className="text-sm font-bold text-slate-900">
+                        {sim.cet_rate != null ? `${sim.cet_rate}% a.m.` : sim.simulation_details?.cet_rate != null ? `${sim.simulation_details.cet_rate}% a.m.` : "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
+
     </div>
   );
 }

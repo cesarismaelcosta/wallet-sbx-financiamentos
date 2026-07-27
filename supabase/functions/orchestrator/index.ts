@@ -166,9 +166,9 @@ async function resolveDestination(
   debugLog(`RESOLVE DESTINATION: Ação ${action}. category: ${categoryId} | product_id: ${productId}`);
 
   // Se a ação for apenas navegação nativa, acata o destino do payload.
-  if (action === "VISIT" || action === "REDIRECT" || action === "CONTACT") {
-    if (!payloadTargetUrl) throw new Error("Para ações de 'VISIT', a target_url é obrigatória no payload.");
-    return { url: payloadTargetUrl };
+  // Não deve chamar resolveDestination
+  if (["VISIT", "REDIRECT", "CONTACT"].includes(action)) {
+    throw new Error(`Ação '${action}' não deve passar pelo motor de resolução de destinos.`);
   }
 
   const cleanDoc = String(entityDocument || "").replace(/\D/g, "");
@@ -592,24 +592,28 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         // =====================================================================
         // D: Motor de Decisão (Onde o usuário vai pousar?)
         // =====================================================================
-        const destination = await resolveDestination(
-          supabase,
-          action,
-          payload.target_url,
-          payload.event?.event_id,
-          payload.seller?.seller_id,
-          category_id,
-          product_id,
-          payload.entity?.document, 
-          payload.entity?.entity_type, 
-        );
+        // Se for VISIT, REDIRECT ou CONTACT acata o que o front envia,
+        // Caso contrario busca a configuração em orchestrator_configs
+        if (!["VISIT", "REDIRECT", "CONTACT"].includes(action)) {
+          const destination = await resolveDestination(
+            supabase,
+            action,
+            payload.target_url,
+            payload.event?.event_id,
+            payload.seller?.seller_id,
+            category_id,
+            product_id,
+            payload.entity?.document, 
+            payload.entity?.entity_type, 
+          );
 
-        // E: Enriquecimento do Payload com a Rota Resolvida
-        payload.target_url = destination.url; 
-        payload.is_integrated = destination.is_integrated; 
-        payload.integration_method = destination.integration_method;
-        payload.integration_details = destination.integration_details;
-        payload.partner_id = destination.partner_id; 
+          // E: Enriquecimento do Payload com a Rota Resolvida
+          payload.target_url = destination.url; 
+          payload.is_integrated = destination.is_integrated; 
+          payload.integration_method = destination.integration_method;
+          payload.integration_details = destination.integration_details;
+          payload.partner_id = destination.partner_id; 
+        }
 
         debugLog("Origem: ", payload.origin_url);
 
