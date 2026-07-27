@@ -643,7 +643,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
         // G: Montagem do Payload de Retorno (Command: REDIRECT)
         const simulationId = payload.simulation_id || null;
-        let finalUrl = `${destination.url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
+        let finalUrl = `${payload.target_url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
         if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
 
         debugLog("[POST] payload final de retorno:", { payload, visitId, visitUpdateId, simulationId });
