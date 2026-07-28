@@ -18,6 +18,7 @@ import { Route as ApiLoginhistoryRouteImport } from './routes/api.loginhistory'
 
 const SegurosLazyRouteImport = createFileRoute('/seguros')()
 const SbxpayLazyRouteImport = createFileRoute('/sbxpay')()
+const SandboxLazyRouteImport = createFileRoute('/sandbox')()
 const FinanciamentosLazyRouteImport = createFileRoute('/financiamentos')()
 const BackofficeLazyRouteImport = createFileRoute('/backoffice')()
 const SbxpayIndexLazyRouteImport = createFileRoute('/sbxpay/')()
@@ -73,6 +74,11 @@ const SbxpayLazyRoute = SbxpayLazyRouteImport.update({
   path: '/sbxpay',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/sbxpay.lazy').then((d) => d.Route))
+const SandboxLazyRoute = SandboxLazyRouteImport.update({
+  id: '/sandbox',
+  path: '/sandbox',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/sandbox.lazy').then((d) => d.Route))
 const FinanciamentosLazyRoute = FinanciamentosLazyRouteImport.update({
   id: '/financiamentos',
   path: '/financiamentos',
@@ -239,6 +245,7 @@ export interface FileRoutesByFullPath {
   '/financialGatewayGate': typeof FinancialGatewayGateRoute
   '/backoffice': typeof BackofficeLazyRouteWithChildren
   '/financiamentos': typeof FinanciamentosLazyRouteWithChildren
+  '/sandbox': typeof SandboxLazyRoute
   '/sbxpay': typeof SbxpayLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   '/financialGatewayEntry': typeof FinancialGatewayEntryRoute
   '/financialGatewayGate': typeof FinancialGatewayGateRoute
   '/financiamentos': typeof FinanciamentosLazyRouteWithChildren
+  '/sandbox': typeof SandboxLazyRoute
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
@@ -294,6 +302,7 @@ export interface FileRoutesById {
   '/financialGatewayGate': typeof FinancialGatewayGateRoute
   '/backoffice': typeof BackofficeLazyRouteWithChildren
   '/financiamentos': typeof FinanciamentosLazyRouteWithChildren
+  '/sandbox': typeof SandboxLazyRoute
   '/sbxpay': typeof SbxpayLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
@@ -324,6 +333,7 @@ export interface FileRouteTypes {
     | '/financialGatewayGate'
     | '/backoffice'
     | '/financiamentos'
+    | '/sandbox'
     | '/sbxpay'
     | '/seguros'
     | '/api/loginhistory'
@@ -351,6 +361,7 @@ export interface FileRouteTypes {
     | '/financialGatewayEntry'
     | '/financialGatewayGate'
     | '/financiamentos'
+    | '/sandbox'
     | '/seguros'
     | '/api/loginhistory'
     | '/accounts/signin'
@@ -378,6 +389,7 @@ export interface FileRouteTypes {
     | '/financialGatewayGate'
     | '/backoffice'
     | '/financiamentos'
+    | '/sandbox'
     | '/sbxpay'
     | '/seguros'
     | '/api/loginhistory'
@@ -407,6 +419,7 @@ export interface RootRouteChildren {
   FinancialGatewayGateRoute: typeof FinancialGatewayGateRoute
   BackofficeLazyRoute: typeof BackofficeLazyRouteWithChildren
   FinanciamentosLazyRoute: typeof FinanciamentosLazyRouteWithChildren
+  SandboxLazyRoute: typeof SandboxLazyRoute
   SbxpayLazyRoute: typeof SbxpayLazyRouteWithChildren
   SegurosLazyRoute: typeof SegurosLazyRouteWithChildren
   ApiLoginhistoryRoute: typeof ApiLoginhistoryRoute
@@ -428,6 +441,13 @@ declare module '@tanstack/react-router' {
       path: '/sbxpay'
       fullPath: '/sbxpay'
       preLoaderRoute: typeof SbxpayLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sandbox': {
+      id: '/sandbox'
+      path: '/sandbox'
+      fullPath: '/sandbox'
+      preLoaderRoute: typeof SandboxLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/financiamentos': {
@@ -678,6 +698,7 @@ const rootRouteChildren: RootRouteChildren = {
   FinancialGatewayGateRoute: FinancialGatewayGateRoute,
   BackofficeLazyRoute: BackofficeLazyRouteWithChildren,
   FinanciamentosLazyRoute: FinanciamentosLazyRouteWithChildren,
+  SandboxLazyRoute: SandboxLazyRoute,
   SbxpayLazyRoute: SbxpayLazyRouteWithChildren,
   SegurosLazyRoute: SegurosLazyRouteWithChildren,
   ApiLoginhistoryRoute: ApiLoginhistoryRoute,

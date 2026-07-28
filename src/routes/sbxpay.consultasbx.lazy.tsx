@@ -45,7 +45,7 @@ export function OfferDetailsNewSBXPAY() {
   // o 'session_sessionToken' (JWT interno assinado pela nossa Edge Function).
   const { sessionToken } = useFinancialAuth();
   const [fotoAtiva, setFotoAtiva] = useState(0);
-  const navigate = Route.useNavigate(); 
+  const navigate = Route.useNavigate();
   // Pegue o search de forma bruta, sem precisar de validateSearch
   const search = useSearch({ strict: false });
   const offerParam = (search as any).offer as string | undefined;
@@ -77,10 +77,9 @@ export function OfferDetailsNewSBXPAY() {
   // [EFFECTS]: Ciclo de Vida e Chamadas de Rede (BFF)
   // =========================================================================
   useEffect(() => {
-    // Função assíncrona encapsulada para evitar vazamento de memória e 
+    // Função assíncrona encapsulada para evitar vazamento de memória e
     // manter a sincronia limpa com a array de dependências do React.
     const loadData = async () => {
-      
       // 2. [GUARD CLAUSE]: Prevenção de chamadas anônimas
       // Se não há JWT assinado, aborta a renderização de dados imediatamente.
       // Isso protege as APIs upstream contra requisições malformadas (401).
@@ -97,11 +96,10 @@ export function OfferDetailsNewSBXPAY() {
         // Passo A: Identificação do usuário
         const user = await fetchMyProfile(sessionToken);
         setUserData(user);
-        
+
         // Passo B: Resgate dos metadados da oferta e vendedor
         const offer = await fetchOfferDetails(offerId);
         setOfferData(offer);
-
       } catch (err: any) {
         // [ERROR HANDLING]: Captura unificada para exibir na UI
         setError(err.message || "Erro ao carregar os dados.");
@@ -114,7 +112,6 @@ export function OfferDetailsNewSBXPAY() {
     loadData();
   }, [sessionToken]); // O efeito reage EXCLUSIVAMENTE a mudanças no JWT assinado.
 
-  
   // =========================================================================
   // Imagens da oferta
   // =========================================================================
@@ -124,7 +121,7 @@ export function OfferDetailsNewSBXPAY() {
       .sort((a, b) => (a.highlight === b.highlight ? 0 : a.highlight ? -1 : 1))
       .map((p: any) => p.link);
   }, [offerData]);
-  
+
   // =========================================================================
   // [VIEW 1]: Estado de Carregamento
   // =========================================================================
@@ -137,29 +134,33 @@ export function OfferDetailsNewSBXPAY() {
   // =========================================================================
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      
       {/* ALERTA DE ERRO DE SISTEMA/REDE */}
-      {error && (
-        <div className="bg-red-50 p-4 mb-6 text-red-700 rounded border border-red-200 font-bold">
-          {error}
-        </div>
-      )}
-      
+      {error && <div className="bg-red-50 p-4 mb-6 text-red-700 rounded border border-red-200 font-bold">{error}</div>}
+
       <div className="space-y-6">
-        
         {/* 1. SESSÃO: DETALHES DA OFERTA (Agora no topo - Cor: #B300FF) */}
         <section className="bg-white p-6 rounded shadow border-l-4 border-[#B300FF]">
           <h2 className="text-xs font-black uppercase text-[#B300FF] mb-2">Oferta Relacionada</h2>
           {offerData ? (
             <div className="text-sm">
               <p className="font-bold mb-4">{offerData.offer.offer_description}</p>
-              
+
               {/* Quadro das Fotos (Integrado) */}
               {imagens.length > 0 && (
                 <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-4">
                   <img src={imagens[fotoAtiva]} className="w-full h-full object-contain" alt="Ativo" />
-                  <button onClick={() => setFotoAtiva(p => (p - 1 + imagens.length) % imagens.length)} className="absolute left-2 top-1/2 bg-black/50 text-white p-2">‹</button>
-                  <button onClick={() => setFotoAtiva(p => (p + 1) % imagens.length)} className="absolute right-2 top-1/2 bg-black/50 text-white p-2">›</button>
+                  <button
+                    onClick={() => setFotoAtiva((p) => (p - 1 + imagens.length) % imagens.length)}
+                    className="absolute left-2 top-1/2 bg-black/50 text-white p-2"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    onClick={() => setFotoAtiva((p) => (p + 1) % imagens.length)}
+                    className="absolute right-2 top-1/2 bg-black/50 text-white p-2"
+                  >
+                    ›
+                  </button>
                 </div>
               )}
 
@@ -183,7 +184,6 @@ export function OfferDetailsNewSBXPAY() {
             <p className="text-gray-400 italic">Carregando...</p>
           )}
         </section>
-
       </div>
     </div>
   );

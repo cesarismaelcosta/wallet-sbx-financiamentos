@@ -7,6 +7,7 @@
 export type FunctionConfig = {
   methods: string[];
   requiredHeaders: string[];
+  origin?: string;
 };
 
 export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
@@ -29,7 +30,10 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
     methods: ['GET', 'POST'], 
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
   },
-
+  'orchestrator-configs': { 
+    methods: ['GET'], 
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
+  },
   // ==========================================
   // 2. SISTEMA DE NOTIFICAÇÕES
   // ==========================================
