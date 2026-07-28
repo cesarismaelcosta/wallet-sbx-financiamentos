@@ -3,6 +3,8 @@
  * @fileoverview Sandbox de Simulação de Jornadas (Topo de Funil / sbX)
  * @description Painel de controle e testes integrado com a API de Ofertas, Sessão, 
  *              Painel Lateral de Consulta de Oferta e Painel Lateral de Rota (Orchestrator Configs).
+ *              Atua como hub de debug e roteamento isolado do front-end principal.
+ * @author César Ismael Pereira da Costa
  * ============================================================================
  */
 
@@ -48,9 +50,13 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { callOrchestratorConfigs } from "@/features/financial-hub/core/services/gateway";
 import { ICON_MAP } from "@/features/financial-hub/components/shared/icons-map";
 
-// =========================================================================
-// [HELPERS]: Validação e Formatação de Documentos (CPF / CNPJ)
-// =========================================================================
+/**
+ * =========================================================================
+ * [HELPERS]: Validação e Formatação de Documentos (CPF / CNPJ)
+ * =========================================================================
+ * @description Utilitários de sanitização e formatação visual para os inputs
+ * de login do Sandbox, garantindo consistência antes do disparo para a API.
+ */
 const isCPF = (str: string) => /^\d{11}$/.test(str.replace(/\D/g, ''));
 const isCNPJ = (str: string) => /^\d{14}$/.test(str.replace(/\D/g, ''));
 const formatCPF = (val: string) => val.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})/, '$1-$2').slice(0, 14);
@@ -62,10 +68,17 @@ const ENV_URLS = {
   staging: "https://stgapi.s4bdigital.net"
 };
 
-// =========================================================================
-// [SUB-COMPONENTES DA ROTA]: FAQ, Footer, OfferPanel, Consents
-// =========================================================================
+/**
+ * =========================================================================
+ * [SUB-COMPONENTES DA ROTA]: Renderizadores de UI do Orchestrator
+ * =========================================================================
+ */
 
+/**
+ * @function FAQSection
+ * @description Renderiza blocos expansíveis (Accordion) baseados no array `page_faqs`
+ * retornado pela edge function orchestrator_configs. Divide em duas colunas.
+ */
 function FAQSection({ items }: { items?: any[] }) {
   if (!items || items.length === 0) return null;
   const sortedItems = [...items].sort((a, b) => (a.position || 0) - (b.position || 0));
@@ -140,6 +153,11 @@ function FAQSection({ items }: { items?: any[] }) {
   );
 }
 
+/**
+ * @function FooterRender
+ * @description Processa templates de string e substitui dinamicamente 
+ * marcadores de hiperlink {texto} baseados no array de links da API.
+ */
 function FooterRender({ config }: { config?: any }) {
   if (!config?.template_text) return null;
   const { template_text, links = [] } = config;
@@ -179,6 +197,11 @@ function FooterRender({ config }: { config?: any }) {
   );
 }
 
+/**
+ * @function OfferPanelRender
+ * @description Componente crítico que desenha a proposta de valor principal da rota.
+ * Mapeia ícones dinamicamente utilizando a estrutura ICON_MAP do Core sbX.
+ */
 function OfferPanelRender({ config }: { config: any }) {
   if (!config?.offer_panel?.headline?.parts || !config?.offer_panel?.description?.parts) return null;
   const { offer_panel, theme } = config;
@@ -210,7 +233,6 @@ function OfferPanelRender({ config }: { config: any }) {
       {offer_panel.benefits && Array.isArray(offer_panel.benefits) && (
         <ul className="grid grid-cols-1 gap-2">
           {offer_panel.benefits.map((b: any, i: number) => {
-            // Busca o ícone no ICON_MAP de forma dinâmica (protegido contra maiúsculas/minúsculas)
             const IconComponent = ICON_MAP[b.icon] || ICON_MAP[b.icon?.toLowerCase()] || CheckCircle2;
             
             return (
@@ -294,9 +316,17 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
   );
 }
 
-// =========================================================================
-// STEP 1 & 2: OAUTH2 & EXCHANGE
-// =========================================================================
+/**
+ * =========================================================================
+ * STEP 1 & 2: OAUTH2 & EXCHANGE (Motor de Autenticação Sandbox)
+ * =========================================================================
+ */
+
+/**
+ * @function autenticarAccountsSBX
+ * @description Ponto de entrada legado. Autentica contra o ecossistema 
+ * Superbid original via grant_type password para capturar o access_token primário.
+ */
 const autenticarAccountsSBX = async (username: string, password: string, environment: "staging" | "production") => {
   const sbxBaseUrl = ENV_URLS[environment];
   const details = new URLSearchParams();
@@ -320,6 +350,11 @@ const autenticarAccountsSBX = async (username: string, password: string, environ
   return { success: true, access_token: sbxData.access_token, userId: sbxData.userId };
 };
 
+/**
+ * @function trocarTokenNaEdgeFunction
+ * @description Recebe o token legado da SBX e solicita à Edge Function de Exchange 
+ * (sbx-auth-exchange) a geração de um JWT nativo seguro da nossa stack (Supabase).
+ */
 const trocarTokenNaEdgeFunction = async (sbxAccessToken: string, environment: "staging" | "production") => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -341,22 +376,28 @@ export const Route = createLazyFileRoute("/sandbox")({
   component: SandboxPage,
 });
 
+/**
+ * =========================================================================
+ * COMPONENTE PRINCIPAL: SandboxPage
+ * =========================================================================
+ */
 function SandboxPage() {
   const { sessionToken, logout, setSession } = useFinancialAuth();
 
+  // Estados Visuais e de UI
   const [isScrolled, setIsScrolled] = useState(false);
-  const [customOfferId, setCustomOfferId] = useState("4755461");
-  const [apiOfferData, setApiOfferData] = useState<any>(null);
-  const [userData, setUserData] = useState<BFFUserProfile | null>(null);
-  
-  const [vitrineOffers, setVitrineOffers] = useState<Record<string, any>>({});
-  const [cardFotoIndex, setCardFotoIndex] = useState<Record<string, number>>({});
-  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
-  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
+  // Estados de Contexto e Prateleira
+  const [customOfferId, setCustomOfferId] = useState("4755461");
+  const [apiOfferData, setApiOfferData] = useState<any>(null);
+  const [userData, setUserData] = useState<BFFUserProfile | null>(null);
+  const [vitrineOffers, setVitrineOffers] = useState<Record<string, any>>({});
+  const [cardFotoIndex, setCardFotoIndex] = useState<Record<string, number>>({});
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  
   // Estados para o Painel Lateral (Drawer) de Consulta de Oferta
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedOfferPayload, setSelectedOfferPayload] = useState<any>(null);
@@ -370,6 +411,7 @@ function SandboxPage() {
   const [routeDrawerLoading, setRouteDrawerLoading] = useState(false);
   const [routeDrawerTitle, setRouteDrawerTitle] = useState("");
 
+  // Handler de Scroll
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
@@ -380,7 +422,18 @@ function SandboxPage() {
     return (getDefaultSbxEnvironment() as "staging" | "production") || "production";
   });
 
-  const [accessTokenSbx, setAccessTokenSbx] = useState<string>(() => sessionStorage.getItem("access_token_sbx") || "");
+  // [GEMINI PRO]: PROTEÇÃO SSR
+  // O uso estrito de `typeof window` previne o erro "sessionStorage is not defined" 
+  // durante a compilação/renderização servida (SSR) do TanStack/Vite, 
+  // garantindo que o storage só seja acessado no client-side.
+  const [accessTokenSbx, setAccessTokenSbx] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("access_token_sbx") || "";
+    }
+    return "";
+  });
+
+  // Estados do Formulário de Login
   const [tipoPessoa, setTipoPessoa] = useState<"F" | "J">("F");
   const [loginCred, setLoginCred] = useState("");
   const [passwordCred, setPasswordCred] = useState("");
@@ -390,13 +443,15 @@ function SandboxPage() {
   const [passwordError, setPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
 
-  // Mapeamento limpo da prateleira seguindo a sua regra real
+  // =========================================================================
+  // ARQUITETURA DE VITRINE: Definição Estática
+  // =========================================================================
   const FLOW_OFFERS = [
     { 
       key: "Cartão", 
       label: "Parcelar com cartão em até 18x", 
       title: "Parcelamento com Cartão", 
-      product_id: "8", // Cartão tem os dois
+      product_id: "8",
       offerId: ambienteAtivo === "production" ? "4846218" : "3064406", 
       flowKey: "Cartão", 
       disabled: false, 
@@ -406,7 +461,6 @@ function SandboxPage() {
       key: "Carros", 
       label: "Financiar em até 60x", 
       title: "Financiamento de Carros", 
-      // Financiamento tem offer (produto é sabido pela categoria)
       offerId: ambienteAtivo === "production" ? "4858961" : "2969794", 
       flowKey: "Carros", 
       disabled: false, 
@@ -425,7 +479,7 @@ function SandboxPage() {
       key: "Imóveis", 
       label: "Financiar em até 240x", 
       title: "Financiamento de Imóveis", 
-      offerId: ambienteAtivo === "production" ? "4843319" : "2400058", 
+      offerId: ambienteAtivo === "production" ? "4512612" : "2400058", 
       flowKey: "Imóveis", 
       disabled: true, 
       variant: "bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60 font-light text-xs" 
@@ -434,6 +488,9 @@ function SandboxPage() {
 
   const activeToken = sessionToken || accessTokenSbx;
 
+  // =========================================================================
+  // HOOKS DE INICIALIZAÇÃO E HIDRATAÇÃO DE DADOS
+  // =========================================================================
   useEffect(() => {
     const loadSandboxData = async () => {
       if (!activeToken) return;
@@ -513,43 +570,55 @@ function SandboxPage() {
     }
   };
 
-  // Handler para consultar a rota garantindo o envio estrito do nosso JWT interno
+  /**
+   * =========================================================================
+   * FETCH DE CONFIGURAÇÃO DE ROTA VIA GATEWAY
+   * =========================================================================
+   * @function handleOpenConsultarRota
+   * @description Aciona a utilitária callOrchestratorConfigs enviando os parâmetros 
+   * dinâmicos (event_id, seller_id, category_id e product_id), espelhando 
+   * rigorosamente a lógica de cascata do backend.
+   */
   const handleOpenConsultarRota = async (item: any) => {
+    // [GEMINI PRO]: Trava de segurança contra envio acidental nulo pelo onclick.
+    if (!item) return; 
+    
     if (!sessionToken) {
       alert("Faça o login primeiro!");
       return;
     }
 
-    setRouteDrawerTitle(item.title);
+    setRouteDrawerTitle(item.title || "Detalhes da Configuração");
     setIsRouteDrawerOpen(true);
     setRouteDrawerLoading(true);
     setRouteConfigData(null);
 
     try {
-      let contextParams: Record<string, any> = {};
+      const contextParams: Record<string, any> = {};
 
-      // Se tem offerId (Financiamentos ou Cartão), puxa o contexto da Superbid
+      // Resolve o contexto multidimensional via Offer (Financiamentos e Cartões)
       if (item.offerId) {
         try {
           const offerPayload = await fetchOfferDetails(item.offerId);
-          contextParams.event_id = offerPayload?.event?.event_id;
-          contextParams.seller_id = offerPayload?.seller?.seller_id;
-          contextParams.category_id = offerPayload?.offer?.category_id; // <- O produto é resolvido por aqui nos financiamentos
+          if (offerPayload?.event?.event_id) contextParams.event_id = offerPayload.event.event_id;
+          if (offerPayload?.seller?.seller_id) contextParams.seller_id = offerPayload.seller.seller_id;
+          if (offerPayload?.offer?.category_id) contextParams.category_id = offerPayload.offer.category_id;
         } catch (e) {
-          console.warn("Erro ao buscar detalhes da offer:", e);
+          console.warn("Erro ao buscar detalhes da offer para montar cascata:", e);
         }
       }
 
-      // Se o item tem product_id próprio explícito (Cartão, Seguros, Car Equity, Home Equity)
+      // Adiciona o Produto explícito (Seguros, Equities e Cartão)
       if (item.product_id) {
         contextParams.product_id = item.product_id;
       }
 
+      // Disparo estrito para o Gateway respeitando o padrão arquitetural definido
       const data = await callOrchestratorConfigs(contextParams);
+      
       setRouteConfigData(data);
     } catch (err: any) {
       console.error("[ROUTE_CONFIG_ERROR]:", err);
-      setError(`Erro ao consultar rota: ${err.message}`);
     } finally {
       setRouteDrawerLoading(false);
     }
@@ -981,9 +1050,10 @@ function SandboxPage() {
                     <ShieldCheck className="h-4 w-4" /> Acessar Seguros Auto
                   </Button>
                   <div className="flex justify-center pt-1">
+                    {/* [GEMINI PRO]: Botão para consulta direta de rota usando ID e Título */}
                     <button
                       type="button"
-                      onClick={() => handleOpenConsultarRota("9", "Seguros de Veículos")}
+                      onClick={() => handleOpenConsultarRota({ product_id: "9", title: "Seguros de Veículos" })}
                       className="text-[11px] font-bold text-[#B300FF] hover:underline bg-transparent border-none cursor-pointer p-0"
                     >
                       consultar rota
@@ -1008,9 +1078,10 @@ function SandboxPage() {
                     <Play className="h-4 w-4" /> Simular Car Equity
                   </Button>
                   <div className="flex justify-center pt-1">
+                    {/* [GEMINI PRO]: Botão para consulta direta de rota usando ID e Título */}
                     <button
                       type="button"
-                      onClick={() => handleOpenConsultarRota("12", "Car Equity")}
+                      onClick={() => handleOpenConsultarRota({ product_id: "12", title: "Car Equity" })}
                       className="text-[11px] font-bold text-[#B300FF] hover:underline bg-transparent border-none cursor-pointer p-0"
                     >
                       consultar rota
@@ -1133,9 +1204,10 @@ function SandboxPage() {
                             consultar oferta
                           </button>
 
+                          {/* [GEMINI PRO]: Disparo direto passando o objeto inteiro item da prateleira */}
                           <button
                             type="button"
-                            onClick={() => handleOpenConsultarRota(item.lookup_id, item.title)}
+                            onClick={() => handleOpenConsultarRota(item)}
                             className="text-[11px] font-bold text-[#B300FF] hover:underline bg-transparent border-none cursor-pointer p-0"
                           >
                             consultar rota
@@ -1315,7 +1387,7 @@ function SandboxPage() {
             </div>
 
               <div className="p-4 border-t border-gray-200 bg-slate-50 flex justify-end flex-shrink-0">
-              <Button onClick={() => setIsDrawerOpen(false)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-xl px-5">
+              <Button onClick={() => setIsRouteDrawerOpen(false)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-xl px-5">
                 Fechar Painel
               </Button>
             </div>

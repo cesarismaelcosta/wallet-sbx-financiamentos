@@ -3,9 +3,10 @@
  * * ARQUITETURA DE REDE:
  * Atua como o "Transportador" que decide se a chamada deve ser atendida por um Mock
  * local (para desenvolvimento ágil) ou por uma Edge Function real (Supabase).
- * * RESPONSABILIDADE:
+ * * RESPONSabilidade:
  * - Ponto de entrada único para chamadas à API.
  * - Centraliza autenticação (Bearer) e headers.
+ * - [GEMINI PRO]: Tratamento enriquecido de erros e montagem dinâmica de query params.
  */
 
 import { authHeaders, fetchOptions } from "@/services/session";
@@ -16,7 +17,6 @@ import { authHeaders, fetchOptions } from "@/services/session";
  * @returns {string} O token de sessão do usuário, ou string vazia se não encontrado.
  */
 function getSessionToken(): string {
-
   // Busca especificamente a chave 'session_token' que está no seu Local Storage
   const sessionToken = localStorage.getItem("session_token");
   
@@ -187,16 +187,12 @@ export async function callSimulation(
     // 3. TRANSPARÊNCIA: Joga o erro exatamente como o backend mandou.
     // Isso garante que o OrchestratorWrapper leia o fallback_url e o code ('SESSION_EXPIRED') nativamente.
     // O fallback para GATEWAY_ERROR só ocorre se o backend enviar um JSON malformado sem 'code'.
-    // Quando o próprio Deno/Supabase lança um erro não-tratado, o padrão universal da plataforma deles é devolver um JSON assim:
-    // {
-    //  "error": "Internal Server Error" 
-    // }
     throw {
-       ...errorData, // Espalha as propriedades nativas (code, message, fallback_url)
-       status: response.status, // Anexa o HTTP status para caso o front precise (ex: 401)
+       ...errorData, 
+       status: response.status, 
        code: errorData.code || "GATEWAY_ERROR", 
        message: errorData.message || errorData.error || "Erro desconhecido ao chamar orquestrador",
-       fallback_url: errorData.fallback_url || window.location.pathname + window.location.search // Proteção final de rota
+       fallback_url: errorData.fallback_url || window.location.pathname + window.location.search 
     };
   }
 
@@ -206,10 +202,26 @@ export async function callSimulation(
 /**
  * callOrchestratorConfigs
  * Executa uma chamada GET segura para a Edge Function 'orchestrator-configs' 
- * enviando todos os headers obrigatórios exigidos pelo registry.ts.
+ * enviando todos os headers obrigatórios e montando dinamicamente a query string 
+ * com base no contexto do card (event, seller, category, product).
+ * 
+ * @param {Record<string, any>} params - Objeto contendo os IDs de contexto
  */
-export async function callOrchestratorConfigs(lookupId: string | number) {
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orchestrator-configs?lookup_id=${encodeURIComponent(lookupId)}`;
+export async function callOrchestratorConfigs(params: Record<string, any>) {
+  // [GEMINI PRO]: Montagem dinâmica da URL. Em vez de fixar 'lookup_id',
+  // iteramos sobre o objeto passado para construir a query string real que a Edge Function espera.
+  const queryParams = new URLSearchParams();
+  
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      // Ignoramos undefined, null, strings vazias e a chave "title" (usada apenas no front)
+      if (value !== undefined && value !== null && value !== "" && key !== "title") {
+        queryParams.append(key, String(value));
+      }
+    });
+  }
+
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orchestrator-configs?${queryParams.toString()}`;
 
   const currentPath = window.location.pathname + window.location.search;
   const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;

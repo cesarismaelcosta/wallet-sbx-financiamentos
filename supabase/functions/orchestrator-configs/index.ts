@@ -69,7 +69,7 @@ async function resolveOrchestratorConfigs(
 
       const { data, error } = await supabase
         .from("orchestrator_configs")
-        .select("partner_id, rules, consent_configs, page_configs, page_faqs, is_integrated, integration_method, integration_details")
+        .select("*")
         .eq("lookup_id", Number(priority.id))
         .eq("config_type", priority.type)
         .eq("is_active", true)
