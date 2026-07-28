@@ -10,7 +10,7 @@
  * armazenados na tabela `orchestrator_configs`.
  * 
  * - MODO LEITURA (GET): Hidrata componentes e drawers do front-end com base no 
- *   contexto flexível do card (event, seller, offer, product, entity, category) 
+ *   contexto flexível do card (event, seller, product, category) 
  *   e perfil do cliente (PF/PJ), replicando a cascata de prioridade oficial.
  * 
  * @author César Ismael Pereira da Costa
@@ -32,16 +32,14 @@ import { debugLog } from "../_shared/logger.ts";
 /**
  * @function resolveOrchestratorConfigs
  * @description Réplica exata da lógica de cascata adaptada para múltiplos contextos de cards.
- * Opera via "Filtro de Prioridade": EVENT > SELLER > OFFER > PRODUCT > ENTITY > CATEGORY,
+ * Opera via "Filtro de Prioridade": EVENT > SELLER > PRODUCT > CATEGORY,
  * validando estritamente o perfil da entidade (PF vs PJ) e o status ativo.
  * 
  * @param {any} supabase - Cliente Supabase com privilégios de Service Role.
  * @param {any} [eventId] - Identificador do Evento.
  * @param {any} [sellerId] - Identificador do Seller.
- * @param {any} [offerId] - Identificador da Offer.
- * @param {any} [productId] - Identificador do Produto.
- * @param {any} [entityId] - Identificador da Entidade.
  * @param {any} [categoryId] - Identificador da Categoria.
+ * @param {any} [productId] - Identificador do Produto.
  * @param {string} [entityType] - Tipo explícito da entidade ("F" ou "J").
  * @returns {Promise<any|null>} O registro de configuração correspondente ou nulo.
  */
@@ -49,11 +47,9 @@ async function resolveOrchestratorConfigs(
   supabase: any,
   eventId?: any,
   sellerId?: any,
-  offerId?: any,
-  productId?: any,
-  entityId?: any,
   categoryId?: any,
-  entityType?: "F" | "J" | string,
+  productId?: any,
+  entityType?: "F" | "J" | string, // 👈 Aceita "F", "J" ou qualquer string genérica / undefined
 ) {
   // 1. Determinação do Perfil Ativo (PF vs PJ)
   const currentProfile = entityType === "J" ? "PJ" : "PF";
@@ -62,9 +58,7 @@ async function resolveOrchestratorConfigs(
   const priorities = [
     { type: "EVENT", id: eventId },
     { type: "SELLER", id: sellerId },
-    { type: "OFFER", id: offerId },
     { type: "PRODUCT", id: productId },
-    { type: "ENTITY", id: entityId },
     { type: "CATEGORY", id: categoryId },
   ];
 
@@ -79,7 +73,7 @@ async function resolveOrchestratorConfigs(
         .eq("lookup_id", Number(priority.id))
         .eq("config_type", priority.type)
         .eq("is_active", true)
-        .or(`entity_type.is.null,entity_type.in.(${currentProfile},PF+PJ)`)
+        .in("entity_type", [currentProfile, "PF+PJ"])
         .maybeSingle();
 
       if (error) continue;
@@ -151,19 +145,17 @@ serve(withSecurity('orchestrator-configs', async (req: Request) => {
     const url = new URL(req.url);
     const eventId = url.searchParams.get("event_id");
     const sellerId = url.searchParams.get("seller_id");
-    const offerId = url.searchParams.get("offer_id");
-    const productId = url.searchParams.get("product_id");
-    const entityId = url.searchParams.get("entity_id");
     const categoryId = url.searchParams.get("category_id");
+    const productId = url.searchParams.get("product_id");
     const entityType = url.searchParams.get("entity_type");
 
-    if (!eventId && !sellerId && !offerId && !productId && !entityId && !categoryId) {
+    if (!eventId && !sellerId && !productId && !categoryId) {
       return {
         status: 400,
         data: { 
           success: false, 
           code: "MISSING_PARAMETER", 
-          message: "É obrigatório informar ao menos um parâmetro de contexto do card (event_id, seller_id, offer_id, product_id, entity_id ou category_id)." 
+          message: "É obrigatório informar ao menos um parâmetro de contexto do card (event_id, seller_id, product_id ou category_id)." 
         }
       };
     }
@@ -201,10 +193,8 @@ serve(withSecurity('orchestrator-configs', async (req: Request) => {
       supabase,
       eventId,
       sellerId,
-      offerId,
-      productId,
-      entityId,
       categoryId,
+      productId,
       resolvedType
     );
 

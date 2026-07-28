@@ -390,12 +390,46 @@ function SandboxPage() {
   const [passwordError, setPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
 
-  // Mapeamento dos produtos da prateleira com os lookup_ids corretos da tabela orchestrator_configs
+  // Mapeamento limpo da prateleira seguindo a sua regra real
   const FLOW_OFFERS = [
-    { key: "Cartão", label: "Parcelar com cartão em até 18x", title: "Parcelamento com Cartão", product_id: "8", lookup_id: "8", offerId: ambienteAtivo === "production" ? "4846218" : "3064406", flowKey: "Cartão", disabled: false, variant: "bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs" },
-    { key: "Carros", label: "Financiar em até 60x", title: "Financiamento de Carros", product_id: "2", lookup_id: "10", offerId: ambienteAtivo === "production" ? "4858961" : "2969794", flowKey: "Carros", disabled: false, variant: "bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs" },
-    { key: "Caminhões", label: "Financiar em até 48x", title: "Financiamento de Caminhões", product_id: "3", lookup_id: "11", offerId: "4680825", flowKey: "Caminhões", disabled: false, variant: "bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs" },
-    { key: "Imóveis", label: "Financiar em até 240x", title: "Financiamento de Imóveis", product_id: "", lookup_id: "13", offerId: ambienteAtivo === "production" ? "4843319" : "2400058", flowKey: "Imóveis", disabled: true, variant: "bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60 font-light text-xs" },
+    { 
+      key: "Cartão", 
+      label: "Parcelar com cartão em até 18x", 
+      title: "Parcelamento com Cartão", 
+      product_id: "8", // Cartão tem os dois
+      offerId: ambienteAtivo === "production" ? "4846218" : "3064406", 
+      flowKey: "Cartão", 
+      disabled: false, 
+      variant: "bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs" 
+    },
+    { 
+      key: "Carros", 
+      label: "Financiar em até 60x", 
+      title: "Financiamento de Carros", 
+      // Financiamento tem offer (produto é sabido pela categoria)
+      offerId: ambienteAtivo === "production" ? "4858961" : "2969794", 
+      flowKey: "Carros", 
+      disabled: false, 
+      variant: "bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs" 
+    },
+    { 
+      key: "Caminhões", 
+      label: "Financiar em até 48x", 
+      title: "Financiamento de Caminhões", 
+      offerId: "4680825", 
+      flowKey: "Caminhões", 
+      disabled: false, 
+      variant: "bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs" 
+    },
+    { 
+      key: "Imóveis", 
+      label: "Financiar em até 240x", 
+      title: "Financiamento de Imóveis", 
+      offerId: ambienteAtivo === "production" ? "4843319" : "2400058", 
+      flowKey: "Imóveis", 
+      disabled: true, 
+      variant: "bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60 font-light text-xs" 
+    },
   ];
 
   const activeToken = sessionToken || accessTokenSbx;
@@ -480,20 +514,38 @@ function SandboxPage() {
   };
 
   // Handler para consultar a rota garantindo o envio estrito do nosso JWT interno
-  const handleOpenConsultarRota = async (lookupId: string, itemTitle: string) => {
+  const handleOpenConsultarRota = async (item: any) => {
     if (!sessionToken) {
       alert("Faça o login primeiro!");
       return;
     }
 
-    setRouteDrawerTitle(itemTitle);
+    setRouteDrawerTitle(item.title);
     setIsRouteDrawerOpen(true);
     setRouteDrawerLoading(true);
     setRouteConfigData(null);
 
     try {
-      // Chamada idêntica ao padrão arquitetural do projeto
-      const data = await callOrchestratorConfigs(lookupId);
+      let contextParams: Record<string, any> = {};
+
+      // Se tem offerId (Financiamentos ou Cartão), puxa o contexto da Superbid
+      if (item.offerId) {
+        try {
+          const offerPayload = await fetchOfferDetails(item.offerId);
+          contextParams.event_id = offerPayload?.event?.event_id;
+          contextParams.seller_id = offerPayload?.seller?.seller_id;
+          contextParams.category_id = offerPayload?.offer?.category_id; // <- O produto é resolvido por aqui nos financiamentos
+        } catch (e) {
+          console.warn("Erro ao buscar detalhes da offer:", e);
+        }
+      }
+
+      // Se o item tem product_id próprio explícito (Cartão, Seguros, Car Equity, Home Equity)
+      if (item.product_id) {
+        contextParams.product_id = item.product_id;
+      }
+
+      const data = await callOrchestratorConfigs(contextParams);
       setRouteConfigData(data);
     } catch (err: any) {
       console.error("[ROUTE_CONFIG_ERROR]:", err);
