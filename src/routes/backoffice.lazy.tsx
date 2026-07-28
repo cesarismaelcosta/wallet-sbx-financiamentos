@@ -40,7 +40,7 @@ const SEGURANCA_NAV = [
 
 const CONFIG_NAV = [
   { to: "/backoffice/dominios", label: "Domínios", icon: Globe },
-  { to: "/backoffice/orchestrator-configs", label: "Consulta de Rotas", icon: Layers }, 
+  { to: "/backoffice/routes", label: "Rotas", icon: Layers }, 
 ];
 
 function BackofficeLayout() {
