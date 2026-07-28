@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Users,
   Globe,
+  Layers,
 } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Input } from "@/components/ui/input";
@@ -37,7 +38,10 @@ const SEGURANCA_NAV = [
   { to: "/backoffice/usuarios", label: "Usuários", icon: Users },
 ];
 
-const CONFIG_NAV = [{ to: "/backoffice/dominios", label: "Domínios", icon: Globe }];
+const CONFIG_NAV = [
+  { to: "/backoffice/dominios", label: "Domínios", icon: Globe },
+  { to: "/backoffice/orchestrator-configs", label: "Consulta de Rotas", icon: Layers }, 
+];
 
 function BackofficeLayout() {
   const { pathname } = useLocation();

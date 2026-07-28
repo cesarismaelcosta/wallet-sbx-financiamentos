@@ -14,6 +14,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as FinancialGatewayGateRouteImport } from './routes/financialGatewayGate'
 import { Route as FinancialGatewayEntryRouteImport } from './routes/financialGatewayEntry'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BackofficeOrchestratorConfigsRouteImport } from './routes/backoffice.orchestrator-configs'
 import { Route as ApiLoginhistoryRouteImport } from './routes/api.loginhistory'
 
 const SegurosLazyRouteImport = createFileRoute('/seguros')()
@@ -233,6 +234,12 @@ const AccountsSigninLazyRoute = AccountsSigninLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/accounts.signin.lazy').then((d) => d.Route),
 )
+const BackofficeOrchestratorConfigsRoute =
+  BackofficeOrchestratorConfigsRouteImport.update({
+    id: '/orchestrator-configs',
+    path: '/orchestrator-configs',
+    getParentRoute: () => BackofficeLazyRoute,
+  } as any)
 const ApiLoginhistoryRoute = ApiLoginhistoryRouteImport.update({
   id: '/api/loginhistory',
   path: '/api/loginhistory',
@@ -249,6 +256,7 @@ export interface FileRoutesByFullPath {
   '/sbxpay': typeof SbxpayLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
+  '/backoffice/orchestrator-configs': typeof BackofficeOrchestratorConfigsRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
@@ -276,6 +284,7 @@ export interface FileRoutesByTo {
   '/sandbox': typeof SandboxLazyRoute
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
+  '/backoffice/orchestrator-configs': typeof BackofficeOrchestratorConfigsRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
@@ -306,6 +315,7 @@ export interface FileRoutesById {
   '/sbxpay': typeof SbxpayLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
+  '/backoffice/orchestrator-configs': typeof BackofficeOrchestratorConfigsRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
@@ -337,6 +347,7 @@ export interface FileRouteTypes {
     | '/sbxpay'
     | '/seguros'
     | '/api/loginhistory'
+    | '/backoffice/orchestrator-configs'
     | '/accounts/signin'
     | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
@@ -364,6 +375,7 @@ export interface FileRouteTypes {
     | '/sandbox'
     | '/seguros'
     | '/api/loginhistory'
+    | '/backoffice/orchestrator-configs'
     | '/accounts/signin'
     | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
@@ -393,6 +405,7 @@ export interface FileRouteTypes {
     | '/sbxpay'
     | '/seguros'
     | '/api/loginhistory'
+    | '/backoffice/orchestrator-configs'
     | '/accounts/signin'
     | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
@@ -611,6 +624,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountsSigninLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/backoffice/orchestrator-configs': {
+      id: '/backoffice/orchestrator-configs'
+      path: '/orchestrator-configs'
+      fullPath: '/backoffice/orchestrator-configs'
+      preLoaderRoute: typeof BackofficeOrchestratorConfigsRouteImport
+      parentRoute: typeof BackofficeLazyRoute
+    }
     '/api/loginhistory': {
       id: '/api/loginhistory'
       path: '/api/loginhistory'
@@ -622,6 +642,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface BackofficeLazyRouteChildren {
+  BackofficeOrchestratorConfigsRoute: typeof BackofficeOrchestratorConfigsRoute
   BackofficeAuditoriaLazyRoute: typeof BackofficeAuditoriaLazyRoute
   BackofficeConfiguracoesLazyRoute: typeof BackofficeConfiguracoesLazyRoute
   BackofficeConsultsLazyRoute: typeof BackofficeConsultsLazyRoute
@@ -633,6 +654,7 @@ interface BackofficeLazyRouteChildren {
 }
 
 const BackofficeLazyRouteChildren: BackofficeLazyRouteChildren = {
+  BackofficeOrchestratorConfigsRoute: BackofficeOrchestratorConfigsRoute,
   BackofficeAuditoriaLazyRoute: BackofficeAuditoriaLazyRoute,
   BackofficeConfiguracoesLazyRoute: BackofficeConfiguracoesLazyRoute,
   BackofficeConsultsLazyRoute: BackofficeConsultsLazyRoute,
