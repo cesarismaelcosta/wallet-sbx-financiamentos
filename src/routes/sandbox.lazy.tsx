@@ -45,6 +45,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
+import { callOrchestratorConfigs } from "@/services/gateway";
 
 // =========================================================================
 // [HELPERS]: Validação e Formatação de Documentos (CPF / CNPJ)
@@ -467,9 +468,9 @@ function SandboxPage() {
     }
   };
 
-  // Handler seguro chamando a nova Edge Function dedicada
+  // Handler para consultar a rota garantindo o envio estrito do nosso JWT interno
   const handleOpenConsultarRota = async (lookupId: string, itemTitle: string) => {
-    if (!activeToken) {
+    if (!sessionToken) {
       alert("Faça o login primeiro!");
       return;
     }
@@ -479,27 +480,10 @@ function SandboxPage() {
     setRouteDrawerLoading(true);
     setRouteConfigData(null);
 
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-    const tokenToUse = sessionToken || accessTokenSbx || supabaseAnonKey;
-
     try {
-      const res = await fetch(`${supabaseUrl}/functions/v1/orchestrator-configs?lookup_id=${lookupId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${tokenToUse}`,
-          'x-original-url': window.location.pathname + window.location.search
-        }
-      });
-
-      const responseJson = await res.json();
-
-      if (!res.ok || !responseJson.success) {
-        throw new Error(responseJson.message || "Erro ao carregar rota pelo gateway.");
-      }
-
-      setRouteConfigData(responseJson.data);
+      // Chamada idêntica ao padrão arquitetural do projeto
+      const data = await callOrchestratorConfigs(lookupId);
+      setRouteConfigData(data);
     } catch (err: any) {
       console.error("[ROUTE_CONFIG_ERROR]:", err);
       setError(`Erro ao consultar rota: ${err.message}`);

@@ -202,3 +202,46 @@ export async function callSimulation(
 
   return response.json();
 }
+
+/**
+ * callOrchestratorConfigs
+ * Executa uma chamada GET segura para a Edge Function 'orchestrator-configs' 
+ * enviando todos os headers obrigatórios exigidos pelo registry.ts.
+ */
+export async function callOrchestratorConfigs(lookupId: string | number) {
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orchestrator-configs?lookup_id=${encodeURIComponent(lookupId)}`;
+
+  const currentPath = window.location.pathname + window.location.search;
+  const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
+
+  const options: RequestInit = {
+    method: "GET",
+    ...fetchOptions, // Mantém credentials/cookies se necessário
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, // Chave pública do Supabase
+      "x-original-url": currentPath,
+      "x-auth-fallback-url": loginFallbackUrl,
+      ...authHeaders(), // 👈 Injeta automaticamente o 'x-session-token' interno correto
+    },
+  };
+
+  const response = await fetch(url, options);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ 
+      error: "Erro no Gateway de Configs", 
+      details: "O servidor retornou um erro não estruturado" 
+    }));
+
+    throw {
+      message: errorData?.error || errorData?.message || `Erro: ${response.status}`,
+      code: errorData.code || "GATEWAY_CONFIG_ERROR", 
+      status: response.status,
+      response: errorData
+    };
+  }
+
+  const result = await response.json();
+  return result.data || result;
+}
