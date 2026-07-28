@@ -10,8 +10,8 @@
  * armazenados na tabela `orchestrator_configs`.
  * 
  * - MODO LEITURA (GET): Hidrata componentes e drawers do front-end com base no 
- *   contexto do produto/lookup e perfil do cliente (PF/PJ), replicando a cascata 
- *   de prioridade oficial do orquestrador principal.
+ *   contexto hierárquico (event, seller, product, category) e perfil do cliente (PF/PJ), 
+ *   replicando a cascata de prioridade oficial do orquestrador principal.
  * 
  * @author César Ismael Pereira da Costa
  * @description Single Source of Truth para metadados e regras de páginas do ecossistema sbX.
@@ -32,59 +32,56 @@ import { debugLog } from "../_shared/logger.ts";
 /**
  * @function resolveOrchestratorConfigs
  * @description Réplica exata da lógica de cascata do orquestrador principal.
- * Opera via "Filtro de Prioridade (Cascata)": PRODUCT > EVENT > SELLER > CATEGORY,
- * validando estritamente o perfil da entidade (PF vs PJ vs PF+PJ) e o status ativo.
+ * Opera via "Filtro de Prioridade (Cascata)": EVENT > SELLER > PRODUCT > CATEGORY,
+ * validando estritamente o perfil da entidade (PF vs PJ) e o status ativo.
  * 
  * @param {any} supabase - Cliente Supabase com privilégios de Service Role.
- * @param {any} lookupId - Identificador de busca (product_id ou category_id).
- * @param {string} [entityDocument] - Documento da entidade para definição de perfil.
+ * @param {any} [eventId] - Identificador do Evento (Prioridade 1).
+ * @param {any} [sellerId] - Identificador do Seller (Prioridade 2).
+ * @param {any} [categoryId] - Identificador da Categoria (Prioridade 3/4).
+ * @param {any} [productId] - Identificador do Produto (Prioridade 3/4).
  * @param {string} [entityType] - Tipo explícito da entidade ("F" ou "J").
  * @returns {Promise<any|null>} O registro de configuração correspondente ou nulo.
  */
 async function resolveOrchestratorConfigs(
   supabase: any,
-  lookupId: any,
-  entityDocument?: string,
+  eventId?: any,
+  sellerId?: any,
+  categoryId?: any,
+  productId?: any,
   entityType?: "F" | "J" | string,
 ) {
-  // 1. Higienização e Determinação do Perfil (PF vs PJ)
-  const cleanDoc = String(entityDocument || "").replace(/\D/g, "");
-  const isPJ = cleanDoc.length === 14 || entityType === "J";
-  const currentProfile = isPJ ? "PJ" : "PF";
+  // 1. Determinação do Perfil Ativo (PF vs PJ)
+  const currentProfile = entityType === "J" ? "PJ" : "PF";
 
   // 2. Ordem de prioridade oficial da arquitetura sbX
-  const priorityTypes = ["PRODUCT", "EVENT", "SELLER", "CATEGORY"];
+  const priorities = [
+    { type: "EVENT", id: eventId },
+    { type: "SELLER", id: sellerId },
+    { type: "PRODUCT", id: productId },
+    { type: "CATEGORY", id: categoryId },
+  ];
 
-  // 3. Execução da Cascata de Prioridade
-  for (const configType of priorityTypes) {
-    debugLog(`[resolveOrchestratorConfigs] Tentando match para lookup_id: ${lookupId} com tipo: ${configType} para perfil: ${currentProfile}`);
-    
-    const { data, error } = await supabase
-      .from("orchestrator_configs")
-      .select("*")
-      .eq("lookup_id", Number(lookupId))
-      .eq("config_type", configType)
-      .eq("is_active", true)
-      .in("entity_type", [currentProfile, "PF+PJ"])
-      .maybeSingle();
+  // 3. Execução da Cascata de Prioridade Baseada em Contexto
+  for (const priority of priorities) {
+    if (priority.id && priority.id !== "undefined") {
+      debugLog(`[resolveOrchestratorConfigs] Tentando match para tipo: ${priority.type} com ID: ${priority.id} para perfil: ${currentProfile}`);
 
-    if (!error && data) {
-      debugLog(`[resolveOrchestratorConfigs] Match cravado via tipo: ${configType}`);
-      return data;
+      const { data, error } = await supabase
+        .from("orchestrator_configs")
+        .select("partner_id, rules, consent_configs, page_configs, page_faqs, is_integrated, integration_method, integration_details")
+        .eq("lookup_id", Number(priority.id))
+        .eq("config_type", priority.type)
+        .eq("is_active", true)
+        .or(`entity_type.is.null,entity_type.in.(${currentProfile},PF+PJ)`)
+        .maybeSingle();
+
+      if (error) continue;
+      if (data) {
+        debugLog(`[resolveOrchestratorConfigs] Match cravado via tipo: ${priority.type}`);
+        return data;
+      }
     }
-  }
-
-  // 4. Fallback de Segurança (Caso o perfil não restrinja estritamente)
-  const { data: fallbackData, error: fallbackError } = await supabase
-    .from("orchestrator_configs")
-    .select("*")
-    .eq("lookup_id", Number(lookupId))
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (!fallbackError && fallbackData) {
-    debugLog(`[resolveOrchestratorConfigs] Match obtido via fallback geral para ID: ${lookupId}`);
-    return fallbackData;
   }
 
   return null;
@@ -143,17 +140,19 @@ serve(withSecurity('orchestrator-configs', async (req: Request) => {
     }
 
     // =========================================================================
-    // 3. EXTRACÃO DE PARÂMETROS DA URL
+    // 3. EXTRACÃO DE PARÂMETROS DA URL (Contexto Multidimensional)
     // =========================================================================
     const url = new URL(req.url);
-    const lookupId = url.searchParams.get("lookup_id") || url.searchParams.get("product_id");
+    const eventId = url.searchParams.get("event_id");
+    const sellerId = url.searchParams.get("seller_id");
+    const categoryId = url.searchParams.get("category_id");
+    const productId = url.searchParams.get("product_id");
     const entityType = url.searchParams.get("entity_type");
-    const entityDocument = url.searchParams.get("entity_document");
 
-    if (!lookupId) {
+    if (!eventId && !sellerId && !categoryId && !productId) {
       return {
         status: 400,
-        data: { success: false, code: "MISSING_PARAMETER", message: "O parâmetro 'lookup_id' ou 'product_id' é obrigatório." }
+        data: { success: false, code: "MISSING_PARAMETER", message: "É obrigatório informar ao menos um parâmetro de contexto (event_id, seller_id, category_id ou product_id)." }
       };
     }
 
@@ -167,20 +166,18 @@ serve(withSecurity('orchestrator-configs', async (req: Request) => {
     );
 
     // =========================================================================
-    // 5. HIDRATAÇÃO DO PERFIL DO USUÁRIO (Se necessário)
+    // 5. HIDRATAÇÃO DO PERFIL DO USUÁRIO (Fallback via tabela entities)
     // =========================================================================
-    let resolvedDoc = entityDocument;
     let resolvedType = entityType;
 
-    if (!resolvedDoc && auth?.user_id) {
+    if (!resolvedType && auth?.user_id) {
       const { data: entityData } = await supabase
         .from("entities")
-        .select("document, entity_type")
+        .select("entity_type")
         .eq("id", auth.user_id)
         .maybeSingle();
 
       if (entityData) {
-        resolvedDoc = entityData.document;
         resolvedType = entityData.entity_type;
       }
     }
@@ -188,12 +185,19 @@ serve(withSecurity('orchestrator-configs', async (req: Request) => {
     // =========================================================================
     // 6. RESOLUÇÃO DE CONFIGURAÇÕES VIA MOTOR DE CASCATA
     // =========================================================================
-    const configData = await resolveOrchestratorConfigs(supabase, lookupId, resolvedDoc, resolvedType);
+    const configData = await resolveOrchestratorConfigs(
+      supabase,
+      eventId,
+      sellerId,
+      categoryId,
+      productId,
+      resolvedType
+    );
 
     if (!configData) {
       return {
         status: 404,
-        data: { success: false, code: "CONFIG_NOT_FOUND", message: `Nenhuma configuração ativa encontrada para o ID ${lookupId}.` }
+        data: { success: false, code: "CONFIG_NOT_FOUND", message: "Nenhuma configuração ativa encontrada para os parâmetros informados." }
       };
     }
 
