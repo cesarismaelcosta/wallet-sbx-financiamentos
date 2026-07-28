@@ -9,7 +9,8 @@
  * Ele consolida e exibe em tempo real as interações dos leads (visitas, 
  * consultas, contatos com parceiros e conversões em simulação) antes da 
  * efetivação do crédito. Inclui painel lateral (Drawer/Sheet) para auditoria
- * completa dos dados relacionais e objetos JSONB (entidade, oferta, gerente, etc.).
+ * completa dos dados relacionais, objetos JSONB e inspeção estruturada do 
+ * raw_payload (Offer Panel, LGPD, FAQs, Rodapé e JSON Bruto).
  * 
  * @architecture
  * - Data Fetching: Relacional direto via Supabase (PostgREST) com junção de tabelas.
@@ -29,14 +30,17 @@ import {
   Filter,
   Download,
   ChevronDown,
-  Building2,
   User,
   Calendar as CalendarIcon,
   CreditCard,
   MapPin,
   Smartphone,
   Briefcase,
-  Store,
+  FileJson,
+  Layers,
+  FileText,
+  HelpCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
@@ -47,9 +51,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Checkbox } from "@/components/ui/checkbox";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-// Camada de Persistência (BaaS)
+// Camada de Persistência (BaaS) e Dicionários Gráficos
 import { supabase } from "@/integrations/supabase/client";
+import { ICON_MAP } from "@/features/financial-hub/components/shared/icons-map";
 
 // ============================================================================
 // [REGISTRO DA ROTA TANSTACK ROUTER]
@@ -59,13 +67,237 @@ export const Route = createLazyFileRoute("/backoffice/consults")({
 });
 
 // ============================================================================
+// [SUB-COMPONENTES DE RENDERIZAÇÃO DO PAYLOAD DA VISITA]
+// ============================================================================
+
+/**
+ * @function FAQSection
+ * @description Renderiza blocos expansíveis (Accordion) organizados em duas colunas 
+ * baseados no array `page_faqs` recuperado do payload bruto.
+ */
+function FAQSection({ items }: { items?: any[] }) {
+  if (!items || items.length === 0) return null;
+  const sortedItems = [...items].sort((a, b) => (a.position || 0) - (b.position || 0));
+  const half = Math.ceil(sortedItems.length / 2);
+
+  return (
+    <section className="py-2 overflow-hidden bg-white">
+      <div className="max-w-full">
+        <div className="grid md:grid-cols-2 gap-x-4 gap-y-3">
+          <div className="space-y-3">
+            <Accordion type="single" collapsible className="w-full">
+              {sortedItems.slice(0, half).map((item, i) => (
+                <AccordionItem 
+                  key={i} 
+                  value={`item-col1-${i}`} 
+                  className="border border-border rounded-xl px-3 bg-white/60 shadow-sm transition-all mb-2"
+                >
+                  <AccordionTrigger className="text-left font-semibold text-xs text-foreground/90 py-2.5">
+                    {item.question}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground text-[11px] leading-relaxed pb-2">
+                    <div className="mb-2">{item.answer}</div>
+                    {item.bullets && item.bullets.length > 0 && (
+                      <div className="space-y-1 mt-1">
+                        {item.bullets.map((bullet: string, idx: number) => (
+                          <div key={idx} className="flex gap-1.5">
+                            <span>•</span>
+                            <span>{bullet}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+          <div className="space-y-3">
+            <Accordion type="single" collapsible className="w-full">
+              {sortedItems.slice(half).map((item, i) => (
+                <AccordionItem 
+                  key={i} 
+                  value={`item-col2-${i}`} 
+                  className="border border-border rounded-xl px-3 bg-white/60 shadow-sm transition-all mb-2"
+                >
+                  <AccordionTrigger className="text-left font-semibold text-xs text-foreground/90 py-2.5">
+                    {item.question}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground text-[11px] leading-relaxed pb-2">
+                    <div className="mb-2">{item.answer}</div>
+                    {item.bullets && item.bullets.length > 0 && (
+                      <div className="space-y-1 mt-1">
+                        {item.bullets.map((bullet: string, idx: number) => (
+                          <div key={idx} className="flex gap-1.5">
+                            <span>•</span>
+                            <span>{bullet}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * @function FooterRender
+ * @description Processa templates de string e substitui dinamicamente marcadores 
+ * de hiperlink baseados nos metadados de rodapé.
+ */
+function FooterRender({ config }: { config?: any }) {
+  if (!config?.template_text) return null;
+  const { template_text, links = [] } = config;
+
+  const renderText = () => {
+    const parts = template_text.split(/\{([^}]+)\}/g);
+    return parts.map((part: string, index: number) => {
+      const linkMatch = links.find((l: any) => l.text === part);
+      if (linkMatch) {
+        return (
+          <a
+            key={index}
+            href={linkMatch.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline font-medium text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            {part}
+          </a>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
+        <FileText size={14} /> Rodapé Legal (Footer)
+      </h4>
+      <footer className="py-3 px-3 text-center text-[10px] text-muted-foreground bg-slate-50 border rounded-xl">
+        <p className="leading-relaxed text-justify sm:text-center text-slate-400">
+          {renderText()}
+        </p>
+      </footer>
+    </div>
+  );
+}
+
+/**
+ * @function OfferPanelRender
+ * @description Constrói visualmente o painel de proposta de valor, 
+ * aplicando tipografias dinâmicas e ícones mapeados.
+ */
+function OfferPanelRender({ config }: { config: any }) {
+  const panel = config?.offer_panel || config;
+  if (!panel?.headline?.parts || !panel?.description?.parts) return null;
+  
+  const brandColor = config?.theme?.primary_color || "#B300FF";
+
+  const getTextStyle = (type: string) => {
+    switch (type) {
+      case "highlight": return "text-[#B300FF]";
+      case "bold": return "font-bold text-foreground";
+      default: return "text-foreground";
+    }
+  };
+
+  return (
+    <div className="space-y-3" style={{ '--brand-primary': brandColor } as React.CSSProperties}>
+      <div className="space-y-1.5">
+        <h2 className="text-base font-semibold leading-tight text-foreground sm:text-lg">
+          {panel.headline.parts.map((part: any, i: number) => (
+            <span key={i} className={getTextStyle(part.type)}>{part.text}</span>
+          ))}
+        </h2>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {panel.description.parts.map((part: any, i: number) => (
+            <span key={i} className={getTextStyle(part.type)}>{part.text}</span>
+          ))}
+        </p>
+      </div>
+
+      {panel.benefits && Array.isArray(panel.benefits) && (
+        <ul className="grid grid-cols-1 gap-2 pt-1">
+          {panel.benefits.map((b: any, i: number) => {
+            const IconComponent = ICON_MAP[b.icon] || ICON_MAP[b.icon?.toLowerCase()] || CheckCircle2;
+            return (
+              <li key={i} className="flex items-start gap-2 text-xs">
+                <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-[#B300FF]/10 text-[#B300FF]">
+                  <IconComponent className="h-3.5 w-3.5" />
+                </span>
+                <div>
+                  <p className="font-medium text-foreground text-xs">{b.title}</p>
+                  <p className="text-[10px] text-muted-foreground">{b.description}</p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {panel.partner?.name && (
+        <div className="rounded-xl border border-border bg-muted/40 p-2.5 text-[11px] text-muted-foreground">
+          {panel.partner.label}{" "}
+          <strong className="text-foreground">{panel.partner.name}</strong>.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * @function DynamicConsentsStatic
+ * @description Renderiza os termos de consentimento e LGPD capturados no payload.
+ */
+function DynamicConsentsStatic({ configs }: { configs: any[] }) {
+  if (!configs || configs.length === 0) return null;
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <div className="flex flex-col rounded-lg border border-border bg-muted/10 p-3 space-y-2.5">
+        {[...configs]
+          .sort((a, b) => (a.position || 0) - (b.position || 0))
+          .map((opt) => (
+            <div key={opt.id} className="flex gap-2 items-start py-0.5 text-xs">
+              <div className="flex items-center mt-0.5">
+                <Checkbox disabled checked={false} className="h-4 w-4 shrink-0 rounded-[4px] border-slate-400" />
+              </div>
+              <label className="text-[11px] text-muted-foreground leading-snug flex-1">
+                {opt.template_text ? (
+                  opt.template_text.split(/(\{.*?\})/g).map((part: string, i: number) => {
+                    if (part.startsWith("{") && part.endsWith("}")) {
+                      const cleanText = part.replace(/[{}]/g, "");
+                      return (
+                        <span key={i} className="underline font-bold inline mx-0.5 text-[#B300FF]">
+                          {cleanText}
+                        </span>
+                      );
+                    }
+                    return <span key={i}>{part}</span>;
+                  })
+                ) : null}
+              </label>
+            </div>
+          ))}
+      </div>
+    </TooltipProvider>
+  );
+}
+
+// ============================================================================
 // HELPERS E UTILITÁRIOS DE APRESENTAÇÃO
 // ============================================================================
 
 /**
  * Dicionário de estilos visuais Tailwind mapeados pelo status da jornada.
- * Utiliza backgrounds com baixa opacidade e textos em cores sólidas para 
- * gerar "Badges" elegantes e de alto contraste.
  */
 const STATUS_STYLES: Record<string, string> = {
   "simulacao": "bg-primary/10 text-primary",
@@ -74,30 +306,14 @@ const STATUS_STYLES: Record<string, string> = {
   "default": "bg-muted text-muted-foreground",
 };
 
-/**
- * @function statusClass
- * @description Normaliza a string de status (remove acentos, espaços e capitalização) 
- * para garantir o match exato com o dicionário de estilos. Retorna fallback seguro.
- * @param {string} status - O nome bruto do status.
- * @returns {string} - As classes utilitárias do Tailwind.
- */
 function statusClass(status: string) {
   const key = status.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   return STATUS_STYLES[key] ?? STATUS_STYLES.default;
 }
 
-/**
- * @function BRL
- * @description Formata valores numéricos brutos para a representação monetária brasileira (Real).
- */
 const BRL = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
 
-/**
- * @function formatDate
- * @description Converte timestamps ISO-8601 em um objeto destruturado contendo
- * a Data curta e a Hora para quebra visual de linhas na tabela.
- */
 function formatDate(iso: string | null) {
   if (!iso) return { d: "—", h: "" };
   const dt = new Date(iso);
@@ -110,34 +326,21 @@ function formatDate(iso: string | null) {
 // ============================================================================
 // COMPONENTE PRINCIPAL
 // ============================================================================
-/**
- * @component ConsultsPage
- * @description View principal que orquestra a listagem de visitas, 
- * aplicação de filtros combinados e renderização dos KPIs do funil.
- */
 function ConsultsPage() {
-  // --- ESTADOS CORE DA TABELA ---
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   
-  // --- ESTADOS DE FILTRAGEM (Simples e Múltipla) ---
   const [selectedStatus, setSelectedStatus] = useState<string>("Todos");
   const [dateRange, setDateRange] = useState<"30" | "90" | "all" | "custom">("30");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [selectedPartners, setSelectedPartners] = useState<string[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
-  // --- DICIONÁRIOS (Dropdowns) ---
   const [partnersList, setPartnersList] = useState<any[]>([]);
   const [productsList, setProductsList] = useState<any[]>([]);
 
-  // Estado para controle do Painel Lateral de Detalhes (Sheet / Drawer)
   const [activeConsult, setActiveConsult] = useState<any | null>(null);
 
-  /**
-   * INICIALIZAÇÃO: Busca listas de domínio (Parceiros e Produtos) 
-   * que alimentarão os seletores dinâmicos de filtro.
-   */
   useEffect(() => {
     async function loadDropdowns() {
       const { data: pData } = await supabase.from('partners').select('id, name').eq('is_active', true).order('name');
@@ -149,14 +352,8 @@ function ConsultsPage() {
     loadDropdowns();
   }, []);
 
-  /**
-   * @async
-   * @function load
-   * @description Pipeline de busca, consolidação e normalização da árvore de dados do Supabase.
-   */
   async function load() {
     try {
-      // 1. DATA FETCHING: Busca visitas com todos os relacionamentos embutidos.
       const { data: visitsData, error: visitError } = await supabase
         .from("visits")
         .select(`
@@ -179,10 +376,8 @@ function ConsultsPage() {
         return;
       }
 
-      // Prepara o array de IDs para busca da sub-entidade (Histórico)
       const visitIds = visitsData.map(v => v.id);
 
-      // 2. BUSCA SECUNDÁRIA: Histórico de updates para flag de contato com parceiro.
       const { data: updatesData, error: updateError } = await supabase
         .from("visit_updates")
         .select("visit_id, action, created_at")
@@ -190,15 +385,13 @@ function ConsultsPage() {
 
       if (updateError) console.error("Erro ao carregar visit_updates:", updateError.message);
 
-      // 3. ESTRUTURAÇÃO OTIMIZADA: Cria um Set para consultas O(1) de existência de Contato.
       const contactSet = new Set(
         updatesData
           ?.filter(u => (u.action || "").toUpperCase().includes("CONTACT"))
-          .map(u => u.visit_id)
-          .filter(Boolean) || []
+          ?.map(u => u.visit_id)
+          ?.filter(Boolean) || []
       );
 
-      // 4. NORMALIZAÇÃO: Achata os arrays do PostgREST e injeta as flags derivadas.
       const normalized = visitsData.map(v => ({
         ...v,
         has_contact: contactSet.has(v.id),
@@ -213,13 +406,8 @@ function ConsultsPage() {
     }
   }
 
-  // Aciona a carga principal ao montar a tela
   useEffect(() => { load(); }, []);
 
-  /**
-   * @function getVisitStatus
-   * @description Resolve o Label de visualização do funil lendo a coluna `action` da visita.
-   */
   function getVisitStatus(r: any): string {
     const act = (r.action ?? "").toUpperCase();
     if (act.includes("SIMULATE") || act.includes("SIMULATION")) return "SIMULAÇÃO";
@@ -230,9 +418,6 @@ function ConsultsPage() {
 
   const statusOptions = ["SIMULAÇÃO", "CONSULTA", "SITE PARCEIRO"];
 
-  /**
-   * MOTOR DE KPI: Totalizadores baseados na amostra carregada.
-   */
   const totals = useMemo(() => {
     const t = { total: rows.length, simulacao: 0, consulta: 0, siteParceiro: 0 };
     rows.forEach(r => {
@@ -244,9 +429,6 @@ function ConsultsPage() {
     return t;
   }, [rows]);
 
-  /**
-   * MOTOR DE FILTRAGEM MULTI-CRITÉRIO
-   */
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       const statusName = getVisitStatus(r);
@@ -460,7 +642,7 @@ function ConsultsPage() {
           
         </div>
 
-        {/* TABELA ORIGINAL INTACTA */}
+        {/* TABELA DE DADOS */}
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -567,7 +749,7 @@ function ConsultsPage() {
       </div>
 
       {/* ===================================================================== */}
-      {/* PAINEL LATERAL DE DETALHES (SHEET / DRAWER) COM DADOS COMPLETOS       */}
+      {/* PAINEL LATERAL DE DETALHES (SHEET / DRAWER) COM DADOS COMPLETOS        */}
       {/* ===================================================================== */}
       <Sheet open={!!activeConsult} onOpenChange={(open) => !open && setActiveConsult(null)}>
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -595,6 +777,15 @@ function ConsultsPage() {
             const fullAddress = [addr.street, addr.number, addr.complement, addr.neighborhood, addr.city, addr.state, addr.zip_code, addr.country]
               .filter(Boolean)
               .join(", ");
+
+            // Tratamento seguro do raw_payload para extração dos blocos visuais da rota
+            const rawPayloadObj = typeof sim.raw_payload === "string" 
+              ? (() => { try { return JSON.parse(sim.raw_payload); } catch { return {}; } })() 
+              : (sim.raw_payload || {});
+
+            const pageConfigs = rawPayloadObj.page_configs || {};
+            const consentConfigs = rawPayloadObj.consent_configs || [];
+            const pageFaqs = rawPayloadObj.page_faqs || [];
 
             return (
               <div className="space-y-6 pt-4">
@@ -648,7 +839,6 @@ function ConsultsPage() {
                     <CalendarIcon className="h-3.5 w-3.5 text-primary" /> Origem & Visita
                   </h4>
                   <div className="grid grid-cols-2 gap-3 text-xs">
-                    {/* PRIMEIRO BLOCO: VISITA */}
                     <div>
                       <span className="text-muted-foreground block">Data de Acesso:</span>
                       <strong className="text-slate-800">{created.d} às {created.h}</strong>
@@ -659,7 +849,6 @@ function ConsultsPage() {
                     </div>
                   </div>
 
-                  {/* SEGUNDO BLOCO: LOCALIZAÇÃO E DEVICE */}
                   <div className="pt-2 border-t grid grid-cols-1 gap-2 text-xs">
                     <div className="flex items-center gap-1.5 text-slate-700">
                       <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -671,7 +860,6 @@ function ConsultsPage() {
                     </div>
                   </div>
 
-                  {/* TERCEIRO BLOCO: ORIGEM E DESTINO (URLs) */}
                   <div className="pt-2 border-t space-y-2 text-xs">
                     <div className="overflow-hidden">
                       <span className="text-muted-foreground block">Origem (URL):</span>
@@ -740,7 +928,7 @@ function ConsultsPage() {
                   )}
                 </div>
 
-                {/* 4. OFERTA / LOTE (Com offer_details, event_details, etc.) */}
+                {/* 4. OFERTA / LOTE */}
                 {offer?.offer_description && (
                   <div className="rounded-xl border bg-card p-4 space-y-4">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -789,7 +977,7 @@ function ConsultsPage() {
                   </div>
                 )}
 
-                {/* 5. VENDEDOR E ORGANIZADOR (Caso preenchidos) */}
+                {/* 5. VENDEDOR E ORGANIZADOR */}
                 {(offer.manager_name || offer.legal_name || Object.keys(managerDetails).length > 0 || Object.keys(sellerDetails).length > 0) && (
                   <div className="rounded-xl border bg-slate-50 p-4 space-y-4">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -818,6 +1006,69 @@ function ConsultsPage() {
                     </div>
                   </div>
                 )}
+
+                {/* ========================================================= */}
+                {/* 6. BLOCOS EXTRAS EXTRAÍDOS DO raw_payload                 */}
+                {/* ========================================================= */}
+
+                {/* Offer Panel (Painel de Proposta da Rota) */}
+                {pageConfigs?.offer_panel && (
+                  <div className="bg-white p-4 rounded-xl border shadow-sm space-y-3">
+                    <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
+                      <Layers size={14} /> Offer Panel (Painel de Proposta)
+                    </h4>
+                    <OfferPanelRender config={pageConfigs} />
+                  </div>
+                )}
+
+                {/* Consentimentos LGPD */}
+                {Array.isArray(consentConfigs) && consentConfigs.length > 0 && (
+                  <div className="bg-white p-4 rounded-xl border shadow-sm space-y-3">
+                    <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
+                      <FileText size={14} /> Consentimentos da Rota (LGPD)
+                    </h4>
+                    <DynamicConsentsStatic configs={consentConfigs} />
+                  </div>
+                )}
+
+                {/* FAQ & Perguntas Frequentes */}
+                {pageFaqs && pageFaqs.length > 0 && (
+                  <div className="bg-white p-4 rounded-xl border shadow-sm space-y-3">
+                    <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
+                      <HelpCircle size={14} /> FAQ & Perguntas Frequentes
+                    </h4>
+                    <FAQSection items={pageFaqs} />
+                  </div>
+                )}
+
+                {/* Rodapé Legal (Footer) */}
+                {pageConfigs?.footer && (
+                  <div className="pt-2">
+                    <FooterRender config={pageConfigs.footer} />
+                  </div>
+                )}
+
+                {/* 7. PAYLOAD BRUTO / AUDITORIA TÉCNICA (JSON) */}
+                <div className="rounded-xl border bg-slate-900 text-slate-100 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                      <FileJson className="h-3.5 w-3.5 text-primary" /> Payload Bruto / Auditoria (JSON)
+                    </h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(sim.raw_payload || sim, null, 2));
+                      }}
+                    >
+                      Copiar JSON
+                    </Button>
+                  </div>
+                  <pre className="text-[10px] font-mono overflow-x-auto max-h-60 p-2.5 rounded bg-slate-950 text-emerald-400 border border-slate-800">
+                    {JSON.stringify(sim.raw_payload || sim, null, 2)}
+                  </pre>
+                </div>
 
               </div>
             );

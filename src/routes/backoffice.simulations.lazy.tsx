@@ -10,9 +10,11 @@
  * listagem em tempo real rigorosamente alinhada ao design system original.
  * 
  * [AJUSTES DESTA VERSÃO]:
- * - Valor da Entrada corrigido para exibir o montante em BRL junto à porcentagem (ex: R$ 15.500,00 (50%)).
- * - CET corrigido para ler diretamente a coluna `sim.cet_rate` (ou `simulation_details.cet_rate`).
- * - Normalização robusta de `financial_institutions` para garantir a exibição dos logotipos dos bancos.
+ * - Inclusão da inspeção profunda do `raw_payload` no painel lateral (Sheet/Drawer).
+ * - Renderização nativa dos blocos visuais de Proposta (Offer Panel), Consentimentos (LGPD), 
+ *   FAQs estruturados em duas colunas e Rodapé Legal extraídos da simulação.
+ * - Normalização robusta de dados relacionais e embutidos.
+ * ============================================================================
  */
 
 import { createLazyFileRoute } from "@tanstack/react-router";
@@ -30,7 +32,14 @@ import {
   CreditCard,
   MapPin,
   Smartphone,
-  Briefcase
+  Briefcase,
+  Layers,
+  FileText,
+  HelpCircle,
+  X,
+  CheckCircle2,
+  Code2,
+  SlidersHorizontal
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
@@ -41,9 +50,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Checkbox } from "@/components/ui/checkbox";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-// Conexão centralizada com o Client do Supabase
+// Conexão centralizada com o Client do Supabase e Dicionários Gráficos
 import { supabase } from "@/integrations/supabase/client";
+import { ICON_MAP } from "@/features/financial-hub/components/shared/icons-map";
 
 // ============================================================================
 // [REGISTRO DA ROTA TANSTACK ROUTER]
@@ -53,43 +66,255 @@ export const Route = createLazyFileRoute("/backoffice/simulations")({
 });
 
 // ============================================================================
-// [HELPERS E UTILITÁRIOS DE APRESENTAÇÃO]
+// [SUB-COMPONENTES DE RENDERIZAÇÃO DO PAYLOAD DA SIMULAÇÃO]
 // ============================================================================
 
 /**
- * Dicionário estático contendo as classes CSS utilitárias para estilização 
- * dinâmica dos badges de status tanto no grid principal quanto no painel lateral.
+ * @function FAQSection
+ * @description Renderiza blocos expansíveis (Accordion) organizados em duas colunas 
+ * baseados no array `page_faqs` recuperado do payload.
  */
+function FAQSection({ items }: { items?: any[] }) {
+  if (!items || items.length === 0) return null;
+  const sortedItems = [...items].sort((a, b) => (a.position || 0) - (b.position || 0));
+  const half = Math.ceil(sortedItems.length / 2);
+
+  return (
+    <section className="py-2 overflow-hidden bg-white">
+      <div className="max-w-full">
+        <div className="grid md:grid-cols-2 gap-x-4 gap-y-3">
+          <div className="space-y-3">
+            <Accordion type="single" collapsible className="w-full">
+              {sortedItems.slice(0, half).map((item, i) => (
+                <AccordionItem 
+                  key={i} 
+                  value={`item-col1-${i}`} 
+                  className="border border-border rounded-xl px-3 bg-white/60 shadow-sm transition-all mb-2"
+                >
+                  <AccordionTrigger className="text-left font-semibold text-xs text-foreground/90 py-2.5">
+                    {item.question}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground text-[11px] leading-relaxed pb-2">
+                    <div className="mb-2">{item.answer}</div>
+                    {item.bullets && item.bullets.length > 0 && (
+                      <div className="space-y-1 mt-1">
+                        {item.bullets.map((bullet: string, idx: number) => (
+                          <div key={idx} className="flex gap-1.5">
+                            <span>•</span>
+                            <span>{bullet}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+          <div className="space-y-3">
+            <Accordion type="single" collapsible className="w-full">
+              {sortedItems.slice(half).map((item, i) => (
+                <AccordionItem 
+                  key={i} 
+                  value={`item-col2-${i}`} 
+                  className="border border-border rounded-xl px-3 bg-white/60 shadow-sm transition-all mb-2"
+                >
+                  <AccordionTrigger className="text-left font-semibold text-xs text-foreground/90 py-2.5">
+                    {item.question}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground text-[11px] leading-relaxed pb-2">
+                    <div className="mb-2">{item.answer}</div>
+                    {item.bullets && item.bullets.length > 0 && (
+                      <div className="space-y-1 mt-1">
+                        {item.bullets.map((bullet: string, idx: number) => (
+                          <div key={idx} className="flex gap-1.5">
+                            <span>•</span>
+                            <span>{bullet}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * @function FooterRender
+ * @description Processa templates de string e substitui dinamicamente marcadores 
+ * de hiperlink baseados nos metadados de rodapé da simulação.
+ */
+function FooterRender({ config }: { config?: any }) {
+  if (!config?.template_text) return null;
+  const { template_text, links = [] } = config;
+
+  const renderText = () => {
+    const parts = template_text.split(/\{([^}]+)\}/g);
+    return parts.map((part: string, index: number) => {
+      const linkMatch = links.find((l: any) => l.text === part);
+      if (linkMatch) {
+        return (
+          <a
+            key={index}
+            href={linkMatch.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline font-medium text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            {part}
+          </a>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
+        <FileText size={14} /> Rodapé Legal (Footer)
+      </h4>
+      <footer className="py-3 px-3 text-center text-[10px] text-muted-foreground bg-slate-50 border rounded-xl">
+        <p className="leading-relaxed text-justify sm:text-center text-slate-400">
+          {renderText()}
+        </p>
+      </footer>
+    </div>
+  );
+}
+
+/**
+ * @function OfferPanelRender
+ * @description Constrói visualmente o painel de proposta de valor, 
+ * aplicando tipografias dinâmicas e ícones mapeados.
+ */
+function OfferPanelRender({ config }: { config: any }) {
+  const panel = config?.offer_panel || config;
+  if (!panel?.headline?.parts || !panel?.description?.parts) return null;
+  
+  const brandColor = config?.theme?.primary_color || "#B300FF";
+
+  const getTextStyle = (type: string) => {
+    switch (type) {
+      case "highlight": return "text-[#B300FF]";
+      case "bold": return "font-bold text-foreground";
+      default: return "text-foreground";
+    }
+  };
+
+  return (
+    <div className="space-y-3" style={{ '--brand-primary': brandColor } as React.CSSProperties}>
+      <div className="space-y-1.5">
+        <h2 className="text-base font-semibold leading-tight text-foreground sm:text-lg">
+          {panel.headline.parts.map((part: any, i: number) => (
+            <span key={i} className={getTextStyle(part.type)}>{part.text}</span>
+          ))}
+        </h2>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {panel.description.parts.map((part: any, i: number) => (
+            <span key={i} className={getTextStyle(part.type)}>{part.text}</span>
+          ))}
+        </p>
+      </div>
+
+      {panel.benefits && Array.isArray(panel.benefits) && (
+        <ul className="grid grid-cols-1 gap-2 pt-1">
+          {panel.benefits.map((b: any, i: number) => {
+            const IconComponent = ICON_MAP[b.icon] || ICON_MAP[b.icon?.toLowerCase()] || CheckCircle2;
+            return (
+              <li key={i} className="flex items-start gap-2 text-xs">
+                <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-[#B300FF]/10 text-[#B300FF]">
+                  <IconComponent className="h-3.5 w-3.5" />
+                </span>
+                <div>
+                  <p className="font-medium text-foreground text-xs">{b.title}</p>
+                  <p className="text-[10px] text-muted-foreground">{b.description}</p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {panel.partner?.name && (
+        <div className="rounded-xl border border-border bg-muted/40 p-2.5 text-[11px] text-muted-foreground">
+          {panel.partner.label}{" "}
+          <strong className="text-foreground">{panel.partner.name}</strong>.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * @function DynamicConsentsStatic
+ * @description Renderiza os termos de consentimento e LGPD capturados no payload.
+ */
+function DynamicConsentsStatic({ configs }: { configs: any[] }) {
+  if (!configs || configs.length === 0) return null;
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <div className="flex flex-col rounded-lg border border-border bg-muted/10 p-3 space-y-2.5">
+        {[...configs]
+          .sort((a, b) => (a.position || 0) - (b.position || 0))
+          .map((opt) => (
+            <div key={opt.id} className="flex gap-2 items-start py-0.5 text-xs">
+              <div className="flex items-center mt-0.5">
+                <Checkbox disabled checked={false} className="h-4 w-4 shrink-0 rounded-[4px] border-slate-400" />
+              </div>
+              <label className="text-[11px] text-muted-foreground leading-snug flex-1">
+                {opt.template_text ? (
+                  opt.template_text.split(/(\{.*?\})/g).map((part: string, i: number) => {
+                    if (part.startsWith("{") && part.endsWith("}")) {
+                      const cleanText = part.replace(/[{}]/g, "");
+                      return (
+                        <span key={i} className="underline font-bold inline mx-0.5 text-[#B300FF]">
+                          {cleanText}
+                        </span>
+                      );
+                    }
+                    return <span key={i}>{part}</span>;
+                  })
+                ) : null}
+              </label>
+            </div>
+          ))}
+      </div>
+    </TooltipProvider>
+  );
+}
+
+// ============================================================================
+// [HELPERS E UTILITÁRIOS DE APRESENTAÇÃO]
+// ============================================================================
+
 const STATUS_STYLES: Record<string, string> = {
   simulacao: "bg-primary/10 text-primary",
   "em análise": "bg-amber-500/10 text-amber-600",
   analise: "bg-amber-500/10 text-amber-600",
-  aprovada: "bg-success/15 text-success",
-  recusada: "bg-destructive/10 text-destructive",
+  aprovada: "bg-emerald-500/15 text-emerald-600",
+  recusada: "bg-rose-500/10 text-rose-600",
+  falha: "bg-rose-500/10 text-rose-600",
   "pendente docs": "bg-muted text-muted-foreground",
   default: "bg-muted text-muted-foreground",
 };
 
-/**
- * Normaliza strings de status textuais (removendo acentos e convertendo para minúsculas)
- * para corresponder de forma segura às chaves do dicionário de estilos.
- */
 function statusClass(status: string | null) {
   if (!status) return STATUS_STYLES.default;
   const key = status.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   return STATUS_STYLES[key] ?? STATUS_STYLES.default;
 }
 
-/**
- * Formata valores numéricos brutos para o padrão de Moeda Brasileira (BRL).
- */
 const BRL = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
 
-/**
- * Converte uma string de data em formato ISO em um objeto estruturado 
- * contendo data compacta (DD/MM/AAAA) e horário (HH:MM).
- */
 function formatDate(iso: string | null) {
   if (!iso) return { d: "—", h: "" };
   const dt = new Date(iso);
@@ -128,21 +353,16 @@ function PropostasPage() {
     loadDropdowns();
   }, []);
 
-  /**
-   * CARREGAMENTO DE DADOS: Consulta a tabela `simulations` cruzando com tabelas 
-   * relacionais válidas por FK e normalizando os retornos.
-   */
   async function load() {
     const [{ data: simData }, { data: statusData }] = await Promise.all([
       supabase.from("simulations").select(`
-        *, 
-        financial_institutions(name, logo_url),
-        product_types(name),
-        stage_types(name),
-        status_types(name),
-        partners(name, logo_url), 
-        simulation_updates (*),
-        simulation_offers (*)
+        *,
+        partners(id, name, logo_url),
+        product_types(id, name),
+        stage_types(id, name),
+        status_types(id, name),
+        financial_institutions(id, name, logo_url),
+        simulation_offers(*)
       `).order('created_at', { ascending: false }),
       supabase.from("status_types").select("name")
     ]);
@@ -380,7 +600,7 @@ function PropostasPage() {
           </Popover>
         </div>
 
-        {/* TABELA DE DADOS EXATAMENTE COMO NO ORIGINAL */}
+        {/* TABELA DE DADOS */}
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -404,7 +624,6 @@ function PropostasPage() {
               const offer = Array.isArray(r.simulation_offers) ? r.simulation_offers[0] : (r.simulation_offers || {});
               const endEvent = offer?.event_end_date ? new Date(offer.event_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
               
-              // Normalização segura do banco (suporta objeto ou array de embed do Supabase)
               const bank = Array.isArray(r.financial_institutions) 
                 ? r.financial_institutions[0] 
                 : r.financial_institutions;
@@ -543,6 +762,15 @@ function PropostasPage() {
             const updatesArray = Array.isArray(sim.simulation_updates) ? sim.simulation_updates : [];
             const firstUpdate = updatesArray.length > 0 ? updatesArray[0] : {};
 
+            // Tratamento seguro do raw_payload para extração dos blocos finais
+            const rawPayloadObj = typeof sim.raw_payload === "string" 
+              ? (() => { try { return JSON.parse(sim.raw_payload); } catch { return {}; } })() 
+              : (sim.raw_payload || {});
+
+            const pageConfigs = rawPayloadObj.page_configs || {};
+            const consentConfigs = rawPayloadObj.consent_configs || [];
+            const pageFaqs = rawPayloadObj.page_faqs || [];
+
             return (
               <div className="space-y-6 pt-4">
                 
@@ -569,7 +797,7 @@ function PropostasPage() {
                     <div>
                       <div className="flex items-center gap-3">
                         <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
-                          {sim.product_types?.name || "Fin. Carros"}
+                          {sim.product_types?.name || "Financiamento"}
                         </span>
                         
                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${statusClass(sim.status_types?.name)}`}>
@@ -764,7 +992,6 @@ function PropostasPage() {
                     <Building2 className="h-3.5 w-3.5 text-primary" /> Simulação
                   </h4>
 
-                  {/* INSTITUIÇÃO FINANCEIRA (Título em cima, logo e nome abaixo) */}
                   <div className="bg-white p-3 rounded-xl border space-y-2">
                     <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Instituição Financeira:</span>
                     <div className="flex items-center gap-3">
@@ -779,7 +1006,6 @@ function PropostasPage() {
                     </div>
                   </div>
 
-                  {/* BOX DE DESCRIÇÃO DO ERRO (result_partner_types) */}
                   {sim.result_partner_id && (
                     <div className="bg-white p-3 rounded-xl border space-y-1">
                       <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Status / Mensagem do Parceiro ({sim.result_partner_id}):</span>
@@ -819,6 +1045,47 @@ function PropostasPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* ========================================================= */}
+                {/* 7. BLOCOS EXTRAS EXTRAÍDOS DO raw_payload                  */}
+                {/* ========================================================= */}
+
+                {/* Offer Panel (Painel de Proposta da Rota) */}
+                {pageConfigs?.offer_panel && (
+                  <div className="bg-white p-4 rounded-xl border shadow-sm space-y-3">
+                    <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
+                      <Layers size={14} /> Offer Panel (Painel de Proposta)
+                    </h4>
+                    <OfferPanelRender config={pageConfigs} />
+                  </div>
+                )}
+
+                {/* Consentimentos LGPD */}
+                {consentConfigs && consentConfigs.length > 0 && (
+                  <div className="bg-white p-4 rounded-xl border shadow-sm space-y-3">
+                    <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
+                      <FileText size={14} /> Consentimentos da Rota (LGPD)
+                    </h4>
+                    <DynamicConsentsStatic configs={consentConfigs} />
+                  </div>
+                )}
+
+                {/* FAQ & Perguntas Frequentes */}
+                {pageFaqs && pageFaqs.length > 0 && (
+                  <div className="bg-white p-4 rounded-xl border shadow-sm space-y-3">
+                    <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
+                      <HelpCircle size={14} /> FAQ & Perguntas Frequentes
+                    </h4>
+                    <FAQSection items={pageFaqs} />
+                  </div>
+                )}
+
+                {/* Rodapé Legal (Footer) */}
+                {pageConfigs?.footer && (
+                  <div className="pt-2">
+                    <FooterRender config={pageConfigs.footer} />
+                  </div>
+                )}
 
               </div>
             );

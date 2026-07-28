@@ -1,9 +1,14 @@
 /**
  * ============================================================================
  * @fileoverview Sandbox de Simulação de Jornadas (Topo de Funil / sbX)
- * @description Painel de controle e testes integrado com a API de Ofertas, Sessão, 
- *              Painel Lateral de Consulta de Oferta e Painel Lateral de Rota (Orchestrator Configs).
- *              Atua como hub de debug e roteamento isolado do front-end principal.
+ * @module Sandbox/Index
+ * @route /sandbox
+ * 
+ * @description
+ * Painel de controle e testes integrado com a API de Ofertas, Sessão, 
+ * Painel Lateral de Consulta de Oferta e Painel Lateral de Rota (Orchestrator Configs).
+ * Atua como hub de debug, inspeção e roteamento isolado do front-end principal.
+ * 
  * @author César Ismael Pereira da Costa
  * ============================================================================
  */
@@ -31,7 +36,8 @@ import {
   X,
   FileText,
   HelpCircle,
-  Layers
+  Layers,
+  Info
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -321,12 +327,6 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
  * STEP 1 & 2: OAUTH2 & EXCHANGE (Motor de Autenticação Sandbox)
  * =========================================================================
  */
-
-/**
- * @function autenticarAccountsSBX
- * @description Ponto de entrada legado. Autentica contra o ecossistema 
- * Superbid original via grant_type password para capturar o access_token primário.
- */
 const autenticarAccountsSBX = async (username: string, password: string, environment: "staging" | "production") => {
   const sbxBaseUrl = ENV_URLS[environment];
   const details = new URLSearchParams();
@@ -350,11 +350,6 @@ const autenticarAccountsSBX = async (username: string, password: string, environ
   return { success: true, access_token: sbxData.access_token, userId: sbxData.userId };
 };
 
-/**
- * @function trocarTokenNaEdgeFunction
- * @description Recebe o token legado da SBX e solicita à Edge Function de Exchange 
- * (sbx-auth-exchange) a geração de um JWT nativo seguro da nossa stack (Supabase).
- */
 const trocarTokenNaEdgeFunction = async (sbxAccessToken: string, environment: "staging" | "production") => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -423,16 +418,18 @@ function SandboxPage() {
     return (getDefaultSbxEnvironment() as "staging" | "production") || "production";
   });
 
-  // [GEMINI PRO]: PROTEÇÃO SSR
-  // O uso estrito de `typeof window` previne o erro "sessionStorage is not defined" 
-  // durante a compilação/renderização servida (SSR) do TanStack/Vite, 
-  // garantindo que o storage só seja acessado no client-side.
-  const [accessTokenSbx, setAccessTokenSbx] = useState<string>(() => {
+  // Inicializa o estado sempre vazio para garantir que Server e Client renderizem idênticos na primeira passada
+  const [accessTokenSbx, setAccessTokenSbx] = useState<string>("");
+
+  // Hidrata o sessionStorage apenas após o componente montar no client-side
+  useEffect(() => {
     if (typeof window !== "undefined") {
-      return sessionStorage.getItem("access_token_sbx") || "";
+      const storedToken = sessionStorage.getItem("access_token_sbx");
+      if (storedToken) {
+        setAccessTokenSbx(storedToken);
+      }
     }
-    return "";
-  });
+  }, []);
 
   // Estados do Formulário de Login
   const [tipoPessoa, setTipoPessoa] = useState<"F" | "J">("F");
@@ -571,15 +568,6 @@ function SandboxPage() {
     }
   };
 
-  /**
-   * =========================================================================
-   * FETCH DE CONFIGURAÇÃO DE ROTA VIA GATEWAY
-   * =========================================================================
-   * @function handleOpenConsultarRota
-   * @description Aciona a utilitária callOrchestratorConfigs enviando os parâmetros 
-   * dinâmicos (event_id, seller_id, category_id e product_id), espelhando 
-   * rigorosamente a lógica de cascata do backend.
-   */
   const handleOpenConsultarRota = async (item: any) => {
     if (!item) return; 
     
@@ -681,14 +669,6 @@ function SandboxPage() {
     if (logout) logout({ purgeEnv: true } as any);
   };
 
-/**
-   * =========================================================================
-   * [GATEWAY DISPATCH]: Chamada Oficial ao financial-gateway-gate (Vitrine/Lotes)
-   * =========================================================================
-   * @function handleSimulateOffer
-   * @description Dispara o POST para a Edge Function de Borda. Abre a aba 
-   * apenas após o sucesso da resposta para evitar abas em branco (`about:blank`) órfãs.
-   */
   const handleSimulateOffer = async (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
     if (isDisabled) return;
     if (!accessTokenSbx) {
@@ -742,7 +722,6 @@ function SandboxPage() {
           return;
         }
         
-        // Abre a aba diretamente com a URL válida retornada pela Borda
         window.open(data.redirect_url, '_blank');
       } else {
         setError(data.message || "Falha na liberação do Gateway Financeiro.");
@@ -759,8 +738,8 @@ function SandboxPage() {
    * =========================================================================
    * [GATEWAY DISPATCH DIRETO]: Chamada Exclusiva para Produtos sem Lote (Equities & Seguros)
    * =========================================================================
-   * @description Produtos como Car Equity e Seguro Auto não exigem offer_id,
-   * enviando estritamente o product_id, token e UTMs para a Borda.
+   * @description Dispara o POST para a Borda e abre a aba apenas quando a URL
+   * de destino estiver validada, evitando abas em branco (about:blank) órfãs.
    */
   const handleDirectGateway = async (flowKey: string, productId: string) => {
     if (!accessTokenSbx) {
@@ -770,11 +749,10 @@ function SandboxPage() {
 
     setLoadingAction(flowKey);
     setError(null);
-    const newWindow = window.open('about:blank', '_blank');
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
     const controller = new AbortController();
-    const safetyTimeout = setTimeout(() => controller.abort(), 10000);
+    const safetyTimeout = setTimeout(() => controller.abort(), 15000);
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
@@ -796,14 +774,12 @@ function SandboxPage() {
 
       clearTimeout(safetyTimeout);
       if (!gatewayResponse.ok) {
-        if (newWindow) newWindow.close();
         const gwErrText = await gatewayResponse.text();
         throw new Error(`Gateway falhou (HTTP ${gatewayResponse.status}): ${gwErrText}`);
       }
 
       const data = await gatewayResponse.json();
       if (gatewayResponse.status === 401 || data.code === 'SESSION_EXPIRED') {
-        if (newWindow) newWindow.close();
         setError("Seu token de Sandbox expirou ou é inválido. Por favor, logue novamente.");
         handleSandboxLogout();
         return;
@@ -811,22 +787,17 @@ function SandboxPage() {
 
       if (data.success && data.redirect_url) {
         if (data.redirect_url.includes("signin") || data.redirect_url.includes("login")) {
-          if (newWindow) newWindow.close();
           setError(`🚨 O Gateway rejeitou o token silenciosamente e tentou forçar a ida para a tela de login.`);
           handleSandboxLogout();
           return;
         }
-        if (newWindow) {
-          newWindow.location.href = data.redirect_url;
-        } else {
-          window.location.href = data.redirect_url;
-        }
+        
+        // Abre a aba diretamente com a URL válida do gateway
+        window.open(data.redirect_url, '_blank');
       } else {
-        if (newWindow) newWindow.close();
         setError(data.message || "Falha na liberação do Gateway Financeiro.");
       }
     } catch (err: any) {
-      if (newWindow) newWindow.close();
       console.error("[GATEWAY_ERROR]:", err);
       setError(`Erro Técnico: ${err.message}`);
     } finally {
@@ -885,7 +856,7 @@ function SandboxPage() {
           </div>
 
           <div className="hidden md:flex items-center space-x-3">
-            <a href="/backoffice" className={ghostBtn}>Backoffice</a>
+            <a href="/backoffice" target="_blank" rel="noopener noreferrer" className={ghostBtn}>Backoffice</a>
             {activeToken ? (
               <button onClick={handleSandboxLogout} className={`flex items-center gap-2 ${ghostBtn}`}>
                 Sair <LogOut className="w-3 h-3" />
@@ -1024,9 +995,9 @@ function SandboxPage() {
               <Card className="rounded-2xl border-border bg-white shadow-sm">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-bold flex items-center gap-2 text-[#B300FF]">
-                    <Search className="h-4 w-4" /> Inspeção de Oferta (API)
+                    <Search className="h-4 w-4" /> Consulta de Oferta (/offer)
                   </CardTitle>
-                  <CardDescription className="text-xs">Dados da oferta carregados utilizando o ID ativo.</CardDescription>
+                  <CardDescription className="text-xs">Edge Function autenticada com token interno que chama /offer na sbX.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 text-xs">
                   <div className="flex gap-2">
@@ -1038,11 +1009,92 @@ function SandboxPage() {
                     <Button onClick={handleInspectOffer} disabled={loading} size="sm" className="rounded-xl bg-[#B300FF] text-white hover:bg-[#9f00e6]">
                       {loading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : "Buscar"}
                     </Button>
+                    <Button onClick={() => handleOpenConsultarOferta(customOfferId)} variant="outline" size="sm" className="rounded-xl text-[#B300FF] border-[#B300FF]/30 hover:bg-[#B300FF]/5">
+                      <Info className="h-3.5 w-3.5 mr-1" /> Detalhes
+                    </Button>
                   </div>
-                  {apiOfferData && (
-                    <div className="p-3 bg-muted/40 rounded-xl border space-y-1">
-                      <p className="font-bold">{apiOfferData.offer?.offer_description}</p>
-                      <p className="text-muted-foreground">Valor: R$ {apiOfferData.offer?.offer_value?.toLocaleString("pt-BR")}</p>
+                  
+                  {/* BOX CINZA COM FOTOS E DADOS RESUMIDOS DA OFERTA */}
+                  {apiOfferData ? (() => {
+                    const rawPhotos = apiOfferData?.offer?.photos || [];
+                    const sortedPhotos = [...rawPhotos].sort((a: any, b: any) => {
+                      if (a.highlight && !b.highlight) return -1;
+                      if (!a.highlight && b.highlight) return 1;
+                      return 0;
+                    }).map((p: any) => p.link);
+
+                    const currentCardIndex = cardFotoIndex["inspection"] || 0;
+                    const activePhotoUrl = sortedPhotos.length > 0 
+                      ? sortedPhotos[currentCardIndex % sortedPhotos.length] 
+                      : null;
+                    
+                    const hasPhotoError = imageErrors["inspection"] || !activePhotoUrl;
+
+                    const catName = apiOfferData?.offer?.category_name || apiOfferData?.offer?.category || "Categoria não informada";
+                    const formattedValue = apiOfferData?.offer?.offer_value 
+                      ? `R$ ${apiOfferData.offer.offer_value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` 
+                      : "Valor sob consulta";
+
+                    // Extração segura dos dados do evento
+                    const eventId = apiOfferData?.event?.event_id || "";
+                    const eventDesc = apiOfferData?.event?.event_description || apiOfferData?.offer?.event_description || "";
+
+                    return (
+                      <div className="bg-muted/40 rounded-xl border flex items-center gap-6 overflow-hidden">
+                        {/* Esquerda: Foto encostada na borda com arredondamento à esquerda */}
+                        <div className="relative h-24 w-32 bg-black shrink-0 overflow-hidden rounded-l-xl">
+                          {hasPhotoError ? (
+                            <div className="absolute inset-0 bg-[#B300FF] flex items-center justify-center text-white text-[10px] font-bold">
+                              Sem foto
+                            </div>
+                          ) : (
+                            <img 
+                              src={activePhotoUrl!} 
+                              alt="Lote" 
+                              className="h-full w-full object-cover"
+                              onError={() => setImageErrors(prev => ({ ...prev, ["inspection"]: true }))}
+                            />
+                          )}
+
+                          {!hasPhotoError && sortedPhotos.length > 1 && (
+                            <>
+                              <button 
+                                onClick={(e) => handlePrevPhoto("inspection", sortedPhotos.length, e)}
+                                className="absolute left-1 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-1 rounded-full cursor-pointer border-none flex items-center justify-center z-10"
+                              >
+                                <ChevronLeft size={12} />
+                              </button>
+                              <button 
+                                onClick={(e) => handleNextPhoto("inspection", sortedPhotos.length, e)}
+                                className="absolute right-1 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-1 rounded-full cursor-pointer border-none flex items-center justify-center z-10"
+                              >
+                                <ChevronRight size={12} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Direita: Textos informativos com espaçamento adequado */}
+                        <div className="py-2 pr-4 flex flex-col justify-center space-y-1 overflow-hidden flex-1">
+                          <p className="font-bold text-sm text-foreground truncate" title={apiOfferData.offer?.offer_description}>
+                            Lote #{customOfferId} - {apiOfferData.offer?.offer_description || "Oferta sem descrição"}
+                          </p>
+
+                          {eventId && (
+                            <p className="text-xs text-muted-foreground truncate font-normal">
+                              EVENTO #{eventId} {eventDesc ? `- ${eventDesc}` : ""}
+                            </p>
+                          )}
+
+                          <p className="text-xs text-muted-foreground truncate">
+                            {catName} • <strong className="text-foreground">{formattedValue}</strong>
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })() : (
+                    <div className="p-3 bg-muted/40 rounded-xl border text-muted-foreground text-center italic">
+                      Nenhuma oferta carregada. Insira um ID e clique em Buscar.
                     </div>
                   )}
                 </CardContent>
@@ -1051,18 +1103,48 @@ function SandboxPage() {
               <Card className="rounded-2xl border-border bg-white shadow-sm">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-bold flex items-center gap-2 text-[#B300FF]">
-                    <UserCheck className="h-4 w-4" /> Perfil Hidratado (BFF /me)
+                    <UserCheck className="h-4 w-4" /> Perfil Carregado da sbX (/me)
                   </CardTitle>
-                  <CardDescription className="text-xs">Sessão validada diretamente com o servidor.</CardDescription>
+                  <CardDescription className="text-xs">Edge Function autenticada com token interno que chama /me na sbX.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {userData ? (
-                    <div className="p-3 bg-muted/40 rounded-xl border space-y-1 text-xs">
-                      <p className="font-bold">{userData.name || "Usuário Identificado"}</p>
-                      <p className="text-muted-foreground font-mono">E-mail: {userData.email || "—"}</p>
+                    <div className="p-3 bg-muted/40 rounded-xl border space-y-2 text-xs">
+                      {/* Linha Principal: Nome e E-mail */}
+                      <div className="border-b pb-2">
+                        <p className="font-bold text-sm text-foreground">{userData.name || "Usuário Identificado"}</p>
+                        <p className="text-muted-foreground font-mono mt-0.5">{userData.email || "—"}</p>
+                      </div>
+
+                      {/* Grid de Detalhes mais compacto */}
+                      <div className="grid grid-cols-2 gap-y-1.5 gap-x-4 pt-0.5 font-mono text-[11px]">
+                        <div>
+                          <span className="text-muted-foreground uppercase text-[10px] block font-sans">Documento:</span>
+                          <span className="font-semibold text-slate-800">{userData.document || "—"}</span>
+                        </div>
+
+                        <div>
+                          <span className="text-muted-foreground uppercase text-[10px] block font-sans">Telefone:</span>
+                          <span className="font-semibold text-slate-800">{userData.phone || "—"}</span>
+                        </div>
+
+                        <div>
+                          <span className="text-muted-foreground uppercase text-[10px] block font-sans">Entity ID:</span>
+                          <span className="font-semibold text-slate-800">{userData.entity_id || "—"}</span>
+                        </div>
+
+                        <div>
+                          <span className="text-muted-foreground uppercase text-[10px] block font-sans">Tipo (Entity):</span>
+                          <span className="font-semibold text-purple-600 uppercase">
+                            {userData.entity_type === "J" ? "Pessoa Jurídica (PJ)" : userData.entity_type === "F" ? "Pessoa Física (PF)" : (userData.entity_type || "—")}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground italic">Carregando perfil...</p>
+                    <div className="p-3 bg-muted/40 rounded-xl border text-xs text-muted-foreground italic text-center">
+                      Carregando dados do perfil...
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -1074,25 +1156,29 @@ function SandboxPage() {
               {/* Card 1: sbxpay.index */}
               <Card className="rounded-2xl border-border hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold mb-2">💳</div>
-                  <CardTitle className="text-lg">sbxpay.index</CardTitle>
-                  <CardDescription className="text-xs">Acesso ao hub central de pagamentos.</CardDescription>
+                  <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
+                    <img src="/assets/home/conta.png" alt="Conta sbXPAY" className="h-full w-full object-contain" />
+                  </div>
+                  <CardTitle className="text-lg">Landing Wallet sbX</CardTitle>
+                  <CardDescription className="text-xs">Acesso ao hub de produtos e serviços financeiros.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <Button 
-                    onClick={() => navigate({ to: "/sbxpay" as any })}
+                    onClick={() => window.open('/sbxpay', '_blank')}
                     variant="outline"
-                    className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
+                    className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm cursor-pointer"
                   >
                     <ExternalLink className="h-4 w-4" /> Ir para sbxpay
                   </Button>
                 </CardContent>
-              </Card>
+              </Card> 
 
               {/* Card 2: Seguros de Veículos (Product ID: 9 - Sem Offer ID) */}
               <Card className="rounded-2xl border-border hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
-                  <div className="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold mb-2">🛡️</div>
+                  <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
+                    <img src="/assets/home/seguros.png" alt="Seguros de Veículos" className="h-full w-full object-contain" />
+                  </div>
                   <CardTitle className="text-lg">Seguros de Veículos</CardTitle>
                   <CardDescription className="text-xs">Disparo direto ao gateway (Product ID: 9)</CardDescription>
                 </CardHeader>
@@ -1120,7 +1206,9 @@ function SandboxPage() {
               {/* Card 3: Car Equity (Product ID: 7 - Sem Offer ID) */}
               <Card className="rounded-2xl border-border hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
-                  <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold mb-2">🚗</div>
+                  <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
+                    <img src="/assets/home/carhomeequity.png" alt="Car Equity" className="h-full w-full object-contain" />
+                  </div>
                   <CardTitle className="text-lg">Car Equity</CardTitle>
                   <CardDescription className="text-xs">Disparo direto ao gateway (Product ID: 7)</CardDescription>
                 </CardHeader>
@@ -1150,8 +1238,8 @@ function SandboxPage() {
             {/* SEÇÃO 4: VITRINE DE LOTES & OFERTAS */}
             <div className="space-y-4 pt-4 border-t">
               <div>
-                <h2 className="text-xl font-bold tracking-tight">Vitrine de Lotes & Ofertas (Dinâmica da API)</h2>
-                <p className="text-xs text-muted-foreground">Fotos e metadados reais obtidos diretamente do ecossistema de ofertas.</p>
+                <h2 className="text-xl font-bold tracking-tight">Parcelamentos e Financiamentos nas Ofertas</h2>
+                <p className="text-xs text-muted-foreground">Chamada da Edge Function de borda do gateway com access token da sbX por form.</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1454,12 +1542,12 @@ function SandboxPage() {
         {activeToken ? (
           <button onClick={handleSandboxLogout} className="flex flex-col items-center justify-center text-red-500 min-w-[70px] gap-1">
             <LogOut className="w-6 h-6" strokeWidth={1.5} />
-            <span className="text-[10px] font-medium">Sair</span>
+            <span className="text-[10px] medium">Sair</span>
           </button>
         ) : (
           <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex flex-col items-center justify-center text-slate-400 min-w-[70px] gap-1">
             <LogIn className="w-6 h-6" strokeWidth={1.5} />
-            <span className="text-[10px] font-medium">Entrar</span>
+            <span className="text-[10px] medium">Entrar</span>
           </button>
         )}
       </div>
