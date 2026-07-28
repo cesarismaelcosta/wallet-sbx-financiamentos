@@ -160,7 +160,6 @@ async function resolveDestination(
   sellerId?: string | number,
   categoryId?: number,
   productId?: number,
-  entityDocument?: string,
   entityType?: "F" | "J" | string, // 👈 Aceita "F", "J" ou qualquer string genérica / undefined
 ) {
   debugLog(`RESOLVE DESTINATION: Ação ${action}. category: ${categoryId} | product_id: ${productId}`);
@@ -175,9 +174,9 @@ async function resolveDestination(
   const currentProfile = entityType === "J" ? "PJ" : "PF";
 
   const priorities = [
-    { type: "PRODUCT", id: productId ? Number(productId) : undefined },
     { type: "EVENT", id: eventId ? Number(eventId) : undefined },
     { type: "SELLER", id: sellerId ? Number(sellerId) : undefined },
+    { type: "PRODUCT", id: productId ? Number(productId) : undefined },
     { type: "CATEGORY", id: categoryId ? Number(categoryId) : undefined },
   ];
 
@@ -226,16 +225,15 @@ async function resolveOrchestratorConfigs(
   sellerId?: any,
   categoryId?: any,
   productId?: any,
-  entityDocument?: string,
   entityType?: "F" | "J" | string, // 👈 Aceita "F", "J" ou qualquer string genérica / undefined
 ) {
   const cleanDoc = String(entityDocument || "").replace(/\D/g, "");
   const currentProfile = entityType === "J" ? "PJ" : "PF";
 
   const priorities = [
-    { type: "PRODUCT", id: productId },
     { type: "EVENT", id: eventId },
     { type: "SELLER", id: sellerId },
+    { type: "PRODUCT", id: productId },
     { type: "CATEGORY", id: categoryId },
   ];
 
@@ -455,7 +453,6 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           visitOfferData.seller_details?.seller_id, 
           visitOfferData.category_id, 
           visit.product_id, 
-          visitEntityData.document, 
           visitEntityData.entity_type,
         );
         
@@ -609,7 +606,6 @@ serve(withSecurity('orchestrator', async (req: Request) => {
             payload.seller?.seller_id,
             category_id,
             product_id,
-            payload.entity?.document, 
             payload.entity?.entity_type, 
           );
 

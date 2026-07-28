@@ -45,7 +45,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
-import { callOrchestratorConfigs } from "@/services/gateway";
+import { callOrchestratorConfigs } from "@/features/financial-hub/core/services/gateway";
+import { ICON_MAP } from "@/features/financial-hub/components/shared/icons-map";
 
 // =========================================================================
 // [HELPERS]: Validação e Formatação de Documentos (CPF / CNPJ)
@@ -165,11 +166,16 @@ function FooterRender({ config }: { config?: any }) {
   };
 
   return (
-    <footer className="py-4 px-3 text-center text-[10px] text-muted-foreground bg-slate-50 border-t rounded-xl">
-      <p className="leading-relaxed text-justify sm:text-center text-slate-400">
-        {renderText()}
-      </p>
-    </footer>
+    <div className="space-y-2">
+      <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
+        <FileText size={14} /> Rodapé Legal (Footer)
+      </h4>
+      <footer className="py-4 px-3 text-center text-[10px] text-muted-foreground bg-slate-50 border rounded-xl">
+        <p className="leading-relaxed text-justify sm:text-center text-slate-400">
+          {renderText()}
+        </p>
+      </footer>
+    </div>
   );
 }
 
@@ -203,17 +209,22 @@ function OfferPanelRender({ config }: { config: any }) {
 
       {offer_panel.benefits && Array.isArray(offer_panel.benefits) && (
         <ul className="grid grid-cols-1 gap-2">
-          {offer_panel.benefits.map((b: any, i: number) => (
-            <li key={i} className="flex items-start gap-2 text-xs">
-              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] font-bold text-[10px]">
-                ✓
-              </span>
-              <div>
-                <p className="font-medium text-foreground text-xs">{b.title}</p>
-                <p className="text-[10px] text-muted-foreground">{b.description}</p>
-              </div>
-            </li>
-          ))}
+          {offer_panel.benefits.map((b: any, i: number) => {
+            // Busca o ícone no ICON_MAP de forma dinâmica (protegido contra maiúsculas/minúsculas)
+            const IconComponent = ICON_MAP[b.icon] || ICON_MAP[b.icon?.toLowerCase()] || CheckCircle2;
+            
+            return (
+              <li key={i} className="flex items-start gap-2 text-xs">
+                <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]">
+                  <IconComponent className="h-3.5 w-3.5" />
+                </span>
+                <div>
+                  <p className="font-medium text-foreground text-xs">{b.title}</p>
+                  <p className="text-[10px] text-muted-foreground">{b.description}</p>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -894,7 +905,8 @@ function SandboxPage() {
                   <Button 
                     onClick={() => handleDispatch("sbxpay.index", { action: "REDIRECT", target_url: `/sbxpay?gateway=active` })}
                     disabled={loadingAction === "sbxpay.index"}
-                    className="w-full rounded-xl gap-2 mt-4 bg-[#B300FF] hover:bg-[#9f00e6] text-white"
+                    variant="outline"
+                    className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
                     <ExternalLink className="h-4 w-4" /> Simular Acesso sbxpay
                   </Button>
@@ -907,15 +919,24 @@ function SandboxPage() {
                   <CardTitle className="text-lg">Seguros de Veículos</CardTitle>
                   <CardDescription className="text-xs">Acesso via banner para produtos de seguros.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 space-y-2">
                   <Button 
                     onClick={() => handleDispatch("Seguros de Veículos", { action: "REDIRECT", product_id: 9, target_url: `/seguros/auto` })}
                     disabled={loadingAction === "Seguros de Veículos"}
                     variant="outline"
-                    className="w-full rounded-xl gap-2 mt-4 border-blue-200 text-blue-600 hover:bg-blue-50"
+                    className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
                     <ShieldCheck className="h-4 w-4" /> Acessar Seguros Auto
                   </Button>
+                  <div className="flex justify-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenConsultarRota("9", "Seguros de Veículos")}
+                      className="text-[11px] font-bold text-[#B300FF] hover:underline bg-transparent border-none cursor-pointer p-0"
+                    >
+                      consultar rota
+                    </button>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -925,15 +946,24 @@ function SandboxPage() {
                   <CardTitle className="text-lg">Car Equity</CardTitle>
                   <CardDescription className="text-xs">Acesso via banner para simulação de crédito com garantia.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 space-y-2">
                   <Button 
                     onClick={() => handleDispatch("Car Equity", { action: "SIMULATE", product_id: 12, target_url: `/car-equity/simulador` })}
                     disabled={loadingAction === "Car Equity"}
                     variant="outline"
-                    className="w-full rounded-xl gap-2 mt-4 border-amber-200 text-amber-600 hover:bg-amber-50"
+                    className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
                     <Play className="h-4 w-4" /> Simular Car Equity
                   </Button>
+                  <div className="flex justify-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenConsultarRota("12", "Car Equity")}
+                      className="text-[11px] font-bold text-[#B300FF] hover:underline bg-transparent border-none cursor-pointer p-0"
+                    >
+                      consultar rota
+                    </button>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1125,7 +1155,7 @@ function SandboxPage() {
             </div>
 
             <div className="p-4 border-t border-gray-200 bg-slate-50 flex justify-end flex-shrink-0">
-              <Button onClick={() => setIsDrawerOpen(false)} className="bg-slate-900 hover:bg-slate-800 text-white text-xs rounded-xl px-5">
+              <Button onClick={() => setIsDrawerOpen(false)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-xl px-5">
                 Fechar Painel
               </Button>
             </div>
@@ -1177,20 +1207,20 @@ function SandboxPage() {
                     </div>
                   )}
 
-                  {/* 2. Integration Details & Rules */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 2. Integration Details & Rules (Empilhados em coluna única com quebra de texto) */}
+                  <div className="flex flex-col gap-4">
                     {routeConfigData.integration_details && Object.keys(routeConfigData.integration_details).length > 0 && (
-                      <div className="bg-slate-50 p-3.5 rounded-xl border text-xs">
-                        <h4 className="font-bold text-slate-700 mb-1 uppercase text-[10px]">Integration Details</h4>
-                        <pre className="font-mono text-[9px] whitespace-pre-wrap text-slate-600">
+                      <div className="bg-slate-50 p-4 rounded-xl border text-xs overflow-hidden">
+                        <h4 className="font-bold text-slate-700 mb-2 uppercase text-[10px] tracking-wide">Integration Details</h4>
+                        <pre className="font-mono text-[9px] text-slate-600 whitespace-pre-wrap break-all overflow-x-auto">
                           {JSON.stringify(routeConfigData.integration_details, null, 2)}
                         </pre>
                       </div>
                     )}
                     {routeConfigData.rules && Object.keys(routeConfigData.rules).length > 0 && (
-                      <div className="bg-slate-50 p-3.5 rounded-xl border text-xs">
-                        <h4 className="font-bold text-slate-700 mb-1 uppercase text-[10px]">Rules / Installments</h4>
-                        <pre className="font-mono text-[9px] whitespace-pre-wrap text-slate-600">
+                      <div className="bg-slate-50 p-4 rounded-xl border text-xs overflow-hidden">
+                        <h4 className="font-bold text-slate-700 mb-2 uppercase text-[10px] tracking-wide">Rules / Installments</h4>
+                        <pre className="font-mono text-[9px] text-slate-600 whitespace-pre-wrap break-all overflow-x-auto">
                           {JSON.stringify(routeConfigData.rules, null, 2)}
                         </pre>
                       </div>
@@ -1232,12 +1262,11 @@ function SandboxPage() {
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-200 bg-slate-50 flex justify-end flex-shrink-0">
-              <Button onClick={() => setIsRouteDrawerOpen(false)} className="bg-slate-900 hover:bg-slate-800 text-white text-xs rounded-xl px-5">
+              <div className="p-4 border-t border-gray-200 bg-slate-50 flex justify-end flex-shrink-0">
+              <Button onClick={() => setIsDrawerOpen(false)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-xl px-5">
                 Fechar Painel
               </Button>
             </div>
-
           </div>
         </div>
       )}
