@@ -170,7 +170,6 @@ async function resolveDestination(
     throw new Error(`Ação '${action}' não deve passar pelo motor de resolução de destinos.`);
   }
 
-  const cleanDoc = String(entityDocument || "").replace(/\D/g, "");
   const currentProfile = entityType === "J" ? "PJ" : "PF";
 
   const priorities = [
@@ -227,7 +226,6 @@ async function resolveOrchestratorConfigs(
   productId?: any,
   entityType?: "F" | "J" | string, // 👈 Aceita "F", "J" ou qualquer string genérica / undefined
 ) {
-  const cleanDoc = String(entityDocument || "").replace(/\D/g, "");
   const currentProfile = entityType === "J" ? "PJ" : "PF";
 
   const priorities = [
