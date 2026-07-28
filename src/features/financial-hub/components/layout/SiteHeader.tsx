@@ -11,7 +11,6 @@
 
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 import { useProductConsult } from "@/features/financial-hub/core/contexts/FinancialHubContext"; // 🚀 Import do Cofre
 
 const links = [
@@ -42,27 +41,8 @@ export function SiteHeader() {
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
         
-        {/* Lado Esquerdo: Botão Voltar + Divisor + Logo */}
+        {/* Lado Esquerdo: Logo */}
         <div className="flex items-center gap-4">
-          <button 
-            onClick={() => {
-              // Tenta voltar na pilha do navegador primeiro
-              if (window.history.length > 1) {
-                window.history.back();
-              } else {
-                // Fallback para a home se não houver histórico
-                navigate({ to: "/" });
-              }
-            }}
-            className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-primary transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
-            aria-label="Voltar para a página anterior"
-          >
-            <ArrowLeft size={16} />
-            <span className="hidden sm:inline">Voltar</span>
-          </button>
-          
-          <div className="h-6 w-px bg-slate-200" />
-          
           <div className="hidden sm:block">
             <WalletLogo size="md" withTagline />
           </div>

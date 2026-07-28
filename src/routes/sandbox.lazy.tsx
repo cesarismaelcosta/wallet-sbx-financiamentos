@@ -8,7 +8,7 @@
  * ============================================================================
  */
 
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, ReactNode } from "react";
 import { 
   Play, 
@@ -382,6 +382,7 @@ export const Route = createLazyFileRoute("/sandbox")({
  * =========================================================================
  */
 function SandboxPage() {
+  const navigate = useNavigate();
   const { sessionToken, logout, setSession } = useFinancialAuth();
 
   // Estados Visuais e de UI
@@ -580,7 +581,6 @@ function SandboxPage() {
    * rigorosamente a lógica de cascata do backend.
    */
   const handleOpenConsultarRota = async (item: any) => {
-    // [GEMINI PRO]: Trava de segurança contra envio acidental nulo pelo onclick.
     if (!item) return; 
     
     if (!sessionToken) {
@@ -596,7 +596,6 @@ function SandboxPage() {
     try {
       const contextParams: Record<string, any> = {};
 
-      // Resolve o contexto multidimensional via Offer (Financiamentos e Cartões)
       if (item.offerId) {
         try {
           const offerPayload = await fetchOfferDetails(item.offerId);
@@ -608,14 +607,11 @@ function SandboxPage() {
         }
       }
 
-      // Adiciona o Produto explícito (Seguros, Equities e Cartão)
       if (item.product_id) {
         contextParams.product_id = item.product_id;
       }
 
-      // Disparo estrito para o Gateway respeitando o padrão arquitetural definido
       const data = await callOrchestratorConfigs(contextParams);
-      
       setRouteConfigData(data);
     } catch (err: any) {
       console.error("[ROUTE_CONFIG_ERROR]:", err);
@@ -685,8 +681,88 @@ function SandboxPage() {
     if (logout) logout({ purgeEnv: true } as any);
   };
 
+/**
+   * =========================================================================
+   * [GATEWAY DISPATCH]: Chamada Oficial ao financial-gateway-gate (Vitrine/Lotes)
+   * =========================================================================
+   * @function handleSimulateOffer
+   * @description Dispara o POST para a Edge Function de Borda. Abre a aba 
+   * apenas após o sucesso da resposta para evitar abas em branco (`about:blank`) órfãs.
+   */
   const handleSimulateOffer = async (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
     if (isDisabled) return;
+    if (!accessTokenSbx) {
+      alert("Token access_token_sbx não encontrado. Faça o login primeiro.");
+      return;
+    }
+
+    setLoadingAction(flowKey);
+    setError(null);
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+    const controller = new AbortController();
+    const safetyTimeout = setTimeout(() => controller.abort(), 10000);
+
+    const searchPayload: Record<string, string> = {
+      environment: ambienteAtivo,
+      auth_token: accessTokenSbx,
+      offer_id: String(offerId),
+      product_id: String(productId || ''),
+      return_uri: window.location.origin + window.location.pathname,
+      utm_source: "sandbox",
+      utm_medium: "referral",
+      utm_campaign: `flow_${flowKey.toLowerCase()}`,
+    };
+
+    try {
+      const gatewayResponse = await fetch(`${supabaseUrl}/functions/v1/financial-gateway-gate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(searchPayload),
+        signal: controller.signal
+      });
+
+      clearTimeout(safetyTimeout);
+      if (!gatewayResponse.ok) {
+        const gwErrText = await gatewayResponse.text();
+        throw new Error(`Gateway falhou (HTTP ${gatewayResponse.status}): ${gwErrText}`);
+      }
+
+      const data = await gatewayResponse.json();
+      if (gatewayResponse.status === 401 || data.code === 'SESSION_EXPIRED') {
+        setError("Seu token de Sandbox expirou ou é inválido. Por favor, logue novamente.");
+        handleSandboxLogout();
+        return;
+      }
+
+      if (data.success && data.redirect_url) {
+        if (data.redirect_url.includes("signin") || data.redirect_url.includes("login")) {
+          setError(`🚨 O Gateway rejeitou o token silenciosamente e tentou forçar a ida para a tela de login.`);
+          handleSandboxLogout();
+          return;
+        }
+        
+        // Abre a aba diretamente com a URL válida retornada pela Borda
+        window.open(data.redirect_url, '_blank');
+      } else {
+        setError(data.message || "Falha na liberação do Gateway Financeiro.");
+      }
+    } catch (err: any) {
+      console.error("[GATEWAY_ERROR]:", err);
+      setError(`Erro Técnico: ${err.message}`);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  /**
+   * =========================================================================
+   * [GATEWAY DISPATCH DIRETO]: Chamada Exclusiva para Produtos sem Lote (Equities & Seguros)
+   * =========================================================================
+   * @description Produtos como Car Equity e Seguro Auto não exigem offer_id,
+   * enviando estritamente o product_id, token e UTMs para a Borda.
+   */
+  const handleDirectGateway = async (flowKey: string, productId: string) => {
     if (!accessTokenSbx) {
       alert("Token access_token_sbx não encontrado. Faça o login primeiro.");
       return;
@@ -703,8 +779,7 @@ function SandboxPage() {
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
       auth_token: accessTokenSbx,
-      offer_id: String(offerId),
-      product_id: String(productId || ''),
+      product_id: String(productId),
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
       utm_medium: "referral",
@@ -758,27 +833,6 @@ function SandboxPage() {
       setLoadingAction(null);
     }
   };
-
-  async function handleDispatch(journeyName: string, actionPayload: any) {
-    if (!activeToken) {
-      alert("Faça o login primeiro!");
-      return;
-    }
-    setLoadingAction(journeyName);
-    try {
-      await fetch("/api/orchestrator", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${activeToken}` },
-        body: JSON.stringify(actionPayload),
-      }).catch(() => null);
-      alert(`Jornada '${journeyName}' disparada com sucesso!`);
-    } catch (err) {
-      console.error(err);
-      alert(`Erro ao disparar ${journeyName}`);
-    } finally {
-      setLoadingAction(null);
-    }
-  }
 
   const handleNextPhoto = (cardKey: string, totalPhotos: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1014,43 +1068,44 @@ function SandboxPage() {
               </Card>
             </div>
 
-            {/* GRID DE JORNADAS DE ACESSO VIA BANNER */}
+            {/* GRID DE JORNADAS DE ACESSO VIA GATEWAY (financial-gateway-gate) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* Card 1: sbxpay.index */}
               <Card className="rounded-2xl border-border hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
                   <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold mb-2">💳</div>
                   <CardTitle className="text-lg">sbxpay.index</CardTitle>
-                  <CardDescription className="text-xs">Acesso via banner com portão de gateway financeiro.</CardDescription>
+                  <CardDescription className="text-xs">Acesso ao hub central de pagamentos.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <Button 
-                    onClick={() => handleDispatch("sbxpay.index", { action: "REDIRECT", target_url: `/sbxpay?gateway=active` })}
-                    disabled={loadingAction === "sbxpay.index"}
+                    onClick={() => navigate({ to: "/sbxpay" as any })}
                     variant="outline"
                     className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
-                    <ExternalLink className="h-4 w-4" /> Simular Acesso sbxpay
+                    <ExternalLink className="h-4 w-4" /> Ir para sbxpay
                   </Button>
                 </CardContent>
               </Card>
 
+              {/* Card 2: Seguros de Veículos (Product ID: 9 - Sem Offer ID) */}
               <Card className="rounded-2xl border-border hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
                   <div className="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold mb-2">🛡️</div>
                   <CardTitle className="text-lg">Seguros de Veículos</CardTitle>
-                  <CardDescription className="text-xs">Acesso via banner para produtos de seguros.</CardDescription>
+                  <CardDescription className="text-xs">Disparo direto ao gateway (Product ID: 9)</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0 space-y-2">
                   <Button 
-                    onClick={() => handleDispatch("Seguros de Veículos", { action: "REDIRECT", product_id: 9, target_url: `/seguros/auto` })}
-                    disabled={loadingAction === "Seguros de Veículos"}
+                    onClick={() => handleDirectGateway("SeguroAuto", "9")}
+                    disabled={loadingAction === "SeguroAuto"}
                     variant="outline"
                     className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
-                    <ShieldCheck className="h-4 w-4" /> Acessar Seguros Auto
+                    <ShieldCheck className="h-4 w-4" /> {loadingAction === "SeguroAuto" ? "Processando..." : "Acessar Seguros Auto"}
                   </Button>
                   <div className="flex justify-center pt-1">
-                    {/* [GEMINI PRO]: Botão para consulta direta de rota usando ID e Título */}
                     <button
                       type="button"
                       onClick={() => handleOpenConsultarRota({ product_id: "9", title: "Seguros de Veículos" })}
@@ -1062,26 +1117,26 @@ function SandboxPage() {
                 </CardContent>
               </Card>
 
+              {/* Card 3: Car Equity (Product ID: 7 - Sem Offer ID) */}
               <Card className="rounded-2xl border-border hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
                   <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold mb-2">🚗</div>
                   <CardTitle className="text-lg">Car Equity</CardTitle>
-                  <CardDescription className="text-xs">Acesso via banner para simulação de crédito com garantia.</CardDescription>
+                  <CardDescription className="text-xs">Disparo direto ao gateway (Product ID: 7)</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0 space-y-2">
                   <Button 
-                    onClick={() => handleDispatch("Car Equity", { action: "SIMULATE", product_id: 12, target_url: `/car-equity/simulador` })}
-                    disabled={loadingAction === "Car Equity"}
+                    onClick={() => handleDirectGateway("AutoEquity", "7")}
+                    disabled={loadingAction === "AutoEquity"}
                     variant="outline"
                     className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
-                    <Play className="h-4 w-4" /> Simular Car Equity
+                    <Play className="h-4 w-4" /> {loadingAction === "AutoEquity" ? "Processando..." : "Simular Car Equity"}
                   </Button>
                   <div className="flex justify-center pt-1">
-                    {/* [GEMINI PRO]: Botão para consulta direta de rota usando ID e Título */}
                     <button
                       type="button"
-                      onClick={() => handleOpenConsultarRota({ product_id: "12", title: "Car Equity" })}
+                      onClick={() => handleOpenConsultarRota({ product_id: "7", title: "Car Equity" })}
                       className="text-[11px] font-bold text-[#B300FF] hover:underline bg-transparent border-none cursor-pointer p-0"
                     >
                       consultar rota
@@ -1089,6 +1144,7 @@ function SandboxPage() {
                   </div>
                 </CardContent>
               </Card>
+
             </div>
 
             {/* SEÇÃO 4: VITRINE DE LOTES & OFERTAS */}
@@ -1184,7 +1240,7 @@ function SandboxPage() {
                         </div>
                       </div>
 
-                      {/* AÇÕES DA PRATELEIRA: BOTÃO DE SIMULAR + LINKS CONSULTAR OFERTA E CONSULTAR ROTA */}
+                      {/* AÇÕES DA PRATELEIRA */}
                       <div className="p-4 pt-0 space-y-2">
                         <Button 
                           onClick={() => handleSimulateOffer(item.flowKey, item.offerId, item.product_id, item.disabled)}
@@ -1204,7 +1260,6 @@ function SandboxPage() {
                             consultar oferta
                           </button>
 
-                          {/* [GEMINI PRO]: Disparo direto passando o objeto inteiro item da prateleira */}
                           <button
                             type="button"
                             onClick={() => handleOpenConsultarRota(item)}
@@ -1287,12 +1342,10 @@ function SandboxPage() {
         </div>
       )}
 
-      {/* PAINEL LATERAL (DRAWER) DE CONSULTA DE ROTA (orchestrator_configs) */}
+      {/* PAINEL LATERAL (DRAWER) DE CONSULTA DE ROTA */}
       {isRouteDrawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-all">
           <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
-            
-            {/* Cabeçalho */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-slate-50 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#B300FF]" />
@@ -1303,7 +1356,6 @@ function SandboxPage() {
               </button>
             </div>
 
-            {/* Conteúdo do Drawer de Rota */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {routeDrawerLoading ? (
                 <div className="flex flex-col items-center justify-center py-24 space-y-3">
@@ -1312,8 +1364,6 @@ function SandboxPage() {
                 </div>
               ) : routeConfigData ? (
                 <div className="space-y-6">
-                  
-                  {/* Metadados da Tabela */}
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-1.5 font-mono">
                     <p><b>ID Config:</b> {routeConfigData.id} | <b>Lookup ID:</b> {routeConfigData.lookup_id}</p>
                     <p><b>Tipo:</b> {routeConfigData.config_type} ({routeConfigData.entity_type})</p>
@@ -1321,7 +1371,6 @@ function SandboxPage() {
                     <p><b>Método:</b> {routeConfigData.integration_method}</p>
                   </div>
 
-                  {/* 1. OfferPanel (Proposta de Valor / Header) */}
                   {routeConfigData.page_configs?.offer_panel && (
                     <div className="bg-white p-4 rounded-xl border shadow-sm">
                       <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-3 flex items-center gap-1.5">
@@ -1331,7 +1380,6 @@ function SandboxPage() {
                     </div>
                   )}
 
-                  {/* 2. Integration Details & Rules (Empilhados em coluna única com quebra de texto) */}
                   <div className="flex flex-col gap-4">
                     {routeConfigData.integration_details && Object.keys(routeConfigData.integration_details).length > 0 && (
                       <div className="bg-slate-50 p-4 rounded-xl border text-xs overflow-hidden">
@@ -1351,7 +1399,6 @@ function SandboxPage() {
                     )}
                   </div>
 
-                  {/* 3. Consentimentos Dinâmicos */}
                   {routeConfigData.consent_configs && routeConfigData.consent_configs.length > 0 && (
                     <div className="bg-white p-4 rounded-xl border shadow-sm">
                       <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-3 flex items-center gap-1.5">
@@ -1361,7 +1408,6 @@ function SandboxPage() {
                     </div>
                   )}
 
-                  {/* 4. FAQ Section (Dúvidas Frequentes da Tabela) */}
                   {routeConfigData.page_faqs && routeConfigData.page_faqs.length > 0 && (
                     <div className="bg-white p-4 rounded-xl border shadow-sm">
                       <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-1 flex items-center gap-1.5">
@@ -1371,13 +1417,11 @@ function SandboxPage() {
                     </div>
                   )}
 
-                  {/* 5. Footer Legal */}
                   {routeConfigData.page_configs?.footer && (
                     <div className="pt-2">
                       <FooterRender config={routeConfigData.page_configs.footer} />
                     </div>
                   )}
-
                 </div>
               ) : (
                 <div className="text-center py-12 text-slate-400 text-xs">
@@ -1386,7 +1430,7 @@ function SandboxPage() {
               )}
             </div>
 
-              <div className="p-4 border-t border-gray-200 bg-slate-50 flex justify-end flex-shrink-0">
+            <div className="p-4 border-t border-gray-200 bg-slate-50 flex justify-end flex-shrink-0">
               <Button onClick={() => setIsRouteDrawerOpen(false)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-xl px-5">
                 Fechar Painel
               </Button>
@@ -1419,7 +1463,6 @@ function SandboxPage() {
           </button>
         )}
       </div>
-
     </div>
   );
 }
