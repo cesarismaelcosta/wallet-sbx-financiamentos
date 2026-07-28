@@ -2,8 +2,9 @@
  * @fileoverview EDGE FUNCTION: Orchestrator Configs (Consulta Segura de Rotas)
  * @path supabase/functions/orchestrator-configs/index.ts
  * 
- * @description Copia a lógica exata de hierarquia e resolução de regras do orquestrador principal 
- *              para fornecer as configurações de rotas, regras, FAQs, offer_panel e consentimentos.
+ * @description Fornece acesso protegido e restrito às configurações de rotas, 
+ *              regras, FAQs, offer_panel e consentimentos, respeitando a hierarquia 
+ *              e os headers de segurança oficiais da sbX.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -63,6 +64,10 @@ async function resolveOrchestratorConfigs(
 }
 
 serve(withSecurity('orchestrator-configs', async (req: Request) => {
+  // Captura dos headers de rastreio e fallback exatamente como no orquestrador principal
+  const originPath = req.headers.get("x-original-url") || "/";
+  const authPath = req.headers.get("x-auth-fallback-url") || "/";
+
   try {
     if (req.method !== "GET") {
       return {
@@ -71,14 +76,36 @@ serve(withSecurity('orchestrator-configs', async (req: Request) => {
       };
     }
 
-    // Validação de Identidade (Segurança padrão da sbX)
+    // =========================================================================
+    // SEGURANÇA: Validação de Identidade idêntica ao Orquestrador
+    // =========================================================================
     let auth;
     try {
       auth = await validateRequest(req);
     } catch (err: any) {
-      return {
-        status: 401,
-        data: { success: false, code: "UNAUTHORIZED", message: err.message || "Não autorizado." }
+      let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
+      let errorCode = "UNAUTHORIZED";
+      let fallbackUrl = authPath;
+      let statusCode = 401;
+
+      if (err.message.includes("SESSION_EXPIRED")) {
+        userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+        errorCode = "SESSION_EXPIRED";
+      } else if (err.message.includes("FORBIDDEN")) {
+        userMessage = "Você não tem permissão para acessar este recurso.";
+        errorCode = "FORBIDDEN";
+        fallbackUrl = originPath;
+        statusCode = 403;
+      }
+
+      return { 
+        status: statusCode,
+        data: { 
+          success: false,
+          code: errorCode,
+          message: userMessage, 
+          fallback_url: fallbackUrl 
+        }
       };
     }
 
@@ -100,8 +127,25 @@ serve(withSecurity('orchestrator-configs', async (req: Request) => {
       { auth: { persistSession: false } }
     );
 
+    // Se o entityDocument não foi passado na query string, podemos opcionalmente buscar o perfil do usuário logado (auth.user_id) na base
+    let resolvedDoc = entityDocument;
+    let resolvedType = entityType;
+
+    if (!resolvedDoc && auth?.user_id) {
+      const { data: entityData } = await supabase
+        .from("entities")
+        .select("document, entity_type")
+        .eq("id", auth.user_id)
+        .maybeSingle();
+
+      if (entityData) {
+        resolvedDoc = entityData.document;
+        resolvedType = entityData.entity_type;
+      }
+    }
+
     // Executa a resolução baseada na mesma hierarquia do orquestrador
-    const configData = await resolveOrchestratorConfigs(supabase, lookupId, entityDocument, entityType);
+    const configData = await resolveOrchestratorConfigs(supabase, lookupId, resolvedDoc, resolvedType);
 
     if (!configData) {
       return {
@@ -138,7 +182,12 @@ serve(withSecurity('orchestrator-configs', async (req: Request) => {
     debugLog(`[orchestrator-configs Fatal Error]: ${err.message}`);
     return {
       status: 500,
-      data: { success: false, code: "INTERNAL_SERVER_ERROR", message: err.message || "Erro interno ao buscar configuração da rota." }
+      data: { 
+        success: false, 
+        code: "INTERNAL_SERVER_ERROR", 
+        message: err.message || "Erro interno ao buscar configuração da rota.",
+        fallback_url: originPath
+      }
     };
   }
 }));
