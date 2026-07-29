@@ -39,6 +39,7 @@ const SEGURANCA_NAV = [
 ];
 
 const CONFIG_NAV = [
+  { to: "/backoffice/alerts", label: "Alertas", icon: AlertTriangle },
   { to: "/backoffice/dominios", label: "Domínios", icon: Globe },
   { to: "/backoffice/routes", label: "Rotas", icon: Layers }, 
 ];

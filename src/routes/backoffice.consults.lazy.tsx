@@ -360,7 +360,8 @@ function ConsultsPage() {
           product_types(name),
           partners(name, logo_url),
           visit_entities(*),
-          visit_offers(*)
+          visit_offers(*),
+          visit_consents(*)
         `)
         .order('created_at', { ascending: false });
 
@@ -1006,8 +1007,85 @@ function ConsultsPage() {
                   </div>
                 )}
 
+                {/* ===================================================================== */}
+                {/* 6. AUDITORIA DE CONSENTIMENTOS (LGPD)                                 */}
+                {/* Bloco condicional alimentado pelo deep join de `visit_consents`.      */}
+                {/* Responsável por exibir a assinatura técnica e a snapshot legal.       */}
+                {/* ===================================================================== */}
+                {sim.visit_consents && sim.visit_consents.length > 0 && (
+                  <div className="rounded-xl border bg-slate-50 p-4 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                      <FileText className="h-3.5 w-3.5 text-primary" /> Auditoria de Aceite (LGPD)
+                    </h4>
+
+                    <div className="space-y-3">
+                      {sim.visit_consents
+                        .sort((a: any, b: any) => new Date(a.accepted_at).getTime() - new Date(b.accepted_at).getTime())
+                        .map((consent: any) => {
+                          const acceptedAt = formatDate(consent.accepted_at);
+                          const legalTextSnapshot = consent.page_snapshot?.legal_text || {};
+                          const origin = consent.origin_details || {};
+
+                          return (
+                            <div key={consent.id} className="bg-white p-3 rounded-xl border border-border shadow-sm space-y-3">
+                              
+                              {/* Cabeçalho do Card: Status e Data */}
+                              <div className="flex items-center justify-between border-b border-border pb-2">
+                                <div className="flex items-center gap-1.5">
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                                    {consent.consent_id || "Termo de Aceite"}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-muted-foreground font-medium">
+                                  {acceptedAt.d} às {acceptedAt.h}
+                                </span>
+                              </div>
+
+                              {/* Texto do Aceite (Snapshot Renderizado) */}
+                              <div className="text-[11px] text-muted-foreground leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-border/50">
+                                {legalTextSnapshot.template_text ? (
+                                  legalTextSnapshot.template_text.split(/(\{.*?\})/g).map((part: string, i: number) => {
+                                    if (part.startsWith("{") && part.endsWith("}")) {
+                                      const cleanText = part.replace(/[{}]/g, "");
+                                      return (
+                                        <span key={i} className="underline font-bold inline mx-0.5 text-[#B300FF]">
+                                          {cleanText}
+                                        </span>
+                                      );
+                                    }
+                                    return <span key={i}>{part}</span>;
+                                  })
+                                ) : (
+                                  "Registro de aceite verificado eletronicamente."
+                                )}
+                              </div>
+
+                              {/* Assinatura Técnica (Infraestrutura da Origem) */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                                  <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="truncate" title={`${origin.city} / ${origin.state} / ${origin.country}`}>
+                                    {origin.city || "N/A"} / {origin.state || "N/A"} / {origin.country || "N/A"}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                                  <Smartphone className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="truncate" title={`${origin.ip_address} - ${origin.operating_system} (${origin.device_type})`}>
+                                    {origin.ip_address || "N/A"} - {origin.operating_system || "N/A"} ({origin.device_type || "N/A"})
+                                  </span>
+                                </div>
+                              </div>
+
+                            </div>
+                          );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* ========================================================= */}
-                {/* 6. BLOCOS EXTRAS EXTRAÍDOS DO raw_payload                 */}
+                {/* 7. BLOCOS EXTRAS EXTRAÍDOS DO raw_payload                 */}
                 {/* ========================================================= */}
 
                 {/* Offer Panel (Painel de Proposta da Rota) */}
@@ -1024,7 +1102,7 @@ function ConsultsPage() {
                 {consentConfigs && consentConfigs.length > 0 && (
                   <div className="bg-white p-4 rounded-xl border shadow-sm space-y-3">
                     <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
-                      <FileText size={14} /> Consentimentos da Rota (LGPD)
+                      <FileText size={14} /> Consentimentos da Jornada (LGPD)
                     </h4>
                     <DynamicConsentsStatic configs={consentConfigs} />
                   </div>

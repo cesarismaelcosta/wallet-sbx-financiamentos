@@ -63,6 +63,7 @@ const BackofficeConfiguracoesLazyRouteImport = createFileRoute(
 const BackofficeAuditoriaLazyRouteImport = createFileRoute(
   '/backoffice/auditoria',
 )()
+const BackofficeAlertsLazyRouteImport = createFileRoute('/backoffice/alerts')()
 const AccountsSigninLazyRouteImport = createFileRoute('/accounts/signin')()
 
 const SegurosLazyRoute = SegurosLazyRouteImport.update({
@@ -234,6 +235,13 @@ const BackofficeAuditoriaLazyRoute = BackofficeAuditoriaLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/backoffice.auditoria.lazy').then((d) => d.Route),
 )
+const BackofficeAlertsLazyRoute = BackofficeAlertsLazyRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
+  getParentRoute: () => BackofficeLazyRoute,
+} as any).lazy(() =>
+  import('./routes/backoffice.alerts.lazy').then((d) => d.Route),
+)
 const AccountsSigninLazyRoute = AccountsSigninLazyRouteImport.update({
   id: '/accounts/signin',
   path: '/accounts/signin',
@@ -258,6 +266,7 @@ export interface FileRoutesByFullPath {
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
+  '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
   '/backoffice/consults': typeof BackofficeConsultsLazyRoute
@@ -286,6 +295,7 @@ export interface FileRoutesByTo {
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
+  '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
   '/backoffice/consults': typeof BackofficeConsultsLazyRoute
@@ -317,6 +327,7 @@ export interface FileRoutesById {
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
+  '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
   '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
   '/backoffice/consults': typeof BackofficeConsultsLazyRoute
@@ -349,6 +360,7 @@ export interface FileRouteTypes {
     | '/seguros'
     | '/api/loginhistory'
     | '/accounts/signin'
+    | '/backoffice/alerts'
     | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
     | '/backoffice/consults'
@@ -377,6 +389,7 @@ export interface FileRouteTypes {
     | '/seguros'
     | '/api/loginhistory'
     | '/accounts/signin'
+    | '/backoffice/alerts'
     | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
     | '/backoffice/consults'
@@ -407,6 +420,7 @@ export interface FileRouteTypes {
     | '/seguros'
     | '/api/loginhistory'
     | '/accounts/signin'
+    | '/backoffice/alerts'
     | '/backoffice/auditoria'
     | '/backoffice/configuracoes'
     | '/backoffice/consults'
@@ -625,6 +639,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackofficeAuditoriaLazyRouteImport
       parentRoute: typeof BackofficeLazyRoute
     }
+    '/backoffice/alerts': {
+      id: '/backoffice/alerts'
+      path: '/alerts'
+      fullPath: '/backoffice/alerts'
+      preLoaderRoute: typeof BackofficeAlertsLazyRouteImport
+      parentRoute: typeof BackofficeLazyRoute
+    }
     '/accounts/signin': {
       id: '/accounts/signin'
       path: '/accounts/signin'
@@ -643,6 +664,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface BackofficeLazyRouteChildren {
+  BackofficeAlertsLazyRoute: typeof BackofficeAlertsLazyRoute
   BackofficeAuditoriaLazyRoute: typeof BackofficeAuditoriaLazyRoute
   BackofficeConfiguracoesLazyRoute: typeof BackofficeConfiguracoesLazyRoute
   BackofficeConsultsLazyRoute: typeof BackofficeConsultsLazyRoute
@@ -655,6 +677,7 @@ interface BackofficeLazyRouteChildren {
 }
 
 const BackofficeLazyRouteChildren: BackofficeLazyRouteChildren = {
+  BackofficeAlertsLazyRoute: BackofficeAlertsLazyRoute,
   BackofficeAuditoriaLazyRoute: BackofficeAuditoriaLazyRoute,
   BackofficeConfiguracoesLazyRoute: BackofficeConfiguracoesLazyRoute,
   BackofficeConsultsLazyRoute: BackofficeConsultsLazyRoute,
