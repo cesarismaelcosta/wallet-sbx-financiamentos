@@ -1,6 +1,6 @@
 /**
  * @fileoverview Monitor de Destinatários de Alertas (Backoffice)
- * @route /backoffice/alertas
+ * @route /backoffice/alerts
  * 
  * ============================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
@@ -17,7 +17,7 @@
 
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Loader2, Plus, RefreshCw, AlertTriangle, BellOff, BellRing, Trash2 } from "lucide-react";
+import { Loader2, Plus, RefreshCw, BellOff, BellRing, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +31,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -47,21 +46,13 @@ export const Route = createLazyFileRoute("/backoffice/alerts")({
 // ============================================================================
 // [TIPAGENS]
 // ============================================================================
-type AlertCategory = "ALL" | "FATAL" | "GATEWAY";
-
 type AlertRecipientRow = {
   id: string;
   name: string;
   email: string;
-  alert_category: AlertCategory;
+  alert_category: string;
   is_active: boolean;
   created_at: string;
-};
-
-const CATEGORY_BADGE: Record<AlertCategory, { label: string, style: string }> = {
-  ALL: { label: "Todos os Erros", style: "bg-purple-500/10 text-purple-600" },
-  FATAL: { label: "Apenas Falhas Críticas", style: "bg-rose-500/10 text-rose-600" },
-  GATEWAY: { label: "Erros de Integração", style: "bg-amber-500/10 text-amber-600" },
 };
 
 // ============================================================================
@@ -69,6 +60,8 @@ const CATEGORY_BADGE: Record<AlertCategory, { label: string, style: string }> = 
 // ============================================================================
 function AlertsPage() {
   const { backofficeUser } = useAuth();
+  
+  // --- [STATE MANAGEMENT] ---
   const [recipients, setRecipients] = useState<AlertRecipientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -76,14 +69,15 @@ function AlertsPage() {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [registerData, setRegisterData] = useState({ 
     name: "", 
-    email: "", 
-    alert_category: "ALL" as AlertCategory 
+    email: "" 
   });
 
   const isAdmin = backofficeUser?.role === "admin";
 
   /**
-   * Extração primária dos destinatários
+   * @function load
+   * @description Extração primária dos destinatários diretamente da tabela
+   * `notification_alert_recipients`. Os dados são ordenados pelos mais recentes.
    */
   async function load() {
     setLoading(true);
@@ -102,7 +96,9 @@ function AlertsPage() {
   }
 
   /**
-   * Persiste um novo destinatário direto via Client (Blindado por RLS)
+   * @function handleRegister
+   * @description Persiste um novo destinatário forçando a regra padrão 'ALL'. 
+   * Executa higienização e validação de Regex no e-mail.
    */
   async function handleRegister() {
     if (!registerData.name || !registerData.email) {
@@ -123,7 +119,7 @@ function AlertsPage() {
         .insert([{
           name: registerData.name,
           email: registerData.email.toLowerCase().trim(),
-          alert_category: registerData.alert_category,
+          alert_category: "ALL", // Força 'ALL' conforme regra acordada
           is_active: true
         }]);
 
@@ -131,7 +127,7 @@ function AlertsPage() {
 
       toast.success("Destinatário cadastrado com sucesso!");
       setRegisterOpen(false);
-      setRegisterData({ name: "", email: "", alert_category: "ALL" });
+      setRegisterData({ name: "", email: "" });
       load();
     } catch (e: any) {
       if (e.code === '23505') {
@@ -145,7 +141,9 @@ function AlertsPage() {
   }
 
   /**
-   * Altera o status ativo/inativo
+   * @function toggleActive
+   * @description Altera o status (is_active) de um destinatário, interrompendo
+   * ou retomando o recebimento de e-mails de alerta.
    */
   async function toggleActive(r: AlertRecipientRow) {
     try {
@@ -164,24 +162,8 @@ function AlertsPage() {
   }
 
   /**
-   * Atualiza a categoria do alerta
-   */
-  async function changeCategory(r: AlertRecipientRow, newCategory: AlertCategory) {
-    try {
-      const { error } = await supabase
-        .from("notification_alert_recipients")
-        .update({ alert_category: newCategory })
-        .eq("id", r.id);
-
-      if (error) throw error;
-      load();
-    } catch (e: any) {
-      toast.error(e.message || "Erro ao alterar categoria.");
-    }
-  }
-
-  /**
-   * Remove permanentemente (Hard Delete)
+   * @function handleDelete
+   * @description Remove permanentemente (Hard Delete) o usuário da base de notificações.
    */
   async function handleDelete(id: string) {
     if (!confirm("Tem certeza que deseja excluir este destinatário?")) return;
@@ -201,6 +183,7 @@ function AlertsPage() {
     }
   }
 
+  // --- [LIFECYCLE] ---
   useEffect(() => {
     load();
   }, []);
@@ -248,23 +231,6 @@ function AlertsPage() {
                       onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
                     />
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Categoria de Alerta</Label>
-                    <Select
-                      value={registerData.alert_category}
-                      onValueChange={(v: AlertCategory) => setRegisterData({ ...registerData, alert_category: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">Todos os Erros (Recomendado)</SelectItem>
-                        <SelectItem value="FATAL">Apenas Falhas Críticas (500)</SelectItem>
-                        <SelectItem value="GATEWAY">Erros de Integração (Parceiros)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
 
                 <DialogFooter>
@@ -291,7 +257,7 @@ function AlertsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <th className="px-4 py-3 w-[250px]">Destinatário</th>
+              <th className="px-4 py-3 w-[300px]">Destinatário</th>
               <th className="px-4 py-3 w-[200px]">Categoria</th>
               <th className="px-4 py-3 w-[150px]">Status</th>
               <th className="px-4 py-3 text-right">Ações</th>
@@ -307,8 +273,6 @@ function AlertsPage() {
             )}
             
             {recipients.map((r) => {
-              const badge = CATEGORY_BADGE[r.alert_category] || CATEGORY_BADGE["ALL"];
-              
               return (
                 <tr key={r.id} className="border-b border-border/60 hover:bg-accent/40">
                   <td className="px-4 py-3">
@@ -317,16 +281,9 @@ function AlertsPage() {
                   </td>
                   
                   <td className="px-4 py-3">
-                    <Select value={r.alert_category} onValueChange={(v: AlertCategory) => changeCategory(r, v)} disabled={!isAdmin}>
-                      <SelectTrigger className={`h-7 w-[160px] text-[11px] border-none font-semibold ${badge.style}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">Todos os Erros</SelectItem>
-                        <SelectItem value="FATAL">Falhas Críticas</SelectItem>
-                        <SelectItem value="GATEWAY">Integração (Parceiros)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <span className="inline-flex items-center rounded-md bg-purple-500/10 px-2 py-1 text-[11px] font-semibold text-purple-600">
+                      Todos os Erros
+                    </span>
                   </td>
                   
                   <td className="px-4 py-3">

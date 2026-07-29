@@ -1,13 +1,25 @@
 /**
- * ============================================================================
  * @fileoverview Sandbox de Simulação de Jornadas (Topo de Funil / sbX)
  * @module Sandbox/Index
  * @route /sandbox
  * 
- * @description
- * Painel de controle e testes integrado com a API de Ofertas, Sessão, 
- * Painel Lateral de Consulta de Oferta e Painel Lateral de Rota (Orchestrator Configs).
- * Atua como hub de debug, inspeção e roteamento isolado do front-end principal.
+ * ============================================================================
+ * [ARQUITETURA, CLEAN ARCHITECTURE & DESIGN SYSTEM]
+ * ============================================================================
+ * Painel de controle, debug e testes integrado com a API de Ofertas, Sessão 
+ * corporativa, Painel Lateral de Consulta de Oferta e Painel Lateral de Rota 
+ * (Orchestrator Configs). Atua como o hub centralizado de inspeção de estado, 
+ * simulação de fluxos de topo de funil e roteamento isolado do ecossistema.
+ * 
+ * [RESPONSABILIDADES DO MÓDULO]:
+ * 1. Autenticação Dual: Realiza OAuth2 direto na API Superbid (sbX) e executa 
+ *    o protocolo de troca (Exchange) para gerar o token interno seguro no Supabase.
+ * 2. Hidratação de Prateleira: Coleta dados dinâmicos de lotes, ofertas, veículos 
+ *    e imóveis para validação visual em tempo real.
+ * 3. Gateway Dispatch: Executa disparos controlados para a Edge Function de 
+ *    borda (`financial-gateway-gate`), garantindo tratamento estrito de sessões.
+ * 4. Inspetores de Rota & Oferta: Abre drawers laterais para auditoria profunda 
+ *    de payloads JSON, FAQs, regras de negócio e termos LGPD.
  * 
  * @author César Ismael Pereira da Costa
  * ============================================================================
@@ -68,7 +80,7 @@ const isCNPJ = (str: string) => /^\d{14}$/.test(str.replace(/\D/g, ''));
 const formatCPF = (val: string) => val.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})/, '$1-$2').slice(0, 14);
 const formatCNPJ = (val: string) => val.replace(/\D/g, '').replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d{1,2})/, '$1-$2').slice(0, 18);
 
-// Mapeamento centralizado de URLs base da API da Superbid por ambiente
+// Mapeamento centralizado de URLs base da API da Superbid por ambiente de execução
 const ENV_URLS = {
   production: "https://api.s4bdigital.net",
   staging: "https://stgapi.s4bdigital.net"
@@ -82,8 +94,12 @@ const ENV_URLS = {
 
 /**
  * @function FAQSection
- * @description Renderiza blocos expansíveis (Accordion) baseados no array `page_faqs`
- * retornado pela edge function orchestrator_configs. Divide em duas colunas.
+ * @description Renderiza blocos expansíveis (Accordion) organizados em duas colunas 
+ * baseados no array `page_faqs` recuperado dinamicamente das configurações da rota.
+ * 
+ * @param {Object} props - Propriedades do componente.
+ * @param {Array<any>} props.items - Coleção de perguntas e respostas estruturadas.
+ * @returns {JSX.Element|null} Bloco visual de FAQs ou null se vazio.
  */
 function FAQSection({ items }: { items?: any[] }) {
   if (!items || items.length === 0) return null;
@@ -162,7 +178,11 @@ function FAQSection({ items }: { items?: any[] }) {
 /**
  * @function FooterRender
  * @description Processa templates de string e substitui dinamicamente 
- * marcadores de hiperlink {texto} baseados no array de links da API.
+ * marcadores de hiperlink `{texto}` baseados no array de links da API.
+ * 
+ * @param {Object} props - Propriedades do componente.
+ * @param {Object} props.config - Objeto contendo o template de texto e os links associados.
+ * @returns {JSX.Element|null} Rodapé legal renderizado com links formatados.
  */
 function FooterRender({ config }: { config?: any }) {
   if (!config?.template_text) return null;
@@ -207,6 +227,10 @@ function FooterRender({ config }: { config?: any }) {
  * @function OfferPanelRender
  * @description Componente crítico que desenha a proposta de valor principal da rota.
  * Mapeia ícones dinamicamente utilizando a estrutura ICON_MAP do Core sbX.
+ * 
+ * @param {Object} props - Propriedades do componente.
+ * @param {Object} props.config - Configurações visuais contendo headline, descrição, benefícios e tema.
+ * @returns {JSX.Element|null} Painel de proposta estilizado ou null.
  */
 function OfferPanelRender({ config }: { config: any }) {
   if (!config?.offer_panel?.headline?.parts || !config?.offer_panel?.description?.parts) return null;
@@ -266,6 +290,15 @@ function OfferPanelRender({ config }: { config: any }) {
   );
 }
 
+/**
+ * @function DynamicConsentsStatic
+ * @description Renderiza os termos de consentimento e LGPD capturados no payload,
+ * processando chaves marcadas com chaves `{}` e aplicando links web ou tooltips.
+ * 
+ * @param {Object} props - Propriedades do componente.
+ * @param {Array<any>} props.configs - Array de configurações de consentimento.
+ * @returns {JSX.Element|null} Bloco estático de consentimentos LGPD.
+ */
 function DynamicConsentsStatic({ configs }: { configs: any[] }) {
   if (!configs || configs.length === 0) return null;
 
@@ -327,6 +360,17 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
  * STEP 1 & 2: OAUTH2 & EXCHANGE (Motor de Autenticação Sandbox)
  * =========================================================================
  */
+
+/**
+ * @function autenticarAccountsSBX
+ * @description Executa a requisição direta de autenticação OAuth2 na API externa da Superbid (sbX),
+ * validando credenciais de usuário (PF/PJ) e resgatando o token de acesso bruto.
+ * 
+ * @param {string} username - Identificador de login (e-mail, CPF ou CNPJ).
+ * @param {string} password - Senha de acesso do usuário.
+ * @param {"staging"|"production"} environment - Ambiente de infraestrutura de destino.
+ * @returns {Promise<{success: boolean, access_token: string, userId: string}>} Objeto com dados de acesso.
+ */
 const autenticarAccountsSBX = async (username: string, password: string, environment: "staging" | "production") => {
   const sbxBaseUrl = ENV_URLS[environment];
   const details = new URLSearchParams();
@@ -350,6 +394,15 @@ const autenticarAccountsSBX = async (username: string, password: string, environ
   return { success: true, access_token: sbxData.access_token, userId: sbxData.userId };
 };
 
+/**
+ * @function trocarTokenNaEdgeFunction
+ * @description Envia o token bruto da sbX para a Edge Function interna (`sbx-auth-exchange`),
+ * convertendo-o em uma sessão segura gerenciada pelo Supabase.
+ * 
+ * @param {string} sbxAccessToken - Token de acesso bruto obtido na sbX.
+ * @param {"staging"|"production"} environment - Ambiente ativo.
+ * @returns {Promise<any>} Dados de resposta contendo o `session_token`.
+ */
 const trocarTokenNaEdgeFunction = async (sbxAccessToken: string, environment: "staging" | "production") => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -367,6 +420,9 @@ const trocarTokenNaEdgeFunction = async (sbxAccessToken: string, environment: "s
   return data;
 };
 
+// ============================================================================
+// [REGISTRO DA ROTA TANSTACK ROUTER]
+// ============================================================================
 export const Route = createLazyFileRoute("/sandbox")({
   component: SandboxPage,
 });
@@ -375,12 +431,14 @@ export const Route = createLazyFileRoute("/sandbox")({
  * =========================================================================
  * COMPONENTE PRINCIPAL: SandboxPage
  * =========================================================================
+ * @description Controla a interface interativa do Sandbox, gerenciando formulários
+ * de login, prateleira de ofertas, inspetores de rotas e abertura de drawers.
  */
 function SandboxPage() {
   const navigate = useNavigate();
   const { sessionToken, logout, setSession } = useFinancialAuth();
 
-  // Estados Visuais e de UI
+  // --- [STATE MANAGEMENT] ---
   const [isScrolled, setIsScrolled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -407,7 +465,7 @@ function SandboxPage() {
   const [routeDrawerLoading, setRouteDrawerLoading] = useState(false);
   const [routeDrawerTitle, setRouteDrawerTitle] = useState("");
 
-  // Handler de Scroll
+  // Handler de Scroll para efeito Glassmorphism no Header
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
@@ -418,10 +476,10 @@ function SandboxPage() {
     return (getDefaultSbxEnvironment() as "staging" | "production") || "production";
   });
 
-  // Inicializa o estado sempre vazio para garantir que Server e Client renderizem idênticos na primeira passada
+  // Inicializa o estado vazio para garantir paridade exata na primeira renderização SSR/Client
   const [accessTokenSbx, setAccessTokenSbx] = useState<string>("");
 
-  // Hidrata o sessionStorage apenas após o componente montar no client-side
+  // Hidratação segura do token guardado no sessionStorage após o mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedToken = sessionStorage.getItem("access_token_sbx");
@@ -431,7 +489,7 @@ function SandboxPage() {
     }
   }, []);
 
-  // Estados do Formulário de Login
+  // Estados do Formulário de Autenticação no Sandbox
   const [tipoPessoa, setTipoPessoa] = useState<"F" | "J">("F");
   const [loginCred, setLoginCred] = useState("");
   const [passwordCred, setPasswordCred] = useState("");
@@ -442,7 +500,7 @@ function SandboxPage() {
   const [generalError, setGeneralError] = useState("");
 
   // =========================================================================
-  // ARQUITETURA DE VITRINE: Definição Estática
+  // ARQUITETURA DE VITRINE: Definição Estática das Ofertas de Topo
   // =========================================================================
   const FLOW_OFFERS = [
     { 
@@ -484,10 +542,11 @@ function SandboxPage() {
     },
   ];
 
+  // Definição clara do token ativo na sessão do Sandbox
   const activeToken = sessionToken || accessTokenSbx;
 
   // =========================================================================
-  // HOOKS DE INICIALIZAÇÃO E HIDRATAÇÃO DE DADOS
+  // HOOKS DE INICIALIZAÇÃO E HIDRATAÇÃO DE DADOS DA PRATELEIRA
   // =========================================================================
   useEffect(() => {
     const loadSandboxData = async () => {
@@ -530,6 +589,10 @@ function SandboxPage() {
     loadSandboxData();
   }, [activeToken, customOfferId, ambienteAtivo]);
 
+  /**
+   * @function handleInspectOffer
+   * @description Dispara a busca detalhada de uma oferta específica informada pelo ID customizado.
+   */
   const handleInspectOffer = async () => {
     if (!activeToken) {
       alert("Autentique-se primeiro no formulário abaixo.");
@@ -547,6 +610,10 @@ function SandboxPage() {
     }
   };
 
+  /**
+   * @function handleOpenConsultarOferta
+   * @description Abre o painel lateral (Drawer) carregando o payload estruturado da oferta.
+   */
   const handleOpenConsultarOferta = async (targetOfferId: string) => {
     if (!activeToken) {
       alert("Faça o login primeiro!");
@@ -568,6 +635,10 @@ function SandboxPage() {
     }
   };
 
+  /**
+   * @function handleOpenConsultarRota
+   * @description Busca e exibe as configurações dinâmicas de rota da Edge Function `orchestrator_configs`.
+   */
   const handleOpenConsultarRota = async (item: any) => {
     if (!item) return; 
     
@@ -608,6 +679,11 @@ function SandboxPage() {
     }
   };
 
+  /**
+   * @function handleSandboxLogin
+   * @description Orquestra o fluxo completo de autenticação no Sandbox: 
+   * autentica na Superbid, armazena o token e executa o Exchange na Edge Function do Supabase.
+   */
   const handleSandboxLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(""); 
@@ -663,12 +739,21 @@ function SandboxPage() {
     }
   };
 
+  /**
+   * @function handleSandboxLogout
+   * @description Limpa os estados de sessão, remove tokens armazenados e purifica o ambiente.
+   */
   const handleSandboxLogout = () => {
     setAccessTokenSbx("");
     sessionStorage.removeItem("access_token_sbx");
     if (logout) logout({ purgeEnv: true } as any);
   };
 
+  /**
+   * @function handleSimulateOffer
+   * @description Realiza o POST para a Edge Function de gateway (`financial-gateway-gate`),
+   * gerando a URL assinada e abrindo a rota de simulação em nova aba.
+   */
   const handleSimulateOffer = async (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
     if (isDisabled) return;
     if (!accessTokenSbx) {
@@ -686,7 +771,8 @@ function SandboxPage() {
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
       auth_token: accessTokenSbx,
-      offer_id: String(offerId),
+      //offer_id: String(offerId),
+      offer_id: '9999',
       product_id: String(productId || ''),
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
@@ -735,11 +821,9 @@ function SandboxPage() {
   };
 
   /**
-   * =========================================================================
-   * [GATEWAY DISPATCH DIRETO]: Chamada Exclusiva para Produtos sem Lote (Equities & Seguros)
-   * =========================================================================
-   * @description Dispara o POST para a Borda e abre a aba apenas quando a URL
-   * de destino estiver validada, evitando abas em branco (about:blank) órfãs.
+   * @function handleDirectGateway
+   * @description Disparo exclusivo para produtos sem lote associado (Equities & Seguros),
+   * validando o retorno do gateway antes de abrir a aba de destino.
    */
   const handleDirectGateway = async (flowKey: string, productId: string) => {
     if (!accessTokenSbx) {
@@ -792,7 +876,6 @@ function SandboxPage() {
           return;
         }
         
-        // Abre a aba diretamente com a URL válida do gateway
         window.open(data.redirect_url, '_blank');
       } else {
         setError(data.message || "Falha na liberação do Gateway Financeiro.");
@@ -805,6 +888,7 @@ function SandboxPage() {
     }
   };
 
+  // --- [HANDLERS DE GALERIA DE FOTOS] ---
   const handleNextPhoto = (cardKey: string, totalPhotos: number, e: React.MouseEvent) => {
     e.stopPropagation();
     setCardFotoIndex(prev => ({ ...prev, [cardKey]: ((prev[cardKey] || 0) + 1) % totalPhotos }));
@@ -836,7 +920,7 @@ function SandboxPage() {
         .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
       `}</style>
 
-      {/* HEADER */}
+      {/* HEADER INSTITUCIONAL */}
       <header className={`fixed top-0 left-0 w-full z-50 glass border-b border-gray-100 transition-all duration-300 ${isScrolled ? 'shadow-sm py-2' : 'py-3'}`}>
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <a href="#" className="flex items-center">
@@ -866,7 +950,7 @@ function SandboxPage() {
         </div>
       </header>
 
-      {/* CONTEÚDO PRINCIPAL */}
+      {/* CONTEÚDO PRINCIPAL DA ROTA */}
       <main className="max-w-7xl mx-auto px-6 pt-28 md:pt-32 space-y-8">
 
         {error && (
@@ -1014,7 +1098,6 @@ function SandboxPage() {
                     </Button>
                   </div>
                   
-                  {/* BOX CINZA COM FOTOS E DADOS RESUMIDOS DA OFERTA */}
                   {apiOfferData ? (() => {
                     const rawPhotos = apiOfferData?.offer?.photos || [];
                     const sortedPhotos = [...rawPhotos].sort((a: any, b: any) => {
@@ -1035,13 +1118,11 @@ function SandboxPage() {
                       ? `R$ ${apiOfferData.offer.offer_value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` 
                       : "Valor sob consulta";
 
-                    // Extração segura dos dados do evento
                     const eventId = apiOfferData?.event?.event_id || "";
                     const eventDesc = apiOfferData?.event?.event_description || apiOfferData?.offer?.event_description || "";
 
                     return (
                       <div className="bg-muted/40 rounded-xl border flex items-center gap-6 overflow-hidden">
-                        {/* Esquerda: Foto encostada na borda com arredondamento à esquerda */}
                         <div className="relative h-24 w-32 bg-black shrink-0 overflow-hidden rounded-l-xl">
                           {hasPhotoError ? (
                             <div className="absolute inset-0 bg-[#B300FF] flex items-center justify-center text-white text-[10px] font-bold">
@@ -1074,7 +1155,6 @@ function SandboxPage() {
                           )}
                         </div>
 
-                        {/* Direita: Textos informativos com espaçamento adequado */}
                         <div className="py-2 pr-4 flex flex-col justify-center space-y-1 overflow-hidden flex-1">
                           <p className="font-bold text-sm text-foreground truncate" title={apiOfferData.offer?.offer_description}>
                             Lote #{customOfferId} - {apiOfferData.offer?.offer_description || "Oferta sem descrição"}
@@ -1110,13 +1190,11 @@ function SandboxPage() {
                 <CardContent>
                   {userData ? (
                     <div className="p-3 bg-muted/40 rounded-xl border space-y-2 text-xs">
-                      {/* Linha Principal: Nome e E-mail */}
                       <div className="border-b pb-2">
                         <p className="font-bold text-sm text-foreground">{userData.name || "Usuário Identificado"}</p>
                         <p className="text-muted-foreground font-mono mt-0.5">{userData.email || "—"}</p>
                       </div>
 
-                      {/* Grid de Detalhes mais compacto */}
                       <div className="grid grid-cols-2 gap-y-1.5 gap-x-4 pt-0.5 font-mono text-[11px]">
                         <div>
                           <span className="text-muted-foreground uppercase text-[10px] block font-sans">Documento:</span>
@@ -1150,10 +1228,9 @@ function SandboxPage() {
               </Card>
             </div>
 
-            {/* GRID DE JORNADAS DE ACESSO VIA GATEWAY (financial-gateway-gate) */}
+            {/* GRID DE JORNADAS DE ACESSO VIA GATEWAY */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               
-              {/* Card 1: sbxpay.index */}
               <Card className="rounded-2xl border-border hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
@@ -1173,7 +1250,6 @@ function SandboxPage() {
                 </CardContent>
               </Card> 
 
-              {/* Card 2: Seguros de Veículos (Product ID: 9 - Sem Offer ID) */}
               <Card className="rounded-2xl border-border hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
@@ -1203,7 +1279,6 @@ function SandboxPage() {
                 </CardContent>
               </Card>
 
-              {/* Card 3: Car Equity (Product ID: 7 - Sem Offer ID) */}
               <Card className="rounded-2xl border-border hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
@@ -1235,7 +1310,7 @@ function SandboxPage() {
 
             </div>
 
-            {/* SEÇÃO 4: VITRINE DE LOTES & OFERTAS */}
+            {/* SEÇÃO: VITRINE DE LOTES & OFERTAS */}
             <div className="space-y-4 pt-4 border-t">
               <div>
                 <h2 className="text-xl font-bold tracking-tight">Parcelamentos e Financiamentos nas Ofertas</h2>
@@ -1328,7 +1403,6 @@ function SandboxPage() {
                         </div>
                       </div>
 
-                      {/* AÇÕES DA PRATELEIRA */}
                       <div className="p-4 pt-0 space-y-2">
                         <Button 
                           onClick={() => handleSimulateOffer(item.flowKey, item.offerId, item.product_id, item.disabled)}
@@ -1527,7 +1601,7 @@ function SandboxPage() {
         </div>
       )}
 
-      {/* MOBILE TAB BAR */}
+      {/* MOBILE NAVIGATION TAB BAR */}
       <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-50 flex justify-around items-center pt-2 pb-4 md:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <a href="/sbxpay" className="flex flex-col items-center justify-center text-purple-600 min-w-[70px] gap-1">
           <Home className="w-6 h-6" strokeWidth={1.5} />
