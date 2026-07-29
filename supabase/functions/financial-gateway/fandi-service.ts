@@ -23,7 +23,8 @@ import {
   SimulationResponse,
   Consultation, 
   SimulationPayload,
-  SimulationFinancials 
+  SimulationFinancials, 
+  Seller
 } from "../_shared/types.ts";
 
 import { Entity, Offer } from "../_shared/types.ts";
@@ -31,8 +32,9 @@ import { Entity, Offer } from "../_shared/types.ts";
 // Importa a função geradora de hash para assinatura do webhook
 import { generateSignature } from '../_shared/crypto.ts';
 
-// Importa a função geradora de e-mail de usuários (Template de Veículos Fandi)
+// Importa a função geradora de e-mail de usuários (Template de Veículos Fandi) e alertas por e-mail
 import { generateUserEmailNotificationHtml } from "./fandi-notifications.ts";
+import { sendSystemAlert } from "../_shared/alert.ts";
 
 /**
  * FUNÇÃO DE LOG PADRONIZADA
@@ -83,6 +85,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   const simulation = (payload.simulation_details as SimulationFinancials) || {};
   const entity = (payload.entity as Entity) || {};
   const offer = (payload.offer as Offer) || {};
+  const seller = (payload.seller as Seller) || {};
 
   // Configurações do parceiro (com fallback para segurança)
   const integrationDetails = payload?.integration_details || {};
@@ -95,9 +98,10 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
 
   // Registra log no Supabase se ligado
   debugLog("DEBUG payload:", payload);
-  debugLog("DEBUG integration_details:", integrationDetails);
-  debugLog("DEBUG offer:", offer);
   debugLog("DEBUG entity:", entity);
+  debugLog("DEBUG offer:", offer);
+  debugLog("DEBUG seller:", seller);
+  debugLog("DEBUG integration_details:", integrationDetails);
 
   // ----------------------------------------------------------------------
   // URL DE WEBHOOK (CALLBACK)
@@ -139,9 +143,10 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   const codigoParceiro = `${payload.event.event_id}/${payload.offer.offer_id}`;
   const sellerId = payload.seller?.seller_id;
   // Regra de negócio atual exige o envio do CPF do vendedor
-  const SEND_CPF_VENDEDOR = true;
+  const SEND_CPF_VENDEDOR = false;
   // Só gera e envia se a flag estiver ativa E houver um sellerId válido
   const cpfVendedor = (SEND_CPF_VENDEDOR && sellerId) ? generateCpfFromSellerId(sellerId) : null
+
   const bodyGuid = { 
     config: { 
       chaveAcesso: FANDI_API_KEY, 
@@ -223,7 +228,33 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
 
   if (!guidResult.retorno) {
     // Fandi respondeu, mas não entregou o GUID (Ainda é falha técnica neste passo)
-    debugLog("Falha ao gerar GUID.", bodyGuid);
+    debugLog("Falha ao gerar GUID.", guidResult);
+
+    // Identifica e dispara alerta usando os textos exatos que você especificou
+    const isVendedorErro = apiMessage.includes("Problema ao consultar o CPF do Vendedor pela API: Usuário não existe.");
+    const isModeloMolicarErro = apiMessage.includes("Código do modelo (Fandi) ou Molicar inválido(s).");
+
+    if (isVendedorErro || isModeloMolicarErro) {
+      const errorTitle = isVendedorErro 
+        ? "Vendedor não cadastrado na Fandi" 
+        : "Código do modelo Fipe ou Molicar inválido";
+
+      sendSystemAlert({
+        context: isVendedorErro ? "fandi-service: SELLER_NOT_FOUND" : "fandi-service: INVALID_FIPE_OR_MOLICAR",
+        subject: `Alerta Fandi: ${errorTitle} ⚠️`,
+        message: apiMessage,
+        simulationId: payload.simulation_id || null,
+        rawPayload: {
+          error_message: apiMessage,
+          codigo_parceiro: codigoParceiro,
+          seller_id: sellerId,
+          fipe_code: fipeCode,
+          vehicle: offer.vehicle_details,
+          payload_enviado: bodyGuid
+        }
+      });
+    }
+
     return { 
         success: false, 
         message: guidResult.message || "Falha ao gerar GUID.",
