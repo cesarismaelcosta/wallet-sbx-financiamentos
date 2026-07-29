@@ -1,12 +1,3 @@
-import { createLazyFileRoute } from '@tanstack/react-router'
-
-export const Route = createLazyFileRoute('/backoffice/alerts')({
-  component: RouteComponent,
-})
-
-function RouteComponent() {
-  return <div>Hello "/backoffice/alerts"!</div>
-}
 /**
  * @fileoverview Monitor de Destinatários de Alertas (Backoffice)
  * @route /backoffice/alertas
@@ -50,7 +41,7 @@ import { useAuth } from "@/integrations/auth/AuthContext";
 // [REGISTRO DA ROTA TANSTACK ROUTER]
 // ============================================================================
 export const Route = createLazyFileRoute("/backoffice/alerts")({ 
-  component: AlertasPage 
+  component: AlertsPage 
 });
 
 // ============================================================================
@@ -76,7 +67,7 @@ const CATEGORY_BADGE: Record<AlertCategory, { label: string, style: string }> = 
 // ============================================================================
 // [COMPONENTE PRINCIPAL]
 // ============================================================================
-function AlertasPage() {
+function AlertsPage() {
   const { backofficeUser } = useAuth();
   const [recipients, setRecipients] = useState<AlertRecipientRow[]>([]);
   const [loading, setLoading] = useState(true);
