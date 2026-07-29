@@ -477,14 +477,14 @@ function SandboxPage() {
   });
 
   // Inicializa o estado vazio para garantir paridade exata na primeira renderização SSR/Client
-  const [accessTokenSbx, setAccessTokenSbx] = useState<string>("");
+  const [accessTokenSBX, setAccessTokenSBX] = useState<string>("");
 
   // Hidratação segura do token guardado no sessionStorage após o mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedToken = sessionStorage.getItem("access_token_sbx");
       if (storedToken) {
-        setAccessTokenSbx(storedToken);
+        setAccessTokenSBX(storedToken);
       }
     }
   }, []);
@@ -543,7 +543,7 @@ function SandboxPage() {
   ];
 
   // Definição clara do token ativo na sessão do Sandbox
-  const activeToken = sessionToken || accessTokenSbx;
+  const activeToken = sessionToken || accessTokenSBX;
 
   // =========================================================================
   // HOOKS DE INICIALIZAÇÃO E HIDRATAÇÃO DE DADOS DA PRATELEIRA
@@ -590,9 +590,9 @@ function SandboxPage() {
   }, [activeToken, customOfferId, ambienteAtivo]);
 
   /**
-   * @function handleInspectOffer
-   * @description Dispara a busca detalhada de uma oferta específica informada pelo ID customizado.
-   */
+  * @function handleInspectOffer
+  * @description Dispara a busca detalhada de uma oferta específica informada pelo ID customizado.
+  */
   const handleInspectOffer = async () => {
     if (!activeToken) {
       alert("Autentique-se primeiro no formulário abaixo.");
@@ -611,9 +611,9 @@ function SandboxPage() {
   };
 
   /**
-   * @function handleOpenConsultarOferta
-   * @description Abre o painel lateral (Drawer) carregando o payload estruturado da oferta.
-   */
+  * @function handleOpenConsultarOferta
+  * @description Abre o painel lateral (Drawer) carregando o payload estruturado da oferta.
+  */
   const handleOpenConsultarOferta = async (targetOfferId: string) => {
     if (!activeToken) {
       alert("Faça o login primeiro!");
@@ -636,9 +636,9 @@ function SandboxPage() {
   };
 
   /**
-   * @function handleOpenConsultarRota
-   * @description Busca e exibe as configurações dinâmicas de rota da Edge Function `orchestrator_configs`.
-   */
+  * @function handleOpenConsultarRota
+  * @description Busca e exibe as configurações dinâmicas de rota da Edge Function `orchestrator_configs`.
+  */
   const handleOpenConsultarRota = async (item: any) => {
     if (!item) return; 
     
@@ -680,10 +680,10 @@ function SandboxPage() {
   };
 
   /**
-   * @function handleSandboxLogin
-   * @description Orquestra o fluxo completo de autenticação no Sandbox: 
-   * autentica na Superbid, armazena o token e executa o Exchange na Edge Function do Supabase.
-   */
+  * @function handleSandboxLogin
+  * @description Orquestra o fluxo completo de autenticação no Sandbox: 
+  * autentica na Superbid, armazena o token e executa o Exchange na Edge Function do Supabase.
+  */
   const handleSandboxLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(""); 
@@ -717,11 +717,10 @@ function SandboxPage() {
     try {
       const loginResponse = await autenticarAccountsSBX(loginCred, passwordCred, ambienteAtivo);
       if (loginResponse?.success && loginResponse.access_token) {
-        const sbxToken = loginResponse.access_token;
-        setAccessTokenSbx(sbxToken);
-        sessionStorage.setItem("access_token_sbx", sbxToken);
+        setAccessTokenSBX(loginResponse.access_token);
+        sessionStorage.setItem("access_token_sbx", loginResponse.access_token);
 
-        const exchangeResponse = await trocarTokenNaEdgeFunction(sbxToken, ambienteAtivo);
+        const exchangeResponse = await trocarTokenNaEdgeFunction(loginResponse.access_token, ambienteAtivo);
         if (exchangeResponse?.success && exchangeResponse.session_token) {
           if (setSession) {
             setSession(exchangeResponse.session_token, exchangeResponse.user_id || loginResponse.userId);
@@ -740,24 +739,46 @@ function SandboxPage() {
   };
 
   /**
-   * @function handleSandboxLogout
-   * @description Limpa os estados de sessão, remove tokens armazenados e purifica o ambiente.
-   */
+  * @function handleSandboxLogout
+  * @description Limpa os estados de sessão, remove tokens armazenados e purifica o ambiente.
+  */
   const handleSandboxLogout = () => {
-    setAccessTokenSbx("");
+    setAccessTokenSBX("");
     sessionStorage.removeItem("access_token_sbx");
     if (logout) logout({ purgeEnv: true } as any);
   };
 
   /**
-   * @function handleSimulateOffer
-   * @description Realiza o POST para a Edge Function de gateway (`financial-gateway-gate`),
-   * gerando a URL assinada e abrindo a rota de simulação em nova aba.
-   */
-  const handleSimulateOffer = async (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
+  * =========================================================================
+  * [GATEWAY DISPATCH VIA FORM POST NATIVO]
+  * =========================================================================
+  * @description Simula uma submissão de formulário HTML tradicional (POST nativo)
+  * em direção à Edge Function de borda (`financial-gateway-gate`).
+  * 
+  * -------------------------------------------------------------------------
+  * [ARQUITETURA & DIFERENÇAS: AJAX vs FORM POST (Domínios Diferentes)]
+  * -------------------------------------------------------------------------
+  * 1. CORS & Preflight (OPTIONS):
+  *    - Em chamadas AJAX (`fetch`), se o Front-end e a Edge Function estão em
+  *      domínios diferentes (ex: app.s4bdigital.net vs xyz.supabase.co), o navegador
+  *      obrigatoriamente dispara uma requisição prévia de segurança (Preflight OPTIONS).
+  *      Se os headers de CORS não estiverem perfeitamente alinhados, a requisição é barrada.
+  *    - No Form POST nativo, o navegador trata a submissão como uma navegação de topo
+  *      (top-level navigation), contornando as restrições rígidas de preflight do AJAX.
+  * 
+  * 2. Tratamento de Erros e Redirecionamentos (HTTP 302):
+  *    - No AJAX, o Front-end intercepta JSONs de erro e manipula o estado via JavaScript 
+  *      (ex: exibindo uma caixa vermelha na mesma tela).
+  *    - No Form POST, o navegador segue automaticamente os redirecionamentos HTTP do servidor.
+  *      Se a borda falhar (ex: `OFFER_NOT_FOUND`), ela responde com um status `302 Found` e um 
+  *      header `Location`, fazendo o navegador carregar diretamente a página de erro com 
+  *      contagem regressiva (`/financialGatewayGate`).
+  * -------------------------------------------------------------------------
+  */
+  const handleSimulateOffer = (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
     if (isDisabled) return;
-    if (!accessTokenSbx) {
-      alert("Token access_token_sbx não encontrado. Faça o login primeiro.");
+    if (!accessTokenSBX) {
+      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
       return;
     }
 
@@ -765,14 +786,19 @@ function SandboxPage() {
     setError(null);
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-    const controller = new AbortController();
-    const safetyTimeout = setTimeout(() => controller.abort(), 10000);
+    const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
 
+    // 1. Criação dinâmica de um elemento <form> invisível no DOM
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = gatewayUrl;
+    form.target = '_blank'; // Abre o resultado em nova aba (ou segue o fluxo nativo)
+
+    // 2. Mapeamento dos parâmetros que serão enviados para a borda
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: accessTokenSbx,
-      //offer_id: String(offerId),
-      offer_id: '9999',
+      auth_token: accessTokenSBX,
+      offer_id: String(offerId),
       product_id: String(productId || ''),
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
@@ -780,54 +806,38 @@ function SandboxPage() {
       utm_campaign: `flow_${flowKey.toLowerCase()}`,
     };
 
+    // 3. Injeção de cada propriedade do payload como inputs ocultos (<input type="hidden">)
+    Object.entries(searchPayload).forEach(([key, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = String(value);
+      form.appendChild(input);
+    });
+
+    // 4. Anexa o formulário ao corpo do documento e dispara o submit nativo
+    document.body.appendChild(form);
+    
     try {
-      const gatewayResponse = await fetch(`${supabaseUrl}/functions/v1/financial-gateway-gate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(searchPayload),
-        signal: controller.signal
-      });
-
-      clearTimeout(safetyTimeout);
-      if (!gatewayResponse.ok) {
-        const gwErrText = await gatewayResponse.text();
-        throw new Error(`Gateway falhou (HTTP ${gatewayResponse.status}): ${gwErrText}`);
-      }
-
-      const data = await gatewayResponse.json();
-      if (gatewayResponse.status === 401 || data.code === 'SESSION_EXPIRED') {
-        setError("Seu token de Sandbox expirou ou é inválido. Por favor, logue novamente.");
-        handleSandboxLogout();
-        return;
-      }
-
-      if (data.success && data.redirect_url) {
-        if (data.redirect_url.includes("signin") || data.redirect_url.includes("login")) {
-          setError(`🚨 O Gateway rejeitou o token silenciosamente e tentou forçar a ida para a tela de login.`);
-          handleSandboxLogout();
-          return;
-        }
-        
-        window.open(data.redirect_url, '_blank');
-      } else {
-        setError(data.message || "Falha na liberação do Gateway Financeiro.");
-      }
+      form.submit();
     } catch (err: any) {
-      console.error("[GATEWAY_ERROR]:", err);
-      setError(`Erro Técnico: ${err.message}`);
+      console.error("[FORM_POST_ERROR]:", err);
+      setError(`Erro ao submeter formulário: ${err.message}`);
     } finally {
+      // 5. Limpeza: Remove o form do DOM para manter a árvore limpa
+      document.body.removeChild(form);
       setLoadingAction(null);
     }
   };
 
   /**
-   * @function handleDirectGateway
-   * @description Disparo exclusivo para produtos sem lote associado (Equities & Seguros),
-   * validando o retorno do gateway antes de abrir a aba de destino.
-   */
-  const handleDirectGateway = async (flowKey: string, productId: string) => {
-    if (!accessTokenSbx) {
-      alert("Token access_token_sbx não encontrado. Faça o login primeiro.");
+  * =========================================================================
+  * [GATEWAY DISPATCH DIRETO VIA FORM POST]: Produtos sem Lote (Equities & Seguros)
+  * =========================================================================
+  */
+  const handleDirectGateway = (flowKey: string, productId: string) => {
+    if (!accessTokenSBX) {
+      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
       return;
     }
 
@@ -835,12 +845,16 @@ function SandboxPage() {
     setError(null);
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-    const controller = new AbortController();
-    const safetyTimeout = setTimeout(() => controller.abort(), 15000);
+    const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = gatewayUrl;
+    form.target = '_blank';
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: accessTokenSbx,
+      auth_token: accessTokenSBX,
       product_id: String(productId),
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
@@ -848,42 +862,23 @@ function SandboxPage() {
       utm_campaign: `flow_${flowKey.toLowerCase()}`,
     };
 
+    Object.entries(searchPayload).forEach(([key, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = String(value);
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+
     try {
-      const gatewayResponse = await fetch(`${supabaseUrl}/functions/v1/financial-gateway-gate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(searchPayload),
-        signal: controller.signal
-      });
-
-      clearTimeout(safetyTimeout);
-      if (!gatewayResponse.ok) {
-        const gwErrText = await gatewayResponse.text();
-        throw new Error(`Gateway falhou (HTTP ${gatewayResponse.status}): ${gwErrText}`);
-      }
-
-      const data = await gatewayResponse.json();
-      if (gatewayResponse.status === 401 || data.code === 'SESSION_EXPIRED') {
-        setError("Seu token de Sandbox expirou ou é inválido. Por favor, logue novamente.");
-        handleSandboxLogout();
-        return;
-      }
-
-      if (data.success && data.redirect_url) {
-        if (data.redirect_url.includes("signin") || data.redirect_url.includes("login")) {
-          setError(`🚨 O Gateway rejeitou o token silenciosamente e tentou forçar a ida para a tela de login.`);
-          handleSandboxLogout();
-          return;
-        }
-        
-        window.open(data.redirect_url, '_blank');
-      } else {
-        setError(data.message || "Falha na liberação do Gateway Financeiro.");
-      }
+      form.submit();
     } catch (err: any) {
-      console.error("[GATEWAY_ERROR]:", err);
-      setError(`Erro Técnico: ${err.message}`);
+      console.error("[FORM_POST_ERROR]:", err);
+      setError(`Erro ao submeter formulário: ${err.message}`);
     } finally {
+      document.body.removeChild(form);
       setLoadingAction(null);
     }
   };
@@ -934,7 +929,7 @@ function SandboxPage() {
               <span className="text-slate-500 uppercase text-[11px] font-bold tracking-wide">Ambiente: {ambienteAtivo}</span>
             </div>
             <div className="flex flex-col font-mono text-[10px] text-slate-500 mt-1 space-y-0.5">
-              <span><b>access_token_sbx:</b> {formatTokenSnippet(accessTokenSbx)}</span>
+              <span><b>access_token_sbx:</b> {formatTokenSnippet(accessTokenSBX)}</span>
               <span><b>session_token:</b> {formatTokenSnippet(sessionToken)}</span>
             </div>
           </div>
@@ -1367,11 +1362,11 @@ function SandboxPage() {
                             />
                           )}
 
-                          <span className="absolute bottom-2 left-2 bg-black/75 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md z-10 shadow">
+                        <span className="absolute bottom-2 left-2 bg-black/75 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md z-10 shadow">
                             Lote #{item.offerId}
-                          </span>
+                        </span>
 
-                          {!hasError && sortedPhotos.length > 1 && (
+                        {!hasError && sortedPhotos.length > 1 && (
                             <>
                               <button 
                                 onClick={(e) => handlePrevPhoto(item.key, sortedPhotos.length, e)}
@@ -1429,14 +1424,14 @@ function SandboxPage() {
                           >
                             consultar rota
                           </button>
-                        </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
-          </>
+          </div>
+        </>
         )}
 
       </main>

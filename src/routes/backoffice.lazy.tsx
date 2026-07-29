@@ -30,7 +30,7 @@ export const Route = createLazyFileRoute("/backoffice")({
 const OPERACAO_NAV = [
   { to: "/backoffice", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/backoffice/simulations", label: "Simulações", icon: ListChecks },
-  { to: "/backoffice/consults", label: "Consultas de Produtos", icon: Search },
+  { to: "/backoffice/consults", label: "Consultas", icon: Search },
   { to: "/backoffice/relatorios", label: "Relatórios", icon: FileBarChart2 },
 ];
 

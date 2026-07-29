@@ -564,10 +564,10 @@ export function sbXPAYHome() {
 
             {/* OVERLAY DE LOADING */}
             {loading && (
-                <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-                    <p className="text-slate-500 font-medium text-sm">
-                      Preparando o ambiente de simulação...
+                <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm font-['Plus_Jakarta_Sans']">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
+                    <p className="text-slate-600 font-medium text-sm">
+                    Preparando o ambiente de simulação...
                     </p>
                 </div>        
             )}

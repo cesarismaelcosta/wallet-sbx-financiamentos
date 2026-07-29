@@ -79,15 +79,12 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     return respondWithError(isAjax, 400, "BAD_REQUEST", "Payload inválido ou vazio.", payload?.return_uri || originPath, req);
   }
 
-  const { environment = "production", offer_id, product_id, return_uri = originPath, utm_source, utm_medium, utm_campaign } = payload;
+  // Extrai o auth_token diretamente no let para poder reatribuir se precisar do cookie depois
+  let { environment = "production", auth_token, offer_id, product_id, return_uri = originPath, utm_source, utm_medium, utm_campaign } = payload;
 
   // =====================================================================
   // [STEP 2] RESOLUÇÃO DE CREDENCIAIS HÍBRIDA (Payload vs Cookie)
   // =====================================================================
-  let auth_token = payload.auth_token;
-
-  // Se o client-side operou em modo blindado (Produção), o token não virá no payload.
-  // Neste caso, o Gateway atua como BFF e pesca a sessão automaticamente dos cookies.
   if (!auth_token) {
       const cookieHeader = req.headers.get("cookie") || "";
       const cookieMatch = cookieHeader.match(/session_token=([^;]+)/);
@@ -99,8 +96,6 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   if (!auth_token) {
     return respondWithError(isAjax, 400, "BAD_REQUEST", "Credencial (auth_token) ausente no payload e nos cookies.", return_uri, req);
   }
-
-  const urls = ENV_URLS[environment as keyof typeof ENV_URLS] || ENV_URLS.production;
 
   try {
     const supabaseAdmin = createClient(
