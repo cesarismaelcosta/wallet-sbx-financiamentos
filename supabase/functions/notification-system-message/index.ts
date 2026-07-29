@@ -6,13 +6,16 @@
  * =========================================================================
  * Porta de Ingestão do Sistema de Notificações. Atua como um sumidouro 
  * assíncrono de telemetria e erros técnicos para o ecossistema do Hub Financeiro.
- * * Garante o desacoplamento total entre falhas de infraestrutura/integração
+ * 
+ * Garante o desacoplamento total entre falhas de infraestrutura/integração
  * e a experiência do usuário (UX), operando sob o princípio de tolerância a falhas.
- * * [RESPONSABILIDADES]:
+ * 
+ * [RESPONSABILIDADES]:
  * 1. Protocolo de Borda: Responde síncronamente ao aperto de mão de segurança (CORS OPTIONS).
  * 2. Validação Contratual: Garante a presença dos metadados mínimos de rastreabilidade.
- * 3. Persistência de Transição: Deposita a mensagem na Outbox como 'pending' para processamento assíncrono.
- * 4. Isolamento de Falhas: Protege o cliente consumidor emitindo respostas silenciosas em caso de pane interna.
+ * 3. Busca Dinâmica: Recupera a lista de destinatários de alerta cadastrados no Backoffice.
+ * 4. Persistência de Transição: Deposita a mensagem na Outbox como 'pending' para processamento assíncrono.
+ * 5. Isolamento de Falhas: Protege o cliente consumidor emitindo respostas silenciosas em caso de pane interna.
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
@@ -72,9 +75,31 @@ serve(withSecurity('notification-system-message', async (req: Request) => {
     }
 
     // -----------------------------------------------------------------------
+    // [DOMÍNIO]: Busca Dinâmica de Destinatários de Alerta
+    // -----------------------------------------------------------------------
+    // Recupera todos os e-mails ativos cadastrados no Backoffice (notification_alert_recipients)
+    const { data: recipients, error: recipientError } = await supabase
+      .from('notification_alert_recipients')
+      .select('email')
+      .eq('is_active', true);
+
+    if (recipientError) {
+      debugLog("[WARNING]: Falha ao buscar destinatários. Usando fallback de segurança.");
+    }
+
+    // Caso a tabela esteja vazia ou haja erro de banco, mapeamos o hardcode como Failsafe.
+    // Transforma o array de objetos em um Array flat de strings e concatena com ponto e vírgula (;).
+    const emailListArray = (recipients && recipients.length > 0) 
+        ? recipients.map(r => r.email) 
+        : ['cesarismaelcosta@gmail.com']; 
+    
+    const finalRecipients = emailListArray.join(';');
+
+    debugLog(`[DISPARO ALERTA]: Destinatários definidos -> ${finalRecipients}`);
+
+    // -----------------------------------------------------------------------
     // [DOMÍNIO]: Processamento e Renderização Visual do Alerta
     // -----------------------------------------------------------------------
-    // CORREÇÃO: Variável nomeada como templateResult para alinhar com o insert
     const templateResult = generateSystemErrorEmailHtml(payload);
     
     // -----------------------------------------------------------------------
@@ -85,9 +110,9 @@ serve(withSecurity('notification-system-message', async (req: Request) => {
     const { error: insertError } = await supabase.from('notification_outbox').insert({
       context_type: 'SYSTEM_ERROR',
       channel: 'email',
-      template_slug: 'system-message-notification',
+      template_slug: 'system-message-notificati',
       recipient_type: 'INTERNAL',
-      recipient: 'cesarismaelcosta@gmail.com',
+      recipient: finalRecipients, // Injeção dinâmica da lista concatenada
       subject: payload.subject || `Alerta de Erro no Gateway de Financiamentos e Seguros ⚠️`,
       rendered_content: templateResult.html, 
       attachments: templateResult.attachments, 
