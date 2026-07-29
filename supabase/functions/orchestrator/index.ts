@@ -160,12 +160,10 @@ async function resolveDestination(
   sellerId?: string | number,
   categoryId?: number,
   productId?: number,
-  entityType?: "F" | "J" | string, // 👈 Aceita "F", "J" ou qualquer string genérica / undefined
+  entityType?: "F" | "J" | string,
 ) {
   debugLog(`RESOLVE DESTINATION: Ação ${action}. category: ${categoryId} | product_id: ${productId}`);
 
-  // Se a ação for apenas navegação nativa, acata o destino do payload.
-  // Não deve chamar resolveDestination
   if (["VISIT", "REDIRECT", "CONTACT"].includes(action)) {
     throw new Error(`Ação '${action}' não deve passar pelo motor de resolução de destinos.`);
   }
@@ -184,7 +182,7 @@ async function resolveDestination(
       debugLog(`Tentando query: ${priority.type} com ID: ${priority.id} para Perfil: ${entityType}`);
       const { data, error } = await supabaseClient
         .from("orchestrator_configs")
-        .select("id, page_url, partner_id, is_integrated, integration_method, integration_details, entity_type")
+        .select("id, page_url, partner_id, is_integrated, integration_method, integration_details, entity_type, rules, consent_configs, page_configs, page_faqs")
         .eq("lookup_id", priority.id)
         .eq("config_type", priority.type)
         .eq("is_active", true)
@@ -196,7 +194,7 @@ async function resolveDestination(
         continue;
       }
 
-      if (!data) continue; // Continua a cascata se não houver match
+      if (!data) continue;
 
       debugLog(`[ROTEAMENTO SUCESSO] Match cravado via ${priority.type} -> `, data);
       return {
@@ -206,6 +204,10 @@ async function resolveDestination(
         is_integrated: data.is_integrated,
         integration_method: data.integration_method,
         integration_details: data.integration_details,
+        rules: data.rules,
+        consent_configs: data.consent_configs,
+        page_configs: data.page_configs,
+        page_faqs: data.page_faqs,
       };
     }
   }
@@ -593,7 +595,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           if (!payload.target_url) {
             throw new Error(`Para ações de '${action}', a target_url é obrigatória no payload.`);
           }
-          // Para navegação direta, o payload já tem a URL e o partner_id. Só garantimos que não está vazia.
+          // Para navegação direta, o payload já tem a URL e o partner_id.
         } else {
           // Se for simulação ou consulta, busca no banco e já injeta no payload
           const resolved = await resolveDestination(
@@ -614,13 +616,20 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           if (resolved.partner_id !== undefined && resolved.partner_id !== null) {
             payload.partner_id = resolved.partner_id;
           }
+
+          // Hidrata o payload ativo para a "foto" ir completa para o banco
+          payload.rules = resolved.rules;
+          payload.consent_configs = resolved.consent_configs;
+          payload.page_configs = resolved.page_configs;
+          payload.page_faqs = resolved.page_faqs;
+
           orchestratorConfigId = resolved.orchestrator_config_id;
         }
 
         debugLog("Origem: ", payload.origin_url);
 
         // =====================================================================
-        // F: Persistência Segura (One-Shot Database Insertion)
+        // E: Persistência Segura (One-Shot Database Insertion)
         // Agora protegido pelo Gatekeeper na etapa C.
         // =====================================================================
         const { visitId, visitUpdateId } = await persistVisitData(

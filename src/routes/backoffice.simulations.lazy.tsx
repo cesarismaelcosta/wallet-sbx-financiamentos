@@ -1,5 +1,5 @@
 /**
- * @fileoverview Monitor de Propostas (Backoffice)
+ * @fileoverview Monitor de Simulações (Backoffice)
  * @route /backoffice/simulations
  * 
  * ============================================================================
@@ -62,7 +62,7 @@ import { ICON_MAP } from "@/features/financial-hub/components/shared/icons-map";
 // [REGISTRO DA ROTA TANSTACK ROUTER]
 // ============================================================================
 export const Route = createLazyFileRoute("/backoffice/simulations")({
-  component: PropostasPage,
+  component: SimulationsPage,
 });
 
 // ============================================================================
@@ -327,7 +327,7 @@ function formatDate(iso: string | null) {
 // ============================================================================
 // [COMPONENTE PRINCIPAL: PROPOSTAS PAGE]
 // ============================================================================
-function PropostasPage() {
+function SimulationsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [statusOptions, setStatusOptions] = useState<string[]>([]);
@@ -425,7 +425,7 @@ function PropostasPage() {
       {/* HEADER DA TELA */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Monitor de Propostas</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Monitor de Simulações</h1>
           <p className="text-sm text-muted-foreground">Acompanhe simulações, análises e aprovações em tempo real.</p>
         </div>
         <div className="flex items-center gap-2">

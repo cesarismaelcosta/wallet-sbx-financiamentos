@@ -1,15 +1,11 @@
-
-
 /**
- * REGRAS DE OBRIGATORIEDADE E INTEGRIDADE:
- * - interaction_context: Sempre obrigatório.
- * - client: Obrigatório para todas as origens.
- * - product_id: Obrigatório se utm_source IN ('banner', 'whatsapp', 'email', 'sms').
- * - category_id: Opcional (se enviado, deve existir em category_types).
- * - event/offer: Obrigatórios se utm_source === 'offer'.
- * - vehicle: Obrigatório se categoria mapeada para 'Caminhões' ou 'Carros'.
+ * ============================================================================
+ * @fileoverview Camada de Persistência Transacional (Visitas e Originação)
+ * @path supabase/functions/orchestrator/persist-data.ts
+ * ============================================================================
  */
 
+import { sql } from './../_shared/db.ts';
 import { 
   OriginDetails, 
   Entity,
@@ -22,23 +18,14 @@ import {
   OrchestratorPayload,
   OrchestratorResponse
 } from "../_shared/types.ts";
-
-/**
- * FUNÇÃO DE LOG PADRONIZADA
- * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
- */
 import { debugLog } from "../_shared/logger.ts";
-
-
-// Importa o cliente já configurado
-import { sql } from './../_shared/db.ts';
 
 /**
  * Função: persistVisitData
  * @description Realiza a persistência atômica da jornada sbX.
  * Utiliza transações nativas do PostgreSQL para garantir que, em caso de falha,
  * nenhum dado parcial (zumbi) seja gravado no banco de dados.
- * * @param sql - Instância de conexão do postgres.js (ou transação ativa)
+ * @param sql - Instância de conexão do postgres.js (ou transação ativa)
  * @param payload - Objeto com dados do produto, parceiro e contexto
  * @param origin - Detalhes da origem (IP, dispositivo, geolocalização)
  * @param categoryId - Opcional, ID da categoria da oferta
@@ -62,7 +49,7 @@ export async function persistVisitData(
 ): Promise<{ visitId: string; visitUpdateId: string | undefined }> {
 
   try {
-    // Início da transação atômica. Se algo der errado aqui dentro, o banco reverte tudo.
+    // Início da transação atômica.
     return await sql.begin(async (t: any) => {
       let visitId: string = existingVisitId || "";
       let isNewVisit = !visitId;
@@ -73,19 +60,20 @@ export async function persistVisitData(
         : [];
       const journeyState = rows.length > 0 ? rows[0] : null;
 
-      const hasEntity = journeyState ? await t`SELECT id FROM visit_entities WHERE visit_id = ${visitId}`.then(r => r.length > 0) : false;
-      const hasOffer = journeyState ? await t`SELECT id FROM visit_offers WHERE visit_id = ${visitId}`.then(r => r.length > 0) : false;
-      const hasConsent = journeyState ? await t`SELECT id FROM visit_consents WHERE visit_id = ${visitId}`.then(r => r.length > 0) : false;
-      const hasOrchestratorConfig = journeyState ? await t`SELECT visit_id FROM visit_orchestrator_configs WHERE visit_id = ${visitId}`.then(r => r.length > 0) : false;
+      const hasEntity = journeyState ? await t`SELECT id FROM visit_entities WHERE visit_id = ${visitId}`.then((r: any) => r.length > 0) : false;
+      const hasOffer = journeyState ? await t`SELECT id FROM visit_offers WHERE visit_id = ${visitId}`.then((r: any) => r.length > 0) : false;
+      const hasConsent = journeyState ? await t`SELECT id FROM visit_consents WHERE visit_id = ${visitId}`.then((r: any) => r.length > 0) : false;
+      const hasOrchestratorConfig = journeyState ? await t`SELECT visit_id FROM visit_orchestrator_configs WHERE visit_id = ${visitId}`.then((r: any) => r.length > 0) : false;
 
       // 2. Atualização ou Criação da Âncora da Visita
       if (visitId && action !== 'CONTACT') {
         const updatedRows = await t`
           UPDATE visits SET 
             product_id = COALESCE(${payload?.product_id || null}, product_id),
-            partner_id = COALESCE(${payload?.partner_id || null}, partner_id), -- <--- BLINDADO: Se vier nulo, mantém o anterior!
+            partner_id = COALESCE(${payload?.partner_id || null}, partner_id),
             action = ${payload.action},
-            target_url = ${ (targetUrl || "").split('?')[0] }
+            target_url = ${ (targetUrl || "").split('?')[0] },
+            raw_payload = ${payload}::jsonb
           WHERE id = ${visitId}
           RETURNING id
         `;
@@ -99,7 +87,8 @@ export async function persistVisitData(
           INSERT INTO visits (
             product_id, partner_id, utm_source, utm_medium, utm_campaign, 
             origin_url, target_url, action, ip_address, country, state, 
-            city, user_agent, device_type, operating_system, origin_details
+            city, user_agent, device_type, operating_system, origin_details,
+            raw_payload
           )
           VALUES (
             ${payload.product_id}, ${payload.partner_id || null}, 
@@ -111,7 +100,8 @@ export async function persistVisitData(
             ${payload.action}, 
             ${origin.ip_address}, ${origin.country}, ${origin.state}, 
             ${origin.city}, ${origin.user_agent}, ${origin.device_type}, 
-            ${origin.operating_system}, ${origin}::jsonb
+            ${origin.operating_system}, ${origin}::jsonb,
+            ${payload}::jsonb
           )
           RETURNING id
         `;
@@ -125,7 +115,9 @@ export async function persistVisitData(
 
       // 4. Log de Navegação
       const [update] = await t`
-        INSERT INTO visit_updates (visit_id, utm_source, utm_medium, utm_campaign, action, origin_url, target_url)
+        INSERT INTO visit_updates (
+          visit_id, utm_source, utm_medium, utm_campaign, action, origin_url, target_url, raw_payload
+        )
         VALUES (
           ${visitId}, 
           ${payload.interaction_context?.utm_source || 'direct'},
@@ -133,7 +125,8 @@ export async function persistVisitData(
           ${payload.interaction_context?.utm_campaign || null},
           ${payload.action}, 
           ${ originUrl || null },
-          ${ (targetUrl || "").split('?')[0] }
+          ${ (targetUrl || "").split('?')[0] },
+          ${payload}::jsonb
         )
         RETURNING id
       `;
@@ -151,7 +144,6 @@ export async function persistVisitData(
 
       if (payload.consents?.length > 0 && !hasConsent) {
         for (const c of payload.consents) {
-          // Normalização: resolve a divergência entre 'accepted' e 'acceptedConsents'
           const acceptedValue = c.accepted === true || c.acceptedConsents === true;
           const acceptedAt = c.accepted_at || c.acceptedConsents_at || new Date().toISOString();
 
@@ -164,7 +156,7 @@ export async function persistVisitData(
             operating_system, origin_details, page_snapshot, raw_payload
           ) VALUES (
             ${visitId}, ${c.consent_id}, ${acceptedValue}, ${acceptedAt}, 
-            ${targetUrl.split('?')[0]}, ${payload.entity.entity_id}, 
+            ${(targetUrl || "").split('?')[0]}, ${payload.entity.entity_id}, 
             ${payload.entity.name}, ${payload.entity.email}, ${payload.entity.document}, 
             ${payload.entity.phone}, ${payload.entity.birth_date}, ${payload.entity.gender}, 
             ${payload.entity}::jsonb, ${origin.ip_address}, ${origin.country}, 

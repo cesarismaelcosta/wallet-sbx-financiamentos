@@ -9,8 +9,8 @@
  * Ele consolida e exibe em tempo real as interações dos leads (visitas, 
  * consultas, contatos com parceiros e conversões em simulação) antes da 
  * efetivação do crédito. Inclui painel lateral (Drawer/Sheet) para auditoria
- * completa dos dados relacionais, objetos JSONB e inspeção estruturada do 
- * raw_payload (Offer Panel, LGPD, FAQs, Rodapé e JSON Bruto).
+ * completa dos dados relacionais, objetos JSONB e blocos visuais nativos do 
+ * raw_payload (Offer Panel, LGPD, FAQs e Footer), espelhando o design system.
  * 
  * @architecture
  * - Data Fetching: Relacional direto via Supabase (PostgREST) com junção de tabelas.
@@ -36,7 +36,6 @@ import {
   MapPin,
   Smartphone,
   Briefcase,
-  FileJson,
   Layers,
   FileText,
   HelpCircle,
@@ -67,13 +66,13 @@ export const Route = createLazyFileRoute("/backoffice/consults")({
 });
 
 // ============================================================================
-// [SUB-COMPONENTES DE RENDERIZAÇÃO DO PAYLOAD DA VISITA]
+// [SUB-COMPONENTES DE RENDERIZAÇÃO DO PAYLOAD]
 // ============================================================================
 
 /**
  * @function FAQSection
  * @description Renderiza blocos expansíveis (Accordion) organizados em duas colunas 
- * baseados no array `page_faqs` recuperado do payload bruto.
+ * baseados no array `page_faqs` recuperado do payload.
  */
 function FAQSection({ items }: { items?: any[] }) {
   if (!items || items.length === 0) return null;
@@ -1022,7 +1021,7 @@ function ConsultsPage() {
                 )}
 
                 {/* Consentimentos LGPD */}
-                {Array.isArray(consentConfigs) && consentConfigs.length > 0 && (
+                {consentConfigs && consentConfigs.length > 0 && (
                   <div className="bg-white p-4 rounded-xl border shadow-sm space-y-3">
                     <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
                       <FileText size={14} /> Consentimentos da Rota (LGPD)
@@ -1047,28 +1046,6 @@ function ConsultsPage() {
                     <FooterRender config={pageConfigs.footer} />
                   </div>
                 )}
-
-                {/* 7. PAYLOAD BRUTO / AUDITORIA TÉCNICA (JSON) */}
-                <div className="rounded-xl border bg-slate-900 text-slate-100 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                      <FileJson className="h-3.5 w-3.5 text-primary" /> Payload Bruto / Auditoria (JSON)
-                    </h4>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
-                      onClick={() => {
-                        navigator.clipboard.writeText(JSON.stringify(sim.raw_payload || sim, null, 2));
-                      }}
-                    >
-                      Copiar JSON
-                    </Button>
-                  </div>
-                  <pre className="text-[10px] font-mono overflow-x-auto max-h-60 p-2.5 rounded bg-slate-950 text-emerald-400 border border-slate-800">
-                    {JSON.stringify(sim.raw_payload || sim, null, 2)}
-                  </pre>
-                </div>
 
               </div>
             );
