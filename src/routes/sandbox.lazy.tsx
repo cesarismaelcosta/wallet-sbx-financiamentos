@@ -444,8 +444,9 @@ function SandboxPage() {
   const [error, setError] = useState<string | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
-  // Estados de Contexto e Prateleira
+  // Estados de Contexto e Prateleira (Desacoplando o input temporário do ID efetivo de busca)
   const [customOfferId, setCustomOfferId] = useState("4755461");
+  const [tempOfferId, setTempOfferId] = useState("4755461");
   const [apiOfferData, setApiOfferData] = useState<any>(null);
   const [userData, setUserData] = useState<BFFUserProfile | null>(null);
   const [vitrineOffers, setVitrineOffers] = useState<Record<string, any>>({});
@@ -464,6 +465,12 @@ function SandboxPage() {
   const [routeConfigData, setRouteConfigData] = useState<any>(null);
   const [routeDrawerLoading, setRouteDrawerLoading] = useState(false);
   const [routeDrawerTitle, setRouteDrawerTitle] = useState("");
+
+  // Estados para o Painel Lateral (Drawer) de Simulação de Erros
+  const [isErrorDrawerOpen, setIsErrorDrawerOpen] = useState(false);
+  const [errorDrawerConfig, setErrorDrawerConfig] = useState<any>(null);
+  const [simulationResult, setSimulationResult] = useState<any>(null);
+  const [simulating, setSimulating] = useState(false);
 
   // Handler de Scroll para efeito Glassmorphism no Header
   useEffect(() => {
@@ -590,30 +597,36 @@ function SandboxPage() {
   }, [activeToken, customOfferId, ambienteAtivo]);
 
   /**
-  * @function handleInspectOffer
-  * @description Dispara a busca detalhada de uma oferta específica informada pelo ID customizado.
-  */
+   * @function handleInspectOffer
+   * @description Sincroniza o valor temporário, limpa dados antigos para o estado de loading,
+   * e dispara a busca detalhada da oferta informada.
+   */
   const handleInspectOffer = async () => {
     if (!activeToken) {
       alert("Autentique-se primeiro no formulário abaixo.");
       return;
     }
+    
+    setCustomOfferId(tempOfferId);
     setLoading(true);
+    setError(null);
+    setApiOfferData(null); // Limpa o card anterior imediatamente para refletir o carregamento
+
     try {
-      const offer = await fetchOfferDetails(customOfferId);
+      const offer = await fetchOfferDetails(tempOfferId);
       setApiOfferData(offer);
-      setError(null);
     } catch (err: any) {
-      setError(err.message || "Oferta não encontrada.");
+      setError(err.message || `Oferta não encontrada (Lote: ${tempOfferId}).`);
+      setApiOfferData(null);
     } finally {
       setLoading(false);
     }
   };
 
   /**
-  * @function handleOpenConsultarOferta
-  * @description Abre o painel lateral (Drawer) carregando o payload estruturado da oferta.
-  */
+   * @function handleOpenConsultarOferta
+   * @description Abre o painel lateral (Drawer) carregando o payload estruturado da oferta.
+   */
   const handleOpenConsultarOferta = async (targetOfferId: string) => {
     if (!activeToken) {
       alert("Faça o login primeiro!");
@@ -636,9 +649,9 @@ function SandboxPage() {
   };
 
   /**
-  * @function handleOpenConsultarRota
-  * @description Busca e exibe as configurações dinâmicas de rota da Edge Function `orchestrator_configs`.
-  */
+   * @function handleOpenConsultarRota
+   * @description Busca e exibe as configurações dinâmicas de rota da Edge Function `orchestrator_configs`.
+   */
   const handleOpenConsultarRota = async (item: any) => {
     if (!item) return; 
     
@@ -680,10 +693,103 @@ function SandboxPage() {
   };
 
   /**
-  * @function handleSandboxLogin
-  * @description Orquestra o fluxo completo de autenticação no Sandbox: 
-  * autentica na Superbid, armazena o token e executa o Exchange na Edge Function do Supabase.
-  */
+   * @function handleOpenSimularErro
+   * @description Abre o painel lateral de simulação de erros contendo instruções e guias para desenvolvedores.
+   */
+  const handleOpenSimularErro = (type: 'offer' | 'direct', item?: any) => {
+    setSimulationResult(null);
+    setErrorDrawerConfig({
+      type,
+      title: type === 'offer' ? `Simulação de Erros: ${item?.title || 'Oferta'}` : `Simulação de Erros: ${item?.title || 'Acesso Direto'}`,
+      item
+    });
+    setIsErrorDrawerOpen(true);
+  };
+
+  /**
+   * @function executeErrorSimulation
+   * @description Executa cenários de falha controlada (oferta inválida ID 9999 ou token corrompido) 
+   * via formulário (redirecionamento) ou via fetch (exibindo o JSON de erro diretamente na aba lateral).
+   */
+  const executeErrorSimulation = async (method: 'form' | 'fetch', errorTarget: 'offer' | 'token' | 'product') => {
+    setSimulating(true);
+    setSimulationResult(null);
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+    const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
+
+    const invalidOfferId = errorTarget === 'offer' ? "9999" : (errorDrawerConfig.item?.offerId || "4846218");
+    const invalidToken = errorTarget === 'token' ? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid_token_payload_test.signature" : accessTokenSBX;
+    const invalidProductId = errorTarget === 'product' ? "999" : (errorDrawerConfig.item?.product_id || "8");
+
+    const payload = {
+      environment: ambienteAtivo,
+      auth_token: invalidToken,
+      offer_id: errorDrawerConfig.type === 'offer' ? invalidOfferId : undefined,
+      product_id: errorDrawerConfig.type === 'direct' ? invalidProductId : (errorDrawerConfig.item?.product_id || ""),
+      return_uri: window.location.origin + window.location.pathname,
+      utm_source: "sandbox_error_simulation",
+      utm_medium: "debug",
+      utm_campaign: `error_${errorTarget}_${method}`,
+    };
+
+    if (method === 'fetch') {
+      try {
+        const res = await fetch(gatewayUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        setSimulationResult({
+          status: res.status,
+          ok: res.ok,
+          data
+        });
+      } catch (err: any) {
+        setSimulationResult({
+          status: 500,
+          ok: false,
+          data: { error: err.message || "Erro de rede ao comunicar com a borda." }
+        });
+      } finally {
+        setSimulating(false);
+      }
+    } else {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = gatewayUrl;
+
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value !== undefined) {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = key;
+          input.value = String(value);
+          form.appendChild(input);
+        }
+      });
+
+      document.body.appendChild(form);
+      try {
+        form.submit();
+      } catch (err: any) {
+        setSimulationResult({ status: 500, data: { error: err.message } });
+        setSimulating(false);
+        document.body.removeChild(form);
+      }
+    }
+  };
+
+  /**
+   * @function handleSandboxLogin
+   * @description Orquestra o fluxo completo de autenticação no Sandbox: 
+   * autentica na Superbid, armazena o token e executa o Exchange na Edge Function do Supabase.
+   */
   const handleSandboxLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(""); 
@@ -739,9 +845,9 @@ function SandboxPage() {
   };
 
   /**
-  * @function handleSandboxLogout
-  * @description Limpa os estados de sessão, remove tokens armazenados e purifica o ambiente.
-  */
+   * @function handleSandboxLogout
+   * @description Limpa os estados de sessão, remove tokens armazenados e purifica o ambiente.
+   */
   const handleSandboxLogout = () => {
     setAccessTokenSBX("");
     sessionStorage.removeItem("access_token_sbx");
@@ -749,52 +855,39 @@ function SandboxPage() {
   };
 
   /**
-  * =========================================================================
-  * [GATEWAY DISPATCH VIA FORM POST NATIVO]
-  * =========================================================================
-  * @description Simula uma submissão de formulário HTML tradicional (POST nativo)
-  * em direção à Edge Function de borda (`financial-gateway-gate`).
-  * 
-  * -------------------------------------------------------------------------
-  * [ARQUITETURA & DIFERENÇAS: AJAX vs FORM POST (Domínios Diferentes)]
-  * -------------------------------------------------------------------------
-  * 1. CORS & Preflight (OPTIONS):
-  *    - Em chamadas AJAX (`fetch`), se o Front-end e a Edge Function estão em
-  *      domínios diferentes (ex: app.s4bdigital.net vs xyz.supabase.co), o navegador
-  *      obrigatoriamente dispara uma requisição prévia de segurança (Preflight OPTIONS).
-  *      Se os headers de CORS não estiverem perfeitamente alinhados, a requisição é barrada.
-  *    - No Form POST nativo, o navegador trata a submissão como uma navegação de topo
-  *      (top-level navigation), contornando as restrições rígidas de preflight do AJAX.
-  * 
-  * 2. Tratamento de Erros e Redirecionamentos (HTTP 302):
-  *    - No AJAX, o Front-end intercepta JSONs de erro e manipula o estado via JavaScript 
-  *      (ex: exibindo uma caixa vermelha na mesma tela).
-  *    - No Form POST, o navegador segue automaticamente os redirecionamentos HTTP do servidor.
-  *      Se a borda falhar (ex: `OFFER_NOT_FOUND`), ela responde com um status `302 Found` e um 
-  *      header `Location`, fazendo o navegador carregar diretamente a página de erro com 
-  *      contagem regressiva (`/financialGatewayGate`).
-  * -------------------------------------------------------------------------
-  */
-  const handleSimulateOffer = (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
+   * =========================================================================
+   * [GATEWAY DISPATCH VIA FORM POST NATIVO - MESMA ABA]
+   * =========================================================================
+   * @description Simula uma submissão de formulário HTML tradicional (POST nativo)
+   * em direção à Edge Function de borda (`financial-gateway-gate`) abrindo na MESMA ABA.
+   * 
+   * -------------------------------------------------------------------------
+   * [ARQUITETURA & DECISÃO TÉCNICA]
+   * -------------------------------------------------------------------------
+   * - Utiliza submissão de formulário nativa para contornar restrições severas de 
+   *   CORS e Preflight (OPTIONS) entre domínios cruzados (App vs Supabase).
+   * - Opera estritamente na mesma aba (sem `target = '_blank'`), garantindo que o 
+   *   ciclo de vida do navegador e o contexto de sessão não sofram rupturas ou 
+   *   problemas de isolamento de armazenamento em ambiente local/staging.
+   * -------------------------------------------------------------------------
+   */
+  const handleSimulateOfferForm = (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
     if (isDisabled) return;
     if (!accessTokenSBX) {
       alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
       return;
     }
 
-    setLoadingAction(flowKey);
+    setLoadingAction(`${flowKey}_form`);
     setError(null);
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
     const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
 
-    // 1. Criação dinâmica de um elemento <form> invisível no DOM
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = gatewayUrl;
-    form.target = '_blank'; // Abre o resultado em nova aba (ou segue o fluxo nativo)
 
-    // 2. Mapeamento dos parâmetros que serão enviados para a borda
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
       auth_token: accessTokenSBX,
@@ -803,10 +896,9 @@ function SandboxPage() {
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
       utm_medium: "referral",
-      utm_campaign: `flow_${flowKey.toLowerCase()}`,
+      utm_campaign: `flow_${flowKey.toLowerCase()}_form`,
     };
 
-    // 3. Injeção de cada propriedade do payload como inputs ocultos (<input type="hidden">)
     Object.entries(searchPayload).forEach(([key, value]) => {
       const input = document.createElement('input');
       input.type = 'hidden';
@@ -815,7 +907,6 @@ function SandboxPage() {
       form.appendChild(input);
     });
 
-    // 4. Anexa o formulário ao corpo do documento e dispara o submit nativo
     document.body.appendChild(form);
     
     try {
@@ -824,24 +915,97 @@ function SandboxPage() {
       console.error("[FORM_POST_ERROR]:", err);
       setError(`Erro ao submeter formulário: ${err.message}`);
     } finally {
-      // 5. Limpeza: Remove o form do DOM para manter a árvore limpa
       document.body.removeChild(form);
       setLoadingAction(null);
     }
   };
 
   /**
-  * =========================================================================
-  * [GATEWAY DISPATCH DIRETO VIA FORM POST]: Produtos sem Lote (Equities & Seguros)
-  * =========================================================================
-  */
-  const handleDirectGateway = (flowKey: string, productId: string) => {
+   * =========================================================================
+   * [GATEWAY DISPATCH VIA AJAX / FETCH - NOVA ABA]
+   * =========================================================================
+   * @description Executa uma requisição assíncrona moderna (AJAX via `fetch`) 
+   * direcionada à Edge Function de borda, tratando o payload JSON de resposta 
+   * e abrindo o resultado controlado em uma NOVA ABA (`_blank`).
+   * 
+   * -------------------------------------------------------------------------
+   * [ARQUITETURA & DECISÃO TÉCNICA]
+   * -------------------------------------------------------------------------
+   * - Consome a API da borda enviando dados em JSON e aguardando o contrato de 
+   *   retorno estruturado (`success`, `redirect_url`, `session_token`).
+   * - Realiza o armazenamento preventivo no `sessionStorage` se necessário e 
+   *   dispara a abertura programática da nova aba (`window.open`), servindo 
+   *   como ferramenta ideal de homologação e validação de contratos de API.
+   * -------------------------------------------------------------------------
+   */
+  const handleSimulateOfferAjax = async (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
+    if (isDisabled) return;
     if (!accessTokenSBX) {
       alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
       return;
     }
 
-    setLoadingAction(flowKey);
+    setLoadingAction(`${flowKey}_ajax`);
+    setError(null);
+
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+      const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
+
+      const res = await fetch(gatewayUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          environment: ambienteAtivo,
+          auth_token: accessTokenSBX,
+          offer_id: String(offerId),
+          product_id: String(productId || ''),
+          return_uri: window.location.origin + window.location.pathname,
+          utm_source: "sandbox",
+          utm_medium: "referral",
+          utm_campaign: `flow_${flowKey.toLowerCase()}_ajax`,
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Erro no gateway AJAX: ${res.status}`);
+      }
+
+      if (data.session_token) {
+        sessionStorage.setItem('session_token', data.session_token);
+      }
+
+      if (data.redirect_url) {
+        window.open(data.redirect_url, '_blank');
+      } else {
+        throw new Error("URL de redirecionamento ausente na resposta.");
+      }
+    } catch (err: any) {
+      console.error("[AJAX_GATEWAY_ERROR]:", err);
+      setError(`Erro no disparo AJAX: ${err.message}`);
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  /**
+   * =========================================================================
+   * [GATEWAY DISPATCH DIRETO VIA FORM POST - PRODUTOS SEM LOTE / MESMA ABA]
+   * =========================================================================
+   * @description Submissão nativa direcionada a produtos estruturais sem lote 
+   * (Equities & Seguros) operando na mesma aba.
+   */
+  const handleDirectGatewayForm = (flowKey: string, productId: string) => {
+    if (!accessTokenSBX) {
+      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
+      return;
+    }
+
+    setLoadingAction(`${flowKey}_form`);
     setError(null);
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
@@ -850,7 +1014,6 @@ function SandboxPage() {
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = gatewayUrl;
-    form.target = '_blank';
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
@@ -859,7 +1022,7 @@ function SandboxPage() {
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
       utm_medium: "referral",
-      utm_campaign: `flow_${flowKey.toLowerCase()}`,
+      utm_campaign: `flow_${flowKey.toLowerCase()}_form`,
     };
 
     Object.entries(searchPayload).forEach(([key, value]) => {
@@ -879,6 +1042,65 @@ function SandboxPage() {
       setError(`Erro ao submeter formulário: ${err.message}`);
     } finally {
       document.body.removeChild(form);
+      setLoadingAction(null);
+    }
+  };
+
+  /**
+   * =========================================================================
+   * [GATEWAY DISPATCH DIRETO VIA AJAX - PRODUTOS SEM LOTE / NOVA ABA]
+   * =========================================================================
+   * @description Requisição assíncrona (AJAX) para produtos estruturais sem lote 
+   * (Equities & Seguros) com abertura controlada em nova aba.
+   */
+  const handleDirectGatewayAjax = async (flowKey: string, productId: string) => {
+    if (!accessTokenSBX) {
+      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
+      return;
+    }
+
+    setLoadingAction(`${flowKey}_ajax`);
+    setError(null);
+
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+      const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
+
+      const res = await fetch(gatewayUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          environment: ambienteAtivo,
+          auth_token: accessTokenSBX,
+          product_id: String(productId),
+          return_uri: window.location.origin + window.location.pathname,
+          utm_source: "sandbox",
+          utm_medium: "referral",
+          utm_campaign: `flow_${flowKey.toLowerCase()}_ajax`,
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Erro no gateway AJAX: ${res.status}`);
+      }
+
+      if (data.session_token) {
+        sessionStorage.setItem('session_token', data.session_token);
+      }
+
+      if (data.redirect_url) {
+        window.open(data.redirect_url, '_blank');
+      } else {
+        throw new Error("URL de redirecionamento ausente na resposta.");
+      }
+    } catch (err: any) {
+      console.error("[AJAX_GATEWAY_ERROR]:", err);
+      setError(`Erro no disparo AJAX: ${err.message}`);
+    } finally {
       setLoadingAction(null);
     }
   };
@@ -1081,8 +1303,9 @@ function SandboxPage() {
                 <CardContent className="space-y-3 text-xs">
                   <div className="flex gap-2">
                     <Input 
-                      value={customOfferId} 
-                      onChange={(e) => setCustomOfferId(e.target.value)} 
+                      value={tempOfferId} 
+                      onChange={(e) => setTempOfferId(e.target.value)} 
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleInspectOffer(); }}
                       className="rounded-xl font-mono text-xs" 
                     />
                     <Button onClick={handleInspectOffer} disabled={loading} size="sm" className="rounded-xl bg-[#B300FF] text-white hover:bg-[#9f00e6]">
@@ -1093,7 +1316,20 @@ function SandboxPage() {
                     </Button>
                   </div>
                   
-                  {apiOfferData ? (() => {
+                  {loading ? (
+                    <div className="bg-muted/40 rounded-xl border flex items-center gap-6 overflow-hidden">
+                      <div className="relative h-24 w-32 bg-[#B300FF] shrink-0 overflow-hidden rounded-l-xl flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                          <Loader2 className="animate-spin text-white" size={16} />
+                        </div>
+                      </div>
+
+                      <div className="py-2 pr-4 flex flex-col justify-center space-y-1 overflow-hidden flex-1">
+                        <p className="font-bold text-sm text-foreground">Carregando lote #{tempOfferId}...</p>
+                        <p className="text-xs text-muted-foreground">Buscando dados na API da Superbid...</p>
+                      </div>
+                    </div>
+                  ) : apiOfferData ? (() => {
                     const rawPhotos = apiOfferData?.offer?.photos || [];
                     const sortedPhotos = [...rawPhotos].sort((a: any, b: any) => {
                       if (a.highlight && !b.highlight) return -1;
@@ -1169,7 +1405,7 @@ function SandboxPage() {
                     );
                   })() : (
                     <div className="p-3 bg-muted/40 rounded-xl border text-muted-foreground text-center italic">
-                      Nenhuma oferta carregada. Insira um ID e clique em Buscar.
+                      Nenhuma oferta carregada. Insira um ID válido e clique em Buscar.
                     </div>
                   )}
                 </CardContent>
@@ -1253,22 +1489,41 @@ function SandboxPage() {
                   <CardTitle className="text-lg">Seguros de Veículos</CardTitle>
                   <CardDescription className="text-xs">Disparo direto ao gateway (Product ID: 9)</CardDescription>
                 </CardHeader>
+                {/* SEGUROS DE VEÍCULOS */}
                 <CardContent className="pt-0 space-y-2">
                   <Button 
-                    onClick={() => handleDirectGateway("SeguroAuto", "9")}
-                    disabled={loadingAction === "SeguroAuto"}
+                    onClick={() => handleDirectGatewayForm("SeguroAuto", "9")}
+                    disabled={loadingAction === "SeguroAuto_form"}
                     variant="outline"
                     className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
-                    <ShieldCheck className="h-4 w-4" /> {loadingAction === "SeguroAuto" ? "Processando..." : "Acessar Seguros Auto"}
+                    <ShieldCheck className="h-4 w-4" /> {loadingAction === "SeguroAuto_form" ? "Processando..." : "Acessar Seguros Auto (form)"}
                   </Button>
-                  <div className="flex justify-center pt-1">
+
+                  <Button 
+                    onClick={() => handleDirectGatewayAjax("SeguroAuto", "9")}
+                    disabled={loadingAction === "SeguroAuto_ajax"}
+                    variant="outline"
+                    className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
+                  >
+                    <ShieldCheck className="h-4 w-4" /> {loadingAction === "SeguroAuto_ajax" ? "Processando..." : "Acessar Seguros Auto (fetch)"}
+                  </Button>
+
+                  <div className="flex justify-center items-center gap-2 pt-1 text-[11px] font-bold text-[#B300FF]">
                     <button
                       type="button"
                       onClick={() => handleOpenConsultarRota({ product_id: "9", title: "Seguros de Veículos" })}
-                      className="text-[11px] font-bold text-[#B300FF] hover:underline bg-transparent border-none cursor-pointer p-0"
+                      className="hover:underline bg-transparent border-none cursor-pointer p-0"
                     >
                       consultar rota
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSimularErro('direct', { product_id: "9", title: "Seguros de Veículos" })}
+                      className="hover:underline bg-transparent border-none cursor-pointer p-0 text-amber-600"
+                    >
+                      simular erro
                     </button>
                   </div>
                 </CardContent>
@@ -1282,22 +1537,41 @@ function SandboxPage() {
                   <CardTitle className="text-lg">Car Equity</CardTitle>
                   <CardDescription className="text-xs">Disparo direto ao gateway (Product ID: 7)</CardDescription>
                 </CardHeader>
+                {/* CAR EQUITY */}
                 <CardContent className="pt-0 space-y-2">
                   <Button 
-                    onClick={() => handleDirectGateway("AutoEquity", "7")}
-                    disabled={loadingAction === "AutoEquity"}
+                    onClick={() => handleDirectGatewayForm("AutoEquity", "7")}
+                    disabled={loadingAction === "AutoEquity_form"}
                     variant="outline"
                     className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
-                    <Play className="h-4 w-4" /> {loadingAction === "AutoEquity" ? "Processando..." : "Simular Car Equity"}
+                    <Play className="h-4 w-4" /> {loadingAction === "AutoEquity_form" ? "Processando..." : "Simular Car Equity (form)"}
                   </Button>
-                  <div className="flex justify-center pt-1">
+
+                  <Button 
+                    onClick={() => handleDirectGatewayAjax("AutoEquity", "7")}
+                    disabled={loadingAction === "AutoEquity_ajax"}
+                    variant="outline"
+                    className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
+                  >
+                    <Play className="h-4 w-4" /> {loadingAction === "AutoEquity_ajax" ? "Processando..." : "Simular Car Equity (fetch)"}
+                  </Button>
+
+                  <div className="flex justify-center items-center gap-2 pt-1 text-[11px] font-bold text-[#B300FF]">
                     <button
                       type="button"
                       onClick={() => handleOpenConsultarRota({ product_id: "7", title: "Car Equity" })}
-                      className="text-[11px] font-bold text-[#B300FF] hover:underline bg-transparent border-none cursor-pointer p-0"
+                      className="hover:underline bg-transparent border-none cursor-pointer p-0"
                     >
                       consultar rota
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSimularErro('direct', { product_id: "7", title: "Car Equity" })}
+                      className="hover:underline bg-transparent border-none cursor-pointer p-0 text-amber-600"
+                    >
+                      simular erro
                     </button>
                   </div>
                 </CardContent>
@@ -1362,11 +1636,11 @@ function SandboxPage() {
                             />
                           )}
 
-                        <span className="absolute bottom-2 left-2 bg-black/75 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md z-10 shadow">
+                          <span className="absolute bottom-2 left-2 bg-black/75 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md z-10 shadow">
                             Lote #{item.offerId}
-                        </span>
+                          </span>
 
-                        {!hasError && sortedPhotos.length > 1 && (
+                          {!hasError && sortedPhotos.length > 1 && (
                             <>
                               <button 
                                 onClick={(e) => handlePrevPhoto(item.key, sortedPhotos.length, e)}
@@ -1399,16 +1673,27 @@ function SandboxPage() {
                       </div>
 
                       <div className="p-4 pt-0 space-y-2">
+                        {/* Botão 1: Disparo via Form POST (Mesma Aba) */}
                         <Button 
-                          onClick={() => handleSimulateOffer(item.flowKey, item.offerId, item.product_id, item.disabled)}
-                          disabled={item.disabled || loadingAction === item.flowKey}
+                          onClick={() => handleSimulateOfferForm(item.flowKey, item.offerId, item.product_id, item.disabled)}
+                          disabled={item.disabled || loadingAction === `${item.flowKey}_form`}
                           variant="outline"
                           className={`w-full rounded-xl shadow-sm ${item.variant}`}
                         >
-                          {loadingAction === item.flowKey ? "Processando..." : (item.disabled ? "Indisponível (Em breve)" : item.label)}
+                          {loadingAction === `${item.flowKey}_form` ? "Processando..." : (item.disabled ? "Indisponível (Em breve)" : `${item.label} (form)`)}
                         </Button>
 
-                        <div className="flex flex-col gap-1 text-center pt-1">
+                        {/* Botão 2: Disparo via AJAX / Fetch (Nova Aba) */}
+                        <Button 
+                          onClick={() => handleSimulateOfferAjax(item.flowKey, item.offerId, item.product_id, item.disabled)}
+                          disabled={item.disabled || loadingAction === `${item.flowKey}_ajax`}
+                          variant="outline"
+                          className={`w-full rounded-xl shadow-sm ${item.variant}`}
+                        >
+                          {loadingAction === `${item.flowKey}_ajax` ? "Processando..." : (item.disabled ? "Indisponível (Em breve)" : `${item.label} (fetch)`)}
+                        </Button>
+
+                        <div className="flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 text-center pt-1">
                           <button
                             type="button"
                             onClick={() => handleOpenConsultarOferta(item.offerId)}
@@ -1416,7 +1701,7 @@ function SandboxPage() {
                           >
                             consultar oferta
                           </button>
-
+                          <span className="text-slate-300">•</span>
                           <button
                             type="button"
                             onClick={() => handleOpenConsultarRota(item)}
@@ -1424,14 +1709,22 @@ function SandboxPage() {
                           >
                             consultar rota
                           </button>
+                          <span className="text-slate-300">•</span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSimularErro('offer', item)}
+                            className="text-[11px] font-bold text-amber-600 hover:underline bg-transparent border-none cursor-pointer p-0"
+                          >
+                            simular erro
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </>
+          </>
         )}
 
       </main>
@@ -1589,6 +1882,177 @@ function SandboxPage() {
 
             <div className="p-4 border-t border-gray-200 bg-slate-50 flex justify-end flex-shrink-0">
               <Button onClick={() => setIsRouteDrawerOpen(false)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-xl px-5">
+                Fechar Painel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PAINEL LATERAL (DRAWER) DE SIMULAÇÃO DE ERROS */}
+      {isErrorDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-all">
+          <div className="w-full max-w-xl bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-purple-50/60 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#B300FF]" />
+                <h3 className="text-sm font-black uppercase text-purple-900">{errorDrawerConfig?.title}</h3>
+              </div>
+              <button onClick={() => setIsErrorDrawerOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs text-slate-700">
+              <div className="bg-purple-50/40 border border-purple-200 p-4 rounded-xl space-y-2">
+                <h4 className="font-bold text-purple-900 uppercase text-[11px]">Guia de Testes e Resiliência (Developer Guide)</h4>
+                <p className="text-muted-foreground leading-relaxed">
+                  Este painel simula cenários de falha na borda (<code className="bg-purple-100 px-1 py-0.5 rounded text-purple-900">financial-gateway-gate</code>). 
+                  Você pode testar a resiliência disparando via <b>Fetch (AJAX)</b> para inspecionar o contrato de erro JSON diretamente aqui na aba, 
+                  ou via <b>Form POST (Nativo)</b> para validar o redirecionamento com spinner de erro do front-end.
+                </p>
+              </div>
+
+              {errorDrawerConfig?.type === 'offer' ? (
+                <div className="space-y-4">
+                  {/* Cenário 1: Oferta Inválida */}
+                  <div className="border border-slate-200 p-4 rounded-xl space-y-3 bg-white shadow-sm">
+                    <h5 className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-500" /> 1. Simular Oferta Inválida (ID: 9999)
+                    </h5>
+                    <p className="text-muted-foreground">
+                      Envia um ID inexistente para a API upstream da Superbid. A borda deve interceptar o erro e disparar <code className="bg-slate-100 px-1 py-0.5 rounded">OFFER_NOT_FOUND</code>.
+                    </p>
+                    <div className="flex gap-2 pt-1">
+                      <Button 
+                        onClick={() => executeErrorSimulation('fetch', 'offer')} 
+                        disabled={simulating}
+                        size="sm" 
+                        variant="outline"
+                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5"
+                      >
+                        {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
+                      </Button>
+                      <Button 
+                        onClick={() => executeErrorSimulation('form', 'offer')} 
+                        disabled={simulating}
+                        size="sm" 
+                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white"
+                      >
+                        Testar via Form (Redirecionar)
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Cenário 2: Token Inválido */}
+                  <div className="border border-slate-200 p-4 rounded-xl space-y-3 bg-white shadow-sm">
+                    <h5 className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-500" /> 2. Simular Token de Acesso Inválido / Expirado
+                    </h5>
+                    <p className="text-muted-foreground">
+                      Substitui o token ativo por uma credencial corrompida. A borda disparará o erro de sessão expirada ou não autorizada (<code className="bg-slate-100 px-1 py-0.5 rounded">SESSION_EXPIRED</code>).
+                    </p>
+                    <div className="flex gap-2 pt-1">
+                      <Button 
+                        onClick={() => executeErrorSimulation('fetch', 'token')} 
+                        disabled={simulating}
+                        size="sm" 
+                        variant="outline"
+                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5"
+                      >
+                        {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
+                      </Button>
+                      <Button 
+                        onClick={() => executeErrorSimulation('form', 'token')} 
+                        disabled={simulating}
+                        size="sm" 
+                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white"
+                      >
+                        Testar via Form (Redirecionar)
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Cenário Direct: Produto Inválido */}
+                  <div className="border border-slate-200 p-4 rounded-xl space-y-3 bg-white shadow-sm">
+                    <h5 className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-500" /> 1. Simular Produto Estrutural Inválido (ID: 999)
+                    </h5>
+                    <p className="text-muted-foreground">
+                      Envia um ID de produto sem correspondência no orquestrador de rotas para testar a validação de destino.
+                    </p>
+                    <div className="flex gap-2 pt-1">
+                      <Button 
+                        onClick={() => executeErrorSimulation('fetch', 'product')} 
+                        disabled={simulating}
+                        size="sm" 
+                        variant="outline"
+                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5"
+                      >
+                        {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
+                      </Button>
+                      <Button 
+                        onClick={() => executeErrorSimulation('form', 'product')} 
+                        disabled={simulating}
+                        size="sm" 
+                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white"
+                      >
+                        Testar via Form (Redirecionar)
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Cenário Direct: Token */}
+                  <div className="border border-slate-200 p-4 rounded-xl space-y-3 bg-white shadow-sm">
+                    <h5 className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-500" /> 2. Simular Token Inválido na Chamada Direta
+                    </h5>
+                    <p className="text-muted-foreground">
+                      Valida o comportamento de segurança da borda ao receber requisições estruturais sem autenticação válida.
+                    </p>
+                    <div className="flex gap-2 pt-1">
+                      <Button 
+                        onClick={() => executeErrorSimulation('fetch', 'token')} 
+                        disabled={simulating}
+                        size="sm" 
+                        variant="outline"
+                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5"
+                      >
+                        {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
+                      </Button>
+                      <Button 
+                        onClick={() => executeErrorSimulation('form', 'token')} 
+                        disabled={simulating}
+                        size="sm" 
+                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white"
+                      >
+                        Testar via Form (Redirecionar)
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Exibição do Retorno via Fetch na Própria Aba */}
+              {simulationResult && (
+                <div className="mt-4 p-4 rounded-xl border bg-slate-900 text-slate-100 space-y-2 font-mono text-[11px]">
+                  <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span className="font-bold text-purple-400">Retorno do Serviço (Fetch):</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] ${simulationResult.ok ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}`}>
+                      HTTP Status: {simulationResult.status}
+                    </span>
+                  </div>
+                  <pre className="whitespace-pre-wrap break-all overflow-x-auto text-[10px]">
+                    {JSON.stringify(simulationResult.data, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 bg-slate-50 flex justify-end flex-shrink-0">
+              <Button onClick={() => setIsErrorDrawerOpen(false)} className="bg-[#B300FF] hover:bg-[#9f00e6] text-white text-xs rounded-xl px-5">
                 Fechar Painel
               </Button>
             </div>
