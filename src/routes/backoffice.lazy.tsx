@@ -15,6 +15,7 @@ import {
   Users,
   Globe,
   Layers,
+  TriangleAlert,
 } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Input } from "@/components/ui/input";
