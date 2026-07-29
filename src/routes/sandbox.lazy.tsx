@@ -479,9 +479,22 @@ function SandboxPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() => {
-    return (getDefaultSbxEnvironment() as "staging" | "production") || "production";
+const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() => {
+    if (typeof window !== "undefined") {
+      const savedEnv = sessionStorage.getItem("sandbox_active_env");
+      if (savedEnv === "staging" || savedEnv === "production") {
+        return savedEnv;
+      }
+    }
+    return (getDefaultSbxEnvironment() as "staging" | "production") || "staging";
   });
+
+  // Salva o ambiente na sessionStorage sempre que ele for alterado
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("sandbox_active_env", ambienteAtivo);
+    }
+  }, [ambienteAtivo]);
 
   // Inicializa o estado vazio para garantir paridade exata na primeira renderização SSR/Client
   const [accessTokenSBX, setAccessTokenSBX] = useState<string>("");

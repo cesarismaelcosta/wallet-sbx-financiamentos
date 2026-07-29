@@ -102,7 +102,6 @@ function FAQSection({ items }: { items?: any[] }) {
   return (
     <section className="py-1 overflow-hidden bg-white">
       <div className="max-w-full">
-        {/* REMOVIDO: md:grid-cols-2. AGORA É UMA COLUNA SÓ PARA SIMULAR MOBILE */}
         <div className="grid grid-cols-1 gap-y-2">
           <Accordion type="single" collapsible className="w-full space-y-2">
             {sortedItems.map((item, i) => (
@@ -114,7 +113,19 @@ function FAQSection({ items }: { items?: any[] }) {
                 <AccordionTrigger className="text-left font-semibold text-xs text-foreground/90 py-2.5">
                   {item.question}
                 </AccordionTrigger>
-                {/* ... resto do conteúdo do accordion ... */}
+                <AccordionContent className="text-muted-foreground text-[11px] leading-relaxed pb-2">
+                  <div className="mb-2">{item.answer}</div>
+                  {item.bullets && item.bullets.length > 0 && (
+                    <div className="space-y-1 mt-1">
+                      {item.bullets.map((bullet: string, idx: number) => (
+                        <div key={idx} className="flex gap-1.5">
+                          <span>•</span>
+                          <span>{bullet}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>
@@ -258,22 +269,101 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
   );
 }
 
+function PaymentFactorsBuilder({ factors = {}, onChange }: { factors: Record<string, number>, onChange: (f: Record<string, number>) => void }) {
+  const [entries, setEntries] = useState<Array<{ term: string, factor: any }>>(() => 
+    Object.entries(factors || {}).map(([term, factor]) => ({ term, factor }))
+  );
+
+  useEffect(() => {
+    const currentEntriesObj = Object.entries(factors || {});
+    if (currentEntriesObj.length !== entries.length) {
+      setEntries(currentEntriesObj.map(([term, factor]) => ({ term, factor })));
+    }
+  }, [factors]);
+
+  const triggerChange = (newEntries: Array<{ term: string, factor: any }>) => {
+    setEntries(newEntries);
+    const newObj: Record<string, number> = {};
+    newEntries.forEach(item => {
+      if (item.term !== undefined && item.term !== "") {
+        newObj[item.term] = Number(item.factor) || 0;
+      }
+    });
+    onChange(newObj);
+  };
+
+  const updateEntry = (index: number, field: 'term' | 'factor', value: string) => {
+    const newEntries = [...entries];
+    newEntries[index][field] = value;
+    triggerChange(newEntries);
+  };
+
+  const removeEntry = (index: number) => {
+    const newEntries = entries.filter((_, i) => i !== index);
+    triggerChange(newEntries);
+  };
+
+  const addEntry = () => {
+    setEntries([...entries, { term: "", factor: "" }]);
+  };
+
+  return (
+    <div className="space-y-2 pt-2 border-t">
+      <div className="flex justify-between items-center">
+        <label className="text-[10px] font-bold text-slate-500 uppercase">Fatores de Pagamento por Prazo (Payment Factors)</label>
+        <button
+          type="button"
+          onClick={addEntry}
+          className="text-[10px] font-bold text-[#B300FF] hover:underline flex items-center"
+        >
+          <Plus size={12} className="mr-0.5" /> Adicionar Fator
+        </button>
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="text-[10px] text-slate-400 italic">Nenhum fator customizado configurado (usará padrão linear se aplicável).</p>
+      ) : (
+        <div className="space-y-2 bg-slate-50 p-2.5 rounded-lg border">
+          {entries.map((entry, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <div className="w-1/3">
+                <Input
+                  placeholder="Prazo (ex: 12)"
+                  value={entry.term}
+                  onChange={(e) => updateEntry(idx, 'term', e.target.value)}
+                  className="h-8 text-xs font-mono bg-white"
+                />
+              </div>
+              <div className="flex-1">
+                <Input
+                  type="number"
+                  step="0.00000001"
+                  placeholder="Fator (ex: 0.09916667)"
+                  value={entry.factor}
+                  onChange={(e) => updateEntry(idx, 'factor', e.target.value)}
+                  className="h-8 text-xs font-mono bg-white"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => removeEntry(idx)}
+                className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                title="Remover linha"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * =========================================================================
  * [SUB-COMPONENTE DE CONSTRUTOR]: ConsentItemBuilder
  * =========================================================================
- * @description 
- * Encapsula a lógica de edição individual de um termo de consentimento (LGPD).
- * Este componente foi extraído para garantir que a manipulação de texto via 
- * Expressão Regular (Regex) e o controle de foco do cursor no campo textarea 
- * ocorram de forma isolada e performática, sem renderizar a página inteira 
- * a cada keystroke.
- * 
- * @features
- * - Sincronização Bidirecional: Sincroniza o texto digitado com a lista de tags configuráveis dinamicamente.
- * - Inserção Dinâmica: Envolve o texto selecionado (API nativa de selectionStart/End) com chaves {}.
- * - Gestão de Estado Elevada (Lifting State Up): Comunica alterações ao componente pai (OrchestratorConfigEditor) 
- *   através dos callbacks `onUpdate` e `onRemove` para compor o JSON final do Live Preview de forma reativa.
  */
 function ConsentItemBuilder({ 
   consent, 
@@ -286,37 +376,19 @@ function ConsentItemBuilder({
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  /**
-   * Monitora alterações na string do Textarea e sincroniza as {tags} encontradas
-   * com o array de configurações de links.
-   * 
-   * @param {string} newText - O texto atualizado proveniente do evento onChange.
-   */
   const handleTextChange = (newText: string) => {
-    // Regex Pattern: Captura qualquer conteúdo entre chaves { }, não guloso (lazy).
     const matches = newText.match(/\{([^}]+)\}/g) || [];
-    // Higieniza o array resultante, removendo os caracteres de chaves para cruzar com o banco.
     const currentTags = matches.map((m) => m.replace(/[{}]/g, ""));
 
-    // Recupera a lista de links legada do estado atual
     const existingLinks = consent.links || [];
-    
-    // Mapeia e constrói o novo array de links
-    // Se a tag já estava configurada (comparando texto com texto), preserva suas propriedades (URL/Tooltip).
-    // Caso contrário, injeta o boilerplate padrão para uma nova configuração de link Web.
     const newLinks = currentTags.map((tag) => {
       const found = existingLinks.find((l: any) => l.text === tag);
       return found || { text: tag, type: "web", url: "", tooltip_text: "" };
     });
 
-    // Propaga o objeto consent atualizado para o estado global do painel
     onUpdate({ ...consent, template_text: newText, links: newLinks });
   };
 
-  /**
-   * Transforma a seleção atual de texto (highlight via mouse) em um {link}.
-   * Utiliza as APIs nativas do HTMLTextAreaElement para injetar os caracteres no DOM.
-   */
   const handleInsertTag = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -325,35 +397,20 @@ function ConsentItemBuilder({
     const end = textarea.selectionEnd;
     const text = consent.template_text || "";
 
-    // Fail-fast: Se o cursor apenas estiver piscando sem nada selecionado.
     if (start === end) {
       alert("Por favor, selecione uma palavra no texto primeiro para criar o link.");
       return;
     }
 
     const selectedText = text.substring(start, end);
-    
-    // Prevenção de quebra de sintaxe (Ex: aninhar chaves {{texto}})
     if (selectedText.includes("{") || selectedText.includes("}")) return;
 
-    // Constrói a nova string injetando as chaves ao redor da substring capturada
     const newText = text.substring(0, start) + `{${selectedText}}` + text.substring(end);
     
-    // Aciona a mesma lógica do onChange para que o Regex atue no novo texto
     handleTextChange(newText);
-    
-    // Macro-task fallback: Devolve o foco ao Textarea após a renderização do React ter 
-    // liberado o Call Stack, garantindo que o usuário não perca o contexto da digitação.
     setTimeout(() => { textarea.focus(); }, 0);
   };
 
-  /**
-   * Atualiza propriedades pontuais (como a URL ou o tipo) de um item específico no array de links.
-   * Utiliza desestruturação para garantir imutabilidade do objeto principal.
-   * 
-   * @param {number} index - O índice do link no array atual.
-   * @param {any} updates - O objeto parcial contendo as chaves a serem atualizadas.
-   */
   const updateLinkConfig = (index: number, updates: any) => {
     const newLinks = [...(consent.links || [])];
     newLinks[index] = { ...newLinks[index], ...updates };
@@ -362,7 +419,6 @@ function ConsentItemBuilder({
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative group">
-      {/* Botão de Remoção Contextual (Aparece no Hover da Div Pai) */}
       <button 
         onClick={onRemove}
         className="absolute top-3 right-3 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -372,7 +428,6 @@ function ConsentItemBuilder({
       </button>
       
       <div className="grid gap-4">
-        {/* CABEÇALHO DO ITEM (ID Funcional e Switch de Obrigatoriedade) */}
         <div className="flex gap-4 items-end">
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase">ID do Termo</label>
@@ -391,7 +446,6 @@ function ConsentItemBuilder({
           </div>
         </div>
 
-        {/* ÁREA DE TEXTO PRINCIPAL COM BOTÃO DE AÇÃO RÁPIDA (WYSIWYG Híbrido) */}
         <div className="space-y-1.5">
           <div className="flex justify-between items-center">
             <label className="text-[10px] font-bold text-slate-500 uppercase">Texto do Termo</label>
@@ -412,16 +466,12 @@ function ConsentItemBuilder({
           />
         </div>
 
-        {/* ÁREA DINÂMICA DE RENDERIZAÇÃO DE LINKS: 
-            Só é injetada no DOM se o motor Regex identificar Tags ativas no texto principal */}
         {consent.links && consent.links.length > 0 && (
           <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 space-y-2 mt-1">
             <h5 className="text-[10px] font-bold text-slate-500 uppercase mb-2">Configuração dos Links</h5>
             {consent.links.map((link: any, idx: number) => (
-              /* Layout ajustado para flex-col (empilhado em duas linhas) */
               <div key={idx} className="flex flex-col gap-2.5 bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
                 
-                {/* LINHA SUPERIOR: Visualização da Tag e Seletor de Tipo */}
                 <div className="flex items-start justify-between gap-3 w-full">
                   <div className="flex-1">
                     <span className="text-[9px] text-slate-400 block uppercase mb-0.5">Texto Destacado</span>
@@ -442,7 +492,6 @@ function ConsentItemBuilder({
                   </div>
                 </div>
 
-                {/* LINHA INFERIOR: Input Condicional (Ocupando 100% da largura) */}
                 <div className="w-full">
                   {link.type === "web" ? (
                     <Input
@@ -475,8 +524,6 @@ function ConsentItemBuilder({
  * =========================================================================
  * [SUB-COMPONENTES DE UI BUILDER]: Para a Aba "Oferta & Rodapé"
  * =========================================================================
- * Estes componentes abstraem a manipulação de arrays aninhados do objeto page_configs,
- * como as partes de texto (para pintar palavras específicas), os benefícios e o rodapé.
  */
 
 function TextPartsBuilder({ label, parts = [], onChange }: { label: string, parts: any[], onChange: (p: any[]) => void }) {
@@ -522,7 +569,6 @@ function TextPartsBuilder({ label, parts = [], onChange }: { label: string, part
 }
 
 function BenefitsBuilder({ benefits = [], onChange }: { benefits: any[], onChange: (b: any[]) => void }) {
-  // Busca dinamicamente todas as chaves mapeadas no seu dicionário oficial
   const iconOptions = Object.keys(ICON_MAP);
   
   return (
@@ -544,7 +590,6 @@ function BenefitsBuilder({ benefits = [], onChange }: { benefits: any[], onChang
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
                   {iconOptions.map(iconKey => {
-                    // Instancia o componente do ícone para mostrá-lo na lista
                     const IconComponent = ICON_MAP[iconKey]; 
                     return (
                       <SelectItem key={iconKey} value={iconKey}>
@@ -592,15 +637,9 @@ function BenefitsBuilder({ benefits = [], onChange }: { benefits: any[], onChang
   );
 }
 
-/**
- * Construtor Híbrido para o Rodapé (Footer).
- * Utiliza a mesma lógica de seleção de texto (WYSIWYG) dos Consentimentos (LGPD),
- * mas otimizado apenas para Links Web (sem suporte a Tooltips).
- */
 function FooterBuilder({ footer = {}, onChange }: { footer: any, onChange: (f: any) => void }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 1. Sincroniza as chaves {} digitadas com os campos de URL embaixo
   const handleTextChange = (newText: string) => {
     const matches = newText.match(/\{([^}]+)\}/g) || [];
     const currentTags = matches.map((m) => m.replace(/[{}]/g, ""));
@@ -608,13 +647,12 @@ function FooterBuilder({ footer = {}, onChange }: { footer: any, onChange: (f: a
     const existingLinks = footer.links || [];
     const newLinks = currentTags.map((tag) => {
       const found = existingLinks.find((l: any) => l.text === tag);
-      return found || { text: tag, url: "" }; // Rodapé usa apenas URL
+      return found || { text: tag, url: "" };
     });
 
     onChange({ ...footer, template_text: newText, links: newLinks });
   };
 
-  // 2. Ação do botão: Envolve o texto selecionado com {}
   const handleInsertTag = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -637,7 +675,6 @@ function FooterBuilder({ footer = {}, onChange }: { footer: any, onChange: (f: a
     setTimeout(() => { textarea.focus(); }, 0);
   };
 
-  // 3. Atualiza a URL digitada no campo dinâmico
   const updateLinkConfig = (index: number, urlValue: string) => {
     const newLinks = [...(footer.links || [])];
     newLinks[index].url = urlValue;
@@ -646,7 +683,6 @@ function FooterBuilder({ footer = {}, onChange }: { footer: any, onChange: (f: a
 
   return (
     <div className="space-y-3">
-      {/* HEADER DA CAIXA DE TEXTO COM BOTÃO */}
       <div className="flex justify-between items-center">
         <label className="text-[10px] font-bold text-slate-500 uppercase">Texto do Rodapé</label>
         <button
@@ -658,7 +694,6 @@ function FooterBuilder({ footer = {}, onChange }: { footer: any, onChange: (f: a
         </button>
       </div>
       
-      {/* ÁREA DE TEXTO PRINCIPAL */}
       <textarea 
         ref={textareaRef}
         value={footer.template_text || ""} 
@@ -667,12 +702,10 @@ function FooterBuilder({ footer = {}, onChange }: { footer: any, onChange: (f: a
         placeholder="© 2026 Wallet sbX. Autorizado por {Nome da Empresa}."
       />
 
-{/* ÁREA DINÂMICA DE LINKS (Aparece ao detectar chaves) */}
       {footer.links && footer.links.length > 0 && (
         <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 space-y-2 mt-2">
           <h5 className="text-[10px] font-bold text-slate-500 uppercase mb-2">URLs Mapeadas no Texto</h5>
           {footer.links.map((link: any, idx: number) => (
-            /* Layout ajustado para flex-col (empilhado em duas linhas) */
             <div key={idx} className="flex flex-col gap-2.5 bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
               <div className="w-full">
                 <span className="text-[9px] text-slate-400 block uppercase mb-0.5">Texto Destacado</span>
@@ -699,23 +732,24 @@ function FooterBuilder({ footer = {}, onChange }: { footer: any, onChange: (f: a
  * =========================================================================
  * [COMPONENTE DE EDITOR]: OrchestratorConfigEditor (Split-Screen)
  * =========================================================================
- * @description Interface híbrida para edição de dados relacionais e JSONs complexos.
- * Apresenta Live Preview à direita validando a configuração visual e de regras na hora.
  */
 function OrchestratorConfigEditor({ 
   initialData = null, 
   partnersList = [],
+  productsList = [],
+  categoriesList = [],
   onClose, 
   onSave 
 }: { 
   initialData?: OrchestratorRow | null, 
   partnersList: { id: string | number, name: string }[],
+  productsList: { id: string | number, name: string }[],
+  categoriesList: { id: string | number, name: string }[],
   onClose: () => void,
   onSave: (data: OrchestratorRow) => Promise<void>
 }) {
   const [isSaving, setIsSaving] = useState(false);
 
-  // 1. Estados fixos
   const [formData, setFormData] = useState({
     config_type: initialData?.config_type || "PRODUCT",
     lookup_id: initialData?.lookup_id || "",
@@ -727,7 +761,6 @@ function OrchestratorConfigEditor({
     is_integrated: initialData?.is_integrated ?? true,
   });
 
-  // 2. Estados em String para o Editor JSON
   const [jsonEditors, setJsonEditors] = useState({
     integration_details: initialData?.integration_details && Object.keys(initialData.integration_details).length > 0 
       ? JSON.stringify(initialData.integration_details, null, 2) : "{\n  \n}",
@@ -741,16 +774,16 @@ function OrchestratorConfigEditor({
       ? JSON.stringify(initialData.page_faqs, null, 2) : "[\n  \n]",
   });
 
-  // 3. Estados de Preview Parseeados
   const [parsedPreview, setParsedPreview] = useState<any>({
     page_configs: initialData?.page_configs || null,
     consent_configs: initialData?.consent_configs || null,
     page_faqs: initialData?.page_faqs || null,
+    rules: initialData?.rules || {},
+    integration_details: initialData?.integration_details || {},
   });
 
   const [jsonErrors, setJsonErrors] = useState<Record<string, string | null>>({});
 
-  // Atualiza e Tenta Parsear o JSON para Live Preview
   const handleJsonChange = (field: keyof typeof jsonEditors, value: string) => {
     setJsonEditors(prev => ({ ...prev, [field]: value }));
     
@@ -764,8 +797,7 @@ function OrchestratorConfigEditor({
       const parsed = JSON.parse(value);
       setJsonErrors(prev => ({ ...prev, [field]: null }));
       
-      // Live update the visual components
-      if (['page_configs', 'consent_configs', 'page_faqs'].includes(field)) {
+      if (['page_configs', 'consent_configs', 'page_faqs', 'rules', 'integration_details'].includes(field)) {
         setParsedPreview(prev => ({ ...prev, [field]: parsed }));
       }
     } catch (e: any) {
@@ -785,23 +817,28 @@ function OrchestratorConfigEditor({
       return;
     }
 
+    if (!formData.partner_id) {
+      alert("O campo Vincular Parceiro Oficial é obrigatório.");
+      return;
+    }
+
     try {
       setIsSaving(true);
       const payload: OrchestratorRow = {
-        ...(initialData?.id ? { id: initialData.id } : {}), // Preserva ID se for edição
+        ...(initialData?.id ? { id: initialData.id } : {}),
         config_type: formData.config_type,
         lookup_id: formData.lookup_id,
         entity_type: formData.entity_type,
         page_url: formData.page_url,
         integration_method: formData.integration_method,
-        partner_id: formData.partner_id !== "none" ? Number(formData.partner_id) : null,
+        partner_id: Number(formData.partner_id), // Sempre envia o número válido do parceiro
         is_active: formData.is_active,
         is_integrated: formData.is_integrated,
-        integration_details: JSON.parse(jsonEditors.integration_details || "{}"),
-        rules: JSON.parse(jsonEditors.rules || "{}"),
-        page_configs: JSON.parse(jsonEditors.page_configs || "{}"),
-        consent_configs: JSON.parse(jsonEditors.consent_configs || "[]"),
-        page_faqs: JSON.parse(jsonEditors.page_faqs || "[]"),
+        integration_details: parsedPreview.integration_details || JSON.parse(jsonEditors.integration_details || "{}"),
+        rules: parsedPreview.rules || JSON.parse(jsonEditors.rules || "{}"),
+        page_configs: parsedPreview.page_configs || JSON.parse(jsonEditors.page_configs || "{}"),
+        consent_configs: parsedPreview.consent_configs || JSON.parse(jsonEditors.consent_configs || "[]"),
+        page_faqs: parsedPreview.page_faqs || JSON.parse(jsonEditors.page_faqs || "[]"),
       };
 
       await onSave(payload);
@@ -865,15 +902,56 @@ function OrchestratorConfigEditor({
                       <SelectContent>
                         <SelectItem value="PRODUCT">Produto (PRODUCT)</SelectItem>
                         <SelectItem value="CATEGORY">Categoria (CATEGORY)</SelectItem>
+                        <SelectItem value="EVENT">Evento (EVENT)</SelectItem>
+                        <SelectItem value="SELLER">Seller (SELLER)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1.5">
-                      Lookup ID <span className="text-red-500">*</span>
+                      {formData.config_type === "PRODUCT" && "Produto Oficial"}
+                      {formData.config_type === "CATEGORY" && "Categoria Oficial"}
+                      {formData.config_type === "SELLER" && "Parceiro / Seller"}
+                      {formData.config_type === "EVENT" && "ID / Código do Evento"}
+                      <span className="text-red-500">*</span>
                     </label>
-                    <Input value={formData.lookup_id} onChange={(e) => setFormData({...formData, lookup_id: e.target.value})} placeholder="Ex: 8, 11..." className="h-11 rounded-xl" />
+
+                    {formData.config_type === "PRODUCT" ? (
+                      <Select value={String(formData.lookup_id || "")} onValueChange={(v) => setFormData({...formData, lookup_id: v})}>
+                        <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Selecione o produto..." /></SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          {productsList.length > 0 ? productsList.map(p => (
+                            <SelectItem key={p.id} value={String(p.id)}>{p.name} <span className="text-slate-400 font-mono text-[10px]">(ID: {p.id})</span></SelectItem>
+                          )) : <div className="p-3 text-xs text-slate-400 text-center">Nenhum produto encontrado</div>}
+                        </SelectContent>
+                      </Select>
+                    ) : formData.config_type === "CATEGORY" ? (
+                      <Select value={String(formData.lookup_id || "")} onValueChange={(v) => setFormData({...formData, lookup_id: v})}>
+                        <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Selecione a categoria..." /></SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          {categoriesList.length > 0 ? categoriesList.map(c => (
+                            <SelectItem key={c.id} value={String(c.id)}>{c.name} <span className="text-slate-400 font-mono text-[10px]">(ID: {c.id})</span></SelectItem>
+                          )) : <div className="p-3 text-xs text-slate-400 text-center">Nenhuma categoria encontrada</div>}
+                        </SelectContent>
+                      </Select>
+                    ) : formData.config_type === "SELLER" ? (
+                      <Select value={String(formData.lookup_id || "")} onValueChange={(v) => setFormData({...formData, lookup_id: v})}>
+                        <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Selecione o seller/parceiro..." /></SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          {partnersList.length > 0 ? partnersList.map(pt => (
+                            <SelectItem key={pt.id} value={String(pt.id)}>{pt.name} <span className="text-slate-400 font-mono text-[10px]">(ID: {pt.id})</span></SelectItem>
+                          )) : <div className="p-3 text-xs text-slate-400 text-center">Nenhum parceiro encontrado</div>}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input 
+                        value={formData.lookup_id} 
+                        onChange={(e) => setFormData({...formData, lookup_id: e.target.value})} 
+                        placeholder="Ex: ID ou código do evento..." 
+                        className="h-11 rounded-xl font-mono text-sm" 
+                      />
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -893,9 +971,10 @@ function OrchestratorConfigEditor({
                     <Select value={formData.integration_method} onValueChange={(v) => setFormData({...formData, integration_method: v})}>
                       <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="API">API Gateway</SelectItem>
-                        <SelectItem value="WEBHOOK">Webhook Direto</SelectItem>
-                        <SelectItem value="FORM">Formulário Externo</SelectItem>
+                        <SelectItem value="API">API</SelectItem>
+                        <SelectItem value="EMAIL">E-mail (EMAIL)</SelectItem>
+                        <SelectItem value="FILE">Arquivo (FILE)</SelectItem>
+                        <SelectItem value="MANUAL">Manual (MANUAL)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -906,14 +985,24 @@ function OrchestratorConfigEditor({
                   </div>
 
                   <div className="space-y-2 col-span-2">
-                    <label className="text-xs font-bold text-slate-600 uppercase">Vincular Parceiro Oficial</label>
-                    <Select value={formData.partner_id} onValueChange={(v) => setFormData({...formData, partner_id: v})}>
-                      <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Selecione um parceiro (opcional)"/></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Nenhum / Não Aplicável</SelectItem>
-                        {partnersList.map(p => (
-                          <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                        ))}
+                    <label className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1.5">
+                      Vincular Parceiro Oficial <span className="text-red-500">*</span>
+                    </label>
+                    <Select 
+                      value={String(formData.partner_id || "")} 
+                      onValueChange={(v) => setFormData({...formData, partner_id: v})}
+                    >
+                      <SelectTrigger className="h-11 rounded-xl">
+                        <SelectValue placeholder="Selecione um parceiro obrigatório..." />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {partnersList.length > 0 ? (
+                          partnersList.map(p => (
+                            <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                          ))
+                        ) : (
+                          <div className="p-3 text-xs text-slate-400 text-center">Nenhum parceiro encontrado</div>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -938,32 +1027,170 @@ function OrchestratorConfigEditor({
                 </div>
               </TabsContent>
 
-              {/* TAB 2: REGRAS E INTEGRAÇÃO (JSON Editor) */}
-              <TabsContent value="rules" className="space-y-6 mt-0 flex flex-col h-full pb-8">
-                <div className="flex-1 flex flex-col space-y-2 min-h-[250px]">
-                  <label className="text-xs font-bold text-slate-600 uppercase">Rules & Installments (Regras de Negócio)</label>
-                  <textarea 
-                    className="flex-1 w-full bg-slate-900 text-green-400 font-mono text-xs p-4 rounded-xl outline-none focus:ring-2 focus:ring-[#B300FF]"
-                    value={jsonEditors.rules}
-                    onChange={(e) => handleJsonChange('rules', e.target.value)}
-                    spellCheck={false}
-                  />
-                   {jsonErrors.rules && <p className="text-xs text-red-500 font-bold flex items-center"><AlertTriangle className="w-3 h-3 mr-1"/>{jsonErrors.rules}</p>}
-                </div>
+              {/* TAB 2: REGRAS & INTEGRAÇÃO (Construtor Visual) */}
+              <TabsContent value="rules" className="space-y-6 mt-0 pb-8">
+                 
+                 <div className="flex justify-between items-center bg-purple-50 p-3 rounded-xl border border-purple-100">
+                    <div>
+                      <h3 className="font-bold text-slate-800 uppercase text-xs flex items-center gap-2">
+                        <SlidersHorizontal size={14} className="text-[#B300FF]" /> Regras de Negócio & Integração
+                      </h3>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Configure os parâmetros de simulação, limites e webhooks de comunicação.</p>
+                    </div>
+                 </div>
 
-                <div className="flex-1 flex flex-col space-y-2 min-h-[250px]">
-                  <label className="text-xs font-bold text-slate-600 uppercase">Integration Details (Credenciais / Webhooks)</label>
-                  <textarea 
-                    className="flex-1 w-full bg-slate-900 text-green-400 font-mono text-xs p-4 rounded-xl outline-none focus:ring-2 focus:ring-[#B300FF]"
-                    value={jsonEditors.integration_details}
-                    onChange={(e) => handleJsonChange('integration_details', e.target.value)}
-                    spellCheck={false}
-                  />
-                  {jsonErrors.integration_details && <p className="text-xs text-red-500 font-bold flex items-center"><AlertTriangle className="w-3 h-3 mr-1"/>{jsonErrors.integration_details}</p>}
-                </div>
+                 {(() => {
+                   const rules = parsedPreview.rules || {};
+                   const integration = parsedPreview.integration_details || {};
+
+                   const updateRules = (newRules: any) => {
+                     setParsedPreview({ ...parsedPreview, rules: newRules });
+                     setJsonEditors({ ...jsonEditors, rules: JSON.stringify(newRules, null, 2) });
+                   };
+
+                   const updateIntegration = (newInt: any) => {
+                     setParsedPreview({ ...parsedPreview, integration_details: newInt });
+                     setJsonEditors({ ...jsonEditors, integration_details: JSON.stringify(newInt, null, 2) });
+                   };
+
+                   return (
+                     <div className="space-y-6">
+                        
+                        {/* 1. CREDENCIAIS E CANAIS (INTEGRATION DETAILS) */}
+                        <div className="bg-white p-5 rounded-xl border shadow-sm space-y-4">
+                          <h4 className="text-[11px] font-bold uppercase text-slate-800 border-b pb-2">1. Credenciais & Webhooks (Integração)</h4>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">CNPJ da Loja</label>
+                              <Input 
+                                value={integration.cnpjLoja || ""} 
+                                onChange={(e) => updateIntegration({ ...integration, cnpjLoja: e.target.value })}
+                                className="h-8 text-xs font-mono" placeholder="Ex: 15314890000183" 
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">URL do WhatsApp de Atendimento</label>
+                              <Input 
+                                value={integration.urlWhatsApp || ""} 
+                                onChange={(e) => updateIntegration({ ...integration, urlWhatsApp: e.target.value })}
+                                className="h-8 text-xs font-mono" placeholder="Ex: https://wa.me/55..." 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">URL de Callback (Webhook Gateway)</label>
+                            <Input 
+                              value={integration.urlCallback || ""} 
+                              onChange={(e) => updateIntegration({ ...integration, urlCallback: e.target.value })}
+                              className="h-8 text-xs font-mono" placeholder="Ex: https://.../financial-gateway-webhook/fandi" 
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">URL de Redirecionamento Direto (Opcional - ex: Seguros)</label>
+                            <Input 
+                              value={integration.urlRedirect || ""} 
+                              onChange={(e) => updateIntegration({ ...integration, urlRedirect: e.target.value })}
+                              className="h-8 text-xs font-mono" placeholder="https://..." 
+                            />
+                          </div>
+                        </div>
+
+                        {/* 2. PARÂMETROS DE FINANCIAMENTO E PARCELAS (RULES) */}
+                        <div className="bg-white p-5 rounded-xl border shadow-sm space-y-4">
+                          <h4 className="text-[11px] font-bold uppercase text-slate-800 border-b pb-2">2. Regras de Parcelamento e Prazos</h4>
+                          
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Opções de Parcelas (Separadas por vírgula)</label>
+                            <Input 
+                              value={Array.isArray(rules.installment_options) ? rules.installment_options.join(", ") : ""} 
+                              onChange={(e) => {
+                                const parsedArray = e.target.value.split(",").map(n => Number(n.trim())).filter(n => !isNaN(n) && n > 0);
+                                updateRules({ ...rules, installment_options: parsedArray });
+                              }}
+                              className="h-8 text-xs font-mono" placeholder="Ex: 12, 24, 36, 48, 60" 
+                            />
+                            <p className="text-[9px] text-slate-400">Digite os meses aceitos para simulação separados por vírgula.</p>
+                          </div>
+
+                          {/* Bloco de Fatores de Pagamento Dinâmicos */}
+                          <PaymentFactorsBuilder 
+                            factors={rules.payment_factors || {}} 
+                            onChange={(newFactors) => updateRules({ ...rules, payment_factors: newFactors })}
+                          />
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">Parcela Padrão (Default)</label>
+                              <Input 
+                                type="number"
+                                value={rules.default_installments ?? ""} 
+                                onChange={(e) => updateRules({ ...rules, default_installments: Number(e.target.value) })}
+                                className="h-8 text-xs" placeholder="Ex: 48" 
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">Valor Máximo Financiado (R$)</label>
+                              <Input 
+                                type="number"
+                                value={rules.max_financed_amount ?? ""} 
+                                onChange={(e) => updateRules({ ...rules, max_financed_amount: e.target.value ? Number(e.target.value) : undefined })}
+                                className="h-8 text-xs" placeholder="Ex: 120000 (Opcional)" 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3 pt-2">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">Entrada Mínima (%)</label>
+                              <Input 
+                                type="number"
+                                value={rules.min_down_payment_percentage ?? 0} 
+                                onChange={(e) => updateRules({ ...rules, min_down_payment_percentage: Number(e.target.value) })}
+                                className="h-8 text-xs" 
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">Entrada Máxima (%)</label>
+                              <Input 
+                                type="number"
+                                value={rules.max_down_payment_percentage ?? 80} 
+                                onChange={(e) => updateRules({ ...rules, max_down_payment_percentage: Number(e.target.value) })}
+                                className="h-8 text-xs" 
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">Cap Máximo Oferta (%)</label>
+                              <Input 
+                                type="number"
+                                value={rules.max_offer_cap_percent ?? 50} 
+                                onChange={(e) => updateRules({ ...rules, max_offer_cap_percent: Number(e.target.value) })}
+                                className="h-8 text-xs" 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="pt-2 border-t flex items-center justify-between">
+                            <div>
+                              <h5 className="font-bold text-xs text-slate-800">Permitir Valor Customizado?</h5>
+                              <p className="text-[10px] text-muted-foreground">Deixa o usuário digitar um valor livre de financiamento na tela</p>
+                            </div>
+                            <Switch 
+                              checked={rules.allow_custom_value ?? true} 
+                              onCheckedChange={(v) => updateRules({ ...rules, allow_custom_value: v })} 
+                            />
+                          </div>
+
+                        </div>
+
+                     </div>
+                   );
+                 })()}
               </TabsContent>
 
-              {/* TAB 3: VISUAL DA PÁGINA (Interface 100% Visual sem JSON) */}
+              {/* TAB 3: OFERTA & RODAPÉ */}
               <TabsContent value="visual" className="h-full flex flex-col mt-0 pb-8 min-h-[500px] space-y-6">
                  
                  <div className="flex justify-between items-center bg-purple-50 p-3 rounded-xl border border-purple-100">
@@ -975,15 +1202,12 @@ function OrchestratorConfigEditor({
                     </div>
                  </div>
 
-                 {/* FUNÇÃO AUXILIAR PARA ATUALIZAÇÃO REATIVA DO PAGE_CONFIGS */}
                  {(() => {
-                   // Extrai a configuração atual garantindo fallbacks seguros caso seja um JSON vazio ou novo
                    const config = parsedPreview.page_configs || {};
                    const theme = config.theme || { box_bg: "bg-white/80", box_radius: "rounded-3xl", primary_color: "#B300FF" };
                    const offer = config.offer_panel || { partner: {}, headline: { parts: [] }, description: { parts: [] }, benefits: [] };
                    const footer = config.footer || { template_text: "", links: [] };
 
-                   // Atualizador mestre de estado
                    const updateConfig = (newConfig: any) => {
                      setParsedPreview({ ...parsedPreview, page_configs: newConfig });
                      setJsonEditors({ ...jsonEditors, page_configs: JSON.stringify(newConfig, null, 2) });
@@ -991,30 +1215,34 @@ function OrchestratorConfigEditor({
 
                    return (
                      <div className="space-y-6">
-                      {/* 1. SEÇÃO DE CORES E TEMA */}
+                        {/* 1. SEÇÃO DE CORES E TEMA */}
                         <div className="bg-white p-5 rounded-xl border shadow-sm space-y-4">
                           <h4 className="text-[11px] font-bold uppercase text-slate-800 border-b pb-2">1. Cores e Estilo do Box</h4>
                           <div className="grid grid-cols-3 gap-4">
                             
-                            {/* Cor Principal (Mantém o color picker que já está legal) */}
+                            {/* Cor Principal com Color Picker Integrado */}
                             <div className="space-y-1.5">
                               <label className="text-[10px] font-bold text-slate-500 uppercase">Cor Principal</label>
                               <div className="flex gap-2 items-center">
-                                <input 
-                                  type="color" 
-                                  value={theme.primary_color || "#B300FF"} 
-                                  onChange={(e) => updateConfig({ ...config, theme: { ...theme, primary_color: e.target.value } })}
-                                  className="w-8 h-8 rounded cursor-pointer border-0 p-0"
-                                />
+                                <div className="relative w-10 h-8 rounded-lg border border-slate-200 shadow-xs overflow-hidden cursor-pointer hover:opacity-90 transition-opacity">
+                                  <div className="absolute inset-0 w-full h-full" style={{ backgroundColor: theme.primary_color || "#B300FF" }} />
+                                  <input 
+                                    type="color" 
+                                    value={theme.primary_color || "#B300FF"} 
+                                    onChange={(e) => updateConfig({ ...config, theme: { ...theme, primary_color: e.target.value } })}
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                  />
+                                </div>
                                 <Input 
                                   value={theme.primary_color || ""} 
                                   onChange={(e) => updateConfig({ ...config, theme: { ...theme, primary_color: e.target.value } })}
-                                  className="h-8 text-xs font-mono uppercase" 
+                                  className="h-8 text-xs font-mono uppercase flex-1 bg-white" 
+                                  placeholder="#B300FF"
                                 />
                               </div>
                             </div>
 
-                            {/* Fundo do Box (Transformado em Select amigável) */}
+                            {/* Fundo do Box */}
                             <div className="space-y-1.5">
                               <label className="text-[10px] font-bold text-slate-500 uppercase">Fundo do Box</label>
                               <Select 
@@ -1031,7 +1259,7 @@ function OrchestratorConfigEditor({
                               </Select>
                             </div>
 
-                            {/* Raio da Borda (Transformado em Select amigável) */}
+                            {/* Raio da Borda */}
                             <div className="space-y-1.5">
                               <label className="text-[10px] font-bold text-slate-500 uppercase">Raio da Borda</label>
                               <Select 
@@ -1099,11 +1327,6 @@ function OrchestratorConfigEditor({
                         {/* 4. SEÇÃO DO RODAPÉ (FOOTER) */}
                         <div className="bg-white p-5 rounded-xl border shadow-sm space-y-4">
                           <h4 className="text-[11px] font-bold uppercase text-slate-800 border-b pb-2">4. Rodapé e Legal (Footer)</h4>
-                          
-                          {/* 
-                            * Invocação do novo FooterBuilder. Toda a complexidade de Regex e controle 
-                            * do textarea foi abstraída. Passamos o objeto inteiro e recebemos ele pronto.
-                            */}
                           <FooterBuilder 
                             footer={footer} 
                             onChange={(newFooter) => updateConfig({ ...config, footer: newFooter })}
@@ -1115,7 +1338,7 @@ function OrchestratorConfigEditor({
                  })()}
               </TabsContent>
 
-              {/* TAB 4: LGPD E FAQS (CONSTRUTOR VISUAL) */}
+              {/* TAB 4: CONSENTIMENTOS & FAQS */}
               <TabsContent value="legal" className="space-y-8 mt-0 flex flex-col h-full pb-8">
                 
                 {/* --- CONSTRUTOR VISUAL DE CONSENTIMENTOS (LGPD) --- */}
@@ -1154,30 +1377,18 @@ function OrchestratorConfigEditor({
                         Nenhum termo de consentimento configurado.
                       </div>
                     ) : (
-                      /* 
-                       * Renderização otimizada dos termos de consentimento utilizando o 
-                       * componente recém integrado ConsentItemBuilder. Ele abstrai a complexidade 
-                       * da edição em linha (Regex, seleção de texto) e devolve para o estado global
-                       * um JSON limpo e formatado.
-                       */
                       parsedPreview.consent_configs.map((consent: any, index: number) => (
                         <ConsentItemBuilder
                           key={index}
                           consent={consent}
                           onUpdate={(updatedConsent) => {
-                            // Cria uma cópia rasa e iterativa para não ferir o ciclo de imutabilidade do React
                             const updatedList = [...parsedPreview.consent_configs];
                             updatedList[index] = updatedConsent;
-                            
-                            // 1. Atualiza a árvore visual (Preview) à direita da tela.
                             setParsedPreview({ ...parsedPreview, consent_configs: updatedList });
-                            // 2. Reflete as alterações como Payload serializado no editor subjacente (JSON).
                             setJsonEditors({ ...jsonEditors, consent_configs: JSON.stringify(updatedList, null, 2) });
                           }}
                           onRemove={() => {
-                            // Extrai o item alvo da coleção mantendo a pureza funcional da operação.
                             const updatedList = parsedPreview.consent_configs.filter((_: any, i: number) => i !== index);
-                            
                             setParsedPreview({ ...parsedPreview, consent_configs: updatedList });
                             setJsonEditors({ ...jsonEditors, consent_configs: JSON.stringify(updatedList, null, 2) });
                           }}
@@ -1261,7 +1472,6 @@ function OrchestratorConfigEditor({
                               />
                             </div>
 
-                            {/* NOVO: GESTÃO DE BULLETS (Tópicos) */}
                             <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-3">
                               <div className="flex justify-between items-center">
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Tópicos (Bullets)</label>
@@ -1295,7 +1505,6 @@ function OrchestratorConfigEditor({
                                           setParsedPreview({ ...parsedPreview, page_faqs: updated });
                                           setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) });
                                         }}
-                                        /* Mudamos h-10 para h-16, p-1.5 para p-2 e leading-tight para leading-relaxed */
                                         className="flex-1 h-16 border border-slate-200 rounded-md p-2 text-[11px] outline-none focus:border-[#B300FF] resize-none leading-relaxed text-slate-700"
                                         placeholder="Digite o item da lista..."
                                       />
@@ -1331,10 +1540,9 @@ function OrchestratorConfigEditor({
         </div>
 
         {/* LADO DIREITO: LIVE PREVIEW (40%) */}
-        <div className="w-[40%] bg-slate-50 p-6 overflow-y-auto relative">
+        <div className="w-[40%] bg-slate-50 overflow-y-auto relative flex flex-col">
           
-          {/* CABEÇALHO DO PREVIEW (AJUSTADO EDGE-TO-EDGE) */}
-          <div className="sticky top-[-24px] -mx-6 px-6 pt-6 pb-4 mb-6 z-10 bg-slate-50/95 backdrop-blur border-b border-slate-200">
+          <div className="sticky top-0 px-6 pt-6 pb-4 z-20 bg-slate-50 border-b border-slate-200 shadow-xs shrink-0">
             <h3 className="font-black text-sm uppercase text-slate-800 flex items-center gap-2">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#B300FF] opacity-75"></span>
@@ -1342,13 +1550,11 @@ function OrchestratorConfigEditor({
               </span>
               Live Preview
             </h3>
-            <p className="text-xs text-slate-500 mt-1">O layout abaixo reflete o JSON em tempo real.</p>
+            <p className="text-xs text-slate-500 mt-0.5">O layout abaixo reflete o JSON em tempo real.</p>
           </div>
 
-          {/* CONTAINER CENTRALIZADO (SIMULA LARGURA DE UM CELULAR) */}
-          <div className="w-full max-w-xl mx-auto space-y-6 pb-20">
+          <div className="p-6 space-y-6 pb-20 max-w-xl mx-auto w-full">
             
-            {/* 1. Preview do Painel de Oferta */}
             {parsedPreview.page_configs && Object.keys(parsedPreview.page_configs).length > 0 ? (
                <div className="bg-white p-5 rounded-2xl shadow-lg border border-slate-100">
                   <OfferPanelRender config={parsedPreview.page_configs} />
@@ -1359,21 +1565,18 @@ function OrchestratorConfigEditor({
               </div>
             )}
 
-            {/* 2. Preview de Consentimentos */}
             {parsedPreview.consent_configs && parsedPreview.consent_configs.length > 0 && (
               <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
                  <DynamicConsentsStatic configs={parsedPreview.consent_configs} />
               </div>
             )}
 
-            {/* 3. Preview de FAQs */}
             {parsedPreview.page_faqs && parsedPreview.page_faqs.length > 0 && (
               <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
                  <FAQSection items={parsedPreview.page_faqs} />
               </div>
             )}
 
-             {/* 4. Preview do Footer */}
              {parsedPreview.page_configs?.footer && (
                <div className="pt-4">
                   <FooterRender config={parsedPreview.page_configs.footer} />
@@ -1387,41 +1590,30 @@ function OrchestratorConfigEditor({
   );
 }
 
-
 /**
  * =========================================================================
  * [COMPONENTE PRINCIPAL]: OrchestratorConfigsBackofficePage
  * =========================================================================
  */
 function OrchestratorConfigsBackofficePage() {
-  // --- ESTADOS CORE DA TELA ---
   const [rows, setRows] = useState<OrchestratorRow[]>([]);
   const [productsMap, setProductsMap] = useState<Record<string, string>>({});
   const [categoriesMap, setCategoriesMap] = useState<Record<string, string>>({});
   const [partnersMap, setPartnersMap] = useState<Record<string, { name: string; logo_url: string }>>({});
   
-  // --- ESTADOS DE CONTROLE E FILTRAGEM ---
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
 
-  // --- ESTADOS DO PAINEL LATERAL (INSPEÇÃO) E EDITOR ---
   const [isRouteDrawerOpen, setIsRouteDrawerOpen] = useState(false);
   const [activeConfig, setActiveConfig] = useState<OrchestratorRow | null>(null);
 
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<OrchestratorRow | null>(null);
 
-  /**
-   * @async
-   * @function load
-   * @description Pipeline assíncrono para busca simultânea de rotas, produtos, 
-   * categorias oficiais e parceiros no Supabase.
-   */
   async function load() {
     setLoading(true);
     try {
-      // 1. Busca dados da tabela principal de configurações de rotas
       const { data: configData, error: configError } = await supabase
         .from("orchestrator_configs")
         .select("*");
@@ -1429,7 +1621,6 @@ function OrchestratorConfigsBackofficePage() {
       if (configError) throw configError;
       setRows((configData as OrchestratorRow[]) || []);
 
-      // 2. Mapeia tipos de produtos por ID
       const { data: prodData } = await supabase.from("product_types").select("id, name");
       if (prodData) {
         const pMap: Record<string, string> = {};
@@ -1437,7 +1628,6 @@ function OrchestratorConfigsBackofficePage() {
         setProductsMap(pMap);
       }
 
-      // 3. Mapeia categorias oficiais (tabela category_types) por ID
       const { data: catData } = await supabase.from("category_types").select("id, name");
       if (catData) {
         const cMap: Record<string, string> = {};
@@ -1445,7 +1635,6 @@ function OrchestratorConfigsBackofficePage() {
         setCategoriesMap(cMap);
       }
 
-      // 4. Mapeia parceiros ativos (nome e logotipos)
       const { data: partData } = await supabase.from("partners").select("id, name, logo_url");
       if (partData) {
         const ptMap: Record<string, { name: string; logo_url: string }> = {};
@@ -1461,38 +1650,28 @@ function OrchestratorConfigsBackofficePage() {
     }
   }
 
-  // Aciona o carregamento inicial ao montar o componente
   useEffect(() => {
     load();
   }, []);
 
-  /**
-   * @function handleSaveRoute
-   * @description Salva os dados gerados pelo Editor Híbrido no Supabase (Insert ou Update)
-   */
   const handleSaveRoute = async (payload: OrchestratorRow) => {
     try {
       if (payload.id) {
-        // Editando rota existente
         const { error } = await supabase.from("orchestrator_configs").update(payload).eq("id", payload.id);
         if (error) throw error;
       } else {
-        // Criando nova rota
         const { error } = await supabase.from("orchestrator_configs").insert([payload]);
         if (error) throw error;
       }
       
       setIsEditorOpen(false);
-      load(); // Recarrega a tabela para exibir os dados atualizados
+      load();
     } catch (err: any) {
       console.error("Erro de BD ao salvar a rota:", err);
       throw new Error(err.message || "Erro desconhecido ao comunicar com o banco de dados.");
     }
   };
 
-  /**
-   * @function getProductOrCategoryName
-   */
   const getProductOrCategoryName = (r: OrchestratorRow) => {
     if (r.config_type === "PRODUCT" && productsMap[r.lookup_id]) {
       return productsMap[r.lookup_id];
@@ -1500,12 +1679,15 @@ function OrchestratorConfigsBackofficePage() {
     if (r.config_type === "CATEGORY" && categoriesMap[r.lookup_id]) {
       return categoriesMap[r.lookup_id];
     }
+    if (r.config_type === "SELLER" && partnersMap[r.lookup_id]) {
+      return partnersMap[r.lookup_id].name;
+    }
+    if (r.config_type === "EVENT") {
+      return `Evento: ${r.lookup_id}`;
+    }
     return r.lookup_id ? `ID #${r.lookup_id}` : "—";
   };
 
-  /**
-   * @function getPartnerInfo
-   */
   const getPartnerInfo = (r: OrchestratorRow) => {
     const partnerId = r.partner_id || r.integration_details?.partner_id || r.page_configs?.offer_panel?.partner?.id;
     if (partnerId && partnersMap[String(partnerId)]) {
@@ -1514,9 +1696,6 @@ function OrchestratorConfigsBackofficePage() {
     return null;
   };
 
-  /**
-   * @constant filtered
-   */
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     
@@ -1542,10 +1721,17 @@ function OrchestratorConfigsBackofficePage() {
     });
   }, [rows, search, statusFilter, productsMap, categoriesMap]);
 
-  // Deriva array de parceiros pro Select do Editor
   const partnersList = useMemo(() => {
     return Object.entries(partnersMap).map(([id, p]) => ({ id, name: p.name }));
   }, [partnersMap]);
+
+  const productsList = useMemo(() => {
+    return Object.entries(productsMap).map(([id, name]) => ({ id, name }));
+  }, [productsMap]);
+
+  const categoriesList = useMemo(() => {
+    return Object.entries(categoriesMap).map(([id, name]) => ({ id, name }));
+  }, [categoriesMap]);
 
   return (
     <div className="space-y-6 font-sans">
@@ -1817,6 +2003,8 @@ function OrchestratorConfigsBackofficePage() {
         <OrchestratorConfigEditor
           initialData={editingConfig}
           partnersList={partnersList}
+          productsList={productsList}
+          categoriesList={categoriesList}
           onClose={() => setIsEditorOpen(false)}
           onSave={handleSaveRoute}
         />

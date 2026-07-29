@@ -35,14 +35,42 @@ import { generateSignature } from '../_shared/crypto.ts';
 import { generateUserEmailNotificationHtml } from "./fandi-notifications.ts";
 
 /**
- * CONFIGURAÇÕES TÉCNICAS E FLAGS DE AMBIENTE
- */
-
-/**
  * FUNÇÃO DE LOG PADRONIZADA
  * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
 import { debugLog } from "../_shared/logger.ts";
+
+/**
+ * Gera um CPF válido a partir de um ID de vendedor (seller_id) preenchendo
+ * com zeros à esquerda e calculando os dois dígitos verificadores (DV).
+ * 
+ * @param {string | number} sellerId - Identificador numérico do vendedor.
+ * @returns {string} CPF gerado contendo 11 dígitos numéricos formatados.
+ */
+function generateCpfFromSellerId(sellerId: string | number): string {
+  // Normaliza o ID para string limpa, garantindo 9 dígitos à esquerda com padding de zeros
+  const base = String(sellerId || "").replace(/\D/g, "").padStart(9, '0').slice(-9);
+
+  // Cálculo do 1º Dígito Verificador do CPF
+  let sum1 = 0;
+  for (let i = 0; i < 9; i++) {
+    sum1 += parseInt(base[i], 10) * (10 - i);
+  }
+  let rem1 = sum1 % 11;
+  let dv1 = rem1 < 2 ? 0 : 11 - rem1;
+
+  // Cálculo do 2º Dígito Verificador do CPF
+  let sum2 = 0;
+  for (let i = 0; i < 9; i++) {
+    sum2 += parseInt(base[i], 10) * (11 - i);
+  }
+  sum2 += dv1 * 2;
+  let rem2 = sum2 % 11;
+  let dv2 = rem2 < 2 ? 0 : 11 - rem2;
+
+  // Retorna a string final combinando a base e os dois DVs calculados
+  return base + dv1 + dv2;
+}
 
 /**
  * FLUXO PRINCIPAL DE SIMULAÇÃO E INCLUSÃO
@@ -60,11 +88,9 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   const integrationDetails = payload?.integration_details || {};
   
   // Chave de intefação
-  // const FANDI_API_KEY = "56a9a219-8af8-43dd-8d1f-98af724a3704"
   const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
 
   // CNPJ DE ACORDO COM O PRODUTO (LEVES E PESADOS)
-  // const CNPJ_LOJA = "15314890000183"; 
   const CNPJ_LOJA = integrationDetails.cnpjLoja; 
 
   // Registra log no Supabase se ligado
@@ -110,13 +136,21 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
    * PASSO 1: SOLICITAÇÃO DE GUID
    * Cria a sessão de checkout vinculando o cliente ao lojista.
    */
+  const codigoParceiro = `${payload.event.event_id}/${payload.offer.offer_id}`;
+  const sellerId = payload.seller?.seller_id;
+  // Regra de negócio atual exige o envio do CPF do vendedor
+  const SEND_CPF_VENDEDOR = true;
+  // Só gera e envia se a flag estiver ativa E houver um sellerId válido
+  const cpfVendedor = (SEND_CPF_VENDEDOR && sellerId) ? generateCpfFromSellerId(sellerId) : null
   const bodyGuid = { 
     config: { 
       chaveAcesso: FANDI_API_KEY, 
       cnpjLoja: CNPJ_LOJA, 
       urlCallback: WEBHOOK_URL,
       confirmarDados: [], 
-      exibeTelaFinalizacao: false
+      exibeTelaFinalizacao: false,
+      ...(codigoParceiro ? { codigoParceiro } : {}),
+      ...(cpfVendedor ? { cpfVendedor: cpfVendedor.replace(/\D/g, "") } : {})
     },
     cliente: {
       // Agora acessamos via payload.entity
