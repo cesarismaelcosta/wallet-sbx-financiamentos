@@ -98,6 +98,9 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   }
 
   try {
+
+    const urls = ENV_URLS[environment as keyof typeof ENV_URLS] || ENV_URLS.production;
+    
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!, 
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
