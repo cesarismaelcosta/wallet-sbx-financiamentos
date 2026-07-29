@@ -49,7 +49,7 @@ import { useAuth } from "@/integrations/auth/AuthContext";
 // ============================================================================
 // [REGISTRO DA ROTA TANSTACK ROUTER]
 // ============================================================================
-export const Route = createLazyFileRoute("/backoffice/alertas")({ 
+export const Route = createLazyFileRoute("/backoffice/alerts")({ 
   component: AlertasPage 
 });
 
