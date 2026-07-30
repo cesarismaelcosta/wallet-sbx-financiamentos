@@ -66,8 +66,18 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   const accept = req.headers.get("accept") || "";
   const isAjax = contentType.includes("application/json") || accept.includes("application/json");
   
-  let payload: any = {};
-  
+  let { 
+    environment, 
+    auth_token, 
+    offer_id, 
+    product_id, 
+    return_uri, 
+    utm_source, 
+    utm_medium, 
+    utm_campaign,
+    target_url // 👈 Parâmetro opcional se for apenas para gerar visita
+  } = payload;
+ 
   try {
     if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
@@ -328,20 +338,23 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     }
 
     // =====================================================================
-    // [STEP 8] ORQUESTRAÇÃO DE ROTAS (Target Discovery)
+    // [STEP 8] ORQUESTRAÇÃO DE ROTAS (Target Discovery & Direct Navigation)
     // =====================================================================
+    const isDirectVisit = !!target_url;
+
     const rehydratedPayload = {
-      action: "CONSULT",
-      timestamp: new Date().toISOString(),
-      origin_url: return_uri,
-      environment,
-      entity: userProfile,
-      product_id: product_id || "",
-      offer: offerPayload?.offer || {},
-      seller: offerPayload?.seller || {},
-      event: offerPayload?.event || {},
-      manager: offerPayload?.manager || {},
-      interaction_context: { utm_source, utm_medium, utm_campaign, origin_url: return_uri }
+    action: isDirectVisit ? "VISIT" : "CONSULT", // 👈 Se tem target_url, usa VISIT (pula busca de regras)
+    target_url: target_url || "",                // 👈 Repassa o destino direto
+    timestamp: new Date().toISOString(),
+    origin_url: return_uri,
+    environment,
+    entity: userProfile,
+    product_id: product_id || "",
+    offer: offerPayload?.offer || {},
+    seller: offerPayload?.seller || {},
+    event: offerPayload?.event || {},
+    manager: offerPayload?.manager || {},
+    interaction_context: { utm_source, utm_medium, utm_campaign, origin_url: return_uri }
     };
 
     debugLog("Iniciando Orquestração de Rota...");

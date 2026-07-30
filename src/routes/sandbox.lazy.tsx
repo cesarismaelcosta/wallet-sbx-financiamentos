@@ -1040,6 +1040,127 @@ function SandboxPage() {
 
   /**
    * =========================================================================
+   * [GATEWAY DISPATCH DIRETO VIA FORM POST - SBXPAY / MESMA ABA]
+   * =========================================================================
+   * @description Submissão nativa direcionada ao hub sbxpay sem produto ou lote,
+   * enviando a target_url opcional para acionar o fluxo de visita (VISIT) na borda.
+   */
+  const handleSbxPayGatewayForm = () => {
+    if (!accessTokenSBX) {
+      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
+      return;
+    }
+
+    setLoadingAction("sbxpay_form");
+    setError(null);
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+    const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = gatewayUrl;
+
+    const searchPayload: Record<string, string> = {
+      environment: ambienteAtivo,
+      auth_token: accessTokenSBX,
+      target_url: "/sbxpay", // 👈 Opcional: Aciona o modo VISIT na borda
+      return_uri: window.location.origin + window.location.pathname,
+      utm_source: "sandbox",
+      utm_medium: "referral",
+      utm_campaign: "flow_sbxpay_form",
+    };
+
+    Object.entries(searchPayload).forEach(([key, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = String(value);
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+
+    try {
+      form.submit();
+    } catch (err: any) {
+      console.error("[FORM_POST_ERROR]:", err);
+      setError(`Erro ao submeter formulário: ${err.message}`);
+      document.body.removeChild(form);
+      setLoadingAction(null);
+    }
+  };
+
+  /**
+   * =========================================================================
+   * [GATEWAY DISPATCH DIRETO VIA AJAX - SBXPAY / NOVA ABA]
+   * =========================================================================
+   * @description Requisição assíncrona (AJAX) para o hub sbxpay sem lote, 
+   * enviando a target_url opcional e abrindo o resultado com a sessão hidratada em nova aba.
+   */
+  const handleSbxPayGatewayAjax = async () => {
+    if (!accessTokenSBX) {
+      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
+      return;
+    }
+
+    setLoadingAction("sbxpay_ajax");
+    setError(null);
+
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+      const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
+
+      const res = await fetch(gatewayUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          environment: ambienteAtivo,
+          auth_token: accessTokenSBX,
+          target_url: "/sbxpay", // 👈 Opcional: Aciona o modo VISIT na borda
+          return_uri: window.location.origin + window.location.pathname,
+          utm_source: "sandbox",
+          utm_medium: "referral",
+          utm_campaign: "flow_sbxpay_ajax",
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Erro no gateway AJAX: ${res.status}`);
+      }
+
+      if (data.session_token) {
+        sessionStorage.setItem('session_token', data.session_token);
+      }
+
+      if (data.redirect_url) {
+        window.open(data.redirect_url, '_blank');
+      } else {
+        throw new Error("URL de redirecionamento ausente na resposta.");
+      }
+    } catch (err: any) {
+      console.error("[AJAX_GATEWAY_ERROR]:", err);
+      const errorMsg = err.message || "Erro desconhecido";
+      setError(`Erro no disparo AJAX: ${errorMsg}`);
+
+      const isAuthError = errorMsg.toLowerCase().includes("autenticação") ||  
+                          errorMsg.toLowerCase().includes("unauthorized") ||  
+                          errorMsg.toLowerCase().includes("session_expired");
+                          
+      if (isAuthError) {
+        handleSandboxLogout();
+      }
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  /**
+   * =========================================================================
    * [GATEWAY DISPATCH DIRETO VIA FORM POST - PRODUTOS SEM LOTE / MESMA ABA]
    * =========================================================================
    * @description Submissão nativa direcionada a produtos estruturais sem lote 
@@ -1212,7 +1333,17 @@ function SandboxPage() {
           </div>
 
           <div className="hidden md:flex items-center space-x-3">
-            <a href="/backoffice" target="_blank" rel="noopener noreferrer" className={ghostBtn}>Backoffice</a>
+            <a 
+              href="/sandbox/help" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className={`flex items-center gap-1.5 ${ghostBtn}`}
+            >
+              <HelpCircle className="w-4 h-4" /> Ajuda
+            </a>
+            <a href="/backoffice" target="_blank" rel="noopener noreferrer" className={ghostBtn}>
+              Backoffice
+            </a>
             {activeToken ? (
               <button onClick={handleSandboxLogout} className={`flex items-center gap-2 ${ghostBtn}`}>
                 Sair <LogOut className="w-3 h-3" />
@@ -1523,18 +1654,38 @@ function SandboxPage() {
                     <img src="/assets/home/conta.png" alt="Conta sbXPAY" className="h-full w-full object-contain" />
                   </div>
                   <CardTitle className="text-lg">Landing Wallet sbX</CardTitle>
-                  <CardDescription className="text-xs">Acesso ao hub de produtos e serviços financeiros.</CardDescription>
+                  <CardDescription className="text-xs">Acesso ao hub de produtos e serviços financeiros (Via Gateway).</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-0">
+                <CardContent className="pt-0 space-y-2">
+                  {/* Botão sbxpay (form) */}
                   <Button 
-                    onClick={() => window.open('/sbxpay', '_blank')}
+                    onClick={handleSbxPayGatewayForm}
+                    disabled={loadingAction === "sbxpay_form"}
                     variant="outline"
-                    className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm cursor-pointer"
+                    className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
-                    <ExternalLink className="h-4 w-4" /> Ir para sbxpay
+                    {loadingAction === "sbxpay_form" ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin text-[#B300FF]" /> Processando...
+                      </>
+                    ) : (
+                      <>
+                        <ExternalLink className="h-4 w-4" /> Ir para sbxpay (form)
+                      </>
+                    )}
+                  </Button>
+
+                  {/* Botão sbxpay (fetch) */}
+                  <Button 
+                    onClick={handleSbxPayGatewayAjax}
+                    disabled={loadingAction === "sbxpay_ajax"}
+                    variant="outline"
+                    className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
+                  >
+                    <ExternalLink className="h-4 w-4" /> {loadingAction === "sbxpay_ajax" ? "Processando..." : "Ir para sbxpay (fetch)"}
                   </Button>
                 </CardContent>
-              </Card> 
+              </Card>
 
               <Card className="rounded-2xl border-border hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
