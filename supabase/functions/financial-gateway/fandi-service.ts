@@ -143,7 +143,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   const codigoParceiro = `${payload.event.event_id}/${payload.offer.offer_id}`;
   const sellerId = payload.seller?.seller_id;
   // Regra de negócio atual exige o envio do CPF do vendedor
-  const SEND_CPF_VENDEDOR = false;
+  const SEND_CPF_VENDEDOR = true;
   // Só gera e envia se a flag estiver ativa E houver um sellerId válido
   const cpfVendedor = (SEND_CPF_VENDEDOR && sellerId) ? generateCpfFromSellerId(sellerId) : null
 
@@ -229,6 +229,9 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   if (!guidResult.retorno) {
     // Fandi respondeu, mas não entregou o GUID (Ainda é falha técnica neste passo)
     debugLog("Falha ao gerar GUID.", guidResult);
+
+    // Mensagem da API
+    const apiMessage = guidResult.message || "Falha ao gerar GUID.";
 
     // Identifica e dispara alerta usando os textos exatos que você especificou
     const isVendedorErro = apiMessage.includes("Problema ao consultar o CPF do Vendedor pela API: Usuário não existe.");
