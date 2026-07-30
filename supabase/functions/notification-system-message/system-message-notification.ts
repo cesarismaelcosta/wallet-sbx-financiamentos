@@ -58,14 +58,11 @@ export function generateSystemErrorEmailHtml(data: SystemErrorPayload): EmailTem
   // [SERIALIZAÇÃO INTELIGENTE]: Preserva o metadata completo e consolida IDs
   // =========================================================================
   const technicalData = {
-    ... (data.raw_payload || {}),
-    metadata: {
-      ...(data.payload?.metadata || {}), // Preserva page, product, partner, etc. enviados pelo front
-      visit_id: data.visit_id || data.payload?.metadata?.visit_id || null,
-      visit_update_id: data.visit_update_id || data.payload?.metadata?.visit_update_id || null,
-      simulation_id: data.simulation_id || data.payload?.metadata?.simulation_id || null,
-      simulation_update_id: data.simulation_update_id || data.payload?.metadata?.simulation_update_id || null
-    }
+    ...(data.raw_payload || {}),
+    visit_id: data.visit_id || null,
+    visit_update_id: data.visit_update_id || null,
+    simulation_id: data.simulation_id || null,
+    simulation_update_id: data.simulation_update_id || null
   };
 
   const formattedMessage = typeof data.message === 'string' 
