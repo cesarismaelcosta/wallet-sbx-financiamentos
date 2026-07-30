@@ -828,6 +828,7 @@ function SandboxPage() {
     setLoginError(""); 
     setPasswordError(""); 
     setGeneralError("");
+    setError(null);
 
     let hasError = false;
     if (!loginCred.trim()) { 
@@ -884,6 +885,8 @@ function SandboxPage() {
   const handleSandboxLogout = () => {
     setAccessTokenSBX("");
     sessionStorage.removeItem("access_token_sbx");
+    setError(null); // <-- CORREÇÃO: Mata o banner vermelho de erro da tela
+    setGeneralError(""); // <-- CORREÇÃO: Limpa erros antigos do formulário
     if (logout) logout({ purgeEnv: true } as any);
   };
 
@@ -1019,7 +1022,17 @@ function SandboxPage() {
       }
     } catch (err: any) {
       console.error("[AJAX_GATEWAY_ERROR]:", err);
-      setError(`Erro no disparo AJAX: ${err.message}`);
+      const errorMsg = err.message || "Erro desconhecido";
+      setError(`Erro no disparo AJAX: ${errorMsg}`);
+
+      // Auto-Logout se for erro de Autenticação/Sessão
+      const isAuthError = errorMsg.toLowerCase().includes("autenticação") || 
+                          errorMsg.toLowerCase().includes("unauthorized") || 
+                          errorMsg.toLowerCase().includes("session_expired");
+                          
+      if (isAuthError) {
+        handleSandboxLogout(); // Expulsa o usuário automaticamente
+      }
     } finally {
       setLoadingAction(null);
     }
@@ -1131,7 +1144,17 @@ function SandboxPage() {
       }
     } catch (err: any) {
       console.error("[AJAX_GATEWAY_ERROR]:", err);
-      setError(`Erro no disparo AJAX: ${err.message}`);
+      const errorMsg = err.message || "Erro desconhecido";
+      setError(`Erro no disparo AJAX: ${errorMsg}`);
+
+      //Auto-Logout se for erro de Autenticação/Sessão
+      const isAuthError = errorMsg.toLowerCase().includes("autenticação") || 
+                          errorMsg.toLowerCase().includes("unauthorized") || 
+                          errorMsg.toLowerCase().includes("session_expired");
+                          
+      if (isAuthError) {
+        handleSandboxLogout(); // Expulsa o usuário automaticamente
+      }
     } finally {
       setLoadingAction(null);
     }

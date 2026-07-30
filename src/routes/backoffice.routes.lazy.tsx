@@ -19,6 +19,9 @@
  * - Data Fetching: Consultas relacionais diretas via PostgREST (Supabase Client).
  * - State Management: Hooks reativos do React (useState, useEffect, useMemo).
  * - Design System: Componentes padronizados do Tailwind CSS e Shadcn/UI.
+ * - Funcionalidade de Duplicação: Permite clonar rotas existentes removendo IDs únicos.
+ * - Impressão Avançada: Renderização isolada em Iframe Virtual (`printRef`)
+ *   garantindo 100% de herança do Tailwind e blindagem contra portais do Radix UI.
  * ============================================================================
  */
 
@@ -41,7 +44,9 @@ import {
   Save,
   LayoutTemplate,
   Settings2,
-  AlertTriangle
+  AlertTriangle,
+  Copy,
+  Printer
 } from "lucide-react";
 
 // Componentes da Interface (Design System Shadcn/UI)
@@ -95,10 +100,42 @@ type OrchestratorRow = {
  * =========================================================================
  */
 
-function FAQSection({ items }: { items?: any[] }) {
+function FAQSection({ items, isPrint = false }: { items?: any[]; isPrint?: boolean }) {
   if (!items || items.length === 0) return null;
   const sortedItems = [...items].sort((a, b) => (a.position || 0) - (b.position || 0));
+  const half = Math.ceil(sortedItems.length / 2);
 
+  // VERSÃO IMPRESSÃO: Sempre aberto, sem cliques e sem setas (chevrons)
+  if (isPrint) {
+    return (
+      <section className="py-2 bg-white">
+        <div className="grid grid-cols-1 gap-y-3">
+          {sortedItems.map((item, i) => (
+            <div key={`print-faq-${i}`} className="border border-slate-200 rounded-xl px-4 py-3 bg-white shadow-sm break-inside-avoid">
+              <div className="font-bold text-xs text-slate-800 pb-2">
+                {item.question}
+              </div>
+              <div className="text-slate-600 text-[11px] leading-relaxed pt-2 border-t border-slate-100">
+                <div className="mb-1">{item.answer}</div>
+                {item.bullets && item.bullets.length > 0 && (
+                  <div className="space-y-1 mt-2">
+                    {item.bullets.map((bullet: string, idx: number) => (
+                      <div key={`bullet-${idx}`} className="flex gap-1.5">
+                        <span className="text-[#B300FF] font-bold">•</span>
+                        <span>{bullet}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  // VERSÃO TELA: Accordion interativo padrão
   return (
     <section className="py-1 overflow-hidden bg-white">
       <div className="max-w-full">
@@ -822,19 +859,28 @@ function OrchestratorConfigEditor({
       return;
     }
 
+    const integrationDetailsToSave = parsedPreview.integration_details || JSON.parse(jsonEditors.integration_details || "{}");
+
+    // Validação estrita: Se o método for E-mail, o JSON de Integração precisa obrigatoriamente conter a chave "email".
+    if (formData.integration_method === "EMAIL" && !integrationDetailsToSave.email) {
+      alert("O campo E-mail de Destino (em Regras & Integração) é obrigatório quando o método for E-mail.");
+      return;
+    }
+
     try {
       setIsSaving(true);
       const payload: OrchestratorRow = {
+        // Envia o ID apenas se estiver de fato editando (duplicações retiram o ID da rota original)
         ...(initialData?.id ? { id: initialData.id } : {}),
         config_type: formData.config_type,
         lookup_id: formData.lookup_id,
         entity_type: formData.entity_type,
         page_url: formData.page_url,
         integration_method: formData.integration_method,
-        partner_id: Number(formData.partner_id), // Sempre envia o número válido do parceiro
+        partner_id: Number(formData.partner_id),
         is_active: formData.is_active,
         is_integrated: formData.is_integrated,
-        integration_details: parsedPreview.integration_details || JSON.parse(jsonEditors.integration_details || "{}"),
+        integration_details: integrationDetailsToSave,
         rules: parsedPreview.rules || JSON.parse(jsonEditors.rules || "{}"),
         page_configs: parsedPreview.page_configs || JSON.parse(jsonEditors.page_configs || "{}"),
         consent_configs: parsedPreview.consent_configs || JSON.parse(jsonEditors.consent_configs || "[]"),
@@ -856,7 +902,12 @@ function OrchestratorConfigEditor({
       <header className="flex items-center justify-between px-6 py-4 bg-white border-b shadow-sm shrink-0">
         <div>
           <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            {initialData ? <><Edit size={18} className="text-[#B300FF]"/> Editando Rota #{initialData.id}</> : <><Plus size={18} className="text-[#B300FF]"/> Nova Configuração de Rota</>}
+            {/* Tratamento condicional do título: se o initialData não tiver ID, estamos criando ou duplicando */}
+            {initialData?.id ? (
+              <><Edit size={18} className="text-[#B300FF]"/> Editando Rota #{initialData.id}</>
+            ) : (
+              <><Plus size={18} className="text-[#B300FF]"/> Nova Configuração de Rota</>
+            )}
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">Configure parâmetros, integrações e o visual da oferta.</p>
         </div>
@@ -1058,7 +1109,7 @@ function OrchestratorConfigEditor({
                         
                         {/* 1. CREDENCIAIS E CANAIS (INTEGRATION DETAILS) */}
                         <div className="bg-white p-5 rounded-xl border shadow-sm space-y-4">
-                          <h4 className="text-[11px] font-bold uppercase text-slate-800 border-b pb-2">1. Credenciais & Webhooks (Integração)</h4>
+                          <h4 className="text-[11px] font-bold uppercase text-slate-800 border-b pb-2">1. Credenciais & Canais (Integração)</h4>
                           
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
@@ -1079,14 +1130,21 @@ function OrchestratorConfigEditor({
                             </div>
                           </div>
 
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase">URL de Callback (Webhook Gateway)</label>
-                            <Input 
-                              value={integration.urlCallback || ""} 
-                              onChange={(e) => updateIntegration({ ...integration, urlCallback: e.target.value })}
-                              className="h-8 text-xs font-mono" placeholder="Ex: https://.../financial-gateway-webhook/fandi" 
-                            />
-                          </div>
+                          {/* Campo visível estritamente se método for EMAIL */}
+                          {formData.integration_method === "EMAIL" && (
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                                E-mail de Destino <span className="text-red-500">*</span>
+                              </label>
+                              <Input 
+                                type="email"
+                                value={integration.email || ""} 
+                                onChange={(e) => updateIntegration({ ...integration, email: e.target.value })}
+                                className="h-8 text-xs font-mono border-blue-200 bg-blue-50 focus-visible:ring-blue-500" 
+                                placeholder="Ex: contato@empresa.com" 
+                              />
+                            </div>
+                          )}
 
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-slate-500 uppercase">URL de Redirecionamento Direto (Opcional - ex: Seguros)</label>
@@ -1611,6 +1669,9 @@ function OrchestratorConfigsBackofficePage() {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<OrchestratorRow | null>(null);
 
+  // Ref para capturar o HTML exato do relatório de impressão
+  const printRef = useRef<HTMLDivElement>(null);
+
   async function load() {
     setLoading(true);
     try {
@@ -1653,6 +1714,18 @@ function OrchestratorConfigsBackofficePage() {
   useEffect(() => {
     load();
   }, []);
+
+  /**
+   * Remove identificadores únicos do objeto de configuração original para acionar
+   * o modo de criação e abrir o Editor de Rotas (Duplicação)
+   */
+  const handleDuplicateRoute = (config: OrchestratorRow) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, created_at, ...rest } = config;
+    setEditingConfig(rest);
+    setIsRouteDrawerOpen(false); // Fecha drawer de inspeção se estiver aberto
+    setIsEditorOpen(true);
+  };
 
   const handleSaveRoute = async (payload: OrchestratorRow) => {
     try {
@@ -1733,283 +1806,495 @@ function OrchestratorConfigsBackofficePage() {
     return Object.entries(categoriesMap).map(([id, name]) => ({ id, name }));
   }, [categoriesMap]);
 
+  // ============================================================================
+  // [HANDLE DE IMPRESSÃO: IFRAME ISOLADO]
+  // ============================================================================
+  const handlePrintSheet = () => {
+    if (!printRef.current) return;
+
+    // 1. Instanciação e ocultação do Iframe no final do fluxo do documento
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentWindow?.document;
+    if (!iframeDoc) return;
+
+    // 2. Extração heurística de Stylesheets e da Árvore de Impressão
+    const headHTML = document.head.innerHTML;
+    const reportHTML = printRef.current.innerHTML;
+
+    // 3. Injeção e Compilação
+    iframeDoc.open();
+    iframeDoc.write(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+        <head>
+          ${headHTML}
+          <style>
+            @page { margin: 15mm; }
+            body { 
+              background-color: white !important; 
+              color: #0f172a !important;
+              -webkit-print-color-adjust: exact !important; 
+              print-color-adjust: exact !important; 
+            }
+          </style>
+        </head>
+        <body>
+          ${reportHTML}
+        </body>
+      </html>
+    `);
+    iframeDoc.close();
+
+    // 4. Execução da thread isolada e limpeza subsequente do Garbage Collector
+    setTimeout(() => {
+      if (iframe.contentWindow) {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      }
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 1000);
+    }, 500);
+  };
+
   return (
     <div className="space-y-6 font-sans">
       
-      {/* HEADER DA TELA E CONTROLES */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Consulta de Rotas & Orchestrator</h1>
-          <p className="text-sm text-muted-foreground">
-            Gerenciamento e inspeção ordenada das configurações de rotas do sistema.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={load} className="rounded-xl bg-white" disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
-          </Button>
-          <Button 
-            onClick={() => { setEditingConfig(null); setIsEditorOpen(true); }} 
-            className="rounded-xl bg-[#B300FF] hover:bg-[#9f00e6]"
-          >
-            <Plus className="mr-2 h-4 w-4" /> Nova Rota
-          </Button>
-        </div>
-      </div>
+      {/* 
+        ===================================================================== 
+        [ESTILOS GLOBAIS DE IMPRESSÃO - BLINDAGEM DO REACT DOM E RADIX]
+        Mesmo usando Iframe para a ação principal, definimos proteções globais
+        para evitar que a tela principal "vaze" em acionamentos acidentais via
+        atalho de teclado do usuário (Ctrl+P nativo).
+        =====================================================================
+      */}
+      <style>{`
+        @media print {
+          body > *:not(#root) { display: none !important; }
+          #main-app-content { display: none !important; }
+          html, body, #root { 
+            background: white !important; 
+            height: auto !important; 
+            min-height: 100% !important; 
+            overflow: visible !important; 
+            position: static !important; 
+          }
+        }
+      `}</style>
 
-      {/* BARRA DE FILTROS E BUSCA */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-3">
-          
-          <div className="relative flex-1 min-w-[240px] max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input 
-              value={search} 
-              onChange={(e) => setSearch(e.target.value)} 
-              placeholder="Buscar por ID, URL, Nome do Produto..." 
-              className="h-10 rounded-xl pl-9" 
-            />
+      {/* ===================================================================== */}
+      {/* 1. CONTEÚDO PRINCIPAL (Envelopado por ID para ocultamento no Print)   */}
+      {/* ===================================================================== */}
+      <div id="main-app-content" className="space-y-6">
+        
+        {/* HEADER DA TELA E CONTROLES */}
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Consulta de Rotas & Orchestrator</h1>
+            <p className="text-sm text-muted-foreground">
+              Gerenciamento e inspeção ordenada das configurações de rotas do sistema.
+            </p>
           </div>
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white">
-                <Filter className="h-3.5 w-3.5 opacity-70" />
-                Status: {statusFilter === "active" ? "Ativas" : statusFilter === "inactive" ? "Inativas" : "Todas"}
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-48 p-0" align="end">
-              <Command>
-                <CommandList>
-                  <CommandGroup>
-                    <CommandItem onSelect={() => setStatusFilter("active")} className="cursor-pointer">
-                      Apenas Ativas
-                    </CommandItem>
-                    <CommandItem onSelect={() => setStatusFilter("inactive")} className="cursor-pointer">
-                      Apenas Inativas
-                    </CommandItem>
-                    <CommandItem onSelect={() => setStatusFilter("all")} className="cursor-pointer">
-                      Todas
-                    </CommandItem>
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={load} className="rounded-xl bg-white" disabled={loading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
+            </Button>
+            <Button 
+              onClick={() => { setEditingConfig(null); setIsEditorOpen(true); }} 
+              className="rounded-xl bg-[#B300FF] hover:bg-[#9f00e6]"
+            >
+              <Plus className="mr-2 h-4 w-4" /> Nova Rota
+            </Button>
+          </div>
         </div>
 
-        {/* TABELA DE ROTAS */}
-        <div className="w-full overflow-x-auto">
-          <table className="w-full text-sm table-fixed">
-            <thead>
-              <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <th className="px-3 py-3 w-[80px]">ID</th>
-                <th className="px-3 py-3 w-[260px]">Regra</th>
-                <th className="px-3 py-3 w-[150px]">Parceiro</th>
-                <th className="px-3 py-3 w-[300px]">URL da Página</th>
-                <th className="px-3 py-3 w-[180px] text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="p-10 text-center text-muted-foreground">
-                    Carregando rotas...
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-10 text-center text-muted-foreground">
-                    Nenhuma rota encontrada com os filtros selecionados.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((r) => {
-                  const prodName = getProductOrCategoryName(r);
-                  const partner = getPartnerInfo(r);
-
-                  return (
-                    <tr 
-                      key={r.id} 
-                      className="border-b border-border/60 hover:bg-accent/40 transition-colors group"
-                    >
-                      <td className="px-3 py-3 font-mono text-sm text-foreground">
-                        {r.id || "—"}
-                      </td>
-
-                      <td className="px-3 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold bg-[#B300FF]/10 text-[#B300FF]">
-                            {r.config_type || "—"}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">({r.entity_type || "N/A"})</span>
-                        </div>
-                        <div className="text-xs text-foreground mt-1 font-normal truncate" title={prodName}>
-                          {prodName}
-                        </div>
-                      </td>
-
-                      <td className="px-3 py-3">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-transparent overflow-hidden shrink-0 border bg-white" title={partner?.name}>
-                            {partner?.logo_url ? (
-                              <img src={partner.logo_url} className="h-full w-full object-cover" alt={partner.name} />
-                            ) : (
-                              <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase">
-                                {partner?.name ? partner.name.slice(0, 3) : "—"}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-xs font-medium text-slate-700 truncate" title={partner?.name}>
-                            {partner?.name || "N/A"}
-                          </span>
-                        </div>
-                      </td>
-
-                      <td className="px-3 py-3 font-mono text-xs text-muted-foreground truncate" title={r.page_url}>
-                        {r.page_url || "—"}
-                      </td>
-
-                      <td className="px-3 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => { setActiveConfig(r); setIsRouteDrawerOpen(true); }}
-                            className="rounded-lg text-slate-500 hover:text-slate-900 px-2 h-8 text-[11px]"
-                          >
-                            <Search className="w-3.5 h-3.5 mr-1" /> Insp.
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => { setEditingConfig(r); setIsEditorOpen(true); }}
-                            className="rounded-lg text-[#B300FF] hover:text-[#9a00db] hover:bg-[#B300FF]/10 px-2 h-8 text-[11px]"
-                          >
-                            <Edit className="w-3.5 h-3.5 mr-1" /> Edit
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ===================================================================== */}
-      {/* 1. PAINEL LATERAL (SHEET / DRAWER) DE INSPEÇÃO RÁPIDA DE DADOS        */}
-      {/* ===================================================================== */}
-      {isRouteDrawerOpen && activeConfig && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-all">
-          <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
+        {/* BARRA DE FILTROS E BUSCA */}
+        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-3">
             
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-slate-50 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#B300FF]" />
-                <h3 className="text-sm font-black uppercase text-slate-800">Consulta de Rota: ID #{activeConfig.id} - {getProductOrCategoryName(activeConfig)}</h3>
-              </div>
-              <button onClick={() => setIsRouteDrawerOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 cursor-pointer">
-                <X size={18} />
-              </button>
+            <div className="relative flex-1 min-w-[240px] max-w-md">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input 
+                value={search} 
+                onChange={(e) => setSearch(e.target.value)} 
+                placeholder="Buscar por ID, URL, Nome do Produto..." 
+                className="h-10 rounded-xl pl-9" 
+              />
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white">
+                  <Filter className="h-3.5 w-3.5 opacity-70" />
+                  Status: {statusFilter === "active" ? "Ativas" : statusFilter === "inactive" ? "Inativas" : "Todas"}
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-0" align="end">
+                <Command>
+                  <CommandList>
+                    <CommandGroup>
+                      <CommandItem onSelect={() => setStatusFilter("active")} className="cursor-pointer">
+                        Apenas Ativas
+                      </CommandItem>
+                      <CommandItem onSelect={() => setStatusFilter("inactive")} className="cursor-pointer">
+                        Apenas Inativas
+                      </CommandItem>
+                      <CommandItem onSelect={() => setStatusFilter("all")} className="cursor-pointer">
+                        Todas
+                      </CommandItem>
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+
+          </div>
+
+          {/* TABELA DE ROTAS */}
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-sm table-fixed">
+              <thead>
+                <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <th className="px-3 py-3 w-[80px]">ID</th>
+                  <th className="px-3 py-3 w-[260px]">Regra</th>
+                  <th className="px-3 py-3 w-[150px]">Parceiro</th>
+                  <th className="px-3 py-3 w-[300px]">URL da Página</th>
+                  <th className="px-3 py-3 w-[220px] text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="p-10 text-center text-muted-foreground">
+                      Carregando rotas...
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-10 text-center text-muted-foreground">
+                      Nenhuma rota encontrada com os filtros selecionados.
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((r) => {
+                    const prodName = getProductOrCategoryName(r);
+                    const partner = getPartnerInfo(r);
+
+                    return (
+                      <tr 
+                        key={r.id} 
+                        className="border-b border-border/60 hover:bg-accent/40 transition-colors group cursor-pointer"
+                        onClick={() => { setActiveConfig(r); setIsRouteDrawerOpen(true); }}
+                      >
+                        <td className="px-3 py-3 font-mono text-sm text-foreground">
+                          {r.id || "—"}
+                        </td>
+
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold bg-[#B300FF]/10 text-[#B300FF]">
+                              {r.config_type || "—"}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">({r.entity_type || "N/A"})</span>
+                          </div>
+                          <div className="text-xs text-foreground mt-1 font-normal truncate" title={prodName}>
+                            {prodName}
+                          </div>
+                        </td>
+
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-transparent overflow-hidden shrink-0 border bg-white" title={partner?.name}>
+                              {partner?.logo_url ? (
+                                <img src={partner.logo_url} className="h-full w-full object-cover" alt={partner.name} />
+                              ) : (
+                                <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase">
+                                  {partner?.name ? partner.name.slice(0, 3) : "—"}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs font-medium text-slate-700 truncate" title={partner?.name}>
+                              {partner?.name || "N/A"}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="px-3 py-3 font-mono text-xs text-muted-foreground truncate" title={r.page_url}>
+                          {r.page_url || "—"}
+                        </td>
+
+                        <td className="px-3 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={(e) => { e.stopPropagation(); setActiveConfig(r); setIsRouteDrawerOpen(true); }}
+                              className="rounded-lg text-slate-500 hover:text-slate-900 px-2 h-8 text-[11px]"
+                            >
+                              <Search className="w-3.5 h-3.5 mr-1" /> Insp.
+                            </Button>
+
+                            {/* Botão de Duplicação Inline */}
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={(e) => { e.stopPropagation(); handleDuplicateRoute(r); }}
+                              className="rounded-lg text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 h-8 text-[11px]"
+                            >
+                              <Copy className="w-3.5 h-3.5 mr-1" /> Duplicar
+                            </Button>
+
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={(e) => { e.stopPropagation(); setEditingConfig(r); setIsEditorOpen(true); }}
+                              className="rounded-lg text-[#B300FF] hover:text-[#9a00db] hover:bg-[#B300FF]/10 px-2 h-8 text-[11px]"
+                            >
+                              <Edit className="w-3.5 h-3.5 mr-1" /> Edit
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ===================================================================== */}
+        {/* 2. PAINEL LATERAL (SHEET / DRAWER) DE INSPEÇÃO RÁPIDA DE DADOS        */}
+        {/* ===================================================================== */}
+        {isRouteDrawerOpen && activeConfig && (
+          <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-all">
+            <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
+              
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-slate-50 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#B300FF]" />
+                  <h3 className="text-sm font-black uppercase text-slate-800">Consulta de Rota: ID #{activeConfig.id} - {getProductOrCategoryName(activeConfig)}</h3>
+                </div>
+                <button onClick={() => setIsRouteDrawerOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 cursor-pointer">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="space-y-6">
+                  
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-1.5 font-mono">
+                    <p><b>ID Config:</b> {activeConfig.id} | <b>Lookup ID:</b> {activeConfig.lookup_id}</p>
+                    <p><b>Tipo:</b> {activeConfig.config_type} ({activeConfig.entity_type})</p>
+                    <p><b>URL:</b> {activeConfig.page_url}</p>
+                    <p><b>Método:</b> {activeConfig.integration_method || "—"}</p>
+                  </div>
+
+                  {activeConfig.page_configs?.offer_panel && (
+                    <div className="bg-white p-4 rounded-xl border shadow-sm">
+                      <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-3 flex items-center gap-1.5">
+                        <Layers size={14} /> Offer Panel (Painel de Proposta)
+                      </h4>
+                      <OfferPanelRender config={activeConfig.page_configs} />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-4">
+                    {activeConfig.integration_details && Object.keys(activeConfig.integration_details).length > 0 && (
+                      <div className="bg-slate-50 p-4 rounded-xl border text-xs overflow-hidden">
+                        <h4 className="font-bold text-slate-700 mb-2 uppercase text-[10px] tracking-wide flex items-center gap-1.5">
+                          <Code2 size={12} /> Integration Details
+                        </h4>
+                        <pre className="font-mono text-[9px] text-slate-600 whitespace-pre-wrap break-all overflow-x-auto bg-white p-2.5 rounded border">
+                          {JSON.stringify(activeConfig.integration_details, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                    {activeConfig.rules && Object.keys(activeConfig.rules).length > 0 && (
+                      <div className="bg-slate-50 p-4 rounded-xl border text-xs overflow-hidden">
+                        <h4 className="font-bold text-slate-700 mb-2 uppercase text-[10px] tracking-wide flex items-center gap-1.5">
+                          <SlidersHorizontal size={12} /> Rules / Installments
+                        </h4>
+                        <pre className="font-mono text-[9px] text-slate-600 whitespace-pre-wrap break-all overflow-x-auto bg-white p-2.5 rounded border">
+                          {JSON.stringify(activeConfig.rules, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+
+                  {activeConfig.consent_configs && activeConfig.consent_configs.length > 0 && (
+                    <div className="bg-white p-4 rounded-xl border shadow-sm">
+                      <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-3 flex items-center gap-1.5">
+                        <FileText size={14} /> Consentimentos da Rota (LGPD)
+                      </h4>
+                      <DynamicConsentsStatic configs={activeConfig.consent_configs} />
+                    </div>
+                  )}
+
+                  {activeConfig.page_faqs && activeConfig.page_faqs.length > 0 && (
+                    <div className="bg-white p-4 rounded-xl border shadow-sm">
+                      <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-1 flex items-center gap-1.5">
+                        <HelpCircle size={14} /> FAQ & Perguntas Frequentes
+                      </h4>
+                      {/* Na tela: Accordion padrão */}
+                      <FAQSection items={activeConfig.page_faqs} />
+                    </div>
+                  )}
+
+                  {activeConfig.page_configs?.footer && (
+                    <div className="pt-2">
+                      <FooterRender config={activeConfig.page_configs.footer} />
+                    </div>
+                  )}
+
+                </div>
+              </div>
+
+              {/* RODAPÉ DO DRAWER COM BOTÕES DE AÇÃO */}
+              <div className="p-4 border-t border-gray-200 bg-slate-50 flex items-center justify-between gap-3 shrink-0 shadow-lg">
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleDuplicateRoute(activeConfig)} 
+                  className="flex-1 rounded-xl text-xs gap-2 border-blue-500/35 text-blue-600 hover:bg-blue-50 h-10 font-semibold px-5"
+                >
+                  <Copy className="h-4 w-4" /> Duplicar Rota
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handlePrintSheet} 
+                  className="flex-1 rounded-xl text-xs gap-2 border-[#B300FF]/35 text-[#B300FF] hover:bg-[#B300FF]/5 h-10 font-semibold"
+                >
+                  <Printer className="h-4 w-4" /> Imprimir / PDF
+                </Button>
+                <Button 
+                  onClick={() => setIsRouteDrawerOpen(false)} 
+                  className="flex-1 rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white h-10 font-semibold px-5"
+                >
+                  Fechar Inspeção
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===================================================================== */}
+        {/* 3. EDITOR HÍBRIDO (SPLIT-SCREEN) DE CONFIGURAÇÃO DE ROTAS             */}
+        {/* ===================================================================== */}
+        {isEditorOpen && (
+          <OrchestratorConfigEditor
+            initialData={editingConfig}
+            partnersList={partnersList}
+            productsList={productsList}
+            categoriesList={categoriesList}
+            onClose={() => setIsEditorOpen(false)}
+            onSave={handleSaveRoute}
+          />
+        )}
+      </div>
+
+      {/* ===================================================================== */}
+      {/* 4. BLOCO DE REFERÊNCIA INVISÍVEL PARA O IFRAME DE IMPRESSÃO           */}
+      {/* ===================================================================== */}
+      <div style={{ display: 'none' }}>
+        <div ref={printRef} className="w-full text-slate-900 bg-white p-8">
+          {activeConfig && (() => {
+            const r = activeConfig;
+            const prodName = getProductOrCategoryName(r);
+            
+            return (
               <div className="space-y-6">
                 
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-1.5 font-mono">
-                  <p><b>ID Config:</b> {activeConfig.id} | <b>Lookup ID:</b> {activeConfig.lookup_id}</p>
-                  <p><b>Tipo:</b> {activeConfig.config_type} ({activeConfig.entity_type})</p>
-                  <p><b>URL:</b> {activeConfig.page_url}</p>
-                  <p><b>Método:</b> {activeConfig.integration_method || "—"}</p>
+                <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold text-[#B300FF] uppercase">Consulta de Rota</span>
+                      <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full border bg-slate-50 uppercase`}>
+                        {r.is_active ? "Ativa" : "Inativa"}
+                      </span>
+                    </div>
+                    <h1 className="text-2xl font-bold">{prodName}</h1>
+                  </div>
+                  <div className="text-right text-xs text-slate-500 font-mono">
+                    ID: {r.id}<br/>Lookup ID: {r.lookup_id}
+                  </div>
                 </div>
 
-                {activeConfig.page_configs?.offer_panel && (
-                  <div className="bg-white p-4 rounded-xl border shadow-sm">
-                    <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-3 flex items-center gap-1.5">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-1.5 font-mono">
+                  <p><b>Tipo:</b> {r.config_type} ({r.entity_type})</p>
+                  <p><b>URL:</b> {r.page_url}</p>
+                  <p><b>Método de Integração:</b> {r.integration_method || "—"}</p>
+                </div>
+
+                {r.page_configs?.offer_panel && (
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm break-inside-avoid">
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#B300FF] flex items-center gap-1.5 mb-3">
                       <Layers size={14} /> Offer Panel (Painel de Proposta)
                     </h4>
-                    <OfferPanelRender config={activeConfig.page_configs} />
+                    <OfferPanelRender config={r.page_configs} />
                   </div>
                 )}
 
-                <div className="flex flex-col gap-4">
-                  {activeConfig.integration_details && Object.keys(activeConfig.integration_details).length > 0 && (
-                    <div className="bg-slate-50 p-4 rounded-xl border text-xs overflow-hidden">
-                      <h4 className="font-bold text-slate-700 mb-2 uppercase text-[10px] tracking-wide flex items-center gap-1.5">
-                        <Code2 size={12} /> Integration Details
-                      </h4>
-                      <pre className="font-mono text-[9px] text-slate-600 whitespace-pre-wrap break-all overflow-x-auto bg-white p-2.5 rounded border">
-                        {JSON.stringify(activeConfig.integration_details, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                  {activeConfig.rules && Object.keys(activeConfig.rules).length > 0 && (
-                    <div className="bg-slate-50 p-4 rounded-xl border text-xs overflow-hidden">
-                      <h4 className="font-bold text-slate-700 mb-2 uppercase text-[10px] tracking-wide flex items-center gap-1.5">
-                        <SlidersHorizontal size={12} /> Rules / Installments
-                      </h4>
-                      <pre className="font-mono text-[9px] text-slate-600 whitespace-pre-wrap break-all overflow-x-auto bg-white p-2.5 rounded border">
-                        {JSON.stringify(activeConfig.rules, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </div>
+                {r.integration_details && Object.keys(r.integration_details).length > 0 && (
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs overflow-hidden break-inside-avoid">
+                    <h4 className="font-bold text-slate-700 mb-2 uppercase text-[10px] tracking-wide flex items-center gap-1.5">
+                      <Code2 size={12} /> Integration Details
+                    </h4>
+                    <pre className="font-mono text-[9px] text-slate-600 whitespace-pre-wrap break-all bg-white p-2.5 rounded border">
+                      {JSON.stringify(r.integration_details, null, 2)}
+                    </pre>
+                  </div>
+                )}
 
-                {activeConfig.consent_configs && activeConfig.consent_configs.length > 0 && (
-                  <div className="bg-white p-4 rounded-xl border shadow-sm">
-                    <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-3 flex items-center gap-1.5">
+                {r.rules && Object.keys(r.rules).length > 0 && (
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs overflow-hidden break-inside-avoid">
+                    <h4 className="font-bold text-slate-700 mb-2 uppercase text-[10px] tracking-wide flex items-center gap-1.5">
+                      <SlidersHorizontal size={12} /> Rules / Installments
+                    </h4>
+                    <pre className="font-mono text-[9px] text-slate-600 whitespace-pre-wrap break-all bg-white p-2.5 rounded border">
+                      {JSON.stringify(r.rules, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+                {r.consent_configs && r.consent_configs.length > 0 && (
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm break-inside-avoid">
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#B300FF] flex items-center gap-1.5 mb-3">
                       <FileText size={14} /> Consentimentos da Rota (LGPD)
                     </h4>
-                    <DynamicConsentsStatic configs={activeConfig.consent_configs} />
+                    <DynamicConsentsStatic configs={r.consent_configs} />
                   </div>
                 )}
 
-                {activeConfig.page_faqs && activeConfig.page_faqs.length > 0 && (
-                  <div className="bg-white p-4 rounded-xl border shadow-sm">
-                    <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-1 flex items-center gap-1.5">
+                {r.page_faqs && r.page_faqs.length > 0 && (
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm break-inside-avoid">
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#B300FF] flex items-center gap-1.5 mb-3">
                       <HelpCircle size={14} /> FAQ & Perguntas Frequentes
                     </h4>
-                    <FAQSection items={activeConfig.page_faqs} />
+                    {/* Força impressão renderizando FAQ de forma aberta */}
+                    <FAQSection items={r.page_faqs} isPrint={true} />
                   </div>
                 )}
 
-                {activeConfig.page_configs?.footer && (
-                  <div className="pt-2">
-                    <FooterRender config={activeConfig.page_configs.footer} />
+                {r.page_configs?.footer && (
+                  <div className="pt-2 break-inside-avoid">
+                    <FooterRender config={r.page_configs.footer} />
                   </div>
                 )}
 
               </div>
-            </div>
-
-            <div className="p-4 border-t border-gray-200 bg-slate-50 flex justify-end flex-shrink-0">
-              <Button onClick={() => setIsRouteDrawerOpen(false)} className="bg-[#B300FF] hover:bg-[#9f00e6] text-white text-xs rounded-xl px-5">
-                Fechar Inspeção
-              </Button>
-            </div>
-          </div>
+            );
+          })()}
         </div>
-      )}
-
-      {/* ===================================================================== */}
-      {/* 2. EDITOR HÍBRIDO (SPLIT-SCREEN) DE CONFIGURAÇÃO DE ROTAS             */}
-      {/* ===================================================================== */}
-      {isEditorOpen && (
-        <OrchestratorConfigEditor
-          initialData={editingConfig}
-          partnersList={partnersList}
-          productsList={productsList}
-          categoriesList={categoriesList}
-          onClose={() => setIsEditorOpen(false)}
-          onSave={handleSaveRoute}
-        />
-      )}
-
+      </div>
     </div>
   );
 }
