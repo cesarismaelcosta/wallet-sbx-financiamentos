@@ -7,8 +7,8 @@
  * =========================================================================
  * 1. [RESPONSABILIDADE ÚNICA]: Atua como a tela receptora de erros disparados
  *    pelo Edge Gateway via redirecionamento HTTP 302.
- * 2. [HIGIENIZAÇÃO DE CONTEXTO]: Extrai query parameters de falha (status, code,
- *    message, return_uri) de forma estrita e segura.
+ * 2. [HIGIENIZAÇÃO DE CONTEXTO]: Extrai query parameters de falha e metadados
+ *    (como offer_id, product_id) de forma estrita e segura.
  * 3. [RETORNO CONTEXTUAL]: Garante que o usuário seja devolvido para a origem
  *    correta (`targetReturnUrl`) de forma atômica, eliminando loops ou saltos 
  *    para a raiz global (/).
@@ -24,6 +24,8 @@ interface SearchSchema {
   code?: string;
   message?: string;
   return_uri?: string;
+  offer_id?: string;
+  product_id?: string;
 }
 
 export const Route = createFileRoute("/financialGatewayGate")({
@@ -35,10 +37,12 @@ export const Route = createFileRoute("/financialGatewayGate")({
     code: search.code as string | undefined,
     message: search.message as string | undefined,
     return_uri: search.return_uri as string | undefined,
+    offer_id: search.offer_id as string | undefined,
+    product_id: search.product_id as string | undefined,
   }),
 
   component: function FinancialGatewayFallback() {
-    const { status, code, message, return_uri } = Route.useSearch();
+    const { status, code, message, return_uri, offer_id, product_id } = Route.useSearch();
     const [countdown, setCountdown] = useState(5);
 
     // =====================================================================
@@ -51,7 +55,7 @@ export const Route = createFileRoute("/financialGatewayGate")({
     // =====================================================================
     useEffect(() => {
       if (status === "error") {
-        // [TELEMETRIA DE ERRO]: Disparo estruturado enriquecido com metadados de borda
+        // [TELEMETRIA DE ERRO]: Disparo estruturado enriquecido com metadados e IDs de contexto
         logSystemError({
           context: "Gateway Redirect (financialGatewayGate)",
           subject: `Erro de Jornada: ${code || 'UNKNOWN'}`,
@@ -59,6 +63,8 @@ export const Route = createFileRoute("/financialGatewayGate")({
           raw_payload: { 
             error_code: code || null,
             return_uri: return_uri || null,
+            offer_id: offer_id || null,
+            product_id: product_id || null,
             // [METADADOS ENRIQUECIDOS]: Padronizados com o mesmo contrato da vitrine
             metadata: {
               page: window.location.pathname,
@@ -70,7 +76,7 @@ export const Route = createFileRoute("/financialGatewayGate")({
           }
         });
       }
-    }, [status, code, message, return_uri]);
+    }, [status, code, message, return_uri, offer_id, product_id]);
 
     // =====================================================================
     // [CONTROLE DE FLUXO]: Temporizador regressivo para redirecionamento automático

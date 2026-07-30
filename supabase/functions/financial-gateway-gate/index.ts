@@ -533,11 +533,27 @@ function respondWithError(
 
     if (isAjax) {
         headers.set("Content-Type", "application/json");
+        
+        // Filtra o payload original para injetar no JSON de erro (excluindo o token)
+        const extraData: Record<string, any> = {};
+        if (originalPayload && typeof originalPayload === 'object') {
+            for (const [key, value] of Object.entries(originalPayload)) {
+                if (key !== 'auth_token' && value !== undefined && value !== null) {
+                    extraData[key] = value;
+                }
+            }
+        }
+
         return new Response(
-            JSON.stringify({ success: false, code, message }), 
+            JSON.stringify({ 
+                success: false, 
+                code, 
+                message, 
+                ...extraData // <-- Injeta offer_id, product_id e demais parâmetros no JSON
+            }), 
             { status: statusCode, headers }
         );
-    } 
+    }
 
     let frontendOrigin = "";
     if (safeReturnUri && (safeReturnUri.startsWith("http://") || safeReturnUri.startsWith("https://"))) {
