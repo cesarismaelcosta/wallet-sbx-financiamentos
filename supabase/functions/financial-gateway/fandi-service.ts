@@ -251,7 +251,8 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
           error_message: apiMessage,
           codigo_parceiro: codigoParceiro,
           seller_id: sellerId,
-          fipe_code: fipeCode,
+          seller_document: cpfVendedor,
+          fipe_code: offer.vehicle_details?.fipe_code,
           vehicle: offer.vehicle_details,
           payload_enviado: bodyGuid
         }
