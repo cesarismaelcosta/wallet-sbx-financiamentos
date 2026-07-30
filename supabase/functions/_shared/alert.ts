@@ -36,6 +36,7 @@ export async function sendSystemAlert(params: AlertPayload): Promise<void> {
     }
 
     // Chamada HTTP assíncrona para a Edge Function central de notificações
+    // Disparo estrito: envia EXATAMENTE os 8 campos exigidos pelo contrato de ingestão
     await fetch(`${supabaseUrl}/functions/v1/notification-system-message`, {
       method: 'POST',
       headers: {

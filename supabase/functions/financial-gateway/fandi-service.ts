@@ -242,31 +242,31 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
         ? "Vendedor não cadastrado na Fandi" 
         : "Código do modelo Fipe ou Molicar inválido";
 
-      const errorDetails = {
-        erro: apiMessage,
-        codigo_parceiro: codigoParceiro,
-        seller_id: sellerId,
-        seller_document: cpfVendedor,
-        fipe_code: offer.vehicle_details?.fipe_code,
-        vehicle: offer.vehicle_details,
-        api_request: bodyGuid,
-        guid: guidResult
-      };
-
       sendSystemAlert({
         context: isVendedorErro ? "fandi-service: SELLER_NOT_FOUND" : "fandi-service: INVALID_FIPE_OR_MOLICAR",
         subject: `Alerta Fandi: ${errorTitle} ⚠️`,
-        // 1. Mensagem LIMPA em texto (Vai pra caixa de destaque do E-mail)
+        
+        // Mensagem clara para a tela do usuário
         message: apiMessage,
-        // 2. Todos os IDs de rastreamento na raiz
-        visit_id: payload.visit_id || null,
-        visit_update_id: payload.visit_update_id || null,
-        simulation_id: payload.simulation_id || null,
-        simulation_update_id: payload.simulation_update_id || null,
-        // 3. Fura o bloqueio: 'payload' alimenta o E-mail, 'raw_payload' salva no Banco.
-        payload: errorDetails,
-        raw_payload: errorDetails
-      } as any);
+        
+        // IDs com a nomenclatura correta
+        visitId: payload.visit_id || null,
+        visitUpdateId: payload.visit_update_id || null,
+        simulationId: payload.simulation_id || null,
+        simulationUpdateId: payload.simulation_update_id || null,
+        
+        // JSON enviado corretamente pelo nome que o Banco exige
+        rawPayload: {
+          erro: apiMessage,
+          codigo_parceiro: codigoParceiro,
+          seller_id: sellerId,
+          seller_document: cpfVendedor,
+          fipe_code: offer.vehicle_details?.fipe_code,
+          vehicle: offer.vehicle_details,
+          api_request: bodyGuid,
+          guid: guidResult
+        }
+      });
     }
 
     return { 
