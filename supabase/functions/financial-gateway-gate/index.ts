@@ -76,7 +76,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
       payload = await req.json();
     }
   } catch (e) {
-    return respondWithError(isAjax, 400, "BAD_REQUEST", "Payload inválido ou vazio.", payload?.return_uri || originPath, req);
+    return respondWithError(isAjax, 400, "BAD_REQUEST", "Payload inválido ou vazio.", payload?.return_uri || originPath, req, payload || {});
   }
 
   // Extrai o auth_token diretamente no let para poder reatribuir se precisar do cookie depois
@@ -94,7 +94,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   }
 
   if (!auth_token) {
-    return respondWithError(isAjax, 400, "BAD_REQUEST", "Credencial (auth_token) ausente no payload e nos cookies.", return_uri, req);
+    return respondWithError(isAjax, 400, "BAD_REQUEST", "Credencial (auth_token) ausente no payload e nos cookies.", return_uri, req, payload);
   }
 
   try {
@@ -498,7 +498,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         statusCode = 422;
     }
 
-    return respondWithError(isAjax, statusCode, errorCode, err.message, safeReturnUri, req);
+    return respondWithError(isAjax, statusCode, errorCode, err.message, safeReturnUri, req, payload);
   }
 }));
 
@@ -525,12 +525,12 @@ function respondWithError(
     code: string, 
     message: string, 
     safeReturnUri: string,
-    req: Request
+    req: Request,
+    originalPayload: Record<string, any> = {}
 ): Response {
     const headers = new Headers();
     headers.set("Access-Control-Allow-Origin", "*");
 
-    // [FLUXO AJAX]: Devolve o erro estruturado para o Client HTTP gerenciar
     if (isAjax) {
         headers.set("Content-Type", "application/json");
         return new Response(
@@ -539,10 +539,6 @@ function respondWithError(
         );
     } 
 
-    // [FLUXO NATIVO]: Redireciona via Header Location (302) para a tela de erro do Front-end
-    const encodedMsg = encodeURIComponent(message);
-    const encodedUri = encodeURIComponent(safeReturnUri);
-    
     let frontendOrigin = "";
     if (safeReturnUri && (safeReturnUri.startsWith("http://") || safeReturnUri.startsWith("https://"))) {
         try { frontendOrigin = new URL(safeReturnUri).origin; } catch (_) {}
@@ -566,7 +562,24 @@ function respondWithError(
         );
     }
 
-    const errorUrl = `${frontendOrigin}/financialGatewayGate?status=error&code=${code}&message=${encodedMsg}&return_uri=${encodedUri}`;
+    // Monta a query string preservando TUDO o que veio no payload original
+    const urlParams = new URLSearchParams({
+        status: "error",
+        code: code,
+        message: message,
+        return_uri: safeReturnUri,
+    });
+
+    if (originalPayload && typeof originalPayload === 'object') {
+        for (const [key, value] of Object.entries(originalPayload)) {
+            // Ignora o token por segurança e não sobrescreve os base
+            if (key !== 'auth_token' && value !== undefined && value !== null && !urlParams.has(key)) {
+                urlParams.set(key, String(value));
+            }
+        }
+    }
+
+    const errorUrl = `${frontendOrigin}/financialGatewayGate?${urlParams.toString()}`;
     
     headers.set("Location", errorUrl);
     return new Response(null, { status: 302, headers });

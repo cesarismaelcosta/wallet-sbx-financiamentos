@@ -1587,11 +1587,14 @@ function SandboxPage() {
                     className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
                     {loadingAction === "AutoEquity_form" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin text-[#B300FF]" /> Processando...
+                      </>
                     ) : (
-                      <Play className="h-4 w-4" />
+                      <>
+                        <Play className="h-4 w-4" /> Simular Car Equity (form)
+                      </>
                     )}
-                    {loadingAction === "AutoEquity_form" ? "Processando..." : "Simular Car Equity (form)"}
                   </Button>
 
                   <Button 

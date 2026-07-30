@@ -6,12 +6,7 @@
  * [ARQUITETURA HÍBRIDA & LOGGING ASSÍNCRONO]
  * =========================================================================
  * Centraliza o envio de logs de erro técnicos para a Edge Function.
- * Integrado ao `session.ts` para respeitar o isolamento de rede:
- * - Em Produção: Envia a requisição anexando o Cookie HttpOnly (`fetchOptions`).
- * - Em Desenvolvimento: Injeta os headers de token manualmente via `authHeaders()`.
- * 
- * @author Cesar Ismael Pereira da Costa
- * @version 2.1.0
+ * Padrão contratual único: raw_payload.
  */
 
 import { fetchOptions, authHeaders } from './session.ts';
@@ -20,53 +15,45 @@ export interface SystemErrorPayload {
   context: string;
   subject?: string;
   message?: any;
-  payload?: any;
+  raw_payload?: any;
   visit_id?: string | null;
   visit_update_id?: string | null;
   simulation_id?: string | null;
   simulation_update_id?: string | null;
-  details?: any;
 }
 
 /**
- * Envia um payload de erro para o serviço de notificação centralizado de forma assíncrona.
- * Suporta tanto o envio direto por objeto quanto a assinatura estendida (status/usuário + payload).
+ * Envia um payload de erro para o serviço de notificação de forma assíncrona.
  * 
- * @param {string | SystemErrorPayload} arg1 - Status da sessão/usuário ou o objeto completo de erro.
- * @param {SystemErrorPayload} [arg2] - Objeto detalhado do erro (caso o primeiro argumento seja uma string).
+ * @param {string | SystemErrorPayload} errorOrStatus - Status da sessão/usuário ou o objeto completo de erro.
+ * @param {SystemErrorPayload} [payloadDetails] - Objeto detalhado do erro (caso o primeiro argumento seja uma string).
  */
 export const logSystemError = async (
-  arg1: string | SystemErrorPayload,
-  arg2?: SystemErrorPayload
+  errorOrStatus: string | SystemErrorPayload,
+  payloadDetails?: SystemErrorPayload
 ): Promise<void> => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) return;
 
-  // =========================================================================
-  // [NORMALIZAÇÃO CONTRATUAL]: Compatibiliza chamadas legadas e diretas
-  // =========================================================================
   let errorData: SystemErrorPayload;
 
-  if (typeof arg1 === 'string') {
-    // Caso seja chamado com 2 argumentos: logSystemError("STATUS", { context, message, ... })
+  if (typeof errorOrStatus === 'string') {
     errorData = {
-      context: arg2?.context || 'UNKNOWN_CONTEXT',
-      subject: arg2?.subject || 'Alerta de Erro no Sistema',
-      message: arg2?.message || 'Falha não especificada.',
-      ...(arg2 || {}),
-      payload: {
-        auth_status_or_user: arg1,
-        ...(arg2?.payload || {})
+      context: payloadDetails?.context || 'UNKNOWN_CONTEXT',
+      subject: payloadDetails?.subject || 'Alerta de Erro no Sistema',
+      message: payloadDetails?.message || 'Falha não especificada.',
+      ...(payloadDetails || {}),
+      raw_payload: {
+        auth_status_or_user: errorOrStatus,
+        ...(payloadDetails?.raw_payload || {})
       }
     };
   } else {
-    // Caso seja chamado com 1 argumento (Objeto direto): logSystemError({ context, message, ... })
-    errorData = arg1;
+    errorData = errorOrStatus;
   }
 
-  // [FAILSAFE DE BORDA]: Garante que os campos contratuais obrigatórios nunca vão nulos
   if (!errorData.context) errorData.context = 'UNKNOWN_CONTEXT';
   if (!errorData.message) errorData.message = 'Falha não especificada na requisição.';
 
@@ -77,9 +64,9 @@ export const logSystemError = async (
         "Authorization": `Bearer ${supabaseAnonKey}`,
         "apikey": supabaseAnonKey,
         "Content-Type": "application/json",
-        ...authHeaders() // Injeta o token via header estritamente em ambiente DEV/Cross-Origin
+        ...authHeaders()
       },
-      ...fetchOptions, // Garante credentials: 'include' em Produção para o navegador mandar o Cookie HttpOnly
+      ...fetchOptions,
       body: JSON.stringify(errorData),
     });
 
@@ -87,7 +74,6 @@ export const logSystemError = async (
       console.warn("⚠️ [NotificationService] Servidor retornou erro ao registrar log:", response.status);
     }
   } catch (err) {
-    // [SILENT FAIL]: Logs de erro nunca devem quebrar a experiência ou o fluxo do usuário
     console.error("🚨 [NotificationService] Falha de rede ao despachar log de erro:", err);
   }
 };

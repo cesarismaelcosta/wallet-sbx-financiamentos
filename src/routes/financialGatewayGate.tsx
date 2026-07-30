@@ -56,8 +56,7 @@ export const Route = createFileRoute("/financialGatewayGate")({
           context: "Gateway Redirect (financialGatewayGate)",
           subject: `Erro de Jornada: ${code || 'UNKNOWN'}`,
           message: message || "Falha não especificada.",
-          payload: { 
-            session_status: "SESSION_N/A",
+          raw_payload: { 
             error_code: code || null,
             return_uri: return_uri || null,
             // [METADADOS ENRIQUECIDOS]: Padronizados com o mesmo contrato da vitrine

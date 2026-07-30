@@ -11,6 +11,7 @@ import { useNavigation, NAVIGATION_INTENTS } from "@/features/financial-hub/core
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 import { DynamicConsents } from "@/features/financial-hub/components/layout/DynamicConsents";
 import { useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
 
 export function Step1PartnersPanel() {
   const insurers = [
@@ -112,13 +113,20 @@ export function Step1PartnersPanel() {
           />
         </div>
         
-        {/* Botão Principal */}
+        {/* Botão Principal com Feedback de Carregamento Padronizado */}
         <button 
-          disabled={loading || !areConsentsValid || navLoading} // Use navLoading ou loading conforme sua preferência
-          onClick={handleProceed} // <- Chamada protegida pelo 'execute'
-          className="w-full bg-[#B300FF] hover:bg-[#9900D9] text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-[#B300FF]/20 disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none"
+          disabled={loading || !areConsentsValid || navLoading}
+          onClick={handleProceed}
+          className="w-full bg-[#B300FF] hover:bg-[#9900D9] text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-[#B300FF]/20 disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none flex items-center justify-center gap-2"
         >
-          Continuar cotação
+          {loading || navLoading ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin text-white" />
+              Processando...
+            </>
+          ) : (
+            "Continuar cotação"
+          )}
         </button>
 
         {/* Botão de contato só aparece se houver whatsappContact definido em integration_details */}
