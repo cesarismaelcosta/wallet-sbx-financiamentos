@@ -58,7 +58,7 @@ export function generateSystemErrorEmailHtml(data: SystemErrorPayload): EmailTem
   // [SERIALIZAÇÃO INTELIGENTE]: Preserva o metadata completo e consolida IDs
   // =========================================================================
   const technicalData = {
-    ... (data.payload || {}),
+    ... (data.raw_payload || {}),
     metadata: {
       ...(data.payload?.metadata || {}), // Preserva page, product, partner, etc. enviados pelo front
       visit_id: data.visit_id || data.payload?.metadata?.visit_id || null,

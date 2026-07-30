@@ -143,7 +143,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
   const codigoParceiro = `${payload.event.event_id}/${payload.offer.offer_id}`;
   const sellerId = payload.seller?.seller_id;
   // Regra de negócio atual exige o envio do CPF do vendedor
-  const SEND_CPF_VENDEDOR = true;
+  const SEND_CPF_VENDEDOR = false;
   // Só gera e envia se a flag estiver ativa E houver um sellerId válido
   const cpfVendedor = (SEND_CPF_VENDEDOR && sellerId) ? generateCpfFromSellerId(sellerId) : null
 
@@ -250,10 +250,10 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
         message: apiMessage,
         
         // IDs com a nomenclatura correta
-        visitId: payload.visit_id || null,
-        visitUpdateId: payload.visit_update_id || null,
-        simulationId: payload.simulation_id || null,
-        simulationUpdateId: payload.simulation_update_id || null,
+        visit_id: payload.visit_id || null,
+        visit_update_id: payload.visit_update_id || null,
+        simulation_id: payload.simulation_id || null,
+        simulation_update_id: payload.simulation_update_id || null,
         
         // JSON enviado corretamente pelo nome que o Banco exige
         rawPayload: {
