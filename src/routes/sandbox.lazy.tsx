@@ -472,6 +472,26 @@ function SandboxPage() {
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [simulating, setSimulating] = useState(false);
 
+  // Limpa o estado de loading se o usuário voltar pela seta do navegador (bfcache)
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted || window.performance?.navigation?.type === 2) {
+        setLoadingAction(null);
+      }
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+    
+    // Garante que o loading limpa se a janela recuperar o foco após o retorno
+    const handleFocus = () => setLoadingAction(null);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
   // Handler de Scroll para efeito Glassmorphism no Header
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -479,7 +499,7 @@ function SandboxPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() => {
+  const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() => {
     if (typeof window !== "undefined") {
       const savedEnv = sessionStorage.getItem("sandbox_active_env");
       if (savedEnv === "staging" || savedEnv === "production") {
@@ -891,6 +911,7 @@ const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() 
       return;
     }
 
+    // Liga o estado de carregamento do botão específico
     setLoadingAction(`${flowKey}_form`);
     setError(null);
 
@@ -927,9 +948,8 @@ const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() 
     } catch (err: any) {
       console.error("[FORM_POST_ERROR]:", err);
       setError(`Erro ao submeter formulário: ${err.message}`);
-    } finally {
       document.body.removeChild(form);
-      setLoadingAction(null);
+      setLoadingAction(null); // Só reseta se der erro explícito no JavaScript
     }
   };
 
@@ -1053,7 +1073,6 @@ const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() 
     } catch (err: any) {
       console.error("[FORM_POST_ERROR]:", err);
       setError(`Erro ao submeter formulário: ${err.message}`);
-    } finally {
       document.body.removeChild(form);
       setLoadingAction(null);
     }
@@ -1504,13 +1523,22 @@ const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() 
                 </CardHeader>
                 {/* SEGUROS DE VEÍCULOS */}
                 <CardContent className="pt-0 space-y-2">
+                  {/* Botão Seguros Auto (form) */}
                   <Button 
                     onClick={() => handleDirectGatewayForm("SeguroAuto", "9")}
                     disabled={loadingAction === "SeguroAuto_form"}
                     variant="outline"
                     className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
-                    <ShieldCheck className="h-4 w-4" /> {loadingAction === "SeguroAuto_form" ? "Processando..." : "Acessar Seguros Auto (form)"}
+                    {loadingAction === "SeguroAuto_form" ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin text-[#B300FF]" /> Processando...
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="h-4 w-4" /> Acessar Seguros Auto (form)
+                      </>
+                    )}
                   </Button>
 
                   <Button 
@@ -1558,7 +1586,12 @@ const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() 
                     variant="outline"
                     className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
-                    <Play className="h-4 w-4" /> {loadingAction === "AutoEquity_form" ? "Processando..." : "Simular Car Equity (form)"}
+                    {loadingAction === "AutoEquity_form" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Play className="h-4 w-4" />
+                    )}
+                    {loadingAction === "AutoEquity_form" ? "Processando..." : "Simular Car Equity (form)"}
                   </Button>
 
                   <Button 
@@ -1686,14 +1719,22 @@ const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() 
                       </div>
 
                       <div className="p-4 pt-0 space-y-2">
-                        {/* Botão 1: Disparo via Form POST (Mesma Aba) */}
+                        {/* Botão Vitrine / Lotes (form) */}
                         <Button 
                           onClick={() => handleSimulateOfferForm(item.flowKey, item.offerId, item.product_id, item.disabled)}
                           disabled={item.disabled || loadingAction === `${item.flowKey}_form`}
                           variant="outline"
                           className={`w-full rounded-xl shadow-sm ${item.variant}`}
                         >
-                          {loadingAction === `${item.flowKey}_form` ? "Processando..." : (item.disabled ? "Indisponível (Em breve)" : `${item.label} (form)`)}
+                          {loadingAction === `${item.flowKey}_form` ? (
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Processando...
+                            </span>
+                          ) : item.disabled ? (
+                            "Indisponível (Em breve)"
+                          ) : (
+                            `${item.label} (form)`
+                          )}
                         </Button>
 
                         {/* Botão 2: Disparo via AJAX / Fetch (Nova Aba) */}
