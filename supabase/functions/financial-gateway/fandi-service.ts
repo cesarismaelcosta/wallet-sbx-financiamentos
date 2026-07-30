@@ -122,7 +122,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
 
   // Monta a URL injetando a assinatura na query string
   // URL Final: /simulation_id/simulation_update_id/timestamp/signature
-  const webhookBase = integrationDetails.urlCallback; 
+  const webhookBase = "https://ldzutiojmcawhwdhojlo.supabase.co/functions/v1/financial-gateway-webhook/fandi";
   const WEBHOOK_URL = `${webhookBase}/${simulationId}/${simulationUpdateId}/${timestamp}/${signature}`;
 
   // Registra log no Supabase se ligado
