@@ -245,17 +245,20 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
       sendSystemAlert({
         context: isVendedorErro ? "fandi-service: SELLER_NOT_FOUND" : "fandi-service: INVALID_FIPE_OR_MOLICAR",
         subject: `Alerta Fandi: ${errorTitle} ⚠️`,
-        message: apiMessage,
-        simulationId: payload.simulation_id || null,
-        rawPayload: {
-          error_message: apiMessage,
+        message: {
+          erro: apiMessage,
           codigo_parceiro: codigoParceiro,
           seller_id: sellerId,
           seller_document: cpfVendedor,
           fipe_code: offer.vehicle_details?.fipe_code,
           vehicle: offer.vehicle_details,
-          payload_enviado: bodyGuid
-        }
+          api_request: bodyGuid,
+          guid: guidResult
+        },
+        visit_id: payload.visit_id || null,
+        visit_update_id: payload.visit_update_id || null,
+        simulation_id: payload.simulation_id || null,
+        simulation_update_id: payload.simulation_update_id || null
       });
     }
 
