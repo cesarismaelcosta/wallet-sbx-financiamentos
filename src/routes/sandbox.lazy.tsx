@@ -1986,16 +1986,18 @@ function SandboxPage() {
                         disabled={simulating}
                         size="sm" 
                         variant="outline"
-                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5"
+                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5 flex items-center"
                       >
-                        {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
+                        {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />} 
+                        Testar via Fetch (JSON)
                       </Button>
                       <Button 
                         onClick={() => executeErrorSimulation('form', 'offer')} 
                         disabled={simulating}
                         size="sm" 
-                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white"
+                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white flex items-center"
                       >
+                        {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />} 
                         Testar via Form (Redirecionar)
                       </Button>
                     </div>
@@ -2046,16 +2048,18 @@ function SandboxPage() {
                         disabled={simulating}
                         size="sm" 
                         variant="outline"
-                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5"
+                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5 flex items-center"
                       >
-                        {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
+                        {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />} 
+                        Testar via Fetch (JSON)
                       </Button>
                       <Button 
                         onClick={() => executeErrorSimulation('form', 'product')} 
                         disabled={simulating}
                         size="sm" 
-                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white"
+                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white flex items-center"
                       >
+                        {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />} 
                         Testar via Form (Redirecionar)
                       </Button>
                     </div>

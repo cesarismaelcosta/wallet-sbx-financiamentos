@@ -62,13 +62,10 @@ export const Route = createFileRoute("/financialGatewayGate")({
           message: message || "Falha não especificada.",
           raw_payload: { 
             error_code: code || null,
-            return_uri: return_uri || null,
             offer_id: offer_id || null,
             product_id: product_id || null,
-            // [METADADOS ENRIQUECIDOS]: Padronizados com o mesmo contrato da vitrine
             metadata: {
               page: window.location.pathname,
-              code: code || "UNKNOWN",
               return_uri: return_uri || "/",
               visit_id: null,
               simulation_id: null

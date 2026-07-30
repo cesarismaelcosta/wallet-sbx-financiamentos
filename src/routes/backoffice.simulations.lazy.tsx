@@ -39,7 +39,8 @@ import {
   X,
   CheckCircle2,
   Code2,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Printer
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
@@ -420,6 +421,10 @@ function SimulationsPage() {
     });
   }, [rows, search, selectedStatus, dateRange, customRange, selectedPartners, selectedProducts]);
 
+  const handlePrintSheet = () => {
+    window.print();
+  };
+
   return (
     <div className="font-sans space-y-6">
       
@@ -791,22 +796,17 @@ function SimulationsPage() {
                       </span>
                     </div>
 
-                    <span className="text-xs font-mono text-muted-foreground">ID: {sim.id}</span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
-                          {sim.product_types?.name || "Financiamento"}
-                        </span>
-                        
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${statusClass(sim.status_types?.name)}`}>
-                          {sim.status_types?.name || "Pendente"}
-                        </span>
-                      </div>
-
-                      <SheetTitle className="text-xl font-bold text-slate-900 mt-1">{sim.name || ed.name || "Cliente sem nome"}</SheetTitle>
+                    {/* BOTÃO DE IMPRESSÃO / PDF */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handlePrintSheet}
+                        className="h-8 rounded-xl text-xs gap-1.5 border-purple-200 text-purple-700 hover:bg-purple-50"
+                      >
+                        <Printer className="h-3.5 w-3.5" /> Imprimir / PDF
+                      </Button>
+                      <span className="text-xs font-mono text-muted-foreground">ID: {sim.id}</span>
                     </div>
                   </div>
                 </SheetHeader>
