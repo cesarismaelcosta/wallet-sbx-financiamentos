@@ -44,7 +44,7 @@ export const Route = createFileRoute("/financialGatewayGate")({
   }),
 
   component: function FinancialGatewayFallback() {
-    const { status, code, message, return_uri, offer_id, product_id } = Route.useSearch();
+    const { status, code, message, return_uri, offer_id, product_id, entity_id } = Route.useSearch();
     const [countdown, setCountdown] = useState(5);
 
     // =====================================================================

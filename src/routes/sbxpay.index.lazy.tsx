@@ -93,6 +93,63 @@ export function sbXPAYHome() {
     const [loading, setLoading] = useState(false);
     const [activeKey, setActiveKey] = useState<string | null>(null);
 
+    // =========================================================================
+    // [VISIT GATEKEEPER]: Criação Automática de Visita via CallOrchestrator
+    // =========================================================================
+    useEffect(() => {
+        const initializeVisit = async () => {
+            console.log("🚦 [GATEKEEPER] 1. Iniciou o hook de visita");
+            
+            const searchParams = new URLSearchParams(window.location.search);
+            const currentVisitId = searchParams.get('visit_id');
+            
+            console.log("🚦 [GATEKEEPER] 2. visit_id atual na URL:", currentVisitId);
+
+            if (currentVisitId) {
+                console.log("🚦 [GATEKEEPER] 3. Visita já existe. Abortando criação.");
+                return;
+            }
+
+            try {
+                console.log("🚦 [GATEKEEPER] 4. Resolvendo ambiente...");
+                const environment = getDefaultSbxEnvironment();
+                console.log("🚦 [GATEKEEPER] 5. Ambiente:", environment);
+
+                console.log("🚦 [GATEKEEPER] 6. Disparando callOrchestrator para Borda Interna...");
+                
+                const response = await callOrchestrator({
+                    action: "VISIT",
+                    target_url: window.location.pathname,
+                    environment,
+                    interaction_context: {
+                        utm_source: "sbxpay_direct",
+                        utm_medium: "organic",
+                        utm_campaign: "auto_visit_init"
+                    }
+                }, "POST");
+
+                console.log("🚦 [GATEKEEPER] 7. Resposta do Orquestrador:", response);
+
+                if (response?.success && response?.data?.visit_id) {
+                    const newVisitId = String(response.data.visit_id);
+                    console.log("🚦 [GATEKEEPER] 8. Injetando ID na URL:", newVisitId);
+                    
+                    // 🔑 MUDANÇA: Usa a API nativa para não depender de schemas do TanStack Router
+                    const newUrl = `${window.location.pathname}?visit_id=${newVisitId}`;
+                    window.history.replaceState({ path: newUrl }, '', newUrl);
+                    
+                    console.log("🚦 [GATEKEEPER] 9. Fluxo finalizado com sucesso!");
+                } else {
+                    console.warn("⚠️ [GATEKEEPER] Resposta recebida sem visit_id:", response);
+                }
+            } catch (err) {
+                console.error("🚨 [GATEKEEPER] Falha Crítica. O código quebrou aqui:", err);
+            }
+        };
+
+        initializeVisit();
+    }, []); // 👈 Array vazio para garantir que rode apenas uma única vez na montagem
+
     useEffect(() => {
         const handleScroll = () => setIsScrolled(window.scrollY > 20);
         window.addEventListener('scroll', handleScroll);
