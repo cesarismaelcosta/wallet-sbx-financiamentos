@@ -66,8 +66,9 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   const accept = req.headers.get("accept") || "";
   const isAjax = contentType.includes("application/json") || accept.includes("application/json");
  
-  // Declaramos o payload vazinho ANTES do try/catch para evitar ReferenceError
+  // Declaramos o payload e userId vazios ANTES do try/catch para evitar ReferenceError
   let payload: any = {};
+  let userId = "";
 
   try {
     if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
@@ -122,7 +123,6 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     // =====================================================================
     let sbx_access_token = auth_token;
     const isJwt = auth_token.split('.').length === 3;
-    let userId = "";
     let finalJwt = auth_token;
     const agora = new Date();
     const expiraEmSegundos = 14400; // 4 horas
