@@ -55,25 +55,25 @@ export const Route = createFileRoute("/financialGatewayGate")({
     // =====================================================================
     useEffect(() => {
       if (status === "error") {
-        // [TELEMETRIA DE ERRO]: Disparo estruturado enriquecido com metadados e IDs de contexto
         logSystemError({
           context: "Gateway Redirect (financialGatewayGate)",
           subject: `Erro de Jornada: ${code || 'UNKNOWN'}`,
           message: message || "Falha não especificada.",
           raw_payload: { 
             error_code: code || null,
+            entity_id: entity_id || null,
             offer_id: offer_id || null,
             product_id: product_id || null,
+            visit_id: visit_id || null,
+            simulation_id: simulation_id || null,
             metadata: {
               page: window.location.pathname,
-              return_uri: return_uri || "/",
-              visit_id: null,
-              simulation_id: null
+              return_uri: targetReturnUrl
             }
           }
         });
       }
-    }, [status, code, message, return_uri, offer_id, product_id]);
+    }, [status, code, message, targetReturnUrl, offer_id, product_id, visit_id, simulation_id, entity_id]);
 
     // =====================================================================
     // [CONTROLE DE FLUXO]: Temporizador regressivo para redirecionamento automático

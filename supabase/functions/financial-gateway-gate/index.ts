@@ -512,7 +512,9 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         statusCode = 422;
     }
 
+    payload.entity_id = userId || null;
     return respondWithError(isAjax, statusCode, errorCode, err.message, safeReturnUri, req, payload);
+
   }
 }));
 
