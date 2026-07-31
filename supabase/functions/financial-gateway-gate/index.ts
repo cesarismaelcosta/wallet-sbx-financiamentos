@@ -344,18 +344,18 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     const isDirectVisit = !!target_url;
 
     const rehydratedPayload = {
-    action: isDirectVisit ? "VISIT" : "CONSULT", // 👈 Se tem target_url, usa VISIT (pula busca de regras)
-    target_url: target_url || "",                // 👈 Repassa o destino direto
-    timestamp: new Date().toISOString(),
-    origin_url: return_uri,
-    environment,
-    entity: userProfile,
-    product_id: product_id || "",
-    offer: offerPayload?.offer || {},
-    seller: offerPayload?.seller || {},
-    event: offerPayload?.event || {},
-    manager: offerPayload?.manager || {},
-    interaction_context: { utm_source, utm_medium, utm_campaign, origin_url: return_uri }
+        action: isDirectVisit ? "VISIT" : "CONSULT", // 👈 Se tem target_url, usa VISIT (pula busca de regras)
+        target_url: target_url || "",                // 👈 Repassa o destino direto
+        timestamp: new Date().toISOString(),
+        origin_url: return_uri,
+        environment,
+        entity: userProfile,
+        product_id: product_id ? Number(product_id) : null,
+        offer: offerPayload?.offer || {},
+        seller: offerPayload?.seller || {},
+        event: offerPayload?.event || {},
+        manager: offerPayload?.manager || {},
+        interaction_context: { utm_source, utm_medium, utm_campaign, origin_url: return_uri }
     };
 
     debugLog("Iniciando Orquestração de Rota...");
