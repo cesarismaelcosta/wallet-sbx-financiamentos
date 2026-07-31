@@ -26,6 +26,7 @@ interface SearchSchema {
   return_uri?: string;
   offer_id?: string;
   product_id?: string;
+  entity_id?: string;
 }
 
 export const Route = createFileRoute("/financialGatewayGate")({
@@ -39,6 +40,7 @@ export const Route = createFileRoute("/financialGatewayGate")({
     return_uri: search.return_uri as string | undefined,
     offer_id: search.offer_id as string | undefined,
     product_id: search.product_id as string | undefined,
+    entity_id: search.entity_id as string | undefined,
   }),
 
   component: function FinancialGatewayFallback() {
@@ -64,8 +66,6 @@ export const Route = createFileRoute("/financialGatewayGate")({
             entity_id: entity_id || null,
             offer_id: offer_id || null,
             product_id: product_id || null,
-            visit_id: visit_id || null,
-            simulation_id: simulation_id || null,
             metadata: {
               page: window.location.pathname,
               return_uri: targetReturnUrl
@@ -73,7 +73,8 @@ export const Route = createFileRoute("/financialGatewayGate")({
           }
         });
       }
-    }, [status, code, message, targetReturnUrl, offer_id, product_id, visit_id, simulation_id, entity_id]);
+    }, [status, code, message, targetReturnUrl, offer_id, product_id, entity_id]);
+
 
     // =====================================================================
     // [CONTROLE DE FLUXO]: Temporizador regressivo para redirecionamento automático
