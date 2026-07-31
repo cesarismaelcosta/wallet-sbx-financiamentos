@@ -66,6 +66,9 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   const accept = req.headers.get("accept") || "";
   const isAjax = contentType.includes("application/json") || accept.includes("application/json");
  
+  // Declaramos o payload vazinho ANTES do try/catch para evitar ReferenceError
+  let payload: any = {};
+
   try {
     if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
