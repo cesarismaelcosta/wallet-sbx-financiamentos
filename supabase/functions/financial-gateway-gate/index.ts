@@ -65,18 +65,6 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   const contentType = req.headers.get("content-type") || "";
   const accept = req.headers.get("accept") || "";
   const isAjax = contentType.includes("application/json") || accept.includes("application/json");
-  
-  let { 
-    environment, 
-    auth_token, 
-    offer_id, 
-    product_id, 
-    return_uri, 
-    utm_source, 
-    utm_medium, 
-    utm_campaign,
-    target_url // 👈 Parâmetro opcional se for apenas para gerar visita
-  } = payload;
  
   try {
     if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
@@ -90,7 +78,17 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   }
 
   // Extrai o auth_token diretamente no let para poder reatribuir se precisar do cookie depois
-  let { environment = "production", auth_token, offer_id, product_id, return_uri = originPath, utm_source, utm_medium, utm_campaign } = payload;
+  let { 
+    environment, 
+    auth_token, 
+    offer_id, 
+    product_id, 
+    return_uri, 
+    utm_source, 
+    utm_medium, 
+    utm_campaign,
+    target_url        // 👈 Parâmetro opcional se for apenas para gerar visita
+  } = payload;
 
   // =====================================================================
   // [STEP 2] RESOLUÇÃO DE CREDENCIAIS HÍBRIDA (Payload vs Cookie)
