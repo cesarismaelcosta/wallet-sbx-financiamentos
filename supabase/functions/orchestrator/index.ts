@@ -524,7 +524,28 @@ serve(withSecurity('orchestrator', async (req: Request) => {
     // =========================================================================
     if (req.method === "POST") {
       try {
-        const payload: OrchestratorPayload = await req.json();
+        const rawPayload = await req.json();
+
+        /**
+         * @function sanitizePayload
+         * @description Purifica recursivamente o payload de entrada transformando 
+         * quaisquer valores undefined em null, prevenindo falhas críticas de tipo 
+         * no driver postgres.js do ambiente Deno.
+         */
+        const sanitizePayload = (obj: any): any => {
+          if (obj === null || obj === undefined) return null;
+          if (typeof obj !== 'object') return obj;
+          if (Array.isArray(obj)) return obj.map(sanitizePayload);
+
+          const sanitized: Record<string, any> = {};
+          for (const key of Object.keys(obj)) {
+            const val = obj[key];
+            sanitized[key] = val === undefined ? null : sanitizePayload(val);
+          }
+          return sanitized;
+        };
+
+        const payload: OrchestratorPayload = sanitizePayload(rawPayload);
 
         // A: Captura de Contexto Nativo (Device/Geo)
         const infra = await captureInfrastructure(req);

@@ -13,6 +13,7 @@ import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Button } from "@/components/ui/button";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { getDefaultSbxEnvironment } from "@/services/session"; // 👈 Importação adicionada para resolução segura de ambiente (Zero LocalStorage)
+import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 
 export const Route = createLazyFileRoute('/sbxpay/')({
     component: sbXPAYHome,
@@ -94,61 +95,49 @@ export function sbXPAYHome() {
     const [activeKey, setActiveKey] = useState<string | null>(null);
 
     // =========================================================================
-    // [VISIT GATEKEEPER]: Criação Automática de Visita via CallOrchestrator
+    // [VISIT GATEKEEPER]:  Criação Automática de Visita via CallOrchestrator
+    //                      se usuário entrou direto na página
     // =========================================================================
     useEffect(() => {
         const initializeVisit = async () => {
-            console.log("🚦 [GATEKEEPER] 1. Iniciou o hook de visita");
-            
             const searchParams = new URLSearchParams(window.location.search);
-            const currentVisitId = searchParams.get('visit_id');
-            
-            console.log("🚦 [GATEKEEPER] 2. visit_id atual na URL:", currentVisitId);
-
-            if (currentVisitId) {
-                console.log("🚦 [GATEKEEPER] 3. Visita já existe. Abortando criação.");
-                return;
-            }
+            if (searchParams.get('visit_id')) return;
 
             try {
-                console.log("🚦 [GATEKEEPER] 4. Resolvendo ambiente...");
-                const environment = getDefaultSbxEnvironment();
-                console.log("🚦 [GATEKEEPER] 5. Ambiente:", environment);
+                const currentHref = window.location.href;
 
-                console.log("🚦 [GATEKEEPER] 6. Disparando callOrchestrator para Borda Interna...");
-                
                 const response = await callOrchestrator({
                     action: "VISIT",
+                    environment: getDefaultSbxEnvironment(),
+                    
+                    // 1. Obrigatoriedade: target_url na raiz para action VISIT
                     target_url: window.location.pathname,
-                    environment,
+                    
+                    // 2. Obrigatoriedade: origin_url na raiz do payload
+                    origin_url: currentHref,
+                    
                     interaction_context: {
+                        // 3. Obrigatoriedade: origin_url dentro do contexto
+                        origin_url: currentHref,
+                        
+                        // 4. Obrigatoriedade: utm_source dentro do contexto
                         utm_source: "sbxpay_direct",
                         utm_medium: "organic",
                         utm_campaign: "auto_visit_init"
                     }
                 }, "POST");
 
-                console.log("🚦 [GATEKEEPER] 7. Resposta do Orquestrador:", response);
-
                 if (response?.success && response?.data?.visit_id) {
-                    const newVisitId = String(response.data.visit_id);
-                    console.log("🚦 [GATEKEEPER] 8. Injetando ID na URL:", newVisitId);
-                    
-                    // 🔑 MUDANÇA: Usa a API nativa para não depender de schemas do TanStack Router
-                    const newUrl = `${window.location.pathname}?visit_id=${newVisitId}`;
+                    const newUrl = `${window.location.pathname}?visit_id=${response.data.visit_id}`;
                     window.history.replaceState({ path: newUrl }, '', newUrl);
-                    
-                    console.log("🚦 [GATEKEEPER] 9. Fluxo finalizado com sucesso!");
-                } else {
-                    console.warn("⚠️ [GATEKEEPER] Resposta recebida sem visit_id:", response);
                 }
-            } catch (err) {
-                console.error("🚨 [GATEKEEPER] Falha Crítica. O código quebrou aqui:", err);
+            } catch (err: any) {
+                console.error("🚨 [GATEKEEPER] Erro real:", JSON.stringify(err.response || err, null, 2));
             }
         };
 
         initializeVisit();
-    }, []); // 👈 Array vazio para garantir que rode apenas uma única vez na montagem
+    }, []);
 
     useEffect(() => {
         const handleScroll = () => setIsScrolled(window.scrollY > 20);
