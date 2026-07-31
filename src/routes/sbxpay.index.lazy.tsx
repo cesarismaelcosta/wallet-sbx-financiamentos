@@ -6,7 +6,7 @@
  * e fluxos diretos via Gateway), e validação de sessão sob o princípio estrito de **Zero LocalStorage**.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { createLazyFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Loader2, LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Building, UserPlus, AppWindow, Users, ShieldCheck, Lock, Plus } from 'lucide-react';
 import { WalletLogo } from "@/components/brand/WalletLogo";
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { getDefaultSbxEnvironment } from "@/services/session"; // 👈 Importação adicionada para resolução segura de ambiente (Zero LocalStorage)
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
+import { UserDataContext } from "@/routes/sbxpay.lazy"; // 👈 Contexto pai importado para disponibilizar o userData hidratado
 
 export const Route = createLazyFileRoute('/sbxpay/')({
     component: sbXPAYHome,
@@ -89,6 +90,7 @@ const flowsConfig = {
 export function sbXPAYHome() {
     const navigate = useNavigate();
     const { sessionToken, logout } = useFinancialAuth();
+    const { userData } = useContext(UserDataContext) || {}; // 👈 Consumo seguro do perfil BFF provido pelo Layout Pai
     
     const [isScrolled, setIsScrolled] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -614,7 +616,7 @@ export function sbXPAYHome() {
                     <p className="text-slate-600 font-medium text-sm">
                     Preparando o ambiente de simulação...
                     </p>
-                </div>        
+                </div>       
             )}
 
             {/* MOBILE TAB BAR (Visível apenas no celular) */}

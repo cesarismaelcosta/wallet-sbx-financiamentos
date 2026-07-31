@@ -547,6 +547,13 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
         const payload: OrchestratorPayload = sanitizePayload(rawPayload);
 
+        // [NORMALIZAÇÃO DE ENTRADA]: Garante estruturas vazias seguras contra undefined no banco
+        payload.offer = payload.offer || {};
+        payload.seller = payload.seller || {};
+        payload.event = payload.event || {};
+        payload.manager = payload.manager || {};
+        payload.interaction_context = payload.interaction_context || {};
+
         // A: Captura de Contexto Nativo (Device/Geo)
         const infra = await captureInfrastructure(req);
         
