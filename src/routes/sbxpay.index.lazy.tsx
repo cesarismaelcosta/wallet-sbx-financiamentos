@@ -106,38 +106,37 @@ export function sbXPAYHome() {
             try {
                 const currentHref = window.location.href;
 
-                const response = await callOrchestrator({
+                // Se você já possui os dados de perfil (userData / BFFUserProfile)
+                const payload = {
                     action: "VISIT",
                     environment: getDefaultSbxEnvironment(),
-                    
-                    // 1. Obrigatoriedade: target_url na raiz para action VISIT
                     target_url: window.location.pathname,
-                    
-                    // 2. Obrigatoriedade: origin_url na raiz do payload
-                    origin_url: currentHref,
-                    
+                    origin_url: currentHref, // Exigido na raiz por validatePayload
+
+                    // Passa o objeto entity preenchido (se disponível)
+                    ...(userData && { entity: userData }),
+
                     interaction_context: {
-                        // 3. Obrigatoriedade: origin_url dentro do contexto
-                        origin_url: currentHref,
-                        
-                        // 4. Obrigatoriedade: utm_source dentro do contexto
+                        origin_url: currentHref, // Exigido no context por validatePayload
                         utm_source: "sbxpay_direct",
                         utm_medium: "organic",
                         utm_campaign: "auto_visit_init"
                     }
-                }, "POST");
+                };
+
+                const response = await callOrchestrator(payload, "POST");
 
                 if (response?.success && response?.data?.visit_id) {
                     const newUrl = `${window.location.pathname}?visit_id=${response.data.visit_id}`;
                     window.history.replaceState({ path: newUrl }, '', newUrl);
                 }
             } catch (err: any) {
-                console.error("🚨 [GATEKEEPER] Erro real:", JSON.stringify(err.response || err, null, 2));
+                console.error("🚨 [GATEKEEPER] Erro no Orquestrador:", JSON.stringify(err.response || err, null, 2));
             }
         };
 
         initializeVisit();
-    }, []);
+    }, [userData]);
 
     useEffect(() => {
         const handleScroll = () => setIsScrolled(window.scrollY > 20);
