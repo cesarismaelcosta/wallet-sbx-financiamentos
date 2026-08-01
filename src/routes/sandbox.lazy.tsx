@@ -557,7 +557,7 @@ function SandboxPage() {
       key: "Carros", 
       label: "Financiar em até 60x", 
       title: "Financiamento de Carros", 
-      offerId: ambienteAtivo === "production" ? "4858961" : "2969794", 
+      offerId: ambienteAtivo === "production" ? "4952846" : "2969794", 
       flowKey: "Carros", 
       disabled: false, 
       variant: "bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs" 
@@ -592,6 +592,7 @@ function SandboxPage() {
     const loadSandboxData = async () => {
       if (!activeToken) return;
       setLoading(true);
+      setError(null);
       try {
         const profile = await fetchMyProfile(activeToken);
         setUserData(profile);
@@ -865,11 +866,17 @@ function SandboxPage() {
     try {
       const loginResponse = await autenticarAccountsSBX(loginCred, passwordCred, ambienteAtivo);
       if (loginResponse?.success && loginResponse.access_token) {
-        setAccessTokenSBX(loginResponse.access_token);
-        sessionStorage.setItem("access_token_sbx", loginResponse.access_token);
-
+        
+        // 👈 A MÁGICA ACONTECE AQUI: 
+        // Não mudamos a tela ainda! Aguardamos a Exchange rolar primeiro.
         const exchangeResponse = await trocarTokenNaEdgeFunction(loginResponse.access_token, ambienteAtivo);
+        
         if (exchangeResponse?.success && exchangeResponse.session_token) {
+          // ✅ Agora sim! Tudo deu certo. Salvamos os dois tokens ao mesmo tempo
+          // e o Dashboard vai montar perfeito sem erro fantasma.
+          sessionStorage.setItem("access_token_sbx", loginResponse.access_token);
+          setAccessTokenSBX(loginResponse.access_token);
+          
           if (setSession) {
             setSession(exchangeResponse.session_token, exchangeResponse.user_id || loginResponse.userId);
           }
@@ -884,6 +891,24 @@ function SandboxPage() {
     } finally {
       setIsLoggingIn(false);
     }
+  };
+
+  /**
+   * @function handleSandboxLogout
+   * @description Limpa os estados de sessão, remove tokens armazenados e purifica o ambiente.
+   */
+  const handleSandboxLogout = () => {
+    setAccessTokenSBX("");
+    sessionStorage.removeItem("access_token_sbx");
+    setError(null);
+    setGeneralError(""); 
+    
+    // 👈 PREVENÇÃO DE FANTASMAS: Limpa os dados do usuário e prateleira ao deslogar
+    setUserData(null);
+    setApiOfferData(null);
+    setVitrineOffers({});
+    
+    if (logout) logout({ purgeEnv: true } as any);
   };
 
   /**
