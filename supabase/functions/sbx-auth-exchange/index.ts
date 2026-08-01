@@ -44,7 +44,7 @@ serve(withSecurity('sbx-auth-exchange', async (req: Request) => {
     // =========================================================================
     // 1. CAPTURA E SANITIZAÇÃO DE ENTRADA (Dual-Mode / OAuth Payload Safe)
     // =========================================================================
-    let { sbx_access_token, environment } = await req.json();
+    let { sbx_access_token, environment, sbx_raw_token_payload } = await req.json();
 
     // Validação estrita da presença inicial do parâmetro
     if (!sbx_access_token) {
@@ -129,7 +129,7 @@ serve(withSecurity('sbx-auth-exchange', async (req: Request) => {
         session_token: sessionToken, 
         user_id: userId, 
         sbx_access_token: sbx_access_token, 
-        sbx_raw_token_payload: JSON.parse(JSON.stringify(upstreamData)),
+        sbx_raw_token_payload: sbx_raw_token_payload ? JSON.parse(JSON.stringify(sbx_raw_token_payload)) : null,
         environment, 
         expires_at: nossaExpiracao.toISOString(),
         ip_address: infra.ip_address,

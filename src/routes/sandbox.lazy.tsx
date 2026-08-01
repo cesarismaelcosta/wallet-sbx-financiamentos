@@ -403,14 +403,18 @@ const autenticarAccountsSBX = async (username: string, password: string, environ
  * @param {"staging"|"production"} environment - Ambiente ativo.
  * @returns {Promise<any>} Dados de resposta contendo o `session_token`.
  */
-const trocarTokenNaEdgeFunction = async (sbxAccessToken: string, environment: "staging" | "production") => {
+const trocarTokenNaEdgeFunction = async (sbxAccessToken: string, environment: "staging" | "production", rawTokenPayload?: any) => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   const res = await fetch(`${supabaseUrl}/functions/v1/sbx-auth-exchange`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseAnonKey}` },
-    body: JSON.stringify({ sbx_access_token: sbxAccessToken, environment: environment })
+    body: JSON.stringify({ 
+      sbx_access_token: sbxAccessToken, 
+      environment: environment,
+      oauth_payload: rawTokenPayload // <--- Envia o objeto inteiro do OAuth
+    })
   });
 
   const data = await res.json();
@@ -871,7 +875,7 @@ function SandboxPage() {
       if (loginResponse?.success && loginResponse.access_token) {
         
         // Não mudamos a tela ainda! Aguardamos a Exchange rolar primeiro.
-        const exchangeResponse = await trocarTokenNaEdgeFunction(loginResponse.access_token, ambienteAtivo);
+        const exchangeResponse = await trocarTokenNaEdgeFunction(loginResponse.access_token, ambienteAtivo, loginResponse);
         
         if (exchangeResponse?.success && exchangeResponse.session_token) {
           // Tudo deu certo. Salvamos os dois tokens ao mesmo tempo.
