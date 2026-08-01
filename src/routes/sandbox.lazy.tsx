@@ -386,8 +386,6 @@ const autenticarAccountsSBX = async (username: string, password: string, environ
     body: details.toString()
   });
 
-  console.log("🔥 DADOS DO OAUTH CAPTURADOS NO FRONT:", sbxLoginResponse);
-
   const rawResponse = await sbxLoginResponse.text();
   if (!sbxLoginResponse.ok) {
     throw new Error(`Credenciais inválidas ou erro na API: ${sbxLoginResponse.status}`);
@@ -405,14 +403,10 @@ const autenticarAccountsSBX = async (username: string, password: string, environ
 
 /**
  * @function trocarTokenNaEdgeFunction
- * @description Envia o token bruto da sbX para a Edge Function interna (`sbx-auth-exchange`),
+ * @description Envia o payload bruto do OAuth para a Edge Function interna (`sbx-auth-exchange`),
  * convertendo-o em uma sessão segura gerenciada pelo Supabase.
- * 
- * @param {string} sbxAccessToken - Token de acesso bruto obtido na sbX.
- * @param {"staging"|"production"} environment - Ambiente ativo.
- * @returns {Promise<any>} Dados de resposta contendo o `session_token`.
  */
-const trocarTokenNaEdgeFunction = async (sbxAccessToken: string, environment: "staging" | "production", rawTokenPayload?: any) => {
+const trocarTokenNaEdgeFunction = async (rawTokenPayload: any, environment: "staging" | "production") => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -420,9 +414,8 @@ const trocarTokenNaEdgeFunction = async (sbxAccessToken: string, environment: "s
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseAnonKey}` },
     body: JSON.stringify({ 
-      sbx_access_token: sbxAccessToken, 
       environment: environment,
-      sbx_raw_token_payload: rawTokenPayload // <--- Envia o objeto inteiro do OAuth
+      sbx_raw_token_payload: rawTokenPayload // Fonte única da verdade contendo o access_token
     })
   });
 
@@ -883,11 +876,8 @@ function SandboxPage() {
       const loginResponse = await autenticarAccountsSBX(loginCred, passwordCred, ambienteAtivo);
       if (loginResponse?.success && loginResponse.access_token) {
 
-        // --- COLOCA O CONSOLE.LOG BEM AQUI ---
-        console.log("🔥 DADOS DO OAUTH CAPTURADOS NO FRONT:", loginResponse);
-
-        // Não mudamos a tela ainda! Aguardamos a Exchange rolar primeiro.
-        const exchangeResponse = await trocarTokenNaEdgeFunction(loginResponse.access_token, ambienteAtivo, loginResponse.raw_oauth);
+        // Passa o objeto bruto do OAuth e o ambiente
+        const exchangeResponse = await trocarTokenNaEdgeFunction(loginResponse.raw_oauth, ambienteAtivo);
         
         if (exchangeResponse?.success && exchangeResponse.session_token) {
           // Tudo deu certo. Salvamos os dois tokens ao mesmo tempo.
