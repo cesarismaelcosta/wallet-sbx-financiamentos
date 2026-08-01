@@ -759,12 +759,13 @@ function SandboxPage() {
     const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
 
     const invalidOfferId = errorTarget === 'offer' ? "9999" : (errorDrawerConfig.item?.offerId || "4846218");
-    const invalidToken = errorTarget === 'token' ? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid_token_payload_test.signature" : accessTokenSBX;
+    // 👈 Híbrido: Pega o activeToken e despacha para a simulação de erros
+    const invalidToken = errorTarget === 'token' ? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid_token_payload_test.signature" : activeToken;
     const invalidProductId = errorTarget === 'product' ? "999" : (errorDrawerConfig.item?.product_id || "8");
 
     const payload = {
       environment: ambienteAtivo,
-      auth_token: invalidToken,
+      auth_token: invalidToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru dependendo do estado)
       offer_id: errorDrawerConfig.type === 'offer' ? invalidOfferId : undefined,
       product_id: errorDrawerConfig.type === 'direct' ? invalidProductId : (errorDrawerConfig.item?.product_id || ""),
       return_uri: window.location.origin + window.location.pathname,
@@ -916,8 +917,8 @@ function SandboxPage() {
    */
   const handleSimulateOfferForm = (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
     if (isDisabled) return;
-    if (!accessTokenSBX) {
-      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
+    if (!activeToken) {
+      alert("Token de autenticação não encontrado. Faça o login primeiro.");
       return;
     }
 
@@ -934,7 +935,7 @@ function SandboxPage() {
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: accessTokenSBX,
+      auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
       offer_id: String(offerId),
       product_id: String(productId || ''),
       return_uri: window.location.origin + window.location.pathname,
@@ -983,8 +984,8 @@ function SandboxPage() {
    */
   const handleSimulateOfferAjax = async (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
     if (isDisabled) return;
-    if (!accessTokenSBX) {
-      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
+    if (!activeToken) {
+      alert("Token de autenticação não encontrado. Faça o login primeiro.");
       return;
     }
 
@@ -1003,7 +1004,7 @@ function SandboxPage() {
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          auth_token: accessTokenSBX,
+          auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
           offer_id: String(offerId),
           product_id: String(productId || ''),
           return_uri: window.location.origin + window.location.pathname,
@@ -1053,8 +1054,8 @@ function SandboxPage() {
    * enviando a target_url opcional para acionar o fluxo de visita (VISIT) na borda.
    */
   const handleSbxPayGatewayForm = () => {
-    if (!accessTokenSBX) {
-      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
+    if (!activeToken) {
+      alert("Token de autenticação não encontrado. Faça o login primeiro.");
       return;
     }
 
@@ -1070,7 +1071,7 @@ function SandboxPage() {
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: accessTokenSBX,
+      auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
       target_url: "/sbxpay", // 👈 Opcional: Aciona o modo VISIT na borda
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
@@ -1106,8 +1107,8 @@ function SandboxPage() {
    * enviando a target_url opcional e abrindo o resultado com a sessão hidratada em nova aba.
    */
   const handleSbxPayGatewayAjax = async () => {
-    if (!accessTokenSBX) {
-      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
+    if (!activeToken) {
+      alert("Token de autenticação não encontrado. Faça o login primeiro.");
       return;
     }
 
@@ -1126,7 +1127,7 @@ function SandboxPage() {
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          auth_token: accessTokenSBX,
+          auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
           target_url: "/sbxpay", // 👈 Opcional: Aciona o modo VISIT na borda
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
@@ -1174,8 +1175,8 @@ function SandboxPage() {
    * (Equities & Seguros) operando na mesma aba.
    */
   const handleDirectGatewayForm = (flowKey: string, productId: string) => {
-    if (!accessTokenSBX) {
-      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
+    if (!activeToken) {
+      alert("Token de autenticação não encontrado. Faça o login primeiro.");
       return;
     }
 
@@ -1191,7 +1192,7 @@ function SandboxPage() {
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: accessTokenSBX,
+      auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
       product_id: String(productId),
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
@@ -1227,8 +1228,8 @@ function SandboxPage() {
    * (Equities & Seguros) com abertura controlada em nova aba.
    */
   const handleDirectGatewayAjax = async (flowKey: string, productId: string) => {
-    if (!accessTokenSBX) {
-      alert("Token accessTokenSBX não encontrado. Faça o login primeiro.");
+    if (!activeToken) {
+      alert("Token de autenticação não encontrado. Faça o login primeiro.");
       return;
     }
 
@@ -1247,7 +1248,7 @@ function SandboxPage() {
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          auth_token: accessTokenSBX,
+          auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
           product_id: String(productId),
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
