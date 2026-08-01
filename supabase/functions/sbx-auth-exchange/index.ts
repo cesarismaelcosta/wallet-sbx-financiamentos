@@ -8,14 +8,15 @@
  * interna e assina o JWT, utilizando o Wrapper de Segurança (withSecurity).
  * 
  * * [RESPONSABILIDADES]:
- * 1. Validação Upstream: Bate no /account/v2/user/me para garantir que o token externo é quente.
- * 2. Prevenção: Intercepta tokens parceiros expirados (401) e nega a troca.
- * 3. Sessão Intermediária: Grava na tabela `session_tokens` para controle de estado.
- * 4. Assinatura Local: Gera o JWT HMAC-SHA256 para o frontend consumir de forma segura.
- * 5. Bridge: Injeção dinâmica de Cookie para habilitar o fluxo SSR do Gateway.
+ * 1. Sanitização de Entrada: Intercepta e normaliza tanto tokens brutos quanto payloads JSON do OAuth.
+ * 2. Validação Upstream: Bate no /account/v2/user/me para garantir que o token externo é quente.
+ * 3. Prevenção: Intercepta tokens parceiros expirados (401) e nega a troca.
+ * 4. Sessão Intermediária: Grava na tabela `session_tokens` para controle de estado.
+ * 5. Assinatura Local: Gera o JWT HMAC-SHA256 para o frontend consumir de forma segura.
+ * 6. Bridge: Injeção dinâmica de Cookie para habilitar o fluxo SSR do Gateway.
  * 
  * @author Cesar Ismael Pereira da Costa
- * @version 2.1.0 (Alinhamento com Wrapper Core e Padrão de Execução)
+ * @version 2.1.1 (Alinhamento com Wrapper Core, Padrão de Execução e Sanitização OAuth)
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -23,18 +24,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
+import { debugLog } from "../_shared/logger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-/**
- * FUNÇÃO DE LOG PADRONIZADA
- * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
- */
-import { debugLog } from "../_shared/logger.ts";
 
 const ENV_URLS = {
   production: "https://api.s4bdigital.net",
@@ -45,12 +41,32 @@ const ENV_URLS = {
 serve(withSecurity('sbx-auth-exchange', async (req: Request) => {
 
   try {
-    // Lendo 'sbx_access_token' e 'environment' do JSON recebido do front-end
-    const { sbx_access_token, environment} = await req.json();
+    // =========================================================================
+    // 1. CAPTURA E SANITIZAÇÃO DE ENTRADA (Dual-Mode / OAuth Payload Safe)
+    // =========================================================================
+    let { sbx_access_token, environment } = await req.json();
 
-    // Validando a presença do token sbx_access_token
+    // Validação estrita da presença inicial do parâmetro
     if (!sbx_access_token) {
       throw new Error("[sbx-auth-exchange] AUTH_REQUIRED: Token externo (sbx_access_token) não fornecido.");
+    }
+
+    // Sanitização defensiva: Normaliza a entrada e intercepta caso o front-end envie o JSON completo do OAuth
+    if (typeof sbx_access_token === 'string') {
+        const trimmedToken = sbx_access_token.trim();
+        if (trimmedToken.startsWith('{') && trimmedToken.endsWith('}')) {
+            try {
+                const parsedTokenJson = JSON.parse(trimmedToken);
+                if (parsedTokenJson.access_token) {
+                    sbx_access_token = parsedTokenJson.access_token;
+                    debugLog("[sbx-auth-exchange] JSON do OAuth detectado e parseado com sucesso. access_token extraído com segurança.");
+                }
+            } catch (e) {
+                debugLog("[sbx-auth-exchange] Falha ao parsear JSON no auth_token, mantendo string original.", { error: String(e) });
+            }
+        } else {
+            sbx_access_token = trimmedToken;
+        }
     }
 
     // Validação estrita do Ambiente (Fail-fast)
