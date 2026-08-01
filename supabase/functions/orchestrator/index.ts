@@ -556,7 +556,48 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
         // A: Captura de Contexto Nativo (Device/Geo)
         const infra = await captureInfrastructure(req);
-        
+
+        // [DEBUG POST COMPLETO] Agora a variável 'infra' existe e pode ser inspecionada
+        debugLog("[POST ENTRYPOINT - DADOS BRUTOS COMPLETOS]:", {
+          headers: {
+            "x-session-token": req.headers.get("x-session-token"),
+            "cookie": req.headers.get("cookie")
+          },
+          
+          // Contexto / Ação / IDs
+          action: [payload?.action, typeof payload?.action],
+          product_id: [payload?.product_id, typeof payload?.product_id],
+          partner_id: [payload?.partner_id, typeof payload?.partner_id],
+
+          // Infraestrutura (Infra)
+          origin_ip: [infra?.ip_address, typeof infra?.ip_address],
+          origin_country: [infra?.country, typeof infra?.country],
+          origin_state: [infra?.state, typeof infra?.state],
+          origin_city: [infra?.city, typeof infra?.city],
+          origin_ua: [infra?.user_agent, typeof infra?.user_agent],
+          origin_device: [infra?.device_type, typeof infra?.device_type],
+          origin_os: [infra?.operating_system, typeof infra?.operating_system],
+
+          // Entidade
+          entity_id: [payload?.entity?.entity_id, typeof payload?.entity?.entity_id],
+          entity_type: [payload?.entity?.entity_type, typeof payload?.entity?.entity_type],
+          name: [payload?.entity?.name, typeof payload?.entity?.name],
+          document: [payload?.entity?.document, typeof payload?.entity?.document],
+          document_rg: [payload?.entity?.document_rg, typeof payload?.entity?.document_rg],
+          email: [payload?.entity?.email, typeof payload?.entity?.email],
+          phone: [payload?.entity?.phone, typeof payload?.entity?.phone],
+          birth_date: [payload?.entity?.birth_date, typeof payload?.entity?.birth_date],
+          gender: [payload?.entity?.gender, typeof payload?.entity?.gender],
+
+          // Oferta
+          offer_id: [payload?.offer?.offer_id, typeof payload?.offer?.offer_id],
+          offer_description: [payload?.offer?.offer_description, typeof payload?.offer?.offer_description],
+          offer_value: [payload?.offer?.offer_value, typeof payload?.offer?.offer_value],
+
+          // Consentimentos
+          consents_count: [payload?.consents?.length, typeof payload?.consents?.length]
+        });
+
         // B: Gatekeeper de Dados (Formatação e Regras Estruturais)
         const { category_id, product_id, action } = await validatePayload(supabase, payload);
 

@@ -91,17 +91,17 @@ export async function persistVisitData(
             raw_payload
           )
           VALUES (
-            ${payload.product_id}, ${payload.partner_id || null}, 
-            ${payload.interaction_context?.utm_source || null},
-            ${payload.interaction_context?.utm_medium || null},
-            ${payload.interaction_context?.utm_campaign || null},
-            ${ originUrl || null },
-            ${ (targetUrl || "").split('?')[0] }, 
-            ${payload.action}, 
-            ${origin.ip_address}, ${origin.country}, ${origin.state}, 
-            ${origin.city}, ${origin.user_agent}, ${origin.device_type}, 
-            ${origin.operating_system}, ${origin}::jsonb,
-            ${payload}::jsonb
+            ${payload.product_id ?? null}, ${payload.partner_id ?? null}, 
+            ${payload.interaction_context?.utm_source ?? null},
+            ${payload.interaction_context?.utm_medium ?? null},
+            ${payload.interaction_context?.utm_campaign ?? null},
+            ${originUrl ?? null},
+            ${(targetUrl || "").split('?')[0]}, 
+            ${payload.action ?? null}, 
+            ${origin.ip_address ?? null}, ${origin.country ?? null}, ${origin.state ?? null}, 
+            ${origin.city ?? null}, ${origin.user_agent ?? null}, ${origin.device_type ?? null}, 
+            ${origin.operating_system ?? null}, ${origin ?? null}::jsonb,
+            ${payload ?? null}::jsonb
           )
           RETURNING id
         `;
