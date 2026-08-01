@@ -545,7 +545,7 @@ function SandboxPage() {
   const FLOW_OFFERS = [
     { 
       key: "Cartão", 
-      label: "Parcelar com cartão em até 18x", 
+      label: "Cartão em até 18x", 
       title: "Parcelamento com Cartão", 
       product_id: "8",
       offerId: ambienteAtivo === "production" ? "4846218" : "3064406", 
@@ -591,10 +591,13 @@ function SandboxPage() {
   useEffect(() => {
     const loadSandboxData = async () => {
       if (!activeToken) return;
+      
       setLoading(true);
       setError(null);
+
       try {
-        const profile = await fetchMyProfile(activeToken);
+        // Chamando vazio para o serviço usar os authHeaders() e pegar do sessionStorage
+        const profile = await fetchMyProfile(); 
         setUserData(profile);
 
         try {
@@ -760,13 +763,13 @@ function SandboxPage() {
     const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
 
     const invalidOfferId = errorTarget === 'offer' ? "9999" : (errorDrawerConfig.item?.offerId || "4846218");
-    // 👈 Híbrido: Pega o activeToken e despacha para a simulação de erros
+    // Híbrido: Pega o activeToken e despacha para a simulação de erros
     const invalidToken = errorTarget === 'token' ? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid_token_payload_test.signature" : activeToken;
     const invalidProductId = errorTarget === 'product' ? "999" : (errorDrawerConfig.item?.product_id || "8");
 
     const payload = {
       environment: ambienteAtivo,
-      auth_token: invalidToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru dependendo do estado)
+      auth_token: invalidToken, // Token híbrido (JWT Interno ou Token sbX cru dependendo do estado)
       offer_id: errorDrawerConfig.type === 'offer' ? invalidOfferId : undefined,
       product_id: errorDrawerConfig.type === 'direct' ? invalidProductId : (errorDrawerConfig.item?.product_id || ""),
       return_uri: window.location.origin + window.location.pathname,
@@ -867,13 +870,11 @@ function SandboxPage() {
       const loginResponse = await autenticarAccountsSBX(loginCred, passwordCred, ambienteAtivo);
       if (loginResponse?.success && loginResponse.access_token) {
         
-        // 👈 A MÁGICA ACONTECE AQUI: 
         // Não mudamos a tela ainda! Aguardamos a Exchange rolar primeiro.
         const exchangeResponse = await trocarTokenNaEdgeFunction(loginResponse.access_token, ambienteAtivo);
         
         if (exchangeResponse?.success && exchangeResponse.session_token) {
-          // ✅ Agora sim! Tudo deu certo. Salvamos os dois tokens ao mesmo tempo
-          // e o Dashboard vai montar perfeito sem erro fantasma.
+          // Tudo deu certo. Salvamos os dois tokens ao mesmo tempo.
           sessionStorage.setItem("access_token_sbx", loginResponse.access_token);
           setAccessTokenSBX(loginResponse.access_token);
           
@@ -898,29 +899,25 @@ function SandboxPage() {
    * @description Limpa os estados de sessão, remove tokens armazenados e purifica o ambiente.
    */
   const handleSandboxLogout = () => {
-    setAccessTokenSBX("");
-    sessionStorage.removeItem("access_token_sbx");
-    setError(null);
-    setGeneralError(""); 
-    
-    // 👈 PREVENÇÃO DE FANTASMAS: Limpa os dados do usuário e prateleira ao deslogar
-    setUserData(null);
-    setApiOfferData(null);
-    setVitrineOffers({});
-    
-    if (logout) logout({ purgeEnv: true } as any);
-  };
+    // 1. Aciona o spinner imediatamente
+    setLoadingAction("logout");
 
-  /**
-   * @function handleSandboxLogout
-   * @description Limpa os estados de sessão, remove tokens armazenados e purifica o ambiente.
-   */
-  const handleSandboxLogout = () => {
-    setAccessTokenSBX("");
-    sessionStorage.removeItem("access_token_sbx");
-    setError(null); // <-- CORREÇÃO: Mata o banner vermelho de erro da tela
-    setGeneralError(""); // <-- CORREÇÃO: Limpa erros antigos do formulário
-    if (logout) logout({ purgeEnv: true } as any);
+    // 2. Dá um fôlego de 50ms para o React renderizar o spinner antes de limpar os dados
+    setTimeout(() => {
+      setAccessTokenSBX("");
+      sessionStorage.removeItem("access_token_sbx");
+      setError(null);
+      setGeneralError(""); 
+      
+      // Limpa os dados do usuário e prateleira ao deslogar
+      setUserData(null);
+      setApiOfferData(null);
+      setVitrineOffers({});
+      
+      if (logout) logout({ purgeEnv: true } as any);
+      
+      setLoadingAction(null);
+    }, 50);
   };
 
   /**
@@ -940,15 +937,31 @@ function SandboxPage() {
    *   problemas de isolamento de armazenamento em ambiente local/staging.
    * -------------------------------------------------------------------------
    */
-  const handleSimulateOfferForm = (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
+  const handleSimulateOfferForm = (flowKey: string, offerId: string, productId: string, isDisabled?: boolean, forceToken?: 'jwt' | 'sbx') => {
+    console.log("🚨 CLIQUE RECEBIDO NA FUNÇÃO DO FORM!", { flowKey, forceToken });
+    
     if (isDisabled) return;
-    if (!activeToken) {
-      alert("Token de autenticação não encontrado. Faça o login primeiro.");
+
+    let tokenToUse = activeToken;
+    if (forceToken === 'jwt') tokenToUse = sessionToken;
+    if (forceToken === 'sbx') tokenToUse = accessTokenSBX;
+
+    if (!tokenToUse) {
+      alert(`Token de autenticação não encontrado. Faça o login primeiro.`);
       return;
     }
+        
+    console.log("🔍 [DEBUG PAYLOAD PARA BORDA]:", {
+      environment: ambienteAtivo,
+      auth_token: tokenToUse, // Vamos ver exatamente o que está indo aqui
+      tamanhoDoToken: tokenToUse ? tokenToUse.length : 0,
+      temPontosDoJwt: tokenToUse ? tokenToUse.split('.').length : 0,
+      offer_id: String(offerId),
+      product_id: String(productId || '')
+    });
 
-    // Liga o estado de carregamento do botão específico
-    setLoadingAction(`${flowKey}_form`);
+    // Liga o estado de carregamento do botão específico com nome do estado
+    setLoadingAction(`${flowKey}_form_${forceToken}`);
     setError(null);
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
@@ -960,7 +973,7 @@ function SandboxPage() {
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
+      auth_token: tokenToUse,
       offer_id: String(offerId),
       product_id: String(productId || ''),
       return_uri: window.location.origin + window.location.pathname,
@@ -978,14 +991,18 @@ function SandboxPage() {
     });
 
     document.body.appendChild(form);
-    
+
     try {
-      form.submit();
+      //form.submit();
     } catch (err: any) {
       console.error("[FORM_POST_ERROR]:", err);
       setError(`Erro ao submeter formulário: ${err.message}`);
-      document.body.removeChild(form);
-      setLoadingAction(null); // Só reseta se der erro explícito no JavaScript
+      setLoadingAction(null);
+    } finally {
+      setTimeout(() => {
+        if (document.body.contains(form)) document.body.removeChild(form);
+        setLoadingAction(null);
+      }, 800);
     }
   };
 
@@ -1007,14 +1024,20 @@ function SandboxPage() {
    *   como ferramenta ideal de homologação e validação de contratos de API.
    * -------------------------------------------------------------------------
    */
-  const handleSimulateOfferAjax = async (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
+  const handleSimulateOfferAjax = async (flowKey: string, offerId: string, productId: string, isDisabled?: boolean, forceToken?: 'jwt' | 'sbx') => {
     if (isDisabled) return;
-    if (!activeToken) {
-      alert("Token de autenticação não encontrado. Faça o login primeiro.");
+
+    let tokenToUse = activeToken;
+    if (forceToken === 'jwt') tokenToUse = sessionToken;
+    if (forceToken === 'sbx') tokenToUse = accessTokenSBX;
+
+    if (!tokenToUse) {
+      alert(`Token de autenticação não encontrado. Faça o login primeiro.`);
       return;
     }
 
-    setLoadingAction(`${flowKey}_ajax`);
+    // Liga o estado de carregamento do botão específico com nome do estado
+    setLoadingAction(`${flowKey}_ajax_${forceToken}`);
     setError(null);
 
     try {
@@ -1029,7 +1052,7 @@ function SandboxPage() {
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
+          auth_token: tokenToUse,
           offer_id: String(offerId),
           product_id: String(productId || ''),
           return_uri: window.location.origin + window.location.pathname,
@@ -1057,15 +1080,6 @@ function SandboxPage() {
       console.error("[AJAX_GATEWAY_ERROR]:", err);
       const errorMsg = err.message || "Erro desconhecido";
       setError(`Erro no disparo AJAX: ${errorMsg}`);
-
-      // Auto-Logout se for erro de Autenticação/Sessão
-      const isAuthError = errorMsg.toLowerCase().includes("autenticação") || 
-                          errorMsg.toLowerCase().includes("unauthorized") || 
-                          errorMsg.toLowerCase().includes("session_expired");
-                          
-      if (isAuthError) {
-        handleSandboxLogout(); // Expulsa o usuário automaticamente
-      }
     } finally {
       setLoadingAction(null);
     }
@@ -1096,8 +1110,8 @@ function SandboxPage() {
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
-      target_url: "/sbxpay", // 👈 Opcional: Aciona o modo VISIT na borda
+      auth_token: activeToken,
+      target_url: "/sbxpay", // Opcional: Aciona o modo VISIT na borda
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
       utm_medium: "referral",
@@ -1119,8 +1133,12 @@ function SandboxPage() {
     } catch (err: any) {
       console.error("[FORM_POST_ERROR]:", err);
       setError(`Erro ao submeter formulário: ${err.message}`);
-      document.body.removeChild(form);
       setLoadingAction(null);
+    } finally {
+      setTimeout(() => {
+        if (document.body.contains(form)) document.body.removeChild(form);
+        setLoadingAction(null);
+      }, 800);
     }
   };
 
@@ -1152,8 +1170,8 @@ function SandboxPage() {
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
-          target_url: "/sbxpay", // 👈 Opcional: Aciona o modo VISIT na borda
+          auth_token: activeToken,
+          target_url: "/sbxpay", // Opcional: Aciona o modo VISIT na borda
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
           utm_medium: "referral",
@@ -1179,14 +1197,6 @@ function SandboxPage() {
       console.error("[AJAX_GATEWAY_ERROR]:", err);
       const errorMsg = err.message || "Erro desconhecido";
       setError(`Erro no disparo AJAX: ${errorMsg}`);
-
-      const isAuthError = errorMsg.toLowerCase().includes("autenticação") ||  
-                          errorMsg.toLowerCase().includes("unauthorized") ||  
-                          errorMsg.toLowerCase().includes("session_expired");
-                          
-      if (isAuthError) {
-        handleSandboxLogout();
-      }
     } finally {
       setLoadingAction(null);
     }
@@ -1217,7 +1227,7 @@ function SandboxPage() {
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
+      auth_token: activeToken,
       product_id: String(productId),
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
@@ -1240,8 +1250,12 @@ function SandboxPage() {
     } catch (err: any) {
       console.error("[FORM_POST_ERROR]:", err);
       setError(`Erro ao submeter formulário: ${err.message}`);
-      document.body.removeChild(form);
       setLoadingAction(null);
+    } finally {
+      setTimeout(() => {
+        if (document.body.contains(form)) document.body.removeChild(form);
+        setLoadingAction(null);
+      }, 800);
     }
   };
 
@@ -1273,7 +1287,7 @@ function SandboxPage() {
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          auth_token: activeToken, // 👈 Token híbrido (JWT Interno ou Token sbX cru)
+          auth_token: activeToken,
           product_id: String(productId),
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
@@ -1300,15 +1314,6 @@ function SandboxPage() {
       console.error("[AJAX_GATEWAY_ERROR]:", err);
       const errorMsg = err.message || "Erro desconhecido";
       setError(`Erro no disparo AJAX: ${errorMsg}`);
-
-      //Auto-Logout se for erro de Autenticação/Sessão
-      const isAuthError = errorMsg.toLowerCase().includes("autenticação") || 
-                          errorMsg.toLowerCase().includes("unauthorized") || 
-                          errorMsg.toLowerCase().includes("session_expired");
-                          
-      if (isAuthError) {
-        handleSandboxLogout(); // Expulsa o usuário automaticamente
-      }
     } finally {
       setLoadingAction(null);
     }
@@ -1378,8 +1383,20 @@ function SandboxPage() {
               Backoffice
             </a>
             {activeToken ? (
-              <button onClick={handleSandboxLogout} className={`flex items-center gap-2 ${ghostBtn}`}>
-                Sair <LogOut className="w-3 h-3" />
+              <button 
+                onClick={handleSandboxLogout} 
+                disabled={loadingAction === "logout"}
+                className={`flex items-center gap-2 ${ghostBtn} ${loadingAction === "logout" ? "opacity-70 cursor-not-allowed" : ""}`}
+              >
+                {loadingAction === "logout" ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" /> Saindo...
+                  </>
+                ) : (
+                  <>
+                    Sair <LogOut className="w-3 h-3" />
+                  </>
+                )}
               </button>
             ) : null}
           </div>
@@ -1501,9 +1518,9 @@ function SandboxPage() {
                 <button
                   type="submit"
                   disabled={isLoggingIn}
-                  className={`w-full h-12 bg-[#B400FF] text-white font-semibold rounded-full transition-all duration-300 flex items-center justify-center gap-2 ${isLoggingIn ? "animate-pulse" : "hover:bg-[#9a00db]"}`}
+                  className={`w-full h-12 bg-[#B400FF] text-white font-semibold rounded-full transition-all duration-300 flex items-center justify-center gap-2 ${isLoggingIn ? "opacity-70 cursor-wait" : "hover:bg-[#9a00db]"}`}
                 >
-                  {isLoggingIn ? <><Loader2 className="animate-spin" size={20} /> Validando...</> : "Entrar"}
+                  {isLoggingIn ? <><Loader2 className="animate-spin" size={20} /> Processando...</> : "Entrar"}
                 </button>
               </form>
             </div>
@@ -1929,35 +1946,71 @@ function SandboxPage() {
                       </div>
 
                       <div className="p-4 pt-0 space-y-2">
-                        {/* Botão Vitrine / Lotes (form) */}
+                        
+                        {/* =========================================
+                        BLOCO 1: SIMULAÇÃO LEGADA (TOKEN DA SBX) 
+                        ========================================= */}
                         <Button 
-                          onClick={() => handleSimulateOfferForm(item.flowKey, item.offerId, item.product_id, item.disabled)}
-                          disabled={item.disabled || loadingAction === `${item.flowKey}_form`}
+                          onClick={() => handleSimulateOfferForm(item.flowKey, item.offerId, item.product_id, item.disabled, 'sbx')}
+                          disabled={item.disabled || loadingAction === `${item.flowKey}_form_sbx`}
                           variant="outline"
                           className={`w-full rounded-xl shadow-sm ${item.variant}`}
                         >
-                          {loadingAction === `${item.flowKey}_form` ? (
+                          {loadingAction === `${item.flowKey}_form_sbx` ? (
                             <span className="flex items-center gap-2">
                               <Loader2 className="h-3.5 w-3.5 animate-spin" /> Processando...
                             </span>
                           ) : item.disabled ? (
                             "Indisponível (Em breve)"
                           ) : (
-                            `${item.label} (form)`
+                            `${item.label} (sbX/form)`
                           )}
                         </Button>
 
-                        {/* Botão 2: Disparo via AJAX / Fetch (Nova Aba) */}
                         <Button 
-                          onClick={() => handleSimulateOfferAjax(item.flowKey, item.offerId, item.product_id, item.disabled)}
-                          disabled={item.disabled || loadingAction === `${item.flowKey}_ajax`}
+                          onClick={() => handleSimulateOfferAjax(item.flowKey, item.offerId, item.product_id, item.disabled, 'sbx')}
+                          disabled={item.disabled || loadingAction === `${item.flowKey}_ajax_sbx`}
                           variant="outline"
                           className={`w-full rounded-xl shadow-sm ${item.variant}`}
                         >
-                          {loadingAction === `${item.flowKey}_ajax` ? "Processando..." : (item.disabled ? "Indisponível (Em breve)" : `${item.label} (fetch)`)}
+                          {loadingAction === `${item.flowKey}_ajax_sbx` ? "Processando..." : (item.disabled ? "Indisponível (Em breve)" : `${item.label} (sbX/fetch)`)}
                         </Button>
 
-                        <div className="flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 text-center pt-1">
+                        {/* =========================================
+                            BLOCO 2: SIMULAÇÃO INTERNA (NOSSO JWT) 
+                            ========================================= */}
+                        <div className="pt-2">
+                          <Button 
+                            onClick={() => handleSimulateOfferForm(item.flowKey, item.offerId, item.product_id, item.disabled, 'jwt')}
+                            disabled={item.disabled || loadingAction === `${item.flowKey}_form_jwt`}
+                            variant="outline"
+                            className="w-full rounded-xl shadow-sm bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 font-light text-xs mb-2"
+                          >
+                            {loadingAction === `${item.flowKey}_form_jwt` ? (
+                              <span className="flex items-center gap-2">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Processando...
+                              </span>
+                            ) : item.disabled ? (
+                              "Indisponível (Em breve)"
+                            ) : (
+                              `${item.label} (JWT/form)`
+                            )}
+                          </Button>
+
+                          <Button 
+                            onClick={() => handleSimulateOfferAjax(item.flowKey, item.offerId, item.product_id, item.disabled, 'jwt')}
+                            disabled={item.disabled || loadingAction === `${item.flowKey}_ajax_jwt`}
+                            variant="outline"
+                            className="w-full rounded-xl shadow-sm bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 font-light text-xs"
+                          >
+                            {loadingAction === `${item.flowKey}_ajax_jwt` ? "Processando..." : (item.disabled ? "Indisponível (Em breve)" : `${item.label} (JWT/fetch)`)}
+                          </Button>
+                        </div>
+
+                        {/* =========================================
+                            LINKS DE CONSULTA E ERROS 
+                            ========================================= */}
+                        <div className="flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 text-center pt-3 border-t mt-2">
                           <button
                             type="button"
                             onClick={() => handleOpenConsultarOferta(item.offerId)}
@@ -1982,6 +2035,7 @@ function SandboxPage() {
                             simular erro
                           </button>
                         </div>
+
                       </div>
                     </div>
                   );
@@ -2341,14 +2395,22 @@ function SandboxPage() {
         </a>
 
         {activeToken ? (
-          <button onClick={handleSandboxLogout} className="flex flex-col items-center justify-center text-red-500 min-w-[70px] gap-1">
-            <LogOut className="w-6 h-6" strokeWidth={1.5} />
-            <span className="text-[10px] medium">Sair</span>
+          <button 
+            onClick={handleSandboxLogout} 
+            disabled={loadingAction === "logout"}
+            className={`flex flex-col items-center justify-center min-w-[70px] gap-1 transition-all ${loadingAction === "logout" ? "text-red-300" : "text-red-500"}`}
+          >
+            {loadingAction === "logout" ? (
+              <Loader2 className="w-6 h-6 animate-spin" strokeWidth={1.5} />
+            ) : (
+              <LogOut className="w-6 h-6" strokeWidth={1.5} />
+            )}
+            <span className="text-[10px] font-medium">{loadingAction === "logout" ? "Saindo..." : "Sair"}</span>
           </button>
         ) : (
           <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex flex-col items-center justify-center text-slate-400 min-w-[70px] gap-1">
             <LogIn className="w-6 h-6" strokeWidth={1.5} />
-            <span className="text-[10px] medium">Entrar</span>
+            <span className="text-[10px] font-medium">Entrar</span>
           </button>
         )}
       </div>

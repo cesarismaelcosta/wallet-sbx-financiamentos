@@ -155,7 +155,7 @@ function SandboxHelpPage() {
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
                   <CardTitle className="text-lg text-slate-800">Controle de Sessão, Tokens SBX e Autenticação Dual</CardTitle>
-                  <CardDescription>Como o sistema gerencia credenciais, o protocolo de Exchange na borda e o isolamento de sessões.</CardDescription>
+                  <CardDescription>Como o sistema gerencia credenciais, o protocolo de Exchange e a Autenticação Híbrida na Borda.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6 bg-slate-50/30">
                   <HelpAccordion 
@@ -167,6 +167,15 @@ function SandboxHelpPage() {
                           <><b>Autenticação Externa:</b> A função <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">autenticarAccountsSBX</code> executa um POST direto no endpoint OAuth2 da Superbid (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">/account/oauth/token</code>) usando credenciais corporativas e o client_id configurado, obtendo um token bruto (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">access_token_sbx</code>).</>,
                           <><b>A Ponte de Borda:</b> O token externo bruto é enviado para a Edge Function <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sbx-auth-exchange</code>, que valida a autenticidade junto à sbX.</>,
                           <><b>Emissão do Token Interno:</b> A borda emite um <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session_token</code> (JWT assinado pelo Supabase) que passa a transitar nas requisições do sistema, garantindo conformidade com as regras de Row Level Security (RLS) sem expor a API primária da Superbid no banco.</>
+                        ]
+                      },
+                      {
+                        q: "Como funciona a Autenticação Híbrida (Content Negotiation) na Borda do Gateway?",
+                        a: "Para garantir resiliência, redundância e transição arquitetural suave, a Edge Function roteadora principal suporta múltiplos formatos de sessão:",
+                        bullets: [
+                          <><b>JWT Interno (Prioridade):</b> O fluxo padrão e mais seguro. Envia o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session_token</code> gerado no processo de Exchange, protegendo o backend upstream e interagindo nativamente com o banco.</>,
+                          <><b>Fallback sbX Token:</b> A borda (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">financial-gateway-gate</code>) atua como um 'Gatekeeper' inteligente. Ela decodifica se o valor recebido é o token bruto da Superbid e o aceita via fallback, convertendo a sessão <i>on-the-fly</i> e permitindo acesso ininterrupto.</>,
+                          <><b>Sandbox Debugging:</b> O front-end expõe disparos segregados para testes (ex: <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">JWT/fetch</code> vs <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sbX/fetch</code>) permitindo validar em tempo real o Content Negotiation da borda.</>
                         ]
                       },
                       {
@@ -199,7 +208,7 @@ function SandboxHelpPage() {
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
                   <CardTitle className="text-lg text-slate-800">Edge Functions em Deno e Núcleo Compartilhado (_shared)</CardTitle>
-                  <CardDescription>Arquitetura de microsserviços serverless, CORS global e protocolo de troca de tokens.</CardDescription>
+                  <CardDescription>Arquitetura de microsserviços serverless, CORS global e protocolo de roteamento híbrido.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6 bg-slate-50/30">
                   <HelpAccordion 
@@ -217,7 +226,7 @@ function SandboxHelpPage() {
                         q: "Quais funções de borda e serviços especializados compõem o financial-gateway?",
                         a: "A pasta 'supabase/functions/financial-gateway/' abriga os microsserviços de integração:",
                         bullets: [
-                          <><b>financial-gateway-gate:</b> Borda principal que intercepta e valida requisições de entrada, gerando tokens e submissões seguras.</>,
+                          <><b>financial-gateway-gate:</b> Borda híbrida principal. Atua como um Gatekeeper com <i>Content Negotiation</i>, interceptando tanto JWTs internos (Auth Seguro) quanto Tokens Opacos sbX (Fallback). Gera tokens de visitação curtos e hidrata o SSR antes do redirecionamento de tela.</>,
                           <><b>financial-gateway-webhook:</b> Recebe callbacks assíncronos de parceiros externos (como a Fandi).</>,
                           <><b>Serviços específicos:</b> <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">credit-card-service.ts</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">creditas-auto-equity-service.ts</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">fandi-service.ts</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">simulation-handler.ts</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">persist-data.ts</code> gerenciam a normalização de payloads e a gravação transacional.</>
                         ]

@@ -31,16 +31,23 @@ interface FetchProfileOptions {
 
 /**
  * Busca o perfil do usuário no servidor respeitando o modelo híbrido (Cookie / Header).
- * @param options Opções contendo AbortSignal e/ou URL de origem opcional.
- * @throws {BFFErrorResponse} Objeto de erro padronizado para consumo do React Router.
+ * @param optionsArg Opções contendo AbortSignal e/ou URL de origem opcional (retrocompatível com string).
+ * @throws {BFFErrorResponse} Objeto de erro padronizado para consumo do React Router / UI.
  */
 export const fetchMyProfile = async (
   optionsArg?: FetchProfileOptions | string
 ): Promise<BFFUserProfile> => {
   
-  // Retrocompatibilidade caso algum lugar ainda chame passando string ou objeto
-  const signal = typeof optionsArg === 'object' ? optionsArg.signal : undefined;
-  const originUrl = typeof optionsArg === 'object' ? optionsArg.originUrl : (typeof optionsArg === 'string' ? optionsArg : undefined);
+  // -----------------------------------------------------------------------
+  // [SANITIZAÇÃO DE PARÂMETROS]: Prevenção contra falsos-positivos (typeof null)
+  // -----------------------------------------------------------------------
+  // Retrocompatibilidade caso o sistema chame passando string, objeto ou nulo.
+  const isObject = typeof optionsArg === 'object' && optionsArg !== null;
+  
+  const signal = isObject ? optionsArg.signal : undefined;
+  const originUrl = isObject 
+    ? optionsArg.originUrl 
+    : (typeof optionsArg === 'string' ? optionsArg : undefined);
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -50,16 +57,18 @@ export const fetchMyProfile = async (
   const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(currentUrl)}`;
 
   try {
-    // [NETWORK]: Chamada segura utilizando a infraestrutura híbrida do session.ts
+    // -----------------------------------------------------------------------
+    // [NETWORK]: Chamada segura utilizando a infraestrutura híbrida
+    // -----------------------------------------------------------------------
     const response = await fetch(url, {
       method: "GET",
       signal,
-      ...fetchOptions, // 👈 Em PROD: injeta 'credentials: include' para o Cookie HttpOnly viajar sozinho
+      ...fetchOptions, // 👈 Em PROD: injeta 'credentials: include' para o Cookie HttpOnly viajar na requisição
       headers: {
         "Authorization": `Bearer ${supabaseAnonKey}`,
         "Content-Type": "application/json",
         "Accept": "application/json",
-        ...authHeaders(), // 👈 Em DEV: injeta o x-session-token do sessionStorage. Em PROD: retorna {}
+        ...authHeaders(), // 👈 Em DEV: injeta o x-session-token do sessionStorage. Em PROD: retorna objeto vazio
         ...(originUrl && { "x-original-url": originUrl }),
         ...(loginFallbackUrl && { "x-auth-fallback-url": loginFallbackUrl })
       }
@@ -80,6 +89,7 @@ export const fetchMyProfile = async (
             fallback_url: jsonError.fallback_url || "/"
         };
       } catch {
+        // Fallback de parse para quando a Edge Function cai severamente e não retorna JSON
         bffError = {
             success: false,
             code: "INFRASTRUCTURE_ERROR",
@@ -88,7 +98,8 @@ export const fetchMyProfile = async (
         };
       }
 
-      // [SECURITY]: Gatilho do Protocolo de Amnésia global
+      // [SECURITY]: Gatilho do Protocolo de Amnésia Global
+      // Se a sessão expirou na API ou na Borda, avisa a aplicação React para limpar os storages imediatamente.
       if (bffError.code === "SESSION_EXPIRED" || bffError.code === "UNAUTHORIZED") {
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('session_expired'));
@@ -98,16 +109,20 @@ export const fetchMyProfile = async (
       throw bffError;
     }
 
-    // [DATA]: Retorna os dados hidratados garantindo a tipagem do contrato BFF
+    // -----------------------------------------------------------------------
+    // [DATA]: Retorno Sucesso
+    // -----------------------------------------------------------------------
+    // Retorna os dados hidratados garantindo a tipagem do contrato BFF
     const result = await response.json();
     return result.data || result;
 
   } catch (error: any) {
+    // Re-lança erros customizados que já passaram pela interceptação (BFFErrorResponse)
     if (error && "code" in error) {
       throw error;
     }
     
-    // [FALLBACK CATASTRÓFICO]: Erro de rede físico
+    // [FALLBACK CATASTRÓFICO]: Erro de rede físico (ex: cliente sem internet)
     throw {
         success: false,
         code: "NETWORK_ERROR",

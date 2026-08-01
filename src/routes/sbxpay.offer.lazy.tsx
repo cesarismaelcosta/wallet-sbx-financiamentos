@@ -60,7 +60,7 @@ const FLOW_MAP: Record<string, {
   Carros: { 
     name: "Financiamento de Carros", 
     category: "Carros & Motos", 
-    offer_id: { staging: "2969794", production: "4858961" }, 
+    offer_id: { staging: "2969794", production: "4952846" }, 
     info: "Entity, Event, Manager, Offer, Vehicle", 
     link: "Box Financiamento" 
   },
