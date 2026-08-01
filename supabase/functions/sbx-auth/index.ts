@@ -120,26 +120,13 @@ serve(withSecurity('sbx-auth', async (req) => {
     );
     const infra = await captureInfrastructure(req);
 
-    // Monta o objeto literal puro exatamente como o gateway faz
-    const parsedRawPayload = {
-      access_token: sbxData.access_token,
-      token_type: sbxData.token_type || "bearer",
-      expires_in: sbxData.expires_in || expiraEmSegundos,
-      userId: String(sbxData.userId),
-      ...(sbxData.refresh_token && { refresh_token: sbxData.refresh_token }),
-      ...(sbxData.scope && { scope: sbxData.scope })
-    };
-
-    console.log("SBX DATA", sbxData);
-    console.log("parsedRawPayload", parsedRawPayload);
-
     const { data: sessionData, error: sessionError } = await supabaseAdmin
       .from('session_tokens')
       .insert({ 
         session_token: sessionToken, 
         user_id: String(sbxData.userId), 
-        sbx_access_token: sbxData.access_token, 
-        sbx_raw_token_payload: parsedRawPayload, // Objeto literal limpo igual ao gateway
+        sbx_access_token: sbxData.access_token,     // access_token da sbX
+        sbx_raw_token_payload: sbxData,             // Token bruto da sbX
         environment, 
         expires_at: nossaExpiracao.toISOString(),
         ip_address: infra.ip_address,

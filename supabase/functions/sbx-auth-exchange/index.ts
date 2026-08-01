@@ -129,6 +129,7 @@ serve(withSecurity('sbx-auth-exchange', async (req: Request) => {
         session_token: sessionToken, 
         user_id: userId, 
         sbx_access_token: sbx_access_token, 
+        sbx_raw_token_payload: JSON.parse(JSON.stringify(upstreamData)),
         environment, 
         expires_at: nossaExpiracao.toISOString(),
         ip_address: infra.ip_address,
