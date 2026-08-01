@@ -24,12 +24,7 @@ export interface ValidatedSession {
 }
 
 export async function validateRequest(req: Request): Promise<ValidatedSession> {
-
-  console.log("DEBUG HEADERS RECEBIDOS:", {
-    "x-session-token": req.headers.get("x-session-token"),
-    "cookie": req.headers.get("cookie")
-  });
-  
+ 
   // -----------------------------------------------------------------------
   // FASE 1: EXTRAÇÃO HÍBRIDA DO TOKEN DE SESSÃO
   // Ordem de prioridade: 1. Header (DEV/Lovable), 2. Cookie HttpOnly (PROD)

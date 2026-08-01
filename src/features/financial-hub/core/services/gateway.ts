@@ -3,13 +3,33 @@
  * * ARQUITETURA DE REDE:
  * Atua como o "Transportador" que decide se a chamada deve ser atendida por um Mock
  * local (para desenvolvimento ágil) ou por uma Edge Function real (Supabase).
- * * RESPONSabilidade:
+ * * RESPONSABILIDADE:
  * - Ponto de entrada único para chamadas à API.
  * - Centraliza autenticação (Bearer) e headers.
  * - [GEMINI PRO]: Tratamento enriquecido de erros e montagem dinâmica de query params.
  */
 
 import { authHeaders, fetchOptions } from "@/services/session";
+
+/**
+ * Função auxiliar para mascarar dados sensíveis (PII e valores financeiros)
+ * caso sejam logados em objetos de erro por segurança.
+ */
+function sanitizePayloadForLogs(data: any): any {
+  if (!data || typeof data !== "object") return data;
+  
+  const clone = Array.isArray(data) ? [...data] : { ...data };
+  const sensitiveKeys = ["cpf", "name", "email", "phone", "document"];
+
+  for (const key of Object.keys(clone)) {
+    if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
+      clone[key] = "[MASKED]";
+    } else if (typeof clone[key] === "object") {
+      clone[key] = sanitizePayloadForLogs(clone[key]);
+    }
+  }
+  return clone;
+}
 
 /**
  * Função auxiliar para capturar o JWT do usuário ativo.
@@ -114,7 +134,7 @@ export async function callOrchestrator(
         message: errorData?.error || errorData?.message || `Erro: ${response.status}`,
         code: errorData.code || "GATEWAY_ERROR", 
         status: response.status,
-        response: errorData
+        response: sanitizePayloadForLogs(errorData)
     };
   }
 
@@ -188,7 +208,7 @@ export async function callSimulation(
     // Isso garante que o OrchestratorWrapper leia o fallback_url e o code ('SESSION_EXPIRED') nativamente.
     // O fallback para GATEWAY_ERROR só ocorre se o backend enviar um JSON malformado sem 'code'.
     throw {
-       ...errorData, 
+       ...sanitizePayloadForLogs(errorData), 
        status: response.status, 
        code: errorData.code || "GATEWAY_ERROR", 
        message: errorData.message || errorData.error || "Erro desconhecido ao chamar orquestrador",
@@ -250,7 +270,7 @@ export async function callOrchestratorConfigs(params: Record<string, any>) {
       message: errorData?.error || errorData?.message || `Erro: ${response.status}`,
       code: errorData.code || "GATEWAY_CONFIG_ERROR", 
       status: response.status,
-      response: errorData
+      response: sanitizePayloadForLogs(errorData)
     };
   }
 

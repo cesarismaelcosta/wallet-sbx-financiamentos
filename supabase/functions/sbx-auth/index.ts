@@ -8,6 +8,30 @@
  * Atua como o ponto de entrada oficial para autenticação de usuários via credenciais 
  * diretas (Username/Password), abstraindo a comunicação com o OAuth2 upstream da Superbid.
  * 
+ * =========================================================================
+ * [EXPLANATION: FORMATO DOS TOKENS E LÓGICA DE IDENTIFICAÇÃO]
+ * =========================================================================
+ * 1. Token Bruto da Superbid (Upstream):
+ *    - Formato: String opaca / hexadecimal (Ex: "2a55e6a0f90cc3c7ffe44fbbc736053").
+ *    - Natureza: Não possui pontos (.), logo falha no teste `split('.').length === 3`.
+ *    - Propósito: Chave oficial de acesso às APIs externas da Superbid (/me, /offers).
+ * 
+ * 2. Nosso JWT Interno (Gerado no Step 4 abaixo):
+ *    - Formato: Padrão RFC 7519 composto por 3 partes Base64URL separadas por pontos (.)
+ *      Ex: `eyJhbGciOiJIUzI1Ni... [Header] . eyJzdWIiOiIxODQ3OTE5Ii... [Payload] . Assinatura_HMAC`
+ *    - Natureza: Possui exatamente 3 partes, passando no teste `split('.').length === 3`.
+ *    - Payload Interno:
+ *      {
+ *        "sub": "1847919",                                    // ID do usuário (userId)
+ *        "jti": "d3b07384-d113-4p91-a832-511739c9f821",       // UUID correspondente ao session_token no banco
+ *        "environment": "staging",                            // Contexto de ambiente
+ *        "exp": 1785860000                                    // Timestamp de expiração
+ *      }
+ *    - Propósito: Crachá seguro emitido para o navegador (via Cookie HttpOnly ou Storage).
+ *      A borda (financial-gateway-gate) o valida via HMAC-SHA256 e resgata o token 
+ *      opaco da Superbid correspondente no cofre da tabela `session_tokens`.
+ * =========================================================================
+ * 
  * RESPONSABILIDADES:
  * 1. Roteamento Multi-Environment: Direciona o handshake para o ambiente correto 
  *    (`staging` ou `production`) com base na preferência fornecida.
@@ -101,7 +125,7 @@ serve(withSecurity('sbx-auth', async (req) => {
       .insert({ 
         session_token: sessionToken, 
         user_id: sbxData.userId, 
-        sbx_access_token: sbxData.access_token, 
+        sbx_access_token: sbxData.access_token, // Salva o token opaco bruto da sbX no cofre
         environment, 
         expires_at: nossaExpiracao.toISOString(),
         ip_address: infra.ip_address,
@@ -133,9 +157,9 @@ serve(withSecurity('sbx-auth', async (req) => {
     const jwt = await create(
       { alg: "HS256", typ: "JWT" },
       { 
-        sub: sbxData.userId,           // Subject (Identificador do usuário)
-        jti: sessionToken,             // JWT ID (Vinculado ao registro da sessão no DB)
-        environment: environment,      // Claim customizada para roteamento multi-stage
+        sub: sbxData.userId,             // Subject (Identificador do usuário)
+        jti: sessionToken,               // JWT ID (Vinculado ao registro da sessão no DB)
+        environment: environment,        // Claim customizada para roteamento multi-stage
         exp: getNumericDate(nossaExpiracao.getTime() / 1000) // Timestamp de expiração
       },
       key

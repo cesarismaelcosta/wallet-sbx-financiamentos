@@ -3,26 +3,26 @@
  * @path supabase/functions/financial-gateway-gate/index.ts
  * 
  * =========================================================================
- * [ARQUITETURA BFF & CONTENT NEGOTIATION]
+ * [ARQUITETURA BFF & NEGOCIAÇÃO DE CONTEÚDO]
  * =========================================================================
  * Este endpoint atua como a porta de entrada (Front Door) para usuários vindos de 
  * sistemas legados (via Form POST) ou do próprio SPA (via chamadas AJAX/JSON).
  * 
- * RESPONSABILIDADES:
- * 1. NEGOCIAÇÃO DE CONTEÚDO: Adapta-se automaticamente à origem (Formulário vs. API Client).
- * 2. AUTENTICAÇÃO: Troca o token bruto da Superbid por um JWT nativo seguro da nossa infraestrutura.
- * 3. HIDRATAÇÃO (BFF): Enriquece o perfil do usuário consultando as APIs upstream da Superbid.
- * 4. ORQUESTRAÇÃO: Consulta o serviço `orchestrator` para definir a rota de destino baseada no contexto.
+ * =========================================================================
+ * [LÓGICA HÍBRIDA DE AUTENTICAÇÃO VIA 'auth_token']
+ * =========================================================================
+ * O gateway recebe o parâmetro `auth_token` e identifica o seu formato de forma inteligente:
  * 
+ * 1. Nosso JWT Interno (Padrão RFC 7519):
+ *    - Característica: Possui exatamente 3 partes separadas por pontos (`split('.').length === 3`).
+ *    - Comportamento: A borda valida a assinatura HMAC-SHA256, lê o claim `jti`, vai até a 
+ *      tabela `session_tokens` e resgata de forma transparente o token bruto da Superbid.
+ * 
+ * 2. Token Bruto da Superbid (`sbx_access_token` opaco):
+ *    - Característica: String sem pontos (Ex: "2a55e6a0f90cc3c7ffe44fbbc736053").
+ *    - Comportamento: A borda valida o token no endpoint upstream `/account/v2/user/me`, 
+ *      grava o par no banco de dados (`session_tokens`) e emite um novo JWT interno seguro.
  * =========================================================================
- * [SEGURANÇA E ZERO LOCALSTORAGE (SMART DELIVERY)]
- * =========================================================================
- * O Gateway alinha-se à política de segurança do front-end (`session.ts`):
- * - PRODUÇÃO (Same-Site): Opera sob segurança máxima. O JWT é entregue EXCLUSIVAMENTE via 
- *   cookie `HttpOnly`. O front-end fica "cego" para o token, blindando o sistema contra XSS.
- * - DESENVOLVIMENTO (Cross-Origin): O cookie falharia devido a regras estritas do navegador (CORS/Lax). 
- *   Neste cenário, o Gateway expõe o token de forma controlada para o React gravar no 
- *   `sessionStorage`, mantendo a fluidez da DX (Developer Experience) localmente.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -43,30 +43,31 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
   const originPath = req.headers.get("origin") || req.headers.get("referer") || "/";
 
   // =====================================================================
-  // [TELEMETRIA] Inspeção de Entrada na Borda
+  // [TELEMETRIA] Inspeção de Entrada na Borda (Segura e Sanitizada)
   // =====================================================================
-  console.log("🔥 [GATEWAY-INSPECT] Método:", req.method);
-  console.log("🔥 [GATEWAY-INSPECT] URL:", req.url);
-  console.log("🔥 [GATEWAY-INSPECT] Content-Type:", req.headers.get("content-type"));
+  debugLog("[GATEWAY-INSPECT] Requisição recebida", {
+    method: req.method,
+    url: req.url,
+    contentType: req.headers.get("content-type")
+  });
   
   try {
     const cloned = req.clone();
-    const textBody = await cloned.text();
-    console.log("🔥 [GATEWAY-INSPECT] Raw Body recebido:", textBody);
+    const jsonBody = await cloned.json();
+    if (jsonBody) {
+      debugLog("[GATEWAY-INSPECT] Payload sanitizado", jsonBody);
+    }
   } catch (e) {
-    console.log("🔥 [GATEWAY-INSPECT] Impossível ler raw body:", e);
+    debugLog("[GATEWAY-INSPECT] Payload não é JSON (ignorado na inspeção de borda)", { error: String(e) });
   }
   
   // =====================================================================
   // [STEP 1] NEGOCIAÇÃO DE CONTEÚDO (Content Negotiation)
   // =====================================================================
-  // Avalia o Content-Type para decidir como extrair os dados, permitindo 
-  // que a mesma rota atenda SPAs (JSON) e sistemas legados (Form POST).
   const contentType = req.headers.get("content-type") || "";
   const accept = req.headers.get("accept") || "";
   const isAjax = contentType.includes("application/json") || accept.includes("application/json");
  
-  // Declaramos o payload e userId vazios ANTES do try/catch para evitar ReferenceError
   let payload: any = {};
   let userId = "";
 
@@ -81,7 +82,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     return respondWithError(isAjax, 400, "BAD_REQUEST", "Payload inválido ou vazio.", payload?.return_uri || originPath, req, payload || {});
   }
 
-  // Extrai o auth_token diretamente no let para poder reatribuir se precisar do cookie depois
+  // Extração inicial dos parâmetros enviados no payload
   let { 
     environment, 
     auth_token, 
@@ -91,26 +92,27 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     utm_source, 
     utm_medium, 
     utm_campaign,
-    target_url        // 👈 Parâmetro opcional se for apenas para gerar visita
+    target_url 
   } = payload;
 
   // =====================================================================
-  // [STEP 2] RESOLUÇÃO DE CREDENCIAIS HÍBRIDA (Payload vs Cookie)
+  // [STEP 2] RESOLUÇÃO HÍBRIDA: Payload (auth_token) vs Cookie HttpOnly
   // =====================================================================
-  if (!auth_token) {
+  let inputToken = auth_token;
+
+  if (!inputToken) {
       const cookieHeader = req.headers.get("cookie") || "";
       const cookieMatch = cookieHeader.match(/session_token=([^;]+)/);
       if (cookieMatch) {
-          auth_token = cookieMatch[1];
+          inputToken = cookieMatch[1];
       }
   }
 
-  if (!auth_token) {
+  if (!inputToken) {
     return respondWithError(isAjax, 400, "BAD_REQUEST", "Credencial (auth_token) ausente no payload e nos cookies.", return_uri, req, payload);
   }
 
   try {
-
     const urls = ENV_URLS[environment as keyof typeof ENV_URLS] || ENV_URLS.production;
     
     const supabaseAdmin = createClient(
@@ -119,33 +121,97 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     );
 
     // =====================================================================
-    // [STEP 3] DUAL-MODE AUTH (Validação de Token Bruto vs JWT Interno)
+    // [STEP 3] DUAL-MODE HÍBRIDO (Identificação e Resolução do Token)
     // =====================================================================
-    let sbx_access_token = auth_token;
-    const isJwt = auth_token.split('.').length === 3;
-    let finalJwt = auth_token;
+    let sbx_access_token = "";
+    let finalJwt = "";
+    
+    // Testa se o token possui 3 partes (Nosso JWT Interno) ou se é a string opaca da sbX
+    const isJwt = inputToken.split('.').length === 3;
     const agora = new Date();
     const expiraEmSegundos = 14400; // 4 horas
     const nossaExpiracao = new Date(agora.getTime() + (expiraEmSegundos * 1000) - (15 * 60 * 1000));
+    const jwtSecret = Deno.env.get("JWT_SECRET")!;
 
     if (isJwt) {
-      debugLog("JWT detectado. Validando localmente...");
-      const jwtSecret = Deno.env.get("JWT_SECRET")!;
-      const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
-      const decoded = await verify(auth_token, key);
-      
-      const { data: sessionData, error: sessionError } = await supabaseAdmin
-        .from('session_tokens')
-        .select('sbx_access_token, user_id')
-        .eq('session_token', decoded.jti)
-        .gt('expires_at', agora.toISOString())
-        .single();
+        // -----------------------------------------------------------------
+        // [CASO A]: O token recebido é o nosso JWT Interno
+        // -----------------------------------------------------------------
+        debugLog("JWT interno detectado no auth_token. Validando claims e consultando cofre...");
+        
+        const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+        const decoded = await verify(inputToken, key);
+        
+        const { data: sessionData, error: sessionError } = await supabaseAdmin
+          .from('session_tokens')
+          .select('sbx_access_token, user_id')
+          .eq('session_token', decoded.jti)
+          .gt('expires_at', agora.toISOString())
+          .single();
 
-      if (sessionError || !sessionData) throw new Error("SESSION_UPSTREAM_EXPIRED: JWT expirado no banco.");
-      
-      // Resgata o token real da Superbid do cofre para chamadas upstream
-      sbx_access_token = sessionData.sbx_access_token;
-      userId = sessionData.user_id;
+        if (sessionError || !sessionData) {
+            throw new Error("SESSION_UPSTREAM_EXPIRED: Sessão interna expirada ou não localizada no banco.");
+        }
+        
+        // Resgata o token real da Superbid guardado no cofre
+        sbx_access_token = sessionData.sbx_access_token;
+        userId = sessionData.user_id;
+        finalJwt = inputToken;
+
+    } else {
+        // -----------------------------------------------------------------
+        // [CASO B]: O token recebido é o Token Bruto da Superbid (sbx_access_token)
+        // -----------------------------------------------------------------
+        debugLog("Token bruto da Superbid detectado no auth_token. Validando no /me e registrando cofre...");
+        
+        sbx_access_token = inputToken;
+
+        // Valida o token batendo no /me da Superbid para garantir autenticidade e capturar o ID
+        const userCheckRes = await fetch(`${urls.api}/account/v2/user/me`, {
+            method: "GET",
+            headers: { "Authorization": `Bearer ${sbx_access_token}` }
+        });
+
+        if (userCheckRes.status === 401) {
+            throw new Error("SESSION_UPSTREAM_EXPIRED: O token bruto da Superbid fornecido é inválido ou expirou.");
+        }
+        if (!userCheckRes.ok) {
+            throw new Error(`UPSTREAM_USER_ERROR (${userCheckRes.status}): Falha ao validar token sbx na origem.`);
+        }
+
+        const upstreamUserData = await userCheckRes.json();
+        const account = upstreamUserData.userAccounts?.[0];
+        userId = String(account?.id || "");
+
+        if (!userId) {
+            throw new Error("USER_NOT_FOUND: Não foi possível identificar o ID do usuário através do token sbx.");
+        }
+
+        // Grava nova sessão no banco salvando o token bruto da Superbid no cofre
+        const newSessionToken = crypto.randomUUID();
+        const infra = await captureInfrastructure(req);
+        
+        const { error: insertError } = await supabaseAdmin.from('session_tokens').insert({ 
+            session_token: newSessionToken, 
+            user_id: userId, 
+            sbx_access_token: sbx_access_token, // 👈 Salvando o token opaco da sbX
+            environment, 
+            expires_at: nossaExpiracao.toISOString(), 
+            ip_address: infra.ip_address, 
+            origin_details: infra.metadata 
+        });
+
+        if (insertError) {
+            throw new Error(`DB_INSERT_FAILURE: Erro ao persistir sessão sbx -> ${insertError.message}`);
+        }
+
+        // Assina e emite o nosso JWT Interno vinculado ao novo jti
+        const signKey = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+        finalJwt = await create(
+            { alg: "HS256", typ: "JWT" }, 
+            { sub: userId, jti: newSessionToken, exp: getNumericDate(nossaExpiracao.getTime() / 1000) }, 
+            signKey
+        );
     }
 
     // =====================================================================
@@ -171,13 +237,10 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     // [STEP 5] HIDRATAÇÃO DE PERFIL (BFF Mapping - Suporte PF / PJ)
     // =====================================================================
     const isJuridica = account?.type === "J";
-    
-    // Extrai CNPJ se PJ, ou CPF se Pessoa Física, limpando caracteres não numéricos
     const targetDocTypeName = isJuridica ? "cnpj" : "cpf";
     const rawDocument = account?.documents?.find((doc: any) => doc.typeName === targetDocTypeName)?.number || "";
     const cleanDocument = rawDocument.replace(/\D/g, '');
 
-    // Extração segura da data de nascimento (para PJ, busca do representante legal)
     const rawBirthDate = isJuridica 
       ? account?.companyRepresentative?.dateOfBirth 
       : account?.birthDate;
@@ -255,87 +318,69 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
        let vehicleData: any = undefined;
 
        if (isVehicleCategory) {
-           const groups = rawOffer.product?.template?.groups || [];
-           const getGroupProp = (groupId: string, propId: string) => 
-               groups.find((g: any) => g.id === groupId)?.properties.find((p: any) => p.id === propId)?.value;
-           
-           vehicleData = {
-               manufacture_year: Number(getGroupProp('identificacao', 'anofabricacao')) || 0,
-               model_year: Number(getGroupProp('identificacao', 'anomodelo')) || 0,
-               fipe_code: getGroupProp('financiamento', 'codigofipe') || "",
-           };
+            const groups = rawOffer.product?.template?.groups || [];
+            const getGroupProp = (groupId: string, propId: string) => 
+                groups.find((g: any) => g.id === groupId)?.properties.find((p: any) => p.id === propId)?.value;
+            
+            vehicleData = {
+                manufacture_year: Number(getGroupProp('identificacao', 'anofabricacao')) || 0,
+                model_year: Number(getGroupProp('identificacao', 'anomodelo')) || 0,
+                fipe_code: getGroupProp('financiamento', 'codigofipe') || "",
+            };
        }
 
        offerPayload = {
-         offer: {
-           offer_id: String(rawOffer.id),
-           lot_number: rawOffer.lotNumber || 1,
-           offer_description: rawOffer.product?.shortDesc || rawOffer.offerDescription?.offerDescription || "",
-           offer_detailed_description: rawOffer.offerDescription?.offerDescription || "",
-           offer_value: rawOffer.price || 0,
-           category_id: rawOffer.product?.productType?.id || 0,
-           category: rawOffer.product?.productType?.description || "",
-           sub_category_id: rawOffer.product?.subCategory?.id || "",
-           sub_category: rawOffer.product?.subCategory?.description || "",
-           offer_status: rawOffer.offerStatus || "",
-           sale_status: rawOffer.saleStatus || "",
-           end_date: rawOffer.endDate || "",
-           location: {
-             neighborhood: rawOffer.product?.location?.neighborhood || "Não informado",
-             city: rawOffer.product?.location?.city || "Não informado",
-             state: rawOffer.product?.location?.state || "Não informado",
-             country: rawOffer.product?.location?.country || "Brasil"
-           },            
-           ...(vehicleData && { vehicle_details: vehicleData }), 
-           photos: rawOffer.product?.galleryJson?.map((p: any) => ({
-             highlight: p.highlight || false,
-             link: p.link,
-             thumbnail: p.thumbnailUrl,
-             file_name: p.originalFileName,
-             type: p.type || "photo",
-             content_type: p.contentType || "image/jpeg"
-           })) || []
-         },
-         manager: { 
-             manager_id: rawOffer.manager?.id || 0, 
-             manager_name: rawOffer.manager?.name || "N/A" 
-         },
-         event: {
-           event_id: String(rawOffer.auction?.id || ""),
-           event_description: `${rawOffer.auction?.desc || ""}${rawOffer.auction?.desc && eventData.fullDescription ? " - " : ""}${eventData.fullDescription || ""}`.trim(),
-           event_start_date: rawOffer.auction?.beginDate || "",
-           event_end_date: rawOffer.auction?.endDate || "",
-           modality_id: eventData.modalityId ?? null,
-           status_id: eventData.statusId ?? null,
-           event_short_description: rawOffer.auction?.desc || "",
-           event_full_description: eventData.fullDescription || "",
-           event_image_url: eventData.imageURL || ""
-         },
-         seller: {
-           seller_id: String(rawOffer.seller?.id || ""),
-           legal_name: rawOffer.seller?.name || "N/A",
-           trade_name: rawOffer.seller?.company?.[0]?.fantasyName || "N/A",
-           economic_group: rawOffer.seller?.company?.[0]?.fantasyName || "N/A"
-         }
+          offer: {
+            offer_id: String(rawOffer.id),
+            lot_number: rawOffer.lotNumber || 1,
+            offer_description: rawOffer.product?.shortDesc || rawOffer.offerDescription?.offerDescription || "",
+            offer_detailed_description: rawOffer.offerDescription?.offerDescription || "",
+            offer_value: rawOffer.price || 0,
+            category_id: rawOffer.product?.productType?.id || 0,
+            category: rawOffer.product?.productType?.description || "",
+            sub_category_id: rawOffer.product?.subCategory?.id || "",
+            sub_category: rawOffer.product?.subCategory?.description || "",
+            offer_status: rawOffer.offerStatus || "",
+            sale_status: rawOffer.saleStatus || "",
+            end_date: rawOffer.endDate || "",
+            location: {
+               neighborhood: rawOffer.product?.location?.neighborhood || "Não informado",
+               city: rawOffer.product?.location?.city || "Não informado",
+               state: rawOffer.product?.location?.state || "Não informado",
+               country: rawOffer.product?.location?.country || "Brasil"
+            },            
+            ...(vehicleData && { vehicle_details: vehicleData }), 
+            photos: rawOffer.product?.galleryJson?.map((p: any) => ({
+               highlight: p.highlight || false,
+               link: p.link,
+               thumbnail: p.thumbnailUrl,
+               file_name: p.originalFileName,
+               type: p.type || "photo",
+               content_type: p.contentType || "image/jpeg"
+            })) || []
+          },
+          manager: { 
+              manager_id: rawOffer.manager?.id || 0, 
+              manager_name: rawOffer.manager?.name || "N/A" 
+          },
+          event: {
+            event_id: String(rawOffer.auction?.id || ""),
+            event_description: `${rawOffer.auction?.desc || ""}${rawOffer.auction?.desc && eventData.fullDescription ? " - " : ""}${eventData.fullDescription || ""}`.trim(),
+            event_start_date: rawOffer.auction?.beginDate || "",
+            event_end_date: rawOffer.auction?.endDate || "",
+            modality_id: eventData.modalityId ?? null,
+            status_id: eventData.statusId ?? null,
+            event_short_description: rawOffer.auction?.desc || "",
+            event_full_description: eventData.fullDescription || "",
+            event_image_url: eventData.imageURL || ""
+          },
+          seller: {
+            seller_id: String(rawOffer.seller?.id || ""),
+            legal_name: rawOffer.seller?.name || "N/A",
+            trade_name: rawOffer.seller?.company?.[0]?.fantasyName || "N/A",
+            economic_group: rawOffer.seller?.company?.[0]?.fantasyName || "N/A"
+          }
        };
-    }
-
-    // =====================================================================
-    // [STEP 7] PERSISTÊNCIA DA SESSÃO E GERAÇÃO DE JWT
-    // =====================================================================
-    if (!isJwt) {
-        debugLog("Gerando nova sessão e JWT...");
-        const newSessionToken = crypto.randomUUID();
-        const infra = await captureInfrastructure(req);
-        
-        await supabaseAdmin.from('session_tokens').insert({ 
-            session_token: newSessionToken, user_id: userId, sbx_access_token, environment, 
-            expires_at: nossaExpiracao.toISOString(), ip_address: infra.ip_address, origin_details: infra.metadata 
-        });
-
-        const jwtSecret = Deno.env.get("JWT_SECRET")!;
-        const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-        finalJwt = await create({ alg: "HS256", typ: "JWT" }, { sub: userId, jti: newSessionToken, exp: getNumericDate(nossaExpiracao.getTime() / 1000) }, key);
     }
 
     // =====================================================================
@@ -344,8 +389,8 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     const isDirectVisit = !!target_url;
 
     const rehydratedPayload = {
-        action: isDirectVisit ? "VISIT" : "CONSULT", // 👈 Se tem target_url, usa VISIT (pula busca de regras)
-        target_url: target_url || "",                // 👈 Repassa o destino direto
+        action: isDirectVisit ? "VISIT" : "CONSULT",
+        target_url: target_url || "",
         timestamp: new Date().toISOString(),
         origin_url: return_uri,
         environment,
@@ -361,7 +406,6 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     debugLog("Iniciando Orquestração de Rota...");
     const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(return_uri)}`;
 
-    // Captura os dados reais vindos do cliente
     const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0] || 
                      req.headers.get("x-real-ip") || "0.0.0.0";
     const clientUa = req.headers.get("user-agent") || "";
@@ -375,7 +419,6 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
             "x-original-url": return_uri,
             "x-auth-fallback-url": loginFallbackUrl,
             "user-agent": clientUa,
-            // Header customizado que o Kong NÃO SOBRESCREVE:
             "x-client-ip": clientIp.trim(),
         },
         body: JSON.stringify(rehydratedPayload),
@@ -386,7 +429,6 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
 
     let targetUrl = orchestratorData.url;
 
-    // Resolução dinâmica da origem do Front-end (Localhost vs Produção)
     let frontendOrigin = "";
     const reqOrigin = req.headers.get("origin") || req.headers.get("referer");
     if (reqOrigin) {
@@ -399,7 +441,6 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         frontendOrigin = Deno.env.get("FRONTEND_URL") || ""; 
     }
 
-    // Prefixa URLs relativas com a origem real
     if (targetUrl && targetUrl.startsWith('/') && frontendOrigin) {
         targetUrl = `${frontendOrigin}${targetUrl}`;
     }
@@ -407,17 +448,10 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     // =====================================================================
     // [STEP 9] SMART DELIVERY E SEGURANÇA FINAL (HttpOnly vs Storage)
     // =====================================================================
-    // [SECURITY]: Alinhamento com as regras de 'Zero LocalStorage' do Front-end.
-    
-    // Identifica o domínio do Gateway (Supabase) e do Front-end (React)
     const apiHost = new URL(Deno.env.get('SUPABASE_URL') || '').hostname;
     const frontendHost = frontendOrigin ? new URL(frontendOrigin).hostname : "";
-    
-    // Calcula o TLD+1 para validar a regra de Same-Site
     const eTLDplus1 = (h: string) => h.split('.').slice(-2).join('.');
     
-    // Se isSameSite = TRUE (Ambiente de Produção), o Cookie HttpOnly cobrirá as requisições.
-    // Portanto, cortamos a exposição do JWT no payload para anular riscos de XSS.
     const isSameSite = (frontendHost && apiHost) ? eTLDplus1(frontendHost) === eTLDplus1(apiHost) : false;
     const safeTokenToReturn = isSameSite ? "" : finalJwt;
 
@@ -425,7 +459,6 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     responseHeaders.set("Access-Control-Allow-Origin", getSafeCorsOrigin(req.headers.get("origin") || req.headers.get("referer")));
 
     if (isAjax) {
-        // [FLUXO AJAX]: Devolve JSON estruturado (Consumido por Axios/Fetch)
         responseHeaders.set("Content-Type", "application/json");
         responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
         
@@ -433,11 +466,9 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
             success: true, 
             redirect_url: targetUrl,
             environment: environment,
-            // O token só viaja no Body se o Client precisar dele para o sessionStorage (Modo DEV)
             ...(safeTokenToReturn ? { session_token: safeTokenToReturn } : {})
         }), { status: 200, headers: responseHeaders });
     } else {
-        // [FLUXO NATIVO]: Interceptor HTML Bridge (Consumido por Form POST do Navegador)
         responseHeaders.set("Content-Type", "text/html; charset=utf-8");
         responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
         
@@ -451,15 +482,10 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         <body>
             <script>
                 try {
-                    // [SECURITY]: Injeção condicional. Em Produção, 'safeTokenToReturn' é vazio 
-                    // e o token não toca na API do Storage.
                     ${safeTokenToReturn ? `sessionStorage.setItem('session_token', '${safeTokenToReturn}');` : ''}
-                    
-                    // A preferência de ambiente sempre é persistida para orientar o UI State no Front-end.
                     sessionStorage.setItem('sbx_env_pref', '${environment}');
                 } catch (e) {}
                 
-                // Redirecionamento forçado no Client-Side, mantendo o histórico de rede limpo.
                 window.location.replace('${targetUrl}');
             </script>
         </body>
@@ -477,7 +503,6 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     let statusCode = 400;
     const msg = (err.message || "").toUpperCase();
 
-    // De/Para semântico para padronização de erros na UI do Front-end
     if (msg.includes("UPSTREAM_USER_ERROR")) {
         errorCode = "SBX_LOADER_FAIL_USER";
         statusCode = 422;
@@ -514,27 +539,9 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
 
     payload.entity_id = userId || null;
     return respondWithError(isAjax, statusCode, errorCode, err.message, safeReturnUri, req, payload);
-
   }
 }));
 
-/**
- * @fileoverview Utilitário de Resposta de Erro para Borda (Edge Gateway)
- * @description Padroniza o despacho de erros suportando Content Negotiation 
- * (AJAX/JSON vs. Navegação Nativa/Redirecionamento HTTP 302).
- */
-
-/**
- * Formata e despacha uma resposta de erro, garantindo que o redirecionamento 
- * aponte estritamente para o Front-end e nunca para o domínio do Supabase.
- * 
- * @param {boolean} isAjax - Indica se a requisição originou-se de uma chamada AJAX/JSON.
- * @param {number} statusCode - Código de status HTTP para a resposta (ex: 400, 401, 422).
- * @param {string} code - Identificador semântico do erro (ex: SESSION_EXPIRED).
- * @param {string} message - Mensagem descritiva detalhada do erro.
- * @param {string} safeReturnUri - URI sanitizada de retorno enviada pelo cliente.
- * @returns {Response} Objeto Response configurado com JSON ou Header Location (302).
- */
 function respondWithError(
     isAjax: boolean, 
     statusCode: number, 
@@ -550,7 +557,6 @@ function respondWithError(
     if (isAjax) {
         headers.set("Content-Type", "application/json");
         
-        // Filtra o payload original para injetar no JSON de erro (excluindo o token)
         const extraData: Record<string, any> = {};
         if (originalPayload && typeof originalPayload === 'object') {
             for (const [key, value] of Object.entries(originalPayload)) {
@@ -565,7 +571,7 @@ function respondWithError(
                 success: false, 
                 code, 
                 message, 
-                ...extraData // <-- Injeta offer_id, product_id e demais parâmetros no JSON
+                ...extraData 
             }), 
             { status: statusCode, headers }
         );
@@ -584,7 +590,7 @@ function respondWithError(
     }
 
     if (!frontendOrigin) {
-        frontendOrigin = Deno.env.get("FRONTEND_URL") || "";
+        frontendOrigin = Deno.env.get("FRONTEND_URL"] || "";
     }
 
     if (!frontendOrigin) {
@@ -594,7 +600,6 @@ function respondWithError(
         );
     }
 
-    // Monta a query string preservando TUDO o que veio no payload original
     const urlParams = new URLSearchParams({
         status: "error",
         code: code,
@@ -604,7 +609,6 @@ function respondWithError(
 
     if (originalPayload && typeof originalPayload === 'object') {
         for (const [key, value] of Object.entries(originalPayload)) {
-            // Ignora o token por segurança e não sobrescreve os base
             if (key !== 'auth_token' && value !== undefined && value !== null && !urlParams.has(key)) {
                 urlParams.set(key, String(value));
             }
