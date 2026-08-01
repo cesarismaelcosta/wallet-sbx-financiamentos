@@ -391,7 +391,7 @@ const autenticarAccountsSBX = async (username: string, password: string, environ
     throw new Error(`Credenciais inválidas ou erro na API: ${sbxLoginResponse.status}`);
   }
   const sbxData = JSON.parse(rawResponse);
-  return { success: true, access_token: sbxData.access_token, userId: sbxData.userId };
+  return { success: true, access_token: sbxData.access_token, userId: sbxData.userId, raw_oauth: sbxData };
 };
 
 /**
@@ -413,7 +413,7 @@ const trocarTokenNaEdgeFunction = async (sbxAccessToken: string, environment: "s
     body: JSON.stringify({ 
       sbx_access_token: sbxAccessToken, 
       environment: environment,
-      oauth_payload: rawTokenPayload // <--- Envia o objeto inteiro do OAuth
+      sbx_raw_token_payload: rawTokenPayload // <--- Envia o objeto inteiro do OAuth
     })
   });
 
@@ -875,7 +875,7 @@ function SandboxPage() {
       if (loginResponse?.success && loginResponse.access_token) {
         
         // Não mudamos a tela ainda! Aguardamos a Exchange rolar primeiro.
-        const exchangeResponse = await trocarTokenNaEdgeFunction(loginResponse.access_token, ambienteAtivo, loginResponse);
+        const exchangeResponse = await trocarTokenNaEdgeFunction(loginResponse.access_token, ambienteAtivo, loginResponse.raw_oauth);
         
         if (exchangeResponse?.success && exchangeResponse.session_token) {
           // Tudo deu certo. Salvamos os dois tokens ao mesmo tempo.
