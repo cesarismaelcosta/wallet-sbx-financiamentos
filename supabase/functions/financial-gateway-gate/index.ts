@@ -121,26 +121,50 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
     );
 
     // =====================================================================
-    // [STEP 3] DUAL-MODE HÍBRIDO (Identificação e Resolução do Token)
+    // [STEP 3] DUAL-MODE HÍBRIDO (Sanitização, Identificação e Resolução)
+    // =====================================================================
+    // Descrição: Realiza a higienização inteligente do token recebido na borda,
+    // identificando se o payload de entrada é o JSON completo de resposta do OAuth2
+    // da Superbid (extraindo o 'access_token' de dentro), uma string opaca bruta
+    // ou um JWT interno (RFC 7519) para consulta no cofre de sessões.
     // =====================================================================
     let sbx_access_token = "";
     let finalJwt = "";
     
-    // Testa se o token possui 3 partes (Nosso JWT Interno) ou se é a string opaca da sbX
-    const isJwt = inputToken.split('.').length === 3;
+    // [SANITIZAÇÃO DE ENTRADA]: Normaliza a string recebida no parâmetro auth_token
+    let sanitizedInputToken = String(inputToken).trim();
+
+    // [INTERCEPÇÃO DE PAYLOAD OAUTH]: Verifica se o cliente passou o objeto JSON cru retornado pela API da Superbid
+    if (sanitizedInputToken.startsWith('{') && sanitizedInputToken.endsWith('}')) {
+        try {
+            const parsedTokenJson = JSON.parse(sanitizedInputToken);
+            if (parsedTokenJson.access_token) {
+                sanitizedInputToken = parsedTokenJson.access_token;
+                debugLog("[GATEWAY-AUTH] JSON do OAuth detectado e parseado com sucesso. access_token extraído com segurança.");
+            }
+        } catch (e) {
+            debugLog("[GATEWAY-AUTH] Falha ao parsear JSON no auth_token, mantendo string original como fallback.", { error: String(e) });
+        }
+    }
+
+    // [VALIDAÇÃO ESTRUTURAL]: Diferencia nosso JWT interno (3 partes por pontos) do token opaco/bruto da Superbid
+    const isJwt = sanitizedInputToken.split('.').length === 3;
     const agora = new Date();
-    const expiraEmSegundos = 14400; // 4 horas
+    const expiraEmSegundos = 14400; // 4 horas de validade padrão para o JWT interno emitido
     const nossaExpiracao = new Date(agora.getTime() + (expiraEmSegundos * 1000) - (15 * 60 * 1000));
     const jwtSecret = Deno.env.get("JWT_SECRET")!;
 
     if (isJwt) {
         // -----------------------------------------------------------------
-        // [CASO A]: O token recebido é o nosso JWT Interno
+        // [CASO A]: O token recebido é o nosso JWT Interno padrão
         // -----------------------------------------------------------------
-        debugLog("JWT interno detectado no auth_token. Validando claims e consultando cofre...");
+        // Comportamento: Valida a assinatura HMAC-SHA256, extrai o claim 'jti' 
+        // e resgata o token real da Superbid armazenado de forma segura no cofre (DB).
+        // -----------------------------------------------------------------
+        debugLog("[GATEWAY-AUTH] JWT interno detectado no auth_token. Validando claims criptográficas e consultando cofre...");
         
         const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
-        const decoded = await verify(inputToken, key);
+        const decoded = await verify(sanitizedInputToken, key);
         
         const { data: sessionData, error: sessionError } = await supabaseAdmin
           .from('session_tokens')
@@ -150,33 +174,37 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
           .single();
 
         if (sessionError || !sessionData) {
-            throw new Error("SESSION_UPSTREAM_EXPIRED: Sessão interna expirada ou não localizada no banco.");
+            throw new Error("SESSION_UPSTREAM_EXPIRED: Sessão interna expirada ou não localizada no banco de dados.");
         }
         
-        // Resgata o token real da Superbid guardado no cofre
+        // Atribui o token real da Superbid recuperado do cofre e mantém o JWT atual
         sbx_access_token = sessionData.sbx_access_token;
         userId = sessionData.user_id;
-        finalJwt = inputToken;
+        finalJwt = sanitizedInputToken;
 
     } else {
         // -----------------------------------------------------------------
-        // [CASO B]: O token recebido é o Token Bruto da Superbid (sbx_access_token)
+        // [CASO B]: O token recebido é o Token Bruto / Opaco da Superbid
         // -----------------------------------------------------------------
-        debugLog("Token bruto da Superbid detectado no auth_token. Validando no /me e registrando cofre...");
+        // Comportamento: Valida o token diretamente no endpoint upstream /account/v2/user/me,
+        // persiste o par na tabela de sessões e emite um novo JWT interno vinculado.
+        // -----------------------------------------------------------------
+        debugLog("[GATEWAY-AUTH] Token bruto/opaco da Superbid detectado no auth_token. Validando no /me e registrando cofre...");
         
-        sbx_access_token = inputToken;
+        // Atribui o token higienizado para uso direto nas requisições upstream
+        sbx_access_token = sanitizedInputToken;
 
-        // Valida o token batendo no /me da Superbid para garantir autenticidade e capturar o ID
+        // Validação de autenticidade no endpoint de usuário da Superbid
         const userCheckRes = await fetch(`${urls.api}/account/v2/user/me`, {
             method: "GET",
             headers: { "Authorization": `Bearer ${sbx_access_token}` }
         });
 
         if (userCheckRes.status === 401) {
-            throw new Error("SESSION_UPSTREAM_EXPIRED: O token bruto da Superbid fornecido é inválido ou expirou.");
+            throw new Error("SESSION_UPSTREAM_EXPIRED: O token bruto da Superbid fornecido é inválido ou expirou na origem.");
         }
         if (!userCheckRes.ok) {
-            throw new Error(`UPSTREAM_USER_ERROR (${userCheckRes.status}): Falha ao validar token sbx na origem.`);
+            throw new Error(`UPSTREAM_USER_ERROR (${userCheckRes.status}): Falha ao validar token sbx no gateway upstream.`);
         }
 
         const upstreamUserData = await userCheckRes.json();
@@ -184,17 +212,17 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         userId = String(account?.id || "");
 
         if (!userId) {
-            throw new Error("USER_NOT_FOUND: Não foi possível identificar o ID do usuário através do token sbx.");
+            throw new Error("USER_NOT_FOUND: Não foi possível identificar o ID do usuário através do token sbx validado.");
         }
 
-        // Grava nova sessão no banco salvando o token bruto da Superbid no cofre
+        // Geração de nova chave de sessão interna e captura de metadados de infraestrutura
         const newSessionToken = crypto.randomUUID();
         const infra = await captureInfrastructure(req);
         
         const { error: insertError } = await supabaseAdmin.from('session_tokens').insert({ 
             session_token: newSessionToken, 
             user_id: userId, 
-            sbx_access_token: sbx_access_token, // 👈 Salvando o token opaco da sbX
+            sbx_access_token: sbx_access_token, 
             environment, 
             expires_at: nossaExpiracao.toISOString(), 
             ip_address: infra.ip_address, 
@@ -202,10 +230,10 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         });
 
         if (insertError) {
-            throw new Error(`DB_INSERT_FAILURE: Erro ao persistir sessão sbx -> ${insertError.message}`);
+            throw new Error(`DB_INSERT_FAILURE: Erro crítico ao persistir sessão sbx no cofre -> ${insertError.message}`);
         }
 
-        // Assina e emite o nosso JWT Interno vinculado ao novo jti
+        // Assinatura e emissão de um novo JWT interno seguro atrelado ao jti gerado
         const signKey = await crypto.subtle.importKey("raw", new TextEncoder().encode(jwtSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
         finalJwt = await create(
             { alg: "HS256", typ: "JWT" }, 

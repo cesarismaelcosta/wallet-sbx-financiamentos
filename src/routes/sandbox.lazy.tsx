@@ -950,15 +950,6 @@ function SandboxPage() {
       alert(`Token de autenticação não encontrado. Faça o login primeiro.`);
       return;
     }
-        
-    console.log("🔍 [DEBUG PAYLOAD PARA BORDA]:", {
-      environment: ambienteAtivo,
-      auth_token: tokenToUse, // Vamos ver exatamente o que está indo aqui
-      tamanhoDoToken: tokenToUse ? tokenToUse.length : 0,
-      temPontosDoJwt: tokenToUse ? tokenToUse.split('.').length : 0,
-      offer_id: String(offerId),
-      product_id: String(productId || '')
-    });
 
     // Liga o estado de carregamento do botão específico com nome do estado
     setLoadingAction(`${flowKey}_form_${forceToken}`);
@@ -993,7 +984,7 @@ function SandboxPage() {
     document.body.appendChild(form);
 
     try {
-      //form.submit();
+      form.submit();
     } catch (err: any) {
       console.error("[FORM_POST_ERROR]:", err);
       setError(`Erro ao submeter formulário: ${err.message}`);
