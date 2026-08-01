@@ -22,10 +22,10 @@
  *    - Natureza: Possui exatamente 3 partes, passando no teste `split('.').length === 3`.
  *    - Payload Interno:
  *      {
- *        "sub": "1847919",                                    // ID do usuário (userId)
- *        "jti": "d3b07384-d113-4p91-a832-511739c9f821",       // UUID correspondente ao session_token no banco
- *        "environment": "staging",                            // Contexto de ambiente
- *        "exp": 1785860000                                    // Timestamp de expiração
+ *        "sub": "1847919",                         // ID do usuário (userId)
+ *        "jti": "d3b07384-d113-4p91-a832-511739c9f821",      // UUID correspondente ao session_token no banco
+ *        "environment": "staging",                         // Contexto de ambiente
+ *        "exp": 1785860000                         // Timestamp de expiração
  *      }
  *    - Propósito: Crachá seguro emitido para o navegador (via Cookie HttpOnly ou Storage).
  *      A borda (financial-gateway-gate) o valida via HMAC-SHA256 e resgata o token 
@@ -38,7 +38,7 @@
  * 2. Proxy OAuth2 Seguro: Executa a troca de credenciais de forma isolada no servidor,
  *    impedindo a exposição de client IDs e tokens de acesso brutos no client-side.
  * 3. SSOT (Single Source of Truth): Persiste a sessão intermediária na tabela `session_tokens` 
- *    do Supabase associando o IP, metadados de infraestrutura e o token upstream.
+ *    do Supabase associando o IP, metadados, o token upstream e o payload OAuth completo (`sbx_raw_token_payload`).
  * 4. Assinatura Criptográfica (JWT): Gera um token interno próprio (HMAC-SHA256) com claims 
  *    customizadas (incluindo o contexto de `environment`) e TTL gerenciado.
  * 5. Smart Delivery de Sessão: Emite o token por meio de um Cookie HttpOnly seguro e 
@@ -124,9 +124,10 @@ serve(withSecurity('sbx-auth', async (req) => {
       .from('session_tokens')
       .insert({ 
         session_token: sessionToken, 
-        user_id: sbxData.userId, 
-        sbx_access_token: sbxData.access_token, // Salva o acess_token da sbX no cofre
-        environment, 
+        user_id: String(sbxData.userId), 
+        sbx_access_token: sbxData.access_token,      // Salva o token opaco bruto da sbX
+        sbx_raw_token_payload: sbxData ? JSON.parse(JSON.stringify(sbxData)) : null, // Garante serialização JSONB limpa
+        environment,         
         expires_at: nossaExpiracao.toISOString(),
         ip_address: infra.ip_address,
         country: infra.country,
@@ -157,7 +158,7 @@ serve(withSecurity('sbx-auth', async (req) => {
     const jwt = await create(
       { alg: "HS256", typ: "JWT" },
       { 
-        sub: sbxData.userId,             // Subject (Identificador do usuário)
+        sub: String(sbxData.userId),       // Subject (Identificador do usuário)
         jti: sessionToken,               // JWT ID (Vinculado ao registro da sessão no DB)
         environment: environment,        // Claim customizada para roteamento multi-stage
         exp: getNumericDate(nossaExpiracao.getTime() / 1000) // Timestamp de expiração
@@ -179,7 +180,7 @@ serve(withSecurity('sbx-auth', async (req) => {
       data: {
         success: true,
         session_token: jwt,
-        user_id: sbxData.userId,
+        user_id: String(sbxData.userId),
         environment: environment,
         expires_at: Math.floor(nossaExpiracao.getTime() / 1000),
         server_now_ms: agora.getTime()
