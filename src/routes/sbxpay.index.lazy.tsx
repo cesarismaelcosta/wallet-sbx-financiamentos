@@ -2,8 +2,10 @@
  * @fileoverview Componente: sbXPAYHome (Rota: /sbxpay/)
  * @path src/routes/sbxpay/index.tsx
  * @description Ponto de entrada principal do ambiente de homologação e testes do Financial Hub (sbxpay).
- * Gerencia a listagem de jornadas de produtos, roteamento dinâmico inteligente (fluxos de vitrine
- * e fluxos diretos via Gateway), e validação de sessão sob o princípio estrito de **Zero LocalStorage**.
+ * Gerencia a listagem de jornadas de produtos e o roteamento inteligente:
+ * 1. Fluxos de Vitrine: Navegam para /sbxpay/offer carregando as prateleiras.
+ * 2. Fluxos Diretos (Ponto 1): Acionam o `callOrchestrator` diretamente com `action: "CONSULT"` 
+ *    e o `productId` correspondente, sem passar por rotas intermediárias.
  */
 
 import React, { useState, useEffect, useContext } from 'react';
@@ -12,7 +14,7 @@ import { Loader2, LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Build
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Button } from "@/components/ui/button";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { getDefaultSbxEnvironment } from "@/services/session"; // 👈 Importação adicionada para resolução segura de ambiente (Zero LocalStorage)
+import { getDefaultSbxEnvironment } from "@/services/session"; // 👈 Resolução segura de ambiente (Zero LocalStorage)
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import { UserDataContext } from "@/routes/sbxpay.lazy"; // 👈 Contexto pai importado para disponibilizar o userData hidratado
 
@@ -86,49 +88,7 @@ export function sbXPAYHome() {
     const [loading, setLoading] = useState(false);
     const [activeKey, setActiveKey] = useState<string | null>(null);
 
-    // =========================================================================
-    // [VISIT GATEKEEPER]:  Criação Automática de Visita via CallOrchestrator
-    //                      se usuário entrou direto na página
-    // =========================================================================
-    useEffect(() => {
-        const initializeVisit = async () => {
-            const searchParams = new URLSearchParams(window.location.search);
-            if (searchParams.get('visit_id')) return;
-
-            try {
-                const currentHref = window.location.href;
-
-                // Se você já possui os dados de perfil (userData / BFFUserProfile)
-                const payload = {
-                    action: "VISIT",
-                    environment: getDefaultSbxEnvironment(),
-                    target_url: window.location.pathname,
-                    origin_url: currentHref, // Exigido na raiz por validatePayload
-
-                    // Passa o objeto entity preenchido (se disponível)
-                    ...(userData && { entity: userData }),
-
-                    interaction_context: {
-                        origin_url: currentHref, // Exigido no context por validatePayload
-                        utm_source: "sbxpay_direct",
-                        utm_medium: "organic",
-                        utm_campaign: "auto_visit_init"
-                    }
-                };
-
-                const response = await callOrchestrator(payload, "POST");
-                // O objeto vem direto: response.visit_id e response.url
-                if (response?.visit_id && response?.url) {
-                    window.location.href = response.url;
-                }
-            } catch (err: any) {
-                console.error("🚨 [GATEKEEPER] Erro no Orquestrador:", JSON.stringify(err.response || err, null, 2));
-            }
-        };
-
-        initializeVisit();
-    }, [userData]);
-
+    // Efeito para monitorar o scroll da página e aplicar efeito de glassmorphism no header
     useEffect(() => {
         const handleScroll = () => setIsScrolled(window.scrollY > 20);
         window.addEventListener('scroll', handleScroll);
@@ -142,6 +102,7 @@ export function sbXPAYHome() {
         setLoading(true);
         setActiveKey(configKey); 
 
+        // Pequeno respiro visual para acionamento do loader do card
         await new Promise(resolve => setTimeout(resolve, 200));
 
         const config = flowsConfig[configKey];
@@ -155,13 +116,13 @@ export function sbXPAYHome() {
 
         try {
             // 🚀 [PONTO 1]: Se o fluxo for direto, chamamos o orquestrador diretamente 
-            // via callOrchestrator sem passar pela borda ou rotas intermediárias.
+            // via callOrchestrator usando action: "CONSULT" e o productId mapeado.
             if ('isDirect' in config && config.isDirect) {
                 const currentHref = window.location.href;
                 const ambiente = getDefaultSbxEnvironment();
                 const currentSessionToken = sessionToken || sessionStorage.getItem('session_token') || "";
                 
-                // Resgata o visit_id já gerado pelo Gatekeeper na URL atual (se existir)
+                // Resgata o visit_id já gerado pelo Layout Pai na URL atual (se existir)
                 const urlParams = new URLSearchParams(window.location.search);
                 const existingVisitId = urlParams.get('visit_id');
 
@@ -171,8 +132,8 @@ export function sbXPAYHome() {
                     product_id: config.productId,
                     auth_token: currentSessionToken,
                     origin_url: currentHref,
-                    ...(existingVisitId && { visit_id: existingVisitId }), // Mantém o vínculo com a visita ativa
-                    ...(userData && { entity: userData }), // Injeta o perfil hidratado do usuário
+                    ...(existingVisitId && { visit_id: existingVisitId }), // Preserva o vínculo com a visita ativa do hub
+                    ...(userData && { entity: userData }), // Injeta o perfil hidratado do usuário via BFF
                     interaction_context: {
                         origin_url: currentHref,
                         utm_source: "sbxpay_direct",
@@ -192,7 +153,7 @@ export function sbXPAYHome() {
                 }
             }
 
-            // --- [FLUXOS DE VITRINE]: Mantêm a navegação padrão para prateleiras ---
+            // --- [FLUXOS DE VITRINE]: Mantêm a navegação padrão para prateleiras de oferta ---
             await navigate({ 
                 to: config.route, 
                 search: { 
@@ -318,7 +279,7 @@ export function sbXPAYHome() {
                             </h1>
                             
                             <p className="text-sm md:text-base text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                                A plataforma líder da América Latina é tem uma infraestrutura segura e inovadora, com a proteção que seu patrimônio exige.
+                                A plataforma líder da América Latina tem uma infraestrutura segura e inovadora, com a proteção que seu patrimônio exige.
                             </p>
 
                             <div className="border-t border-gray-100 pt-5 space-y-4 text-left max-w-xl mx-auto lg:mx-0">
@@ -572,7 +533,7 @@ export function sbXPAYHome() {
                             </div>
                             <div className="space-y-3">
                                 <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Seu patrimônio protegido agora.</h2>
-                                <p className="text-sm md:text-base text-slate-600">Use a Wallet sBX para desfrutar de condições diferenciadas e garantir seus bens com contra imprevistos.</p>
+                                <p className="text-sm md:text-base text-slate-600">Use a Wallet sBX para desfrutar de condições diferenciadas e garantir seus bens contra imprevistos.</p>
                             </div>
                             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-md shadow-purple-500/5 space-y-3">
                                 <h3 className="text-xs font-bold text-purple-600 uppercase tracking-wider">Cotação 100% Online, em segundos, sem compromisso</h3>
@@ -597,10 +558,9 @@ export function sbXPAYHome() {
                 </div>
             </section>
 
-            {/* FOOTER - Logo aumentada */}
+            {/* FOOTER */}
             <footer className="w-full pt-10 pb-40 md:py-10 mt-auto bg-black border-t border-gray-800">
                 <div className="container mx-auto px-6 flex flex-col items-center gap-4 text-center">
-                    
                     <div className="h-20 w-20 rounded-md bg-black overflow-hidden flex items-center justify-center">
                         <img 
                             src="/assets/home/sbxpay_p_sem_borda.png" 
@@ -620,14 +580,14 @@ export function sbXPAYHome() {
                 </div>
             </footer>
 
-            {/* OVERLAY DE LOADING */}
+            {/* OVERLAY DE LOADING DOS BOTÕES DE JORNADA */}
             {loading && (
                 <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm font-['Plus_Jakarta_Sans']">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
                     <p className="text-slate-600 font-medium text-sm">
-                    Preparando o ambiente de simulação...
+                    Processando...
                     </p>
-                </div>       
+                </div>      
             )}
 
             {/* MOBILE TAB BAR (Visível apenas no celular) */}
