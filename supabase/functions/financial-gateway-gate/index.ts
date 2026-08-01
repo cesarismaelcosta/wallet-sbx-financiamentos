@@ -590,7 +590,7 @@ function respondWithError(
     }
 
     if (!frontendOrigin) {
-        frontendOrigin = Deno.env.get("FRONTEND_URL"] || "";
+        frontendOrigin = Deno.env.get("FRONTEND_URL") || "";
     }
 
     if (!frontendOrigin) {
