@@ -386,12 +386,21 @@ const autenticarAccountsSBX = async (username: string, password: string, environ
     body: details.toString()
   });
 
+  console.log("🔥 DADOS DO OAUTH CAPTURADOS NO FRONT:", sbxLoginResponse);
+
   const rawResponse = await sbxLoginResponse.text();
   if (!sbxLoginResponse.ok) {
     throw new Error(`Credenciais inválidas ou erro na API: ${sbxLoginResponse.status}`);
   }
   const sbxData = JSON.parse(rawResponse);
-  return { success: true, access_token: sbxData.access_token, userId: sbxData.userId, raw_oauth: sbxData };
+
+  // Retornando o token bruto da sbX e o userId para uso posterior:
+  return { 
+    success: true, 
+    access_token: sbxData.access_token, 
+    userId: sbxData.userId, 
+    raw_oauth: sbxData 
+  };
 };
 
 /**
@@ -873,7 +882,10 @@ function SandboxPage() {
     try {
       const loginResponse = await autenticarAccountsSBX(loginCred, passwordCred, ambienteAtivo);
       if (loginResponse?.success && loginResponse.access_token) {
-        
+
+        // --- COLOCA O CONSOLE.LOG BEM AQUI ---
+        console.log("🔥 DADOS DO OAUTH CAPTURADOS NO FRONT:", loginResponse);
+
         // Não mudamos a tela ainda! Aguardamos a Exchange rolar primeiro.
         const exchangeResponse = await trocarTokenNaEdgeFunction(loginResponse.access_token, ambienteAtivo, loginResponse.raw_oauth);
         
