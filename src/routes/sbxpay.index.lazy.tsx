@@ -24,7 +24,7 @@ export const Route = createLazyFileRoute('/sbxpay/')({
 // [CONFIGURAÇÃO]: Mapeamento Centralizado de Jornadas e Produtos
 // =========================================================================
 const flowsConfig = {
-    // Fluxos de Vitrine (Passam por /sbxpay/offer)
+    // --- [FLUXOS DE VITRINE]: Passam por /sbxpay/offer para carregar prateleiras ---
     cartao: { 
         route: "/sbxpay/offer", 
         flowKey: "Cartão", 
@@ -51,36 +51,26 @@ const flowsConfig = {
         disabled: true 
     },
     
-    // =========================================================================
-    // [FLUXOS DIRETOS]: Redirecionam para o Gateway APENAS com o product_id
-    // =========================================================================
+    // --- [FLUXOS DIRETOS]: Executam chamada direta ao orquestrador (Sem rotas intermediárias) ---
     equityCarro: { 
-        route: "/financialGatewayEntry", 
-        flowKey: "AutoEquity", 
         isDirect: true, 
         productId: "7", // Produto: Car Equity
-        disabled: false // Habilitado
+        disabled: false 
     },
     equityImovel: { 
-        route: "/financialGatewayEntry", 
-        flowKey: "HomeEquity", 
         isDirect: true, 
         productId: "6", // Produto: Home Equity
-        disabled: true  // Desativado
+        disabled: true 
     },
     seguroResidencial: { 
-        route: "/financialGatewayEntry", 
-        flowKey: "SeguroResidencial", 
         isDirect: true, 
         productId: "10", // Produto: Seguro Residencial
-        disabled: true   // Desativado
+        disabled: true 
     },
     seguroAuto: { 
-        route: "/financialGatewayEntry", 
-        flowKey: "SeguroAuto", 
         isDirect: true, 
         productId: "9", // Produto: Seguro Auto
-        disabled: false // Habilitado
+        disabled: false 
     },
 };
 
@@ -127,10 +117,9 @@ export function sbXPAYHome() {
                 };
 
                 const response = await callOrchestrator(payload, "POST");
-
-                if (response?.success && response?.data?.visit_id) {
-                    const newUrl = `${window.location.pathname}?visit_id=${response.data.visit_id}`;
-                    window.history.replaceState({ path: newUrl }, '', newUrl);
+                // O objeto vem direto: response.visit_id e response.url
+                if (response?.visit_id && response?.url) {
+                    window.location.href = response.url;
                 }
             } catch (err: any) {
                 console.error("🚨 [GATEKEEPER] Erro no Orquestrador:", JSON.stringify(err.response || err, null, 2));
@@ -147,7 +136,7 @@ export function sbXPAYHome() {
     }, []);
 
     // =========================================================================
-    // [HANDLERS]: Lógica Inteligente de Roteamento com Correção Zero LocalStorage
+    // [HANDLERS]: Lógica Inteligente de Roteamento (Ponto 1: Chamada Direta)
     // =========================================================================
     const handleProductClick = async (configKey: keyof typeof flowsConfig) => {
         setLoading(true);
@@ -165,40 +154,62 @@ export function sbXPAYHome() {
         }
 
         try {
+            // 🚀 [PONTO 1]: Se o fluxo for direto, chamamos o orquestrador diretamente 
+            // via callOrchestrator sem passar pela borda ou rotas intermediárias.
             if ('isDirect' in config && config.isDirect) {
-                // 🔑 CORREÇÃO CRÍTICA [Zero LocalStorage]: Utiliza o state do contexto/sessionStorage e getDefaultSbxEnvironment()
-                const currentSessionToken = sessionToken || sessionStorage.getItem('session_token') || "";
+                const currentHref = window.location.href;
                 const ambiente = getDefaultSbxEnvironment();
+                const currentSessionToken = sessionToken || sessionStorage.getItem('session_token') || "";
                 
-                const searchPayload: any = {
+                // Resgata o visit_id já gerado pelo Gatekeeper na URL atual (se existir)
+                const urlParams = new URLSearchParams(window.location.search);
+                const existingVisitId = urlParams.get('visit_id');
+
+                const payload = {
+                    action: "CONSULT", // Ação padrão exigida pelo orquestrador para processamento de produtos diretos
                     environment: ambiente,
+                    product_id: config.productId,
                     auth_token: currentSessionToken,
-                    product_id: encodeURIComponent(config.productId),
-                    return_uri: window.location.pathname + window.location.search,
-                    utm_source: "landing",
-                    utm_medium: "referral",
-                    utm_campaign: `flow_${config.flowKey.toLowerCase()}`
+                    origin_url: currentHref,
+                    ...(existingVisitId && { visit_id: existingVisitId }), // Mantém o vínculo com a visita ativa
+                    ...(userData && { entity: userData }), // Injeta o perfil hidratado do usuário
+                    interaction_context: {
+                        origin_url: currentHref,
+                        utm_source: "sbxpay_direct",
+                        utm_medium: "referral",
+                        utm_campaign: `flow_${configKey.toLowerCase()}`
+                    }
                 };
 
-                await navigate({
-                    to: config.route,
-                    search: searchPayload
-                });
-            } else {
-                await navigate({ 
-                    to: config.route, 
-                    search: { 
-                        flow: config.flowKey,
-                        return_uri: window.location.pathname 
-                    } as any 
-                });
+                const response = await callOrchestrator(payload, "POST");
+
+                // O orquestrador retorna a URL final de redirecionamento interno
+                if (response?.url) {
+                    window.location.href = response.url;
+                    return;
+                } else {
+                    throw new Error("URL de redirecionamento ausente na resposta do orquestrador.");
+                }
             }
+
+            // --- [FLUXOS DE VITRINE]: Mantêm a navegação padrão para prateleiras ---
+            await navigate({ 
+                to: config.route, 
+                search: { 
+                    flow: config.flowKey,
+                    return_uri: window.location.pathname 
+                } as any 
+            });
+
         } catch (error) {
-            console.error("Erro na navegação:", error);
+            console.error("🚨 [HANDLE_PRODUCT_CLICK] Erro na chamada direta ao orquestrador:", error);
             setLoading(false);
             setActiveKey(null);
         } finally {
-            setLoading(false); 
+            // Se for fluxo de vitrine limpa o loading; no fluxo direto o redirecionamento limpa a tela
+            if (!('isDirect' in config && config.isDirect)) {
+                setLoading(false); 
+            }
         }
     };
 

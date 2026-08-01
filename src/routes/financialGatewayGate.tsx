@@ -67,8 +67,7 @@ export const Route = createFileRoute("/financialGatewayGate")({
             offer_id: offer_id || null,
             product_id: product_id || null,
             metadata: {
-              page: window.location.pathname,
-              return_uri: targetReturnUrl
+              origin_url: targetReturnUrl
             }
           }
         });

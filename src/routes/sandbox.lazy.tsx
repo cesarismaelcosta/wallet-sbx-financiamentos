@@ -621,7 +621,14 @@ function SandboxPage() {
         });
         setVitrineOffers(newVitrine);
       } catch (err: any) {
-        console.error(err);
+        console.error("Erro ao carregar dados do sandbox:", err);
+        const errorMsg = (err.message || "").toLowerCase();
+        
+        if (errorMsg.includes("401") || errorMsg.includes("unauthorized") || errorMsg.includes("session") || errorMsg.includes("expired") || errorMsg.includes("falha de autenticação")) {
+          setError("Sua sessão expirou. Utilize o botão 'Sair' no topo para entrar novamente.");
+        } else {
+          setError(err.message || "Erro ao carregar dados do sandbox.");
+        }
       } finally {
         setLoading(false);
       }
