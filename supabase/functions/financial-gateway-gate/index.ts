@@ -120,7 +120,7 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // =====================================================================
+// =====================================================================
     // [STEP 3] DUAL-MODE HÍBRIDO (Sanitização, Identificação e Resolução)
     // =====================================================================
     // Descrição: Realiza a higienização inteligente do token recebido na borda,
@@ -219,13 +219,38 @@ serve(withSecurity('financial-gateway-gate', async (req: Request) => {
         const newSessionToken = crypto.randomUUID();
         const infra = await captureInfrastructure(req);
         
+        // Tenta isolar o objeto JSON completo caso tenha vindo no formato OAuth
+        let parsedRawPayload = null;
+        try {
+            if (sanitizedInputToken.startsWith('{') && sanitizedInputToken.endsWith('}')) {
+                parsedRawPayload = JSON.parse(sanitizedInputToken);
+            } else {
+                // Se veio apenas a string opaca, criamos um payload simulado padrão compatível
+                parsedRawPayload = {
+                    access_token: sbx_access_token,
+                    token_type: "bearer",
+                    expires_in: expiraEmSegundos,
+                    userId: userId
+                };
+            }
+        } catch (_) {
+            parsedRawPayload = { access_token: sbx_access_token, userId: userId };
+        }
+
         const { error: insertError } = await supabaseAdmin.from('session_tokens').insert({ 
             session_token: newSessionToken, 
             user_id: userId, 
             sbx_access_token: sbx_access_token, 
+            sbx_raw_token_payload: parsedRawPayload, // Persiste o JSON completo do OAuth no cofre
             environment, 
             expires_at: nossaExpiracao.toISOString(), 
-            ip_address: infra.ip_address, 
+            ip_address: infra.ip_address,
+            country: infra.country,
+            state: infra.state,
+            city: infra.city,
+            user_agent: infra.user_agent,
+            device_type: infra.device_type,
+            operating_system: infra.operating_system,
             origin_details: infra.metadata 
         });
 

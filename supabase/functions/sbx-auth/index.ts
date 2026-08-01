@@ -125,7 +125,7 @@ serve(withSecurity('sbx-auth', async (req) => {
       .insert({ 
         session_token: sessionToken, 
         user_id: sbxData.userId, 
-        sbx_access_token: sbxData.access_token, // Salva o token opaco bruto da sbX no cofre
+        sbx_access_token: sbxData.access_token, // Salva o acess_token da sbX no cofre
         environment, 
         expires_at: nossaExpiracao.toISOString(),
         ip_address: infra.ip_address,
