@@ -42,7 +42,7 @@ const SEGURANCA_NAV = [
 const CONFIG_NAV = [
   { to: "/backoffice/alerts", label: "Alertas", icon: TriangleAlert },
   { to: "/backoffice/dominios", label: "Domínios", icon: Globe },
-  { to: "/backoffice/routes", label: "Rotas", icon: Layers }, 
+  { to: "/backoffice/routes", label: "Rotas", icon: Layers },
 ];
 
 function BackofficeLayout() {
@@ -65,13 +65,15 @@ function BackofficeLayout() {
     }
     if (!isBackofficeAllowed) {
       if (session?.access_token) {
-        void logLoginHistoryEvent({
-          email: backofficeUser.email,
-          event: "blocked",
-          success: false,
-          failureReason: "route_access_denied",
-          accessToken: session.access_token,
-        }).catch((err) => console.error("blocked route logging failed:", err));
+        void logLoginHistoryEvent(
+          {
+            email: backofficeUser?.email ?? "",
+            event: "blocked",
+            success: false,
+            failureReason: "route_access_denied",
+          },
+          session.access_token,
+        ).catch((err) => console.error("blocked route logging failed:", err));
       }
       navigate({ to: "/backoffice/login" });
     }
