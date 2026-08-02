@@ -1,6 +1,6 @@
 /**
  * ARQUIVO: registry.ts
- * OBJETIVO: Centralizar o contrato de infraestrutura (CORS e Métodos) de todo o ecossistema.
+ * OBJETIVO: Centralizar o contrato de infraestrutura (CORS, Métodos e Segurança) de todo o ecossistema.
  * REGRA DE OURO: Se uma função não estiver aqui, o Wrapper bloqueará sua execução (Fail-Safe).
  */
 
@@ -8,6 +8,8 @@ export type FunctionConfig = {
   methods: string[];
   requiredHeaders: string[];
   origin?: string;
+  requiresSession?: boolean; // Exige x-session-token / JWT de usuário válido
+  requiresSecret?: string;   // Nome da variável de ambiente com o segredo server-to-server
 };
 
 export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
@@ -16,39 +18,47 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   // ==========================================
   'financial-gateway': { 
     methods: ['GET', 'POST'], 
-    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    requiresSession: true
   },
-    'financial-gateway-gate': { 
+  'financial-gateway-gate': { 
     methods: ['POST'], 
-    requiredHeaders: [] 
+    requiredHeaders: [],
+    // Aberto (geralmente recebe o token via payload/form submit para redirecionamento)
   },
   'financial-gateway-webhook': { 
-    methods: ['POST'],  // Webhooks costumam ser POST
-    requiredHeaders: [] // Webhooks de parceiros geralmente não mandam headers customizados
+    methods: ['POST'], 
+    requiredHeaders: [],
+    // Aberto para parceiros (protegido internamente por assinatura HMAC/payload)
   },
   'orchestrator': { 
     methods: ['GET', 'POST'], 
-    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    requiresSession: true
   },
   'orchestrator-configs': { 
     methods: ['GET'], 
-    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    requiresSession: true
   },
+
   // ==========================================
   // 2. SISTEMA DE NOTIFICAÇÕES
   // ==========================================
   'notification-dispatcher': { 
     methods: ['POST', 'GET'], 
-    requiredHeaders: [],        // Chamado internamente via CRON (Service Role)
-    origin: 'self'              // NENHUM site externo consegue chamar via browser, só o projeto do supabase. O Wrapper substitui pelo projeto
+    requiredHeaders: [],
+    origin: 'self' // Protegido por restrição de origem interna (CRON)
   },
   'notification-gateway': { 
     methods: ['POST'], 
-    requiredHeaders: ['x-gateway-secret'] // Proteção contra disparos indevidos
+    requiredHeaders: ['x-gateway-secret'],
+    requiresSecret: 'NOTIFICATION_GATEWAY_SECRET' // 👈 Declarativo agora!
   },
   'notification-system-message': { 
     methods: ['POST'], 
-    requiredHeaders: ['x-session-token'] 
+    requiredHeaders: ['x-session-token'],
+    requiresSession: true // 👈 Protegido pelo perímetro do withSecurity
   },
 
   // ==========================================
@@ -56,15 +66,18 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   // ==========================================
   'sbx-auth': { 
     methods: ['POST'], 
-    requiredHeaders: [] // Auth inicial não tem token ainda
+    requiredHeaders: []
+    // Aberto (Auth inicial da Superbid)
   },
   'sbx-auth-exchange': { 
     methods: ['POST'], 
-    requiredHeaders: [] 
+    requiredHeaders: []
+    // Aberto (Protocolo de troca de token público para sessão interna)
   },
   'sbx-user': { 
-    methods: ['GET'], // Alterado para bater com o padrão de leitura de perfil
-    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
+    methods: ['GET'], 
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    requiresSession: true
   },
 
   // ==========================================
@@ -72,7 +85,8 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   // ==========================================
   'sbx-offer': { 
     methods: ['GET'], 
-    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    requiresSession: true
   },
 
   // ==========================================
@@ -80,13 +94,13 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   // ==========================================
   'manage-backoffice-users': { 
     methods: ['POST'], 
-    requiredHeaders: [], // Usa apenas o 'authorization' padrão
-    // Se você tiver um domínio customizado (ex: admin.sbx.com.br), 
-    // pode deixar a string fixa. Se for o próprio supabase, use 'self'.
+    requiredHeaders: [],
+    requiresSession: true, // Apenas administradores logados gerenciam usuários
     origin: 'self'
   },
   'login-history': { 
     methods: ['POST'], 
-    requiredHeaders: [] 
+    requiredHeaders: [],
+    requiresSession: true // Telemetria de login exige usuário autenticado
   },
 };

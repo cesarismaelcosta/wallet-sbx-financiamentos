@@ -13,9 +13,10 @@
  * [RESPONSABILIDADES]:
  * 1. Protocolo de Borda: Responde síncronamente ao aperto de mão de segurança (CORS OPTIONS).
  * 2. Validação Contratual: Garante a presença dos metadados mínimos de rastreabilidade.
- * 3. Busca Dinâmica: Recupera a lista de destinatários de alerta cadastrados no Backoffice.
- * 4. Persistência de Transição: Deposita a mensagem na Outbox como 'pending' para processamento assíncrono.
- * 5. Isolamento de Falhas: Protege o cliente consumidor emitindo respostas silenciosas em caso de pane interna.
+ * 3. Sanitização de Entrada: Aplica escape de HTML contra Stored XSS nos campos de texto.
+ * 4. Busca Dinâmica: Recupera a lista de destinatários de alerta cadastrados no Backoffice.
+ * 5. Persistência de Transição: Deposita a mensagem na Outbox como 'pending' para processamento assíncrono.
+ * 6. Isolamento de Falhas: Protege o cliente consumidor emitindo respostas silenciosas em caso de pane interna.
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
@@ -31,6 +32,20 @@ import { debugLog } from "../_shared/logger.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+/**
+ * [SEGURANÇA]: Utilitário de Escape de HTML (Prevenção contra XSS / HTML Injection)
+ * Converte caracteres perigosos em entidades HTML seguras antes de interpolar no e-mail.
+ */
+const escapeHtml = (str: unknown): string => {
+  if (typeof str !== 'string') return String(str ?? '');
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
 
 serve(withSecurity('notification-system-message', async (req: Request) => {
   // -----------------------------------------------------------------------
@@ -57,7 +72,24 @@ serve(withSecurity('notification-system-message', async (req: Request) => {
     // -----------------------------------------------------------------------
     // [CONTRATO DE ENTRADA]: Consumo e Desestruturação do Payload
     // -----------------------------------------------------------------------
-    const payload = await req.json();
+    const rawBody = await req.json();
+    
+    // Validação estrita dos nós obrigatórios do contrato do log
+    if (!rawBody.context || !rawBody.message) {
+      throw new Error("Parâmetros contratuais obrigatórios ('context' e 'message') ausentes.");
+    }
+
+    // [SANITIZAÇÃO DE SEGURANÇA]: Aplica escape de HTML nos campos textuais de entrada
+    const payload = {
+      ...rawBody,
+      context: escapeHtml(rawBody.context),
+      subject: rawBody.subject ? escapeHtml(rawBody.subject) : undefined,
+      message: escapeHtml(rawBody.message),
+      raw_payload: typeof rawBody.raw_payload === 'object' && rawBody.raw_payload !== null
+        ? Object.fromEntries(Object.entries(rawBody.raw_payload).map(([k, v]) => [k, typeof v === 'string' ? escapeHtml(v) : v]))
+        : rawBody.raw_payload
+    };
+
     const { 
       context, 
       subject, 
@@ -68,11 +100,6 @@ serve(withSecurity('notification-system-message', async (req: Request) => {
       simulation_id, 
       simulation_update_id 
     } = payload;
-    
-    // Validação estrita dos nós obrigatórios do contrato do log
-    if (!payload.context || !payload.message) {
-      throw new Error("Parâmetros contratuais obrigatórios ('context' e 'message') ausentes.");
-    }
 
     // -----------------------------------------------------------------------
     // [DOMÍNIO]: Busca Dinâmica de Destinatários de Alerta
@@ -110,7 +137,7 @@ serve(withSecurity('notification-system-message', async (req: Request) => {
     const { error: insertError } = await supabase.from('notification_outbox').insert({
       context_type: 'SYSTEM_ERROR',
       channel: 'email',
-      template_slug: 'system-message-notificati',
+      template_slug: 'system-message-notification',
       recipient_type: 'INTERNAL',
       recipient: finalRecipients, // Injeção dinâmica da lista concatenada
       subject: payload.subject || `Alerta de Erro no Gateway de Financiamentos e Seguros ⚠️`,

@@ -1,12 +1,29 @@
 /**
- * ARQUIVO: server.ts
- * OBJETIVO: Interceptador Global (Wrapper). 
- * Ele envolve sua lógica de negócio, resolve o CORS, valida o método e devolve a resposta 
- * sem quebrar as Edge Functions que ainda usam "new Response(...)".
+ * @fileoverview Interceptador Global de Borda (Middleware de Segurança & Gateway)
+ * @module _shared/server
+ * 
+ * ============================================================================
+ * [ARQUITETURA & CLEAN ARCHITECTURE]
+ * ============================================================================
+ * O wrapper `withSecurity` atua como o ponto único de entrada (Perimeter Gateway)
+ * para todas as Edge Functions do ecossistema de Financiamentos e Seguros.
+ * 
+ * [RESPONSABILIDADES CRÍTICAS]:
+ * 1. Resolução de Contrato: Consulta o `registry.ts` para aplicar regras de método,
+ *    headers exigidos e restrições de origem (CORS).
+ * 2. Handshake de Borda (Preflight): Responde automaticamente a requisições CORS `OPTIONS`.
+ * 3. Blindagem de Perímetro (Zero-Trust): Valida de forma declarativa e centralizada
+ *    se a rota exige autenticação por sessão de usuário (`requiresSession`) ou 
+ *    segredo server-to-server (`requiresSecret`), bloqueando acessos anônimos (`401`).
+ * 4. Retrocompatibilidade de Resposta: Aceita tanto instâncias nativas de `Response` 
+ *    quanto o padrão unificado de objetos `{ status, data }`.
+ * 5. Fail-Safe Global: Captura exceções não tratadas na regra de negócio, garantindo
+ *    resposta JSON padronizada sem vazamento de stack trace.
  */
 
 import { FUNCTION_CONFIGS } from "./registry.ts";
 import { getSafeCorsOrigin } from "./security.ts";
+import { validateRequest } from "./auth.ts";
 
 export interface StandardResponse {
   status: number;
@@ -14,29 +31,43 @@ export interface StandardResponse {
   error?: string;
 }
 
+/**
+ * Envolve uma Edge Function com validações rigorosas de segurança, CORS e tratamento de erros.
+ * 
+ * @param {string} functionName - Identificador da função correspondente no `registry.ts`.
+ * @param {Function} handler - Lógica de negócio da Edge Function.
+ * @returns {Function} Handler compatível com o Deno `serve()`.
+ */
 export const withSecurity = (
   functionName: string,
   handler: (req: Request) => Promise<Response | StandardResponse>
 ) => {
   return async (req: Request): Promise<Response> => {
     
+    // -----------------------------------------------------------------------
+    // [PASSO 1]: Recuperação e Validação do Contrato de Rota no Registry
+    // -----------------------------------------------------------------------
     const config = FUNCTION_CONFIGS[functionName];
 
     if (!config) {
       console.error(`[WRAPPER FATAL ERROR]: Função '${functionName}' não mapeada no registry.ts`);
-      return new Response(JSON.stringify({ error: "Configuração de segurança ausente" }), { status: 500 });
+      return new Response(
+        JSON.stringify({ error: "Configuração de segurança ausente no registro de borda." }), 
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
     }
 
-    // 1. MONTAGEM DINÂMICA DE CORS E CONTRATO DE ORIGEM
-    // Junta os headers padrão (authorization, etc) com os headers exigidos pela função no registry
-    const defaultHeaders = ["authorization", "x-client-info", "apikey", "content-type"];
+    // -----------------------------------------------------------------------
+    // [PASSO 2]: Montagem Dinâmica de Políticas CORS e Origem
+    // -----------------------------------------------------------------------
+    // Agrupa os headers padrão de infraestrutura com os específicos exigidos pela rota no registry.
+    const defaultHeaders = ["authorization", "x-client-info", "apikey", "content-type", "x-session-token"];
     const allAllowedHeaders = [...new Set([...defaultHeaders, ...config.requiredHeaders])].join(", ");
     
-    // Captura a origem via Origin ou fallback de Referer caso o browser omita o header
     const reqOrigin = req.headers.get("Origin") || req.headers.get("Referer") || "";
     let finalAllowedOrigin = "";
 
-    // Se a função no registry.ts exige 'self', blindamos para aceitar apenas chamadas da própria URL do Supabase
+    // Regra especial para 'origin: self' (restringe estritamente às chamadas internas do próprio projeto Supabase)
     if (config.origin === 'self') {
         const projectUrl = Deno.env.get('SUPABASE_URL');
         if (projectUrl) {
@@ -50,74 +81,111 @@ export const withSecurity = (
             }
         }
     } else {
-        // Caso contrário, aplica a blindagem padrão do security.ts (Allowlist / Curinga)
+        // Aplica a allowlist padrão de domínios seguros gerenciada pelo security.ts
         finalAllowedOrigin = getSafeCorsOrigin(reqOrigin);
     }
 
     const corsHeaders = {
-      // 1. Blindagem dinâmica da Origem respeitando o registry.ts
       "Access-Control-Allow-Origin": finalAllowedOrigin,
-      
-      // 2. Proteção de Cache (Diz aos proxies/CDNs que a resposta muda dependendo de quem pede)
       "Vary": "Origin",
-      
-      // 3. Liberação de Métodos e Headers dinâmicos
       "Access-Control-Allow-Methods": [...config.methods, "OPTIONS"].join(", "),
       "Access-Control-Allow-Headers": allAllowedHeaders,
-      
-      // 4. A CHAVE MESTRA DOS COOKIES (Obrigatório para arquitetura HttpOnly via AJAX)
       "Access-Control-Allow-Credentials": "true",
     };
 
-    // 2. HANDSHAKE (PREFLIGHT) AUTOMÁTICO
+    // -----------------------------------------------------------------------
+    // [PASSO 3]: Tratamento Síncrono de Preflight (OPTIONS Handshake)
+    // -----------------------------------------------------------------------
     if (req.method === "OPTIONS") {
       return new Response("ok", { status: 200, headers: corsHeaders });
     }
 
-    // 3. SEGURANÇA: BLOQUEIO DE MÉTODOS NÃO AUTORIZADOS
+    // -----------------------------------------------------------------------
+    // [PASSO 4]: Validação de Verbo HTTP (White-list declarada no Registry)
+    // -----------------------------------------------------------------------
     if (!config.methods.includes(req.method)) {
-      return new Response(JSON.stringify({ error: `Método ${req.method} não permitido.` }), { 
-        status: 405, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+      return new Response(
+        JSON.stringify({ error: `Método HTTP ${req.method} não permitido para esta rota.` }), 
+        { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // 4. EXECUÇÃO DA SUA REGRA DE NEGÓCIO
+    // =======================================================================
+    // [PASSO 5]: BLINDAGEM DE PERÍMETRO (Zero-Trust & Autenticação Declarativa)
+    // =======================================================================
+    let perimeterAuthorized = false;
+    let perimeterErrorMsg = "Unauthorized: Acesso negado.";
+
+    // 5.A. Validação de Segredo Compartilhado (Server-to-Server / Cron / Dispatcher)
+    if (config.requiresSecret) {
+      const secretHeader = req.headers.get("x-gateway-secret") || req.headers.get("authorization");
+      const expectedSecret = Deno.env.get(config.requiresSecret);
+      
+      if (expectedSecret && secretHeader) {
+        // Normaliza o header removendo prefixos acidentais como 'Bearer '
+        const cleanHeader = secretHeader.replace(/^Bearer\s+/i, "").trim();
+        if (cleanHeader === expectedSecret.trim()) {
+          perimeterAuthorized = true;
+        }
+      }
+    }
+
+    // 5.B. Validação de Sessão de Usuário (JWT / x-session-token / Bearer de Sessão)
+    // Se a rota exige sessão e o perímetro ainda não foi autorizado pelo segredo acima:
+    if (config.requiresSession && !perimeterAuthorized) {
+      const sessionValidation = await validateRequest(req);
+      if (sessionValidation.success) {
+        perimeterAuthorized = true;
+      } else {
+        perimeterErrorMsg = sessionValidation.error || "Unauthorized: Sessão de usuário inválida ou expirada.";
+      }
+    }
+
+    // Se a função exige explicitamente autenticação (por sessão ou segredo) e falhou em ambas:
+    if ((config.requiresSession || config.requiresSecret) && !perimeterAuthorized) {
+      return new Response(
+        JSON.stringify({ error: perimeterErrorMsg }), 
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // -----------------------------------------------------------------------
+    // [PASSO 6]: Execução Isolada da Regra de Negócio
+    // -----------------------------------------------------------------------
     try {
       const result = await handler(req);
 
-      // =========================================================================
-      // MÁGICA DA RETROCOMPATIBILIDADE (Não quebra o seu código atual)
-      // =========================================================================
-      // Se a sua função (ex: sbx-offer) retornou um "new Response(...)", 
-      // o wrapper apenas injeta o CORS nela e repassa para frente. Suas formatações
-      // de erro customizadas (code, fallback_url) passam intactas.
+      // Retrocompatibilidade Tipo A: Se o handler retornou uma instância nativa de Response
       if (result instanceof Response) {
         Object.entries(corsHeaders).forEach(([k, v]) => result.headers.set(k, v));
         return result;
       }
 
-      // =========================================================================
-      // SUPORTE AO NOVO PADRÃO (Objetos Simples)
-      // =========================================================================
-      // Quando você refatorar no futuro para retornar apenas { status: 200, data: {...} }
-      return new Response(JSON.stringify(result.data || { error: result.error }), {
-        status: result.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+      // Retrocompatibilidade Tipo B: Objeto padronizado { status, data, error }
+      return new Response(
+        JSON.stringify(result.data || { error: result.error }), 
+        {
+          status: result.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
 
     } catch (err: any) {
-      // Este catch global só é acionado se a sua função "estourar" um erro não tratado
-      // internamente. Como suas funções já têm blocos try/catch robustos, isso é uma camada de fail-safe.
+      // -----------------------------------------------------------------------
+      // [PASSO 7]: Fail-Safe Global para Exceções Não Tratadas no Handler
+      // -----------------------------------------------------------------------
       console.error(`[WRAPPER GLOBAL CATCH em ${functionName}]:`, err);
-      return new Response(JSON.stringify({ 
-        success: false, 
-        code: "INTERNAL_SERVER_ERROR", 
-        message: err.message || "Erro crítico de execução" 
-      }), { 
-        status: 500, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      });
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          code: "INTERNAL_SERVER_ERROR", 
+          message: err.message || "Erro crítico de execução na camada de borda." 
+        }), 
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
     }
   };
 };
