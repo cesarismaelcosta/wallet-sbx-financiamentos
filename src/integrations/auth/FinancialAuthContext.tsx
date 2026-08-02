@@ -2,7 +2,7 @@
  * @fileoverview Contexto: FinancialAuthContext
  * @path src/integrations/auth/FinancialAuthContext.tsx
  * @description Contexto de autenticação exclusivo para o sbXPAY/Financial Hub.
- * Lê, gerencia e propaga o session_token e user_id utilizando estritamente 
+ * Lê, gerencia e propaga o session_token, user_id e user_profile utilizando estritamente 
  * sessionStorage (Zero localStorage), com preservação de preferência de ambiente 
  * na expiração automática (amnésia) e limpeza total no logout manual.
  */
@@ -13,8 +13,9 @@ import { manualLogout, clearSession, setSessionToken, authHeaders } from "@/serv
 interface FinancialAuthContextType {
   sessionToken: string | null;
   userId: string | null;
+  userProfile: any | null; // 👈 Perfil unificado (/me) propagado em memória
   isLoading: boolean;
-  setSession: (token: string, userId?: string) => void; 
+  setSession: (token: string, userId?: string, profile?: any) => void; 
   logout: (opts?: { purgeEnv?: boolean }) => void;
 }
 
@@ -23,6 +24,7 @@ const FinancialAuthContext = createContext<FinancialAuthContextType | undefined>
 export function FinancialAuthProvider({ children }: { children: React.ReactNode }) {
   const [sessionToken, setSessionTokenState] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<any | null>(null); // 👈 Estado reativo do perfil
   const [isLoading, setIsLoading] = useState(true);
 
   // -----------------------------------------------------------------------
@@ -30,15 +32,21 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   // -----------------------------------------------------------------------
 
   /**
-   * Armazena o token e opcionalmente o ID do usuário utilizando o gerenciador session.ts
+   * Armazena o token, o ID e o perfil unificado do usuário utilizando o gerenciador session.ts
    * e atualiza o estado reativo do contexto.
    */
-  const setSession = (token: string, newUserId?: string) => {
+  const setSession = (token: string, newUserId?: string, profile?: any) => {
     if (typeof window !== 'undefined') {
       setSessionToken(token); // Delega para session.ts (respeita USE_COOKIE e TOKEN_KEY)
+      
       if (newUserId) {
         sessionStorage.setItem("user_id", newUserId);
         setUserId(newUserId);
+      }
+      
+      if (profile) {
+        sessionStorage.setItem("user_profile", JSON.stringify(profile));
+        setUserProfile(profile);
       }
     }
     setSessionTokenState(token);
@@ -54,12 +62,14 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     if (typeof window !== 'undefined') {
       clearSession(); // Utiliza o purgador centralizado do session.ts
       sessionStorage.removeItem("user_id");
+      sessionStorage.removeItem("user_profile");
       sessionStorage.removeItem("session_expires_at");
       sessionStorage.removeItem("time_delta");
     }
 
     setSessionTokenState(null);
     setUserId(null);
+    setUserProfile(null);
   };
 
   /**
@@ -75,10 +85,12 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
         clearSession(); // Limpa apenas tokens, preservando o sbx_env_pref (Expiração/Timeout)
       }
       sessionStorage.removeItem("user_id");
+      sessionStorage.removeItem("user_profile");
     }
 
     setSessionTokenState(null);
     setUserId(null);
+    setUserProfile(null);
   };
 
   // -----------------------------------------------------------------------
@@ -95,20 +107,34 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    // Resgata o token priorizando o sessionStorage da aba ou validando via headers/contexto
     const storedToken = sessionStorage.getItem("session_token");
     const storedUserId = sessionStorage.getItem("user_id");
+    const storedProfile = sessionStorage.getItem("user_profile");
 
+    // CORREÇÃO: Em PROD (USE_COOKIE = true), o token está no Cookie e não no storage.
+    // Portanto, a hidratação do Perfil não pode depender do 'if (storedToken)'.
+    
     if (storedToken) {
       setSessionTokenState(storedToken);
+    }
+    
+    if (storedUserId) {
       setUserId(storedUserId);
+    }
+
+    if (storedProfile) {
+      try {
+        setUserProfile(JSON.parse(storedProfile));
+      } catch (e) {
+        console.error("🚨 [AuthContext] Erro ao parsear user_profile do sessionStorage:", e);
+      }
     }
     
     setIsLoading(false);
   }, []);
 
   return (
-    <FinancialAuthContext.Provider value={{ sessionToken, userId, isLoading, setSession, logout }}>
+    <FinancialAuthContext.Provider value={{ sessionToken, userId, userProfile, isLoading, setSession, logout }}>
       {children}
     </FinancialAuthContext.Provider>
   );

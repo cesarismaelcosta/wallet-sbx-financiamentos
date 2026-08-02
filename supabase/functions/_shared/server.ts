@@ -60,14 +60,12 @@ export const withSecurity = (
     // -----------------------------------------------------------------------
     // [PASSO 2]: Montagem Dinâmica de Políticas CORS e Origem
     // -----------------------------------------------------------------------
-    // Agrupa os headers padrão de infraestrutura com os específicos exigidos pela rota no registry.
     const defaultHeaders = ["authorization", "x-client-info", "apikey", "content-type", "x-session-token"];
     const allAllowedHeaders = [...new Set([...defaultHeaders, ...config.requiredHeaders])].join(", ");
     
     const reqOrigin = req.headers.get("Origin") || req.headers.get("Referer") || "";
     let finalAllowedOrigin = "";
 
-    // Regra especial para 'origin: self' (restringe estritamente às chamadas internas do próprio projeto Supabase)
     if (config.origin === 'self') {
         const projectUrl = Deno.env.get('SUPABASE_URL');
         if (projectUrl) {
@@ -81,7 +79,6 @@ export const withSecurity = (
             }
         }
     } else {
-        // Aplica a allowlist padrão de domínios seguros gerenciada pelo security.ts
         finalAllowedOrigin = getSafeCorsOrigin(reqOrigin);
     }
 
@@ -114,7 +111,7 @@ export const withSecurity = (
     // [PASSO 5]: BLINDAGEM DE PERÍMETRO (Zero-Trust & Autenticação Declarativa)
     // =======================================================================
     let perimeterAuthorized = false;
-    let perimeterErrorMsg = "Unauthorized: Acesso negado.";
+    const perimeterErrorMsg = "Unauthorized: Acesso negado.";
 
     // 5.A. Validação de Segredo Compartilhado (Server-to-Server / Cron / Dispatcher)
     if (config.requiresSecret) {
@@ -122,11 +119,23 @@ export const withSecurity = (
       const expectedSecret = Deno.env.get(config.requiresSecret);
       
       if (expectedSecret && secretHeader) {
-        // Normaliza o header removendo prefixos acidentais como 'Bearer '
         const cleanHeader = secretHeader.replace(/^Bearer\s+/i, "").trim();
         if (cleanHeader === expectedSecret.trim()) {
           perimeterAuthorized = true;
         }
+      }
+    }
+
+    // 5.B. Validação de Sessão de Usuário via validateRequest (com try/catch robusto)
+    if (config.requiresSession && !perimeterAuthorized) {
+      try {
+        const authContext = await validateRequest(req);
+        if (authContext && authContext.session_token) {
+          perimeterAuthorized = true;
+        }
+      } catch (authErr: any) {
+        console.warn(`[Perimeter Auth Warning em ${functionName}]:`, authErr.message);
+        perimeterAuthorized = false;
       }
     }
 
@@ -144,13 +153,11 @@ export const withSecurity = (
     try {
       const result = await handler(req);
 
-      // Retrocompatibilidade Tipo A: Se o handler retornou uma instância nativa de Response
       if (result instanceof Response) {
         Object.entries(corsHeaders).forEach(([k, v]) => result.headers.set(k, v));
         return result;
       }
 
-      // Retrocompatibilidade Tipo B: Objeto padronizado { status, data, error }
       return new Response(
         JSON.stringify(result.data || { error: result.error }), 
         {
@@ -160,9 +167,6 @@ export const withSecurity = (
       );
 
     } catch (err: any) {
-      // -----------------------------------------------------------------------
-      // [PASSO 7]: Fail-Safe Global para Exceções Não Tratadas no Handler
-      // -----------------------------------------------------------------------
       console.error(`[WRAPPER GLOBAL CATCH em ${functionName}]:`, err);
       return new Response(
         JSON.stringify({ 

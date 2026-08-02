@@ -179,41 +179,46 @@ export function CustomLogin() {
 
     try {
       // -----------------------------------------------------------------------
-      // STEP 2: Disparo da requisição para o serviço de autenticação proxy
-      // O ambiente ativo foi resolvido com segurança na montagem ou escolha do usuário.
+      // [STEP 2] DISPARO DO PROXY: Autenticação via Edge Function sbx-auth
+      // O ambiente ativo foi resolvido com segurança na montagem ou escolha.
       // -----------------------------------------------------------------------
       const response = await autenticateWalletsbX(login, password, ambienteAtivo);
-
+      console.log("🚨 O QUE O BACKEND DEVOLVEU:", response);
       if (response?.success) {
-        // ---------------------------------------------------------------------
-        // STEP 3: Atualização do estado global do usuário em memória
-        // O transporte do Token (Cookie ou SessionStorage) já foi resolvido pela auth.ts
-        // O token real vai no primeiro argumento, o userId no segundo
-        // ---------------------------------------------------------------------
-        setSession(response.session_token, response.userId);
+        // 1. NORMALIZAÇÃO BLINDADA (Deep Merge): Puxa de onde estiver disponível,
+        // garantindo que nenhum campo obrigatório do Orquestrador fique de fora.
+        const rawP = response.user_profile || {};
+        const safeProfile = {
+          entity_id: rawP.entity_id || response.entity_id || response.userId || "",
+          entity_type: rawP.entity_type || response.entity_type || "F",
+          name: rawP.name || response.name || "",
+          document: rawP.document || response.document || "",
+          document_rg: rawP.document_rg || response.document_rg || "",
+          email: rawP.email || response.email || "",
+          phone: rawP.phone || response.phone || "",
+          birth_date: rawP.birth_date || response.birth_date || "",
+          gender: rawP.gender || response.gender || "",
+          login: rawP.login || response.login || "",
+          mothers_name: rawP.mothers_name || response.mothers_name || "",
+          address: rawP.address || response.address || null,
+          metadata: rawP.metadata || response.metadata || {}
+        };
 
-        // ---------------------------------------------------------------------
-        // STEP 4: Processamento de Redirecionamento Limpo
-        // Navega para a URL destino sem anexar query params de autenticação
-        // ---------------------------------------------------------------------
-        const redirectUri = search.redirect_uri;
-        if (redirectUri) {
-          const base = redirectUri.startsWith('http') ? '' : window.location.origin;
-          const urlObject = new URL(redirectUri, base || undefined);
-          const finalUri = redirectUri.startsWith('http') 
-            ? urlObject.toString() 
-            : `${urlObject.pathname}${urlObject.search}`;
+        // 2. Salva usando o seu Contexto (que já fala com o session.ts e salva no sessionStorage)
+        setSession(response.session_token, response.userId, safeProfile);
 
-          if (redirectUri.startsWith('http')) {
-            window.location.href = finalUri;
-          } else {
-            navigate({ to: finalUri as any, replace: true });
-          }
-        } else {
-          // Fallback padrão para a raiz do sistema
-          navigate({ to: "/", replace: true });
-        }
+        // 3. Libera o botão
+        setIsLoading(false);
+
+        // 4. NAVEGAÇÃO NATIVA: Dá um reload forçado e limpo para o /sbxpay
+        // Isso impede que o Router carregue a tela com o estado em memória desatualizado
+        const redirectUri = search.redirect_uri || "/sbxpay";
+        window.location.href = redirectUri.startsWith('http') 
+          ? redirectUri 
+          : `${window.location.origin}${redirectUri.startsWith('/') ? '' : '/'}${redirectUri}`;
+          
       } else {
+        // MANTENHA O ELSE AQUI PARA NÃO QUEBRAR O TRATAMENTO DE ERRO!
         setPasswordError(response.message || "Usuário ou senha inválidos.");
         setIsLoading(false);
       }

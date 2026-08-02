@@ -75,9 +75,9 @@ export const autenticateWalletsbX = async (
 
         return { 
           success: true, 
-          // Retorna null em PROD para garantir que a UI não manipule a string da sessão
           session_token: data.session_token || null, 
-          userId: data.user_id                // Identificador público do usuário
+          userId: data.userId,
+          user_profile: data.user_profile
         };
       } else {
         console.error("Proxy validado (200), mas sem token na resposta:", data);
