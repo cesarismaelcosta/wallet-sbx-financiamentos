@@ -130,17 +130,6 @@ export const withSecurity = (
       }
     }
 
-    // 5.B. Validação de Sessão de Usuário (JWT / x-session-token / Bearer de Sessão)
-    // Se a rota exige sessão e o perímetro ainda não foi autorizado pelo segredo acima:
-    if (config.requiresSession && !perimeterAuthorized) {
-      const sessionValidation = await validateRequest(req);
-      if (sessionValidation.success) {
-        perimeterAuthorized = true;
-      } else {
-        perimeterErrorMsg = sessionValidation.error || "Unauthorized: Sessão de usuário inválida ou expirada.";
-      }
-    }
-
     // Se a função exige explicitamente autenticação (por sessão ou segredo) e falhou em ambas:
     if ((config.requiresSession || config.requiresSecret) && !perimeterAuthorized) {
       return new Response(
