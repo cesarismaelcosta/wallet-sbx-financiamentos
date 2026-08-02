@@ -7,7 +7,7 @@
  * @description
  * Documentação técnica aprofundada gerada a partir da inspeção exaustiva 
  * dos arquivos reais do ecossistema (Camada de Serviços, Rotas TanStack, 
- * Contextos de Autenticação, Edge Functions Deno em _shared e Migrações PostgreSQL).
+ * Contextos de Autenticação, Edge Functions Deno em _shared e Arquitetura Stateless).
  * ============================================================================
  */
 
@@ -78,11 +78,11 @@ function SandboxHelpPage() {
         <div className="flex flex-col gap-2 border-b border-slate-200 pb-6">
           <h1 className="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-3">
             <LifeBuoy className="h-8 w-8 text-[#B300FF]" />
-            Manual Técnico & Arquitetura do Ecossistema
+            Manual Técnico & Arquitetura Stateless do Ecossistema
           </h1>
           <p className="text-sm text-muted-foreground max-w-4xl leading-relaxed">
-            Documentação estruturada estritamente com base na auditoria dos arquivos-fonte do projeto. 
-            Abrange o roteamento lazy do TanStack, o ecossistema de serviços, a segurança de borda em Deno (_shared) e o modelo relacional do PostgreSQL.
+            Documentação estruturada com base na auditoria dos arquivos-fonte do projeto. 
+            Abrange o roteamento lazy do TanStack, o ecossistema de serviços, a segurança de borda em Deno (_shared) e o modelo de autenticação puramente Stateless em memória.
           </p>
         </div>
 
@@ -96,7 +96,7 @@ function SandboxHelpPage() {
                 <Layers className="w-4 h-4 mr-2" /> Front-end & Rotas
               </TabsTrigger>
               <TabsTrigger value="services" className="rounded-lg data-[state=active]:bg-slate-100 data-[state=active]:text-[#B300FF] px-4 font-semibold text-xs">
-                <KeyRound className="w-4 h-4 mr-2" /> Serviços & Auth
+                <KeyRound className="w-4 h-4 mr-2" /> Serviços & Auth Stateless
               </TabsTrigger>
               <TabsTrigger value="edge" className="rounded-lg data-[state=active]:bg-slate-100 data-[state=active]:text-[#B300FF] px-4 font-semibold text-xs">
                 <ServerCrash className="w-4 h-4 mr-2" /> Edge Functions (_shared)
@@ -150,51 +150,41 @@ function SandboxHelpPage() {
               </Card>
             </TabsContent>
 
-            {/* ABA: SERVIÇOS & AUTH */}
+            {/* ABA: SERVIÇOS & AUTH STATELESS */}
             <TabsContent value="services" className="space-y-6 animate-in fade-in duration-300">
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
-                  <CardTitle className="text-lg text-slate-800">Controle de Sessão, Tokens SBX e Autenticação Dual</CardTitle>
-                  <CardDescription>Como o sistema gerencia credenciais, o protocolo de Exchange e a Autenticação Híbrida na Borda.</CardDescription>
+                  <CardTitle className="text-lg text-slate-800">Autenticação Stateless e Arquitetura Zero-Database</CardTitle>
+                  <CardDescription>Como o sistema substituiu tabelas de sessão por assinaturas criptográficas em memória.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6 bg-slate-50/30">
                   <HelpAccordion 
                     items={[
                       {
                         q: "Como o ecossistema executa a autenticação e o protocolo de Exchange (sbx-auth-exchange)?",
-                        a: "Para mitigar riscos de exposição do token corporativo da Superbid, a aplicação implementa um fluxo rigoroso de troca de credenciais:",
+                        a: "Para mitigar riscos e eliminar consultas desnecessárias ao banco de dados, o sistema adota um fluxo otimizado de autenticação:",
                         bullets: [
-                          <><b>Autenticação Externa:</b> A função <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">autenticarAccountsSBX</code> executa um POST direto no endpoint OAuth2 da Superbid (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">/account/oauth/token</code>) usando credenciais corporativas e o client_id configurado, obtendo um token bruto (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">access_token_sbx</code>).</>,
-                          <><b>A Ponte de Borda:</b> O token externo bruto é enviado para a Edge Function <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sbx-auth-exchange</code>, que valida a autenticidade junto à sbX.</>,
-                          <><b>Emissão do Token Interno:</b> A borda emite um <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session_token</code> (JWT assinado pelo Supabase) que passa a transitar nas requisições do sistema, garantindo conformidade com as regras de Row Level Security (RLS) sem expor a API primária da Superbid no banco.</>
+                          <><b>Autenticação Externa:</b> A função <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">autenticarAccountsSBX</code> executa um POST direto no endpoint OAuth2 da Superbid (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">/account/oauth/token</code>), obtendo o token bruto (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">access_token_sbx</code>).</>,
+                          <><b>Exchange Stateless:</b> O token bruto é enviado para a Edge Function <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sbx-auth-exchange</code>, que valida o usuário no upstream e retorna um perfil unificado junto a um JWT assinado criptografamente em memória (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session_token</code>).</>,
+                          <><b>Zero Banco de Dados para Sessões:</b> A tabela legada <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session_tokens</code> foi eliminada. Toda a validação de acesso ocorre puramente pela verificação matemática da assinatura do JWT.</>
                         ]
                       },
                       {
-                        q: "Como funciona a Autenticação Híbrida (Content Negotiation) na Borda do Gateway?",
-                        a: "Para garantir resiliência, redundância e transição arquitetural suave, a Edge Function roteadora principal suporta múltiplos formatos de sessão:",
+                        q: "Como funciona a Validação em Memória (Gatekeeper e Auth)?",
+                        a: "Módulos de segurança críticos operam de forma totalmente autônoma:",
                         bullets: [
-                          <><b>JWT Interno (Prioridade):</b> O fluxo padrão e mais seguro. Envia o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session_token</code> gerado no processo de Exchange, protegendo o backend upstream e interagindo nativamente com o banco.</>,
-                          <><b>Fallback sbX Token:</b> A borda (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">financial-gateway-gate</code>) atua como um 'Gatekeeper' inteligente. Ela decodifica se o valor recebido é o token bruto da Superbid e o aceita via fallback, convertendo a sessão <i>on-the-fly</i> e permitindo acesso ininterrupto.</>,
-                          <><b>Sandbox Debugging:</b> O front-end expõe disparos segregados para testes (ex: <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">JWT/fetch</code> vs <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sbX/fetch</code>) permitindo validar em tempo real o Content Negotiation da borda.</>
+                          <><b>Verificação Criptográfica:</b> As funções <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">verifySessionToken</code> (em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">jwt.ts</code>) decodificam a identidade e o ambiente diretamente da assinatura do token.</>,
+                          <><b>Zero Roundtrips:</b> O <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">gatekeeper.ts</code> e o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">auth.ts</code> extraem o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">user_id</code> e o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">environment</code> em frações de milésimos de segundo, sem consultar tabelas relacionais.</>,
+                          <><b>Resiliência e Performance:</b> O modelo stateless blinda a aplicação contra gargalos de I/O no PostgreSQL em rotas de alta frequência.</>
                         ]
                       },
                       {
-                        q: "Como o armazenamento de tokens e o FinancialAuthContext operam no front-end?",
-                        a: "O gerenciamento de estado e persistência de credenciais divide-se em duas camadas:",
+                        q: "Como o FinancialAuthContext e os serviços operam no front-end?",
+                        a: "A gestão de estado local e chamadas de serviço segue o padrão clean architecture:",
                         bullets: [
-                          <><b>Armazenamento Local/Sessão:</b> O token bruto obtido da sbX é salvo em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sessionStorage</code> para isolar o ciclo de vida à aba ativa do operador no Sandbox.</>,
-                          <><b>FinancialAuthContext:</b> Localizado em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">integrations/auth/FinancialAuthContext.tsx</code>, gerencia o token de sessão reativo, propaga estados de login e executa o encerramento seguro com purga de ambiente (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">purgeEnv</code>).</>,
-                          <><b>Instâncias Supabase:</b> Trabalha integrado aos clientes de front, servidor e administração (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">client.admin.ts</code>) com privilégios de service role quando necessário.</>
-                        ]
-                      },
-                      {
-                        q: "Quais são as responsabilidades da pasta 'services/'?",
-                        a: "Isola totalmente a comunicação com APIs externas e microserviços de suporte:",
-                        bullets: [
-                          <><b>offer.ts:</b> Implementa a função <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">fetchOfferDetails</code> para resgatar dados detalhados de lotes na API upstream.</>,
-                          <><b>user.ts:</b> Executa <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">fetchMyProfile</code> para coletar o perfil estruturado do usuário logado.</>,
-                          <><b>session.ts:</b> Gerencia o estado de sessão e a alternância de ambientes entre staging e production.</>,
-                          <><b>auth.ts e systemNotification.ts:</b> Concentram rotinas auxiliares de autenticação e gerenciamento de alertas sistêmicos.</>
+                          <><b>FinancialAuthContext:</b> Localizado em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">integrations/auth/FinancialAuthContext.tsx</code>, gerencia a sessão reativa e propaga o token stateless.</>,
+                          <><b>Armazenamento Seguro:</b> O perfil do usuário e o token bruto são mantidos em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sessionStorage</code> para isolamento adequado da sessão ativa.</>,
+                          <><b>Camada de Serviços:</b> Módulos como <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">offer.ts</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session.ts</code> abstraem a comunicação REST com as Edge Functions.</>
                         ]
                       }
                     ]}
@@ -208,27 +198,27 @@ function SandboxHelpPage() {
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
                   <CardTitle className="text-lg text-slate-800">Edge Functions em Deno e Núcleo Compartilhado (_shared)</CardTitle>
-                  <CardDescription>Arquitetura de microsserviços serverless, CORS global e protocolo de roteamento híbrido.</CardDescription>
+                  <CardDescription>Arquitetura de microsserviços serverless e validação de borda.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6 bg-slate-50/30">
                   <HelpAccordion 
                     items={[
                       {
                         q: "Como o diretório 'supabase/functions/_shared/' padroniza o back-end?",
-                        a: "O código serverless evita duplicação importando utilitários universais do núcleo compartilhado:",
+                        a: "O código serverless utiliza utilitários universais centralizados:",
                         bullets: [
-                          <><b>server.ts:</b> Define e exporta a constante global <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">corsHeaders</code> para atender requisições de origem cruzada.</>,
-                          <><b>gateKeeper.ts e auth.ts:</b> Atuam como middlewares de validação de tokens e segurança de borda.</>,
-                          <><b>logger.ts, crypto.ts, db.ts e security.ts:</b> Fornecem rotinas de logs estruturados, criptografia e interação segura com o banco.</>
+                          <><b>server.ts:</b> Define os cabeçalhos de CORS e o wrapper de segurança <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">withSecurity</code>.</>,
+                          <><b>jwt.ts e auth.ts:</b> Concentram a lógica de emissão (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">generateSessionToken</code>) e validação em memória (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">verifySessionToken</code>).</>,
+                          <><b>gateKeeper.ts, logger.ts e db.ts:</b> Asseguram regras de IDOR, logs estruturados e conexões seguras com o Supabase.</>
                         ]
                       },
                       {
-                        q: "Quais funções de borda e serviços especializados compõem o financial-gateway?",
-                        a: "A pasta 'supabase/functions/financial-gateway/' abriga os microsserviços de integração:",
+                        q: "Como a borda (financial-gateway-gate) processa as requisições de entrada?",
+                        a: "Atua como a porta de entrada frontal unificada do ecossistema:",
                         bullets: [
-                          <><b>financial-gateway-gate:</b> Borda híbrida principal. Atua como um Gatekeeper com <i>Content Negotiation</i>, interceptando tanto JWTs internos (Auth Seguro) quanto Tokens Opacos sbX (Fallback). Gera tokens de visitação curtos e hidrata o SSR antes do redirecionamento de tela.</>,
-                          <><b>financial-gateway-webhook:</b> Recebe callbacks assíncronos de parceiros externos (como a Fandi).</>,
-                          <><b>Serviços específicos:</b> <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">credit-card-service.ts</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">creditas-auto-equity-service.ts</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">fandi-service.ts</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">simulation-handler.ts</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">persist-data.ts</code> gerenciam a normalização de payloads e a gravação transacional.</>
+                          <><b>Recepção do Token Externo:</b> Recebe o token bruto da Superbid enviado pelo front-end ou sistemas externos.</>,
+                          <><b>Validação Upstream & Emissão Stateless:</b> Valida o token no endpoint <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">/account/v2/user/me</code> da Superbid e emite o nosso JWT interno assinado em memória.</>,
+                          <><b>Smart Delivery:</b> Retorna o token via cookie HttpOnly ou corpo JSON (segundo negociação de conteúdo), redirecionando o fluxo com segurança.</>
                         ]
                       }
                     ]}
@@ -242,25 +232,25 @@ function SandboxHelpPage() {
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
                   <CardTitle className="text-lg text-slate-800">Backend-for-Frontend (BFF) e Orchestrator</CardTitle>
-                  <CardDescription>Como a Edge Function 'orchestrator-configs' entrega UIs e regras dinâmicas.</CardDescription>
+                  <CardDescription>Como o motor de orquestração distribui regras e fluxos dinâmicos.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6 bg-slate-50/30">
                   <HelpAccordion 
                     items={[
                       {
                         q: "Qual é a função do motor Orchestrator no projeto?",
-                        a: "Ele desacopla as regras de apresentação do código React, permitindo que o front-end monte interfaces sem dependências de código estático:",
+                        a: "Desacopla as regras de navegação e apresentação do código estático do front-end:",
                         bullets: [
-                          <>A Edge Function <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">orchestrator-configs</code> consulta o banco de dados para buscar parametrizações de rotas.</>,
-                          "Retorna um payload JSON estruturado contendo dados do Offer Panel, FAQs, regras de parcelamento e termos LGPD."
+                          <>A Edge Function <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">orchestrator</code> lê o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">user_id</code> diretamente do token stateless validado em memória (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">auth.user_id</code>).</>,
+                          "Entrega payloads JSON estruturados com configurações de rotas, painéis de propostas, FAQs e termos LGPD."
                         ]
                       },
                       {
                         q: "Como o ecossistema processa webhooks de parceiros externos?",
-                        a: "Através da Edge Function 'financial-gateway-webhook':",
+                        a: "Através de rotas dedicadas como 'financial-gateway-webhook':",
                         bullets: [
-                          <>Expõe endpoints seguros para receber callbacks assíncronos de instituições financeiras (ex: Fandi).</>,
-                          "Atualiza o status e a máquina de estados das propostas diretamente na base de dados de forma automatizada."
+                          <>Processa callbacks assíncronos de instituições financeiras parceiras (ex: Fandi).</>,
+                          "Atualiza o pipeline de propostas na base de dados de forma automatizada e segura."
                         ]
                       }
                     ]}
@@ -284,7 +274,7 @@ function SandboxHelpPage() {
                         a: "Os scripts em 'supabase/migrations/' aplicam restrições de acesso rígidas no banco de dados relacional:",
                         bullets: [
                           <>Todas as tabelas executam explicitamente o comando <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">ENABLE ROW LEVEL SECURITY</code>.</>,
-                          <>As políticas de segurança utilizam funções validadoras como <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">check_user_role()</code> para restringir operações com base na role do usuário autenticado.</>
+                          <>A tabela legada <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session_tokens</code> foi totalmente removida para dar lugar à arquitetura puramente stateless.</>
                         ]
                       },
                       {
@@ -292,12 +282,8 @@ function SandboxHelpPage() {
                         a: "O banco divide o ciclo de vida do cliente em domínios normalizados:",
                         bullets: [
                           <><b>Topo de Funil:</b> As tabelas <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">visits</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">visit_updates</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">visit_entities</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">visit_consents</code> registram UTMs, IPs e interações prévias.</>,
-                          <><b>Esteira de Crédito:</b> A tabela mestre <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">simulations</code> gerencia propostas de financiamento, ligando-se a tabelas satélites de auditoria (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">simulation_updates</code>), consentimentos com snapshot jurídico (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">simulation_consents</code>) e garantias físicas (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">simulation_collateral_vehicle</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">simulation_collateral_home</code>).</>
+                          <><b>Esteira de Crédito:</b> A tabela mestre <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">simulations</code> gerencia propostas de financiamento, ligando-se a tabelas satélites de auditoria e garantias.</>
                         ]
-                      },
-                      {
-                        q: "Como os Triggers automatizam a auditoria temporal?",
-                        a: "Funções de gatilho como 'update_updated_at_column()' e 'handle_updated_at()' são acopladas a triggers BEFORE UPDATE, garantindo a atualização automática da coluna 'updated_at' nas modificações de registros."
                       }
                     ]}
                   />

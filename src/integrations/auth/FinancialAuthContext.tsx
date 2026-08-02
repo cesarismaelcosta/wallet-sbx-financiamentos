@@ -8,7 +8,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { manualLogout, clearSession } from "@/services/session";
+import { manualLogout, clearSession, setSessionToken, authHeaders } from "@/services/session";
 
 interface FinancialAuthContextType {
   sessionToken: string | null;
@@ -21,7 +21,7 @@ interface FinancialAuthContextType {
 const FinancialAuthContext = createContext<FinancialAuthContextType | undefined>(undefined);
 
 export function FinancialAuthProvider({ children }: { children: React.ReactNode }) {
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [sessionToken, setSessionTokenState] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -30,18 +30,18 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   // -----------------------------------------------------------------------
 
   /**
-   * Armazena o token e opcionalmente o ID do usuário no sessionStorage
+   * Armazena o token e opcionalmente o ID do usuário utilizando o gerenciador session.ts
    * e atualiza o estado reativo do contexto.
    */
   const setSession = (token: string, newUserId?: string) => {
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem("session_token", token);
+      setSessionToken(token); // Delega para session.ts (respeita USE_COOKIE e TOKEN_KEY)
       if (newUserId) {
         sessionStorage.setItem("user_id", newUserId);
         setUserId(newUserId);
       }
     }
-    setSessionToken(token);
+    setSessionTokenState(token);
   };
 
   /**
@@ -52,13 +52,13 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     console.warn("🚨 [SECURITY] Sessão expirada. Protocolo de Amnésia ativado.");
     
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem("session_token");
+      clearSession(); // Utiliza o purgador centralizado do session.ts
       sessionStorage.removeItem("user_id");
       sessionStorage.removeItem("session_expires_at");
       sessionStorage.removeItem("time_delta");
     }
 
-    setSessionToken(null);
+    setSessionTokenState(null);
     setUserId(null);
   };
 
@@ -74,9 +74,10 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
       } else {
         clearSession(); // Limpa apenas tokens, preservando o sbx_env_pref (Expiração/Timeout)
       }
+      sessionStorage.removeItem("user_id");
     }
 
-    setSessionToken(null);
+    setSessionTokenState(null);
     setUserId(null);
   };
 
@@ -89,16 +90,17 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
   }, []);
 
   // -----------------------------------------------------------------------
-  // [STATE]: Hidratação Inicial (Mount via SessionStorage)
+  // [STATE]: Hidratação Inicial (Mount via SessionStorage / Gateway)
   // -----------------------------------------------------------------------
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
+    // Resgata o token priorizando o sessionStorage da aba ou validando via headers/contexto
     const storedToken = sessionStorage.getItem("session_token");
     const storedUserId = sessionStorage.getItem("user_id");
 
     if (storedToken) {
-      setSessionToken(storedToken);
+      setSessionTokenState(storedToken);
       setUserId(storedUserId);
     }
     

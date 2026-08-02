@@ -25,7 +25,7 @@ import { fetchMyProfile } from "@/services/user";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway"; // 👈 Serviço de Gateway para chamadas ao Orquestrador
-import { getDefaultSbxEnvironment } from "@/services/session"; // 👈 Resolução segura de ambiente (Zero LocalStorage)
+import { getDefaultSbxEnvironment, USE_COOKIE } from "@/services/session"; // 👈 Resolução segura de ambiente e flag híbrida USE_COOKIE
 
 // =========================================================================
 // CONFIGURAÇÃO DA ROTA (TanStack Router)
@@ -56,7 +56,10 @@ const Spinner = ({ msg }: { msg: string }) => (
 // [COMPONENTE PRINCIPAL]: Layout e Gatekeeper Mestre do Hub
 // =========================================================================
 export function sbXPAYLayOut() {
-  const { sessionToken, isLoading, logout } = useFinancialAuth();
+  const { sessionToken: contextToken, isLoading, logout } = useFinancialAuth();
+  // Resgate preventivo imediato no sessionStorage caso o contexto ainda esteja se hidratando
+  const sessionToken = contextToken || (typeof window !== 'undefined' ? sessionStorage.getItem('session_token') : null);
+
   const navigate = useNavigate();
   const logoutRef = useRef(logout);
 
@@ -77,20 +80,20 @@ export function sbXPAYLayOut() {
   };
 
   // =========================================================================
-  // [GATEKEEPER & REHYDRATION MESTRE]: Validação de Perfil + Visita Automática
+  // [GATEKEEPER & REHYDRATION MESTRE]: Leitura Local + Visita Automática
   // =========================================================================
   useEffect(() => {
     let isMounted = true;
 
-    // Aguarda o contexto de autenticação inicializar antes de decidir qualquer rota
+    // Aguarda o contexto de autenticação inicializar
     if (isLoading) return; 
 
-    // 🔒 CENÁRIO A: Sem credencial ativa -> Despacha imediatamente para o Login
-    if (!sessionToken) {
+    // 🔒 CENÁRIO A: Sem credencial ativa
+    if (!USE_COOKIE && !sessionToken) {
       if (isMounted) setIsVerifying(false); 
       
       const currentPath = typeof window !== "undefined" 
-        ? `${window.location.pathname}` 
+        ? `${window.location.pathname}${window.location.search}` 
         : "/sbxpay";
 
       navigate({ 
@@ -101,32 +104,23 @@ export function sbXPAYLayOut() {
       return;
     }
 
-    // 🚀 CENÁRIO B: Sessão presente -> Inicia o ciclo de validação e rastreio
+    // 🚀 CENÁRIO B: Sessão presente -> Hidrata do Storage e gerencia a Visita
     if (isMounted) setIsVerifying(true); 
-    const controller = new AbortController();
 
-    async function validateSessionAndInitializeVisit() {
+    async function initializeHubSession() {
       try {
-        // 1. Hidrata o perfil do usuário consultando o BFF upstream
-        const profile = await fetchMyProfile({ signal: controller.signal });
-        
-        if (!profile || (profile as any).success === false) {
-          throw { 
-            code: (profile as any)?.code || 'SESSION_EXPIRED', 
-            fallback_url: (profile as any)?.fallback_url 
-          };
+        // 1. Hidrata o perfil direto de onde ele veio: do LOGIN (armazenado no sessionStorage)
+        const storedProfile = sessionStorage.getItem("user_profile");
+        if (!storedProfile) {
+          throw { code: 'SESSION_EXPIRED', fallback_url: '/accounts/signin' };
         }
 
-        const userProfile = profile as BFFUserProfile;
+        const userProfile = JSON.parse(storedProfile) as BFFUserProfile;
 
         if (isMounted) {
           setUserData(userProfile);
 
-          // =========================================================================
-          // [GATEKEEPER DE VISITA CENTRALIZADO]: 
-          // Verifica se o visit_id já está presente na URL atual. Caso contrário,
-          // inicializa a visita de forma transparente no carregamento do layout.
-          // =========================================================================
+          // 2. Gatekeeper de Visita: Se a URL ainda não tem visit_id, chama o Orquestrador
           const searchParams = new URLSearchParams(window.location.search);
           if (!searchParams.get('visit_id')) {
             try {
@@ -136,7 +130,7 @@ export function sbXPAYLayOut() {
                 environment: getDefaultSbxEnvironment(),
                 target_url: window.location.pathname,
                 origin_url: currentHref,
-                entity: userProfile, // Injeta o perfil recém-hidratado diretamente
+                entity: userProfile, // Usa o perfil que já veio do login
                 interaction_context: {
                   origin_url: currentHref,
                   utm_source: "sbxpay_direct",
@@ -147,8 +141,6 @@ export function sbXPAYLayOut() {
 
               const visitResponse = await callOrchestrator(visitPayload, "POST");
               
-              // Se o orquestrador retornar a URL com o visit_id, atualizamos a barra 
-              // de endereços silenciosamente via history.replaceState (Evita Hard Reload)
               if (visitResponse?.visit_id && visitResponse?.url) {
                 window.history.replaceState({}, '', visitResponse.url);
               }
@@ -157,31 +149,23 @@ export function sbXPAYLayOut() {
             }
           }
 
-          // Libera o carregamento do shell principal
+          // Libera o shell principal instantaneamente
           setIsVerifying(false);
         }
       } catch (err: any) {
-        if (err.name !== 'AbortError' && isMounted) {
-          console.error("🔒 [Gatekeeper] Falha na validação do perfil ou sessão expirada:", err);
-          
-          // Limpa os dados da sessão corrompida
+        if (isMounted) {
+          console.error("🔒 [Gatekeeper] Sessão inválida ou perfil ausente no storage:", err);
           performLogout(); 
-
-          // Redireciona respeitando estritamente o fallback_url fornecido pelo backend
           const currentPath = typeof window !== "undefined" ? window.location.pathname : "/sbxpay";
-          const fallback = err?.fallback_url || `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
-          
-          window.location.href = fallback;
+          window.location.href = err?.fallback_url || `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
         }
       }
     }
 
-    validateSessionAndInitializeVisit();
+    initializeHubSession();
 
-    // Função de limpeza para evitar memory leaks caso o componente seja desmontado
     return () => { 
       isMounted = false; 
-      controller.abort(); 
     }; 
   }, [isLoading, sessionToken, navigate]);
 
@@ -189,8 +173,16 @@ export function sbXPAYLayOut() {
   // [RENDERIZAÇÃO DE ESTADOS VISUAIS]
   // =========================================================================
 
-  // Exibe o spinner nativo enquanto o perfil é validado e a visita inicial é aberta
-  if (isLoading || isVerifying) {
+  // Exibe o spinner nativo enquanto o contexto de auth carrega
+  if (isLoading) {
+    return <Spinner msg="Validando seus dados e preparando o ambiente Wallet sbX..." />;
+  }
+
+  // Fail-safe em DEV caso não haja sessionToken (confia no cookie HttpOnly em PROD)
+  if (!USE_COOKIE && !sessionToken) return null;
+
+  // Exibe o spinner enquanto o perfil e a visita são validados
+  if (isVerifying) {
     return <Spinner msg="Validando seus dados e preparando o ambiente Wallet sbX..." />;
   }
 

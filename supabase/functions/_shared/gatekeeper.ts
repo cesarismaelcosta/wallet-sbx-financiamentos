@@ -3,14 +3,18 @@
  * @path supabase/functions/_shared/gatekeeper.ts
  *
  * =========================================================================
- * GATEKEEPER DE SEGURANÇA (Zero-Trust Authorization & DDD)
+ * GATEKEEPER DE SEGURANÇA (Zero-Trust Authorization & Stateless DDD)
  * =========================================================================
- * Centraliza a validação de acesso a recursos e a comunicação Upstream.
- * Funções 100% autônomas: recebem o payload e resolvem suas próprias queries.
+ * Centraliza a validação de acesso a recursos e a integridade de jornada.
+ * Opera 100% em memória validando o token Stateless via `verifySessionToken`.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @version 5.0.0 (Migração para Validação Stateless em Memória - Sem Dependência de Banco)
  */
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { debugLog } from "./logger.ts";
+import { verifySessionToken } from "./jwt.ts";
 
 // =========================================================================
 // 1. GATEKEEPER DE JORNADA: VISITA + OFERTA
@@ -18,10 +22,10 @@ import { debugLog } from "./logger.ts";
 
 /**
  * @function validateVisitAndOfferIntegrity
- * @description Funde a Validação Triangular de Visita e o Gatekeeper Upstream.
- *              1. Busca o token 1 única vez (pega user_id e sbx_access_token).
- *              2. Valida IDOR da Visita e Vínculo da Oferta (se houver).
- *              3. Bate na API da Superbid e retorna a Oferta formatada.
+ * @description Funde a Validação Triangular de Visita e o Gatekeeper de Sessão Stateless.
+ *               1. Valida o token JWT em memória via verifySessionToken (extraindo user_id e environment).
+ *               2. Valida IDOR da Visita e Vínculo da Oferta (se houver).
+ *               3. Bate na API da Superbid usando o ambiente seguro e retorna a Oferta formatada.
  * 
  * @param {SupabaseClient} supabase - Cliente do Supabase com Service Role.
  * @param {Object} auth - Objeto contendo { session_token }.
@@ -38,19 +42,29 @@ export async function validateVisitAndOfferIntegrity(
   const targetEntityId = payload.entity_id;
   const targetOfferId = payload.offer_id;
 
-  // 1. Busca Unificada de Sessão (User ID + Token Upstream)
-  const now = new Date().toISOString();
-  const { data: session, error: sessError } = await supabase
-    .from('session_tokens')
-    .select('user_id, sbx_access_token, environment')
-    .eq('session_token', auth.session_token)
-    .gt('expires_at', now)
-    .single();
+  // =====================================================================
+  // FASE 1: VALIDAÇÃO STATELSS DA SESSÃO EM MEMÓRIA
+  // =====================================================================
+  if (!auth?.session_token) {
+    throw new Error("UNAUTHORIZED: Token de sessão ausente.");
+  }
 
-  if (sessError || !session?.user_id) throw new Error("UNAUTHORIZED");
-  const sessionUserId = session.user_id;
+  const validationResult = await verifySessionToken(auth.session_token);
+  if (!validationResult.valid || !validationResult.data) {
+    debugLog(`[Gatekeeper Auth Fail]: ${validationResult.errorMessage}`);
+    throw new Error("SESSION_EXPIRED: Token de sessão inválido ou expirado.");
+  }
 
-  // 2. Validação da Visita e Vínculo com a Oferta (Ownership/IDOR)
+  const sessionUserId = validationResult.data.userId;
+  const env = validationResult.environment || "production";
+
+  if (!sessionUserId) {
+    throw new Error("UNAUTHORIZED: ID do usuário não localizado no token.");
+  }
+
+  // =====================================================================
+  // FASE 2: VALIDAÇÃO DA VISITA E VÍNCULO COM A OFERTA (Ownership/IDOR)
+  // =====================================================================
   if (visitId) {
     debugLog(`[Gatekeeper] Validando Visita (${visitId}) e Vínculos no DB...`);
     
@@ -92,17 +106,14 @@ export async function validateVisitAndOfferIntegrity(
     }
   }
 
-  // 3. Validação Upstream da Oferta (Superbid)
+  // =====================================================================
+  // FASE 3: VALIDAÇÃO UPSTREAM DA OFERTA (Superbid)
+  // =====================================================================
   if (!targetOfferId) {
     debugLog(`[Gatekeeper] Nenhuma oferta fornecida. Pulando Upstream.`);
     return null;
   }
 
-  if (!session.sbx_access_token) {
-    throw new Error("SESSION_EXPIRED: Token SBX inválido ou ausente.");
-  }
-
-  const env = session.environment || "staging";
   const offerBaseUrl = env === "production" 
     ? "https://offer-query.superbid.net" 
     : "https://offer-query.stage.superbid.net";
@@ -123,10 +134,11 @@ export async function validateVisitAndOfferIntegrity(
 
   const apiUrl = `${offerBaseUrl}/offers/?${params.toString()}`;
 
+  // Nota: Como o token JWT stateless contém apenas a identidade interna, 
+  // as requisições puramente públicas de catálogo de oferta usam cabeçalhos de contrato padrão.
   const response = await fetch(apiUrl, {
     method: "GET",
     headers: { 
-      "Authorization": `Bearer ${session.sbx_access_token}`, 
       "Accept": "application/json",
       "Content-Type": "application/json",
       "Origin": "https://www.superbid.net",
@@ -199,9 +211,9 @@ export async function validateVisitAndOfferIntegrity(
 /**
  * @function validateSimulationIntegrity
  * @description Gatekeeper Financeiro (Autônomo). 
- *              Garante que a simulação manipulada no payload pertence à jornada.
- *              - Cenário A (Simulação Nova): Cruza payload contra a Visita (visits).
- *              - Cenário B (Reuso): Cruza payload contra a Simulação (simulations_offers).
+ *               Garante que a simulação manipulada no payload pertence à jornada.
+ *               - Cenário A (Simulação Nova): Cruza payload contra a Visita (visits).
+ *               - Cenário B (Reuso): Cruza payload contra a Simulação (simulations_offers).
  * 
  * @param {SupabaseClient} supabase - Cliente do Supabase (Service Role).
  * @param {string} visitId - ID obrigatório da visita atual.
@@ -275,4 +287,3 @@ export async function validateSimulationIntegrity(
     }
   }
 }
-
