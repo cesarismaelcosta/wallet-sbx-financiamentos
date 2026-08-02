@@ -1,27 +1,18 @@
 /**
- * @fileoverview Edge Function: SBX-OFFER (Offer Details BFF - Stateless)
- * @path supabase/functions/sbx-offer/index.ts
+ * @fileoverview Edge Function: SBX-OFFER-ANON (Anonymous Offer BFF)
  *
  * ============================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * ============================================================================
- * BFF responsável por obter os detalhes completos de uma oferta e leilão no ecossistema Superbid.
+ * Rota PÚBLICA (Anônima) para consulta de ofertas e eventos na Superbid.
+ * Não exige JWT ou validação de sessão, tirando proveito da natureza aberta 
+ * do catálogo upstream para montar a tela de detalhes do produto.
  * 
- * [MUDANÇAS CRÍTICAS DA ARQUITETURA STATELESS]:
- * 1. Segurança de Borda: Exige obrigatoriamente o nosso JWT interno via `validateRequest`.
- * 2. Imunidade a Cross-Environment: O ambiente (`staging` | `production`) é extraído 
- *    diretamente do payload criptografado do JWT. Ninguém pode adulterar a rota via Query String.
- * 3. Catálogo Público Upstream: Como a Superbid permite leitura pública de ofertas, a função 
- *    realiza o proxy de forma anônima e limpa, eliminando a dependência de tokens opacos no banco.
- *
- * @author César Ismael Pereira da Costa
- * @version 4.0.0 (Stateless & Environment Sealed)
+ * @module sbx-offer-anon
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { validateRequest } from "../_shared/auth.ts";
 import { withSecurity } from "../_shared/server.ts";
-import { Vehicle } from "../_shared/types.ts";
 import { debugLog } from "../_shared/logger.ts";
 
 const OFFER_BASE_URLS = {
@@ -34,49 +25,24 @@ const EVENT_BASE_URLS = {
   staging: "https://event-query.stage.superbid.net"
 };
 
-serve(withSecurity('sbx-offer', async (req: Request) => {
-  
-  // =========================================================================
-  // FASE 1: GATEKEEPER DE BORDA (Validação Stateless do JWT)
-  // =========================================================================
-  let auth;
-  try {
-    auth = await validateRequest(req);
-  } catch (err: any) {
-    const authUrl = req.headers.get("x-auth-fallback-url") || "/accounts/signin";
-    debugLog(`[sbx-offer] Falha de autenticação na borda: ${err.message}`);
-    return {
-      status: 401,
-      data: { 
-        success: false, 
-        code: "UNAUTHORIZED", 
-        message: "Sessão inválida ou expirada. Por favor, faça login novamente.", 
-        fallback_url: authUrl 
-      }
-    };
-  }
-
-  // =========================================================================
-  // FASE 2: LÓGICA DE NEGÓCIO E PROXY UPSTREAM
-  // =========================================================================
+serve(withSecurity('sbx-offer-anon', async (req: Request) => {
   try {
     const reqUrl = new URL(req.url);
     const offerId = reqUrl.searchParams.get("offer_id");
+    const env = reqUrl.searchParams.get("environment") || "staging";
 
     if (!offerId) {
       throw Object.assign(new Error("ID da oferta não informado."), { errorCode: "MISSING_OFFER_ID" });
     }
 
-    // O ambiente é lido estritamente do token lacrado, impedindo adulteração externa
-    const env = auth.environment || "staging";
-    const offerBaseUrl = OFFER_BASE_URLS[env] || OFFER_BASE_URLS.staging;
-    const eventBaseUrl = EVENT_BASE_URLS[env] || EVENT_BASE_URLS.staging;
+    const offerBaseUrl = OFFER_BASE_URLS[env as keyof typeof OFFER_BASE_URLS] || OFFER_BASE_URLS.staging;
+    const eventBaseUrl = EVENT_BASE_URLS[env as keyof typeof EVENT_BASE_URLS] || EVENT_BASE_URLS.staging;
 
     const upstreamUrl = `${offerBaseUrl}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${offerId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
 
-    debugLog(`[sbx-offer] Buscando oferta ID: ${offerId} no ambiente seguro: ${env}`);
+    debugLog(`[sbx-offer-anon] Buscando oferta ID: ${offerId} no ambiente: ${env}`);
 
-    // Requisição limpa e pública para a Superbid (Sem necessidade de Bearer Token do usuário)
+    // Requisição ANÔNIMA (sem Header de Authorization) para o catálogo público
     const response = await fetch(upstreamUrl, {
       method: "GET",
       headers: { 
@@ -98,9 +64,7 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
       throw Object.assign(new Error(`Oferta não encontrada (Lote: ${offerId}).`), { errorCode: "OFFER_NOT_FOUND" });
     }
 
-    // -----------------------------------------------------------------------
-    // STEP 2.1: BUSCA COMPLEMENTAR DE EVENTO / LEILÃO
-    // -----------------------------------------------------------------------
+    // 2. Busca Complementar do Evento (também anônima)
     let eventData: any = {};
     const auctionId = rawOffer.auction?.id;
     if (auctionId) {
@@ -115,17 +79,14 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
       });
 
       if (eventResponse.ok) {
-        const eventJson = await eventResponse.json();
-        eventData = eventJson.events?.[0] || {};
+        eventData = (await eventResponse.json()).events?.[0] || {};
       }
     }
 
-    // -----------------------------------------------------------------------
-    // STEP 2.2: EXTRAÇÃO DE METADADOS DE VEÍCULO (Se aplicável)
-    // -----------------------------------------------------------------------
+    // 3. Extração de Veículos (Se aplicável)
     const productTypeId = rawOffer.product?.productType?.id;
     const isVehicleCategory = [10, 11].includes(productTypeId);
-    let vehicleData: Vehicle | undefined;
+    let vehicleData = undefined;
 
     if (isVehicleCategory) {
       const groups = rawOffer.product?.template?.groups || [];
@@ -139,12 +100,11 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
       };
     }
 
-    // =========================================================================
-    // FASE 3: MONTAGEM DO CONTRATO DE RESPOSTA BFF
-    // =========================================================================
+    // 4. Retorno do Contrato BFF
     return {
       status: 200,
       data: {
+        success: true,
         offer: {
           offer_id: String(rawOffer.id),
           lot_number: rawOffer.lotNumber || 1,
@@ -199,14 +159,10 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
     };
 
   } catch (err: any) {
-    debugLog(`[sbx-offer] Falha operacional: ${err.message}`);
+    debugLog(`[sbx-offer-anon] Falha: ${err.message}`);
     return {
-      status: err.errorCode === "OFFER_NOT_FOUND" ? 404 : 500,
-      data: { 
-        success: false, 
-        code: err.errorCode || "UNKNOWN_ERROR", 
-        message: err.message || "Erro interno no processamento da oferta." 
-      }
+      status: err.errorCode === "OFFER_NOT_FOUND" ? 404 : 400,
+      data: { success: false, code: err.errorCode || "UNKNOWN_ERROR", message: err.message }
     };
   }
 }));
