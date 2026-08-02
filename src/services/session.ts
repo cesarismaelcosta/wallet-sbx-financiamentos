@@ -182,3 +182,12 @@ export const hasSbxEnvironmentPreference = (): boolean => {
   if (typeof window === "undefined") return false; // Proteção contra SSR
   return !!sessionStorage.getItem("sbx_env_pref");
 };
+
+/**
+ * Recupera o desvio de relógio (Clock Drift) armazenado de forma segura.
+ * @returns {number} O delta em milissegundos.
+ */
+export function getTimeDelta(): number {
+  if (typeof window === 'undefined') return 0;
+  return parseInt(sessionStorage.getItem('time_delta') || '0', 10);
+}

@@ -944,7 +944,6 @@ function SandboxPage() {
    * -------------------------------------------------------------------------
    */
   const handleSimulateOfferForm = (flowKey: string, offerId: string, productId: string, isDisabled?: boolean, forceToken?: 'jwt' | 'sbx') => {
-    console.log("🚨 CLIQUE RECEBIDO NA FUNÇÃO DO FORM!", { flowKey, forceToken });
     
     if (isDisabled) return;
 

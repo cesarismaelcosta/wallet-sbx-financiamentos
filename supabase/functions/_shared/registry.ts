@@ -62,10 +62,6 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
     methods: ['POST'], 
     requiredHeaders: [] 
   },
-  'sbx-loader': { 
-    methods: ['POST'], 
-    requiredHeaders: [] 
-  },
   'sbx-user': { 
     methods: ['GET'], // Alterado para bater com o padrão de leitura de perfil
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 

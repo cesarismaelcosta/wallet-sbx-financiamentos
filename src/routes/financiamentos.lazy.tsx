@@ -28,7 +28,7 @@ import { useProductConsult } from "@/features/financial-hub/core/contexts/Financ
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
 import { jwtDecode } from "jwt-decode"; 
-import { USE_COOKIE } from "@/services/session"; // Importação vital para a inteligência híbrida
+import { USE_COOKIE, getTimeDelta } from "@/services/session"; // Importação vital para a inteligência híbrida
 
 const FinanciamentosGuard = () => {
   // [ARQUITETURA]: sessionToken do contexto global
@@ -64,7 +64,7 @@ const FinanciamentosGuard = () => {
         const decoded = jwtDecode<{ exp?: number }>(sessionToken);
         
         // Resgata o desvio do relógio salvo no momento do login
-        const timeDelta = parseInt(localStorage.getItem('time_delta') || '0', 10);
+        const timeDelta = getTimeDelta();
         
         // Hora da máquina + diferença = Hora Real sincronizada com o Servidor
         const syncedCurrentTimeInSeconds = Math.floor((Date.now() + timeDelta) / 1000);

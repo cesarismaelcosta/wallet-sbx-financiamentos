@@ -7,6 +7,7 @@
  * - Ponto de entrada único para chamadas à API.
  * - Centraliza autenticação (Bearer) e headers.
  * - [GEMINI PRO]: Tratamento enriquecido de erros e montagem dinâmica de query params.
+ * - [SECURITY E2]: Eliminação rigorosa de dependência do localStorage (Zero LocalStorage policy).
  */
 
 import { authHeaders, fetchOptions } from "@/services/session";
@@ -32,24 +33,11 @@ function sanitizePayloadForLogs(data: any): any {
 }
 
 /**
- * Função auxiliar para capturar o JWT do usuário ativo.
- * No futuro poderá ser usado cookies ou outro mecanismo de armazenamento seguro.
- * @returns {string} O token de sessão do usuário, ou string vazia se não encontrado.
- */
-function getSessionToken(): string {
-  // Busca especificamente a chave 'session_token' que está no seu Local Storage
-  const sessionToken = localStorage.getItem("session_token");
-  
-  if (sessionToken) return sessionToken;
-
-  return "";
-}
-
-/**
  * callOrchestrator
  * Executa uma chamada HTTP para a Edge Function ou intercepta via Mock.
  * * @param payload - O corpo da requisição contendo o product_id.
  * @param method - 'GET' ou 'POST'.
+ * @param passedSessionToken - Mantido na assinatura para retrocompatibilidade, mas a injeção real ocorre via authHeaders().
  * @returns Promise com os dados da resposta (JSON).
  */
 export async function callOrchestrator(
@@ -76,10 +64,6 @@ export async function callOrchestrator(
   // Execução padrão via Edge Function (Orchestrator fixo)
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orchestrator`;
 
-  // Se `passedSessionToken` veio (do loader), usa ele.
-  // 2. Se não, chama a função getSessionToken() (que busca no localStorage)
-  const sessionToken = passedSessionToken || getSessionToken();
-
   // Monta a rota de login exata que você quer
   const currentPath = window.location.pathname + window.location.search;
   const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
@@ -92,7 +76,7 @@ export async function callOrchestrator(
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       "x-original-url": currentPath,
       "x-auth-fallback-url": loginFallbackUrl,
-      ...authHeaders(), // ✅ Em dev, puxa do sessionStorage. Em prod, retorna vazio (deixa pro Cookie)
+      ...authHeaders(), // ✅ Injeção segura e centralizada: puxa do sessionStorage (DEV) ou confia no Cookie (PROD)
     },
   };
 
@@ -157,9 +141,6 @@ export async function callSimulation(
   const method = "POST";
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-gateway`;
 
-  // CAPTURA DO TOKEN PARA A TRAVA DE SEGURANÇA
-  const sessionToken = getSessionToken();
-
   // Monta a rota de login para fallback
   const currentPath = window.location.pathname + window.location.search;
   const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
@@ -172,7 +153,7 @@ export async function callSimulation(
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       "x-original-url": currentPath,
       "x-auth-fallback-url": loginFallbackUrl,
-      ...authHeaders(), // ✅ Em dev, puxa do sessionStorage. Em prod, retorna vazio (deixa pro Cookie) 
+      ...authHeaders(), // ✅ Injeção segura e centralizada: puxa do sessionStorage (DEV) ou confia no Cookie (PROD)
     },
     body: JSON.stringify({
       ...payload,

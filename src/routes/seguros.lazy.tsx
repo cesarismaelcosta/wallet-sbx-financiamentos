@@ -15,7 +15,7 @@ import { FinancialHubLayout } from "@/features/financial-hub/components/layout/F
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
 import { jwtDecode } from "jwt-decode"; 
-import { USE_COOKIE } from "@/services/session"; // Importação vital para a inteligência híbrida
+import { USE_COOKIE, getTimeDelta } from "@/services/session"; // Importação vital para a inteligência híbrida
 
 /**
  * SegurosGuard
@@ -53,7 +53,7 @@ const SegurosGuard = () => {
     if (sessionToken) {
       try {
         const decoded = jwtDecode<{ exp?: number }>(sessionToken);
-        const timeDelta = parseInt(localStorage.getItem('time_delta') || '0', 10);
+        const timeDelta = getTimeDelta();
         
         // Sincroniza a hora local do usuário com o relógio do servidor
         const syncedCurrentTimeInSeconds = Math.floor((Date.now() + timeDelta) / 1000);
