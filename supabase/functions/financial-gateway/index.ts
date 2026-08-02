@@ -39,6 +39,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
     // 1. SEGURANÇA BÁSICA: VALIDAÇÃO DE IDENTIDADE E TOKEN
     // =========================================================================
     let auth;
+    
     try {
         auth = await validateRequest(req);
     } catch (err: any) {
