@@ -8,8 +8,6 @@ export type FunctionConfig = {
   methods: string[];
   requiredHeaders: string[];
   origin?: string;
-  requiresSession?: boolean; // Exige x-session-token / JWT de usuário válido
-  requiresSecret?: string;   // Nome da variável de ambiente com o segredo server-to-server
 };
 
 export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
