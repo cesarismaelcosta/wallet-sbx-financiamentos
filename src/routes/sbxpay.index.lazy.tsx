@@ -9,45 +9,64 @@
  */
 
 import React, { useState, useEffect, useContext } from 'react';
-import { createLazyFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Loader2, LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Building, UserPlus, AppWindow, Users, ShieldCheck, Lock, Plus } from 'lucide-react';
+import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
+import { Loader2, LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Building, UserPlus, AppWindow, Plus } from 'lucide-react';
 import { WalletLogo } from "@/components/brand/WalletLogo";
-import { Button } from "@/components/ui/button";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { getDefaultSbxEnvironment } from "@/services/session"; // 👈 Resolução segura de ambiente (Zero LocalStorage)
+import { getDefaultSbxEnvironment } from "@/services/session"; 
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
-import { UserDataContext } from "@/routes/sbxpay.lazy"; // 👈 Contexto pai importado para disponibilizar o userData hidratado
+import { UserDataContext } from "@/routes/sbxpay.lazy"; 
 
 export const Route = createLazyFileRoute('/sbxpay/')({
     component: sbXPAYHome,
 });
 
 // =========================================================================
-// [CONFIGURAÇÃO]: Mapeamento Centralizado de Jornadas e Produtos
+// [CONFIGURAÇÃO]: Tipagem e Mapeamento Centralizado de Jornadas e Produtos
 // =========================================================================
-const flowsConfig = {
+type ShowcaseConfig = {
+    isDirect?: false;
+    route: string;
+    flowKey: string;
+    disabled: boolean;
+};
+
+type DirectConfig = {
+    isDirect: true;
+    productId: string;
+    disabled: boolean;
+};
+
+type FlowConfig = ShowcaseConfig | DirectConfig;
+
+const flowsConfig: Record<string, FlowConfig> = {
     // --- [FLUXOS DE VITRINE]: Passam por /sbxpay/offer para carregar prateleiras ---
     cartao: { 
+        isDirect: false,
         route: "/sbxpay/offer", 
         flowKey: "Cartão", 
         disabled: false 
     },
     carros: { 
+        isDirect: false,
         route: "/sbxpay/offer", 
         flowKey: "Carros", 
         disabled: false 
     },
     caminhoes: { 
+        isDirect: false,
         route: "/sbxpay/offer", 
         flowKey: "Caminhões", 
         disabled: false 
     },
     imoveis: { 
+        isDirect: false,
         route: "/sbxpay/offer", 
         flowKey: "Imóveis", 
         disabled: true 
     },
     floorPlan: { 
+        isDirect: false,
         route: "/sbxpay/offer", 
         flowKey: "Vendedor", 
         disabled: true 
@@ -56,22 +75,22 @@ const flowsConfig = {
     // --- [FLUXOS DIRETOS]: Executam chamada direta ao orquestrador (Sem rotas intermediárias) ---
     equityCarro: { 
         isDirect: true, 
-        productId: "7", // Produto: Car Equity
+        productId: "7", 
         disabled: false 
     },
     equityImovel: { 
         isDirect: true, 
-        productId: "6", // Produto: Home Equity
+        productId: "6", 
         disabled: true 
     },
     seguroResidencial: { 
         isDirect: true, 
-        productId: "10", // Produto: Seguro Residencial
+        productId: "10", 
         disabled: true 
     },
     seguroAuto: { 
         isDirect: true, 
-        productId: "9", // Produto: Seguro Auto
+        productId: "9", 
         disabled: false 
     },
 };
@@ -82,13 +101,12 @@ const flowsConfig = {
 export function sbXPAYHome() {
     const navigate = useNavigate();
     const { sessionToken, logout } = useFinancialAuth();
-    const { userData } = useContext(UserDataContext) || {}; // 👈 Consumo seguro do perfil BFF provido pelo Layout Pai
+    const { userData } = useContext(UserDataContext) || {}; 
     
     const [isScrolled, setIsScrolled] = useState(false);
     const [loading, setLoading] = useState(false);
     const [activeKey, setActiveKey] = useState<string | null>(null);
 
-    // Efeito para monitorar o scroll da página e aplicar efeito de glassmorphism no header
     useEffect(() => {
         const handleScroll = () => setIsScrolled(window.scrollY > 20);
         window.addEventListener('scroll', handleScroll);
@@ -102,7 +120,6 @@ export function sbXPAYHome() {
         setLoading(true);
         setActiveKey(configKey); 
 
-        // Pequeno respiro visual para acionamento do loader do card
         await new Promise(resolve => setTimeout(resolve, 200));
 
         const config = flowsConfig[configKey];
@@ -115,25 +132,22 @@ export function sbXPAYHome() {
         }
 
         try {
-            // 🚀 [PONTO 1]: Se o fluxo for direto, chamamos o orquestrador diretamente 
-            // via callOrchestrator usando action: "CONSULT" e o productId mapeado.
-            if ('isDirect' in config && config.isDirect) {
+            if (config.isDirect) {
                 const currentHref = window.location.href;
                 const ambiente = getDefaultSbxEnvironment();
                 const currentSessionToken = sessionToken || sessionStorage.getItem('session_token') || "";
                 
-                // Resgata o visit_id já gerado pelo Layout Pai na URL atual (se existir)
                 const urlParams = new URLSearchParams(window.location.search);
                 const existingVisitId = urlParams.get('visit_id');
 
                 const payload = {
-                    action: "CONSULT", // Ação padrão exigida pelo orquestrador para processamento de produtos diretos
+                    action: "CONSULT",
                     environment: ambiente,
                     product_id: config.productId,
                     auth_token: currentSessionToken,
                     origin_url: currentHref,
-                    ...(existingVisitId && { visit_id: existingVisitId }), // Preserva o vínculo com a visita ativa do hub
-                    ...(userData && { entity: userData }), // Injeta o perfil hidratado do usuário via BFF
+                    ...(existingVisitId && { visit_id: existingVisitId }),
+                    ...(userData && { entity: userData }),
                     interaction_context: {
                         origin_url: currentHref,
                         utm_source: "sbxpay_direct",
@@ -144,7 +158,6 @@ export function sbXPAYHome() {
 
                 const response = await callOrchestrator(payload, "POST");
 
-                // O orquestrador retorna a URL final de redirecionamento interno
                 if (response?.url) {
                     window.location.href = response.url;
                     return;
@@ -153,7 +166,7 @@ export function sbXPAYHome() {
                 }
             }
 
-            // --- [FLUXOS DE VITRINE]: Mantêm a navegação padrão para prateleiras de oferta ---
+            // --- [FLUXOS DE VITRINE] ---
             await navigate({ 
                 to: config.route, 
                 search: { 
@@ -167,8 +180,7 @@ export function sbXPAYHome() {
             setLoading(false);
             setActiveKey(null);
         } finally {
-            // Se for fluxo de vitrine limpa o loading; no fluxo direto o redirecionamento limpa a tela
-            if (!('isDirect' in config && config.isDirect)) {
+            if (!config.isDirect) {
                 setLoading(false); 
             }
         }
@@ -180,7 +192,7 @@ export function sbXPAYHome() {
         label: string, 
         Icon: React.ElementType, 
         configKey: keyof typeof flowsConfig, 
-        isSingle: boolean = false
+        _isSingle: boolean = false
     ) => {
         const config = flowsConfig[configKey];
         const isCurrentLoading = loading && activeKey === configKey;
@@ -285,7 +297,6 @@ export function sbXPAYHome() {
                             <div className="border-t border-gray-100 pt-5 space-y-4 text-left max-w-xl mx-auto lg:mx-0">
                                 <h3 className="text-xs font-bold text-purple-600 uppercase tracking-wider">Conta sbXPAY: Prática e Segura</h3>
                                 
-                                {/* Item 1 */}
                                 <div className="flex items-start space-x-3">
                                     <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
                                         <Plus className="w-4 h-4 text-purple-500" strokeWidth={3} />
@@ -296,7 +307,6 @@ export function sbXPAYHome() {
                                     </div>
                                 </div>
                                 
-                                {/* Item 2 */}
                                 <div className="flex items-start space-x-3">
                                     <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
                                         <Plus className="w-4 h-4 text-purple-500" strokeWidth={3} />
@@ -341,7 +351,6 @@ export function sbXPAYHome() {
                     <div className="flex flex-col lg:flex-row-reverse items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
                             <div className="inline-flex items-center space-x-2 bg-purple-100/80 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <i className="fa-solid fa-credit-card"></i>
                                 <span>Até R$ 120 mil</span>
                             </div>
                             <div className="space-y-3">
@@ -392,7 +401,6 @@ export function sbXPAYHome() {
                     <div className="flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
                             <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <i className="fa-solid fa-truck-pickup"></i>
                                 <span>PROCESSO DIGITAL COM APOIO DE ESPECIALISTAS</span>
                             </div>
                             <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Financie seu veículo em até 60x.</h2>
@@ -440,7 +448,6 @@ export function sbXPAYHome() {
                     <div className="flex flex-col lg:flex-row-reverse items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
                             <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <i className="fa-solid fa-house-chimney"></i>
                                 <span>INVISTA PAGANDO EM ATÉ 240x</span>
                             </div>
                             <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Financie seu imóvel em até 240x.</h2>
@@ -469,7 +476,6 @@ export function sbXPAYHome() {
                     <div className="flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
                             <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <i className="fa-solid fa-money-bill-trend-up"></i>
                                 <span>TAXAS DIFERENCIADAS PARA VOCÊ INVESTIR</span>
                             </div>
                             <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Transforme ativos em investimento.</h2>
@@ -499,13 +505,12 @@ export function sbXPAYHome() {
                     <div className="flex flex-col lg:flex-row-reverse items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
                             <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <i className="fa-solid fa-store"></i>
                                 <span>Lojistas AutoArremate</span>
                             </div>
                             <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Floor Plan com prazo de 90 dias.</h2>
                             <p className="text-sm md:text-base text-slate-600 leading-relaxed">Você é lojista? Aproveite nossa linha de crédito exclusiva para a compra de veículos na nossa plataforma com pagamento em até 90 dias.</p>
                             <div className="pt-2">
-                                {renderButton("Conheça as condições", () => <TrendingUp className="w-5 h-5 rotate-90" strokeWidth={1.5} />, "floorPlan", true)}
+                                {renderButton("Conheça as condições", Building, "floorPlan", true)}
                             </div>
                         </div>
                         <div className="w-full lg:w-5/12 flex justify-center mt-8 lg:mt-0 relative">
@@ -528,7 +533,6 @@ export function sbXPAYHome() {
                     <div className="flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
                             <div className="inline-flex items-center space-x-2 bg-purple-100/80 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <i className="fa-solid fa-shield-heart"></i>
                                 <span>SEGURE SEU VEÍCULO OU SUA RESIDÊNCIA</span>
                             </div>
                             <div className="space-y-3">
@@ -582,10 +586,10 @@ export function sbXPAYHome() {
 
             {/* OVERLAY DE LOADING DOS BOTÕES DE JORNADA */}
             {loading && (
-                <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm font-['Plus_Jakarta_Sans']">
+                <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/85 backdrop-blur-sm font-sans">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
                     <p className="text-slate-600 font-medium text-sm">
-                    Processando...
+                        Processando...
                     </p>
                 </div>      
             )}
@@ -603,7 +607,7 @@ export function sbXPAYHome() {
                 </a>
 
                 {sessionToken ? (
-                    <button onClick={logout} className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[70px] gap-1">
+                    <button onClick={() => logout()} className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[70px] gap-1">
                         <LogOut className="w-6 h-6" strokeWidth={1.5} />
                         <span className="text-[10px] font-medium">Sair</span>
                     </button>

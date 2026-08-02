@@ -1,20 +1,17 @@
 /**
  * @fileoverview Componente: OfferDetailsNewSBXPAY (Rota: /sbxpay/consultasbx)
- * * =========================================================================
+ * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * =========================================================================
  * Página de sbXPAY isolada para integração do Motor de Ofertas.
- * Execução sequencial estrita: Autenticação -> Perfil (BFF) -> Oferta.
- * * [RESPONSABILIDADES DA REFATORAÇÃO (COERÊNCIA DE CONTRATO)]:
- * 1. Higienização de Estado: Desestruturação explícita do 'sessionToken' do contexto.
- * 2. Segurança de Tipagem: Eliminação do fallback inseguro 'auth.accesssessionToken'.
- * 3. Ciclo de Vida Reativo: Blindagem do useEffect para reagir apenas à sessão oficial.
+ * Execução sequencial estrita: Autenticação -> Perfil (SessionStorage) -> Oferta.
  */
 
-import { useState, useEffect, useMemo, useContext } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createLazyFileRoute, useSearch } from "@tanstack/react-router";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { fetchMyProfile, type BFFUserProfile } from "@/services/user";
+import { getStoredUserProfile } from "@/services/session";
+import type { BFFUserProfile } from "@/services/types";
 import { fetchOfferDetails } from "@/services/offer";
 import { Offer, Manager, Event, Seller } from "@/features/financial-hub/components/shared/types";
 
@@ -39,28 +36,22 @@ interface OfferDataPayload {
 // [COMPONENTE PRINCIPAL]
 // =========================================================================
 export function OfferDetailsNewSBXPAY() {
-  // 1. [SECURITY CORE]: Extração Desestruturada de Identidade
-  // Ao invés de importar o objeto 'auth' inteiro e usar condicionais (auth.sessionToken || auth.accesssessionToken),
-  // forçamos o contrato da interface. O 'sessionToken' extraído aqui é, arquiteturalmente,
-  // o 'session_sessionToken' (JWT interno assinado pela nossa Edge Function).
   const { sessionToken } = useFinancialAuth();
   const [fotoAtiva, setFotoAtiva] = useState(0);
   const navigate = Route.useNavigate();
-  // Pegue o search de forma bruta, sem precisar de validateSearch
   const search = useSearch({ strict: false });
   const offerParam = (search as any).offer as string | undefined;
   const DEFAULT_OFFER = "4755461";
 
-  // Define o ID de forma estática, sem forçar navegação
   const offerId = offerParam || DEFAULT_OFFER;
 
-  // 1. FORÇAR URL: Se não houver offer, redireciona para a mesma rota com o ID padrão
+  // Força URL com o ID padrão se não houver oferta informada
   useEffect(() => {
     if (!offerParam) {
       navigate({
         to: "/sbxpay/consultasbx",
         search: { offer: DEFAULT_OFFER },
-        replace: true, // Importante: não polui o histórico
+        replace: true,
       });
     }
   }, [offerParam, navigate]);
@@ -74,15 +65,10 @@ export function OfferDetailsNewSBXPAY() {
   const [error, setError] = useState<string | null>(null);
 
   // =========================================================================
-  // [EFFECTS]: Ciclo de Vida e Chamadas de Rede (BFF)
+  // [EFFECTS]: Ciclo de Vida e Hidratação de Dados
   // =========================================================================
   useEffect(() => {
-    // Função assíncrona encapsulada para evitar vazamento de memória e
-    // manter a sincronia limpa com a array de dependências do React.
     const loadData = async () => {
-      // 2. [GUARD CLAUSE]: Prevenção de chamadas anônimas
-      // Se não há JWT assinado, aborta a renderização de dados imediatamente.
-      // Isso protege as APIs upstream contra requisições malformadas (401).
       if (!sessionToken) {
         setError("Usuário não autenticado.");
         setLoading(false);
@@ -92,25 +78,22 @@ export function OfferDetailsNewSBXPAY() {
       setLoading(true);
 
       try {
-        // 3. [ORQUESTRAÇÃO SEQUENCIAL]
-        // Passo A: Identificação do usuário
-        const user = await fetchMyProfile(sessionToken);
-        setUserData(user);
+        // Passo A: Identificação do usuário via storage local seguro da sessão
+        const profile = getStoredUserProfile() as BFFUserProfile | null;
+        setUserData(profile);
 
         // Passo B: Resgate dos metadados da oferta e vendedor
         const offer = await fetchOfferDetails(offerId);
         setOfferData(offer);
       } catch (err: any) {
-        // [ERROR HANDLING]: Captura unificada para exibir na UI
         setError(err.message || "Erro ao carregar os dados.");
       } finally {
-        // [UI RELEASE]: Libera a tela independentemente de sucesso ou falha
         setLoading(false);
       }
     };
 
     loadData();
-  }, [sessionToken]); // O efeito reage EXCLUSIVAMENTE a mudanças no JWT assinado.
+  }, [sessionToken, offerId]);
 
   // =========================================================================
   // Imagens da oferta
@@ -134,18 +117,16 @@ export function OfferDetailsNewSBXPAY() {
   // =========================================================================
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      {/* ALERTA DE ERRO DE SISTEMA/REDE */}
       {error && <div className="bg-red-50 p-4 mb-6 text-red-700 rounded border border-red-200 font-bold">{error}</div>}
 
       <div className="space-y-6">
-        {/* 1. SESSÃO: DETALHES DA OFERTA (Agora no topo - Cor: #B300FF) */}
+        {/* 1. DETALHES DA OFERTA */}
         <section className="bg-white p-6 rounded shadow border-l-4 border-[#B300FF]">
           <h2 className="text-xs font-black uppercase text-[#B300FF] mb-2">Oferta Relacionada</h2>
           {offerData ? (
             <div className="text-sm">
               <p className="font-bold mb-4">{offerData.offer.offer_description}</p>
 
-              {/* Quadro das Fotos (Integrado) */}
               {imagens.length > 0 && (
                 <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-4">
                   <img src={imagens[fotoAtiva]} className="w-full h-full object-contain" alt="Ativo" />
@@ -173,7 +154,7 @@ export function OfferDetailsNewSBXPAY() {
           )}
         </section>
 
-        {/* 2. SESSÃO: PERFIL DO USUÁRIO (Abaixo da oferta) */}
+        {/* 2. PERFIL DO USUÁRIO */}
         <section className="bg-white p-6 rounded shadow border-l-4 border-[#B300FF]">
           <h2 className="text-xs font-black uppercase text-[#B300FF] mb-2">Perfil Completo</h2>
           {userData ? (
@@ -181,7 +162,7 @@ export function OfferDetailsNewSBXPAY() {
               {JSON.stringify(userData, null, 2)}
             </pre>
           ) : (
-            <p className="text-gray-400 italic">Carregando...</p>
+            <p className="text-gray-400 italic">Nenhum perfil de sessão encontrado.</p>
           )}
         </section>
       </div>

@@ -10,7 +10,7 @@
  * 3. Sincronia: Calcula e persiste o Clock Drift para validação local de sessão.
  */
 
-import { setSessionToken, setSessionMetadata } from "@/services/session";
+import { setSessionToken, setSessionMetadata, USE_COOKIE } from "@/services/session";
 
 // =========================================================================
 // FUNÇÃO: autenticateWalletsbX

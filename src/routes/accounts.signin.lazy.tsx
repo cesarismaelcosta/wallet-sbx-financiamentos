@@ -184,41 +184,39 @@ export function CustomLogin() {
       // -----------------------------------------------------------------------
       const response = await autenticateWalletsbX(login, password, ambienteAtivo);
       console.log("🚨 O QUE O BACKEND DEVOLVEU:", response);
+      
       if (response?.success) {
-        // 1. NORMALIZAÇÃO BLINDADA (Deep Merge): Puxa de onde estiver disponível,
-        // garantindo que nenhum campo obrigatório do Orquestrador fique de fora.
+        // 1. EXTRAÇÃO ROBUSTA: Mapeia estritamente do user_profile retornado pela Edge Function
         const rawP = response.user_profile || {};
         const safeProfile = {
-          entity_id: rawP.entity_id || response.entity_id || response.userId || "",
-          entity_type: rawP.entity_type || response.entity_type || "F",
-          name: rawP.name || response.name || "",
-          document: rawP.document || response.document || "",
-          document_rg: rawP.document_rg || response.document_rg || "",
-          email: rawP.email || response.email || "",
-          phone: rawP.phone || response.phone || "",
-          birth_date: rawP.birth_date || response.birth_date || "",
-          gender: rawP.gender || response.gender || "",
-          login: rawP.login || response.login || "",
-          mothers_name: rawP.mothers_name || response.mothers_name || "",
-          address: rawP.address || response.address || null,
-          metadata: rawP.metadata || response.metadata || {}
+          entity_id: rawP.entity_id || response.userId || "",
+          entity_type: rawP.entity_type || "F",
+          name: rawP.name || "",
+          document: rawP.document || "",
+          document_rg: rawP.document_rg || "",
+          email: rawP.email || "",
+          phone: rawP.phone || "",
+          birth_date: rawP.birth_date || "",
+          gender: rawP.gender || "",
+          login: rawP.login || "",
+          mothers_name: rawP.mothers_name || "",
+          address: rawP.address || null,
+          metadata: rawP.metadata || {}
         };
 
-        // 2. Salva usando o seu Contexto (que já fala com o session.ts e salva no sessionStorage)
+        // 2. Salva usando o seu Contexto (que fala com o session.ts e salva no sessionStorage)
         setSession(response.session_token, response.userId, safeProfile);
 
         // 3. Libera o botão
         setIsLoading(false);
 
         // 4. NAVEGAÇÃO NATIVA: Dá um reload forçado e limpo para o /sbxpay
-        // Isso impede que o Router carregue a tela com o estado em memória desatualizado
         const redirectUri = search.redirect_uri || "/sbxpay";
         window.location.href = redirectUri.startsWith('http') 
           ? redirectUri 
           : `${window.location.origin}${redirectUri.startsWith('/') ? '' : '/'}${redirectUri}`;
           
       } else {
-        // MANTENHA O ELSE AQUI PARA NÃO QUEBRAR O TRATAMENTO DE ERRO!
         setPasswordError(response.message || "Usuário ou senha inválidos.");
         setIsLoading(false);
       }
@@ -248,13 +246,7 @@ export function CustomLogin() {
           </span>
         </div>
 
-        {/* 
-          SELETOR DE AMBIENTE
-          - Sem fade, sem min-height fixo.
-          - Enquanto !mounted, nada é renderizado (SSR/1º paint = neutro).
-          - Após mount, se `showEnvSelector` for true, aparece INSTANTANEAMENTE
-            no seu tamanho natural. Se false, não ocupa espaço algum.
-        */}
+        {/* SELETOR DE AMBIENTE */}
         {mounted && showEnvSelector && (
           <div className="mb-4">
             <p className="text-[11px] uppercase font-bold text-gray-500 mb-2 text-center tracking-wide">
