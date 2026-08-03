@@ -111,15 +111,18 @@ serve(withSecurity('notification-system-message', async (req: Request) => {
       .eq('is_active', true);
 
     if (recipientError) {
-      debugLog("[WARNING]: Falha ao buscar destinatários. Usando fallback de segurança.");
+      debugLog(`[WARNING]: Falha ao buscar destinatários na tabela: ${recipientError.message}`);
+      throw new Error(`Falha ao carregar destinatários de alerta: ${recipientError.message}`);
     }
 
-    // Caso a tabela esteja vazia ou haja erro de banco, mapeamos o hardcode como Failsafe.
+    // Regra estrita: Se não houver nenhum e-mail ativo cadastrado, encerra de forma limpa
+    if (!recipients || recipients.length === 0) {
+      debugLog("[DISPARO ALERTA ABORTADO]: Nenhum destinatário ativo encontrado na tabela notification_alert_recipients.");
+      return { status: 200, data: { status: "ignored", reason: "no_active_recipients" } };
+    }
+
     // Transforma o array de objetos em um Array flat de strings e concatena com ponto e vírgula (;).
-    const emailListArray = (recipients && recipients.length > 0) 
-        ? recipients.map(r => r.email) 
-        : ['cesarismaelcosta@gmail.com']; 
-    
+    const emailListArray = recipients.map(r => r.email);
     const finalRecipients = emailListArray.join(';');
 
     debugLog(`[DISPARO ALERTA]: Destinatários definidos -> ${finalRecipients}`);
