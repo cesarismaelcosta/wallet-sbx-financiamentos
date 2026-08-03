@@ -80,7 +80,7 @@ export const withSecurity = (
     // -----------------------------------------------------------------------
     // [PASSO 2]: Montagem Dinâmica de Políticas CORS e Origem
     // -----------------------------------------------------------------------
-    const defaultHeaders = ["authorization", "x-client-info", "apikey", "content-type", "x-session-token"];
+    const defaultHeaders = ["authorization", "x-client-info", "apikey", "content-type", "x-session-token", "x-access-token"];
     const allAllowedHeaders = [...new Set([...defaultHeaders, ...config.requiredHeaders])].join(", ");
     
     const reqOrigin = req.headers.get("Origin") || req.headers.get("Referer") || "";

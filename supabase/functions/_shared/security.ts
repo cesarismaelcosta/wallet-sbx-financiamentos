@@ -38,7 +38,6 @@ const ALLOWED_DOMAIN_SUFFIXES = [
   // Ecossistema Corporativo Superbid / sbX
   "superbid.net",
   "s4bdigital.net",
-  "fandi.com.br"
 ];
 
 /**
