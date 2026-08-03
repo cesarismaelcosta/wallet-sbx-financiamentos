@@ -117,13 +117,13 @@ const allFiles = import.meta.glob("/src/assets/sbxpay/**/*.{jpg,jpeg,png,gif}", 
 const formatarCaminho = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "").toLowerCase();
 
 // =========================================================================
-// CONFIGURAÇÃO DA ROTA (TanStack Router Wrapper)
+// CONFIGURAÇÃO DA ROTA (TanStack Router Wrapper Blindado)
 // =========================================================================
 function OfferDetailsSBXPage() {
-  const search = Route.useSearch() as any;
-  const flow = search.flow; 
+  // Lê diretamente da URL do navegador de forma síncrona e infalível
+  const params = new URLSearchParams(window.location.search);
+  const flow = params.get("flow"); 
 
-  // Validação preventiva caso o parâmetro de query '?flow=' não seja informado na URL
   if (!flow) {
     console.warn("🚨 [ROUTER]: O parâmetro '?flow=' não chegou na URL!");
     return (

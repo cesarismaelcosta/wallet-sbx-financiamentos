@@ -3,9 +3,11 @@
  * @path src/routes/sbxpay/index.tsx
  * @description Ponto de entrada principal do ambiente de homologação e testes do Financial Hub (sbxpay).
  * Gerencia a listagem de jornadas de produtos e o roteamento inteligente:
- * 1. Fluxos de Vitrine: Navegam para /sbxpay/offer carregando as prateleiras.
- * 2. Fluxos Diretos (Ponto 1): Acionam o `callOrchestrator` diretamente com `action: "CONSULT"` 
+ * 1. Fluxos de Vitrine: Acionam o `callOrchestrator` com `action: "VISIT"` e `target_url` para blindar a telemetria antes de ir para `/sbxpay/offer`.
+ * 2. Fluxos Diretos: Acionam o `callOrchestrator` diretamente com `action: "CONSULT"` 
  *    e o `productId` correspondente, sem passar por rotas intermediárias.
+ * 
+ * @author Gemini Pro
  */
 
 import React, { useState, useEffect, useContext } from 'react';
@@ -40,7 +42,7 @@ type DirectConfig = {
 type FlowConfig = ShowcaseConfig | DirectConfig;
 
 const flowsConfig: Record<string, FlowConfig> = {
-    // --- [FLUXOS DE VITRINE]: Passam por /sbxpay/offer para carregar prateleiras ---
+    // --- [FLUXOS DE VITRINE]: Passam por /sbxpay/offer para carregar prateleiras via VISIT ---
     cartao: { 
         isDirect: false,
         route: "/sbxpay/offer", 
@@ -114,7 +116,7 @@ export function sbXPAYHome() {
     }, []);
 
     // =========================================================================
-    // [HANDLERS]: Lógica Inteligente de Roteamento (Ponto 1: Chamada Direta)
+    // [HANDLERS]: Lógica Inteligente de Roteamento Bilateral
     // =========================================================================
     const handleProductClick = async (configKey: keyof typeof flowsConfig) => {
         setLoading(true);
@@ -132,20 +134,17 @@ export function sbXPAYHome() {
         }
 
         try {
-            if (config.isDirect) {
-                const currentHref = window.location.href;
-                const ambiente = getDefaultSbxEnvironment();
-                
-                // -------------------------------------------------------------------
-                // [SECURITY GATE]: Resgate encapsulado do token de sessão ativo.
-                // Substitui a chamada direta ao sessionStorage.getItem por uma 
-                // função segura com proteção contra SSR e centralização de chaves.
-                // -------------------------------------------------------------------
-                const currentSessionToken = sessionToken || getTokenForPayload() || "";
-                
-                const urlParams = new URLSearchParams(window.location.search);
-                const existingVisitId = urlParams.get('visit_id');
+            const currentHref = window.location.href;
+            const ambiente = getDefaultSbxEnvironment();
+            const currentSessionToken = sessionToken || getTokenForPayload() || "";
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const existingVisitId = urlParams.get('visit_id');
 
+            // -------------------------------------------------------------------
+            // [FLUXOS DIRETOS]: Executam CONSULT e redirecionam com a URL retornada
+            // -------------------------------------------------------------------
+            if (config.isDirect) {
                 const payload = {
                     action: "CONSULT",
                     environment: ambiente,
@@ -172,17 +171,43 @@ export function sbXPAYHome() {
                 }
             }
 
-            // --- [FLUXOS DE VITRINE] ---
-            await navigate({ 
-                to: config.route, 
-                search: { 
-                    flow: config.flowKey,
-                    return_uri: window.location.pathname 
-                } as any 
-            });
+            // -------------------------------------------------------------------
+            // [FLUXOS DE VITRINE]: Registram a visita (VISIT) no Gateway antes da navegação
+            // -------------------------------------------------------------------
+            const targetDestinationUrl = config.route; 
+            const visitPayload = {
+                action: "VISIT",
+                environment: ambiente,
+                target_url: targetDestinationUrl,
+                origin_url: currentHref,
+                auth_token: currentSessionToken,
+                ...(existingVisitId && { visit_id: existingVisitId }),
+                ...(userData && { entity: userData }),
+                interaction_context: {
+                    origin_url: currentHref,
+                    utm_source: "sbxpay_direct",
+                    utm_medium: "referral",
+                    utm_campaign: `flow_${configKey.toLowerCase()}`
+                }
+            };
+
+            const visitResponse = await callOrchestrator(visitPayload, "POST");
+
+            if (visitResponse?.url) {
+                // Realiza o merge seguro garantindo que o flow e o return_uri caminhem juntos com a nova visita
+                const targetUrlObj = new URL(visitResponse.url, window.location.origin);
+                
+                targetUrlObj.searchParams.set('flow', config.flowKey);
+                targetUrlObj.searchParams.set('return_uri', window.location.pathname);
+
+                window.location.href = targetUrlObj.toString();
+                return;
+            } else {
+                throw new Error("URL de visita ausente na resposta do orquestrador.");
+            }
 
         } catch (error) {
-            console.error("🚨 [HANDLE_PRODUCT_CLICK] Erro na chamada direta ao orquestrador:", error);
+            console.error("🚨 [HANDLE_PRODUCT_CLICK] Erro no roteamento:", error);
             setLoading(false);
             setActiveKey(null);
         } finally {

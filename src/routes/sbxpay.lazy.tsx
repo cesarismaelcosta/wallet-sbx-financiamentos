@@ -132,7 +132,7 @@ export function sbXPAYLayOut() {
                 environment: getDefaultSbxEnvironment(),
                 target_url: window.location.pathname,
                 origin_url: currentHref,
-                entity: userProfile, // Usa o perfil hidratado sem requisições extras
+                entity: userProfile,
                 interaction_context: {
                   origin_url: currentHref,
                   utm_source: "sbxpay_direct",
@@ -144,7 +144,19 @@ export function sbXPAYLayOut() {
               const visitResponse = await callOrchestrator(visitPayload, "POST");
               
               if (visitResponse?.visit_id && visitResponse?.url) {
-                window.history.replaceState({}, '', visitResponse.url);
+                // ✅ CORREÇÃO BLINDADA: Extrai os parâmetros que já estavam na URL (ex: flow=Cartão)
+                // e os funde com os novos parâmetros devolvidos pelo orquestrador (visit_id, visit_update_id)
+                const originalParams = new URLSearchParams(window.location.search);
+                const responseUrlObj = new URL(visitResponse.url, window.location.origin);
+                
+                // Injeta os parâmetros de visita da resposta do orquestrador
+                responseUrlObj.searchParams.forEach((val, key) => {
+                  originalParams.set(key, val);
+                });
+
+                // Aplica o replaceState mantendo o flow E a visita juntos na URL
+                const finalCleanUrl = `${responseUrlObj.pathname}?${originalParams.toString()}`;
+                window.history.replaceState({}, '', finalCleanUrl);
               }
             } catch (visitErr) {
               console.error("🚨 [Gatekeeper] Falha não bloqueante ao inicializar visita automática:", visitErr);

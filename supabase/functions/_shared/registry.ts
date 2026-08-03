@@ -78,7 +78,6 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   'manage-backoffice-users': { 
     methods: ['POST'], 
     requiredHeaders: [],
-    origin: 'self'
   },
   'login-history': { 
     methods: ['POST'], 
