@@ -24,7 +24,7 @@ import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway"; // 👈 Serviço de Gateway para chamadas ao Orquestrador
-import { getDefaultSbxEnvironment, USE_COOKIE } from "@/services/session"; // 👈 Resolução segura de ambiente e flag híbrida USE_COOKIE
+import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload } from "@/services/session"; // 👈 Resolução segura de ambiente, flag híbrida e encapsulamento de token
 
 // =========================================================================
 // CONFIGURAÇÃO DA ROTA (TanStack Router)
@@ -57,8 +57,8 @@ const Spinner = ({ msg }: { msg: string }) => (
 export function sbXPAYLayOut() {
   const { sessionToken: contextToken, userProfile: contextProfile, isLoading, logout } = useFinancialAuth();
   
-  // Resgate preventivo imediato no sessionStorage caso o contexto ainda esteja se hidratando
-  const sessionToken = contextToken || (typeof window !== 'undefined' ? sessionStorage.getItem('session_token') : null);
+  // Resgate preventivo imediato utilizando o helper centralizado do session.ts
+  const sessionToken = contextToken || getTokenForPayload();
 
   const navigate = useNavigate();
   const logoutRef = useRef(logout);

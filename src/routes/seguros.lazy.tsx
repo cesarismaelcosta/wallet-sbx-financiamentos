@@ -15,7 +15,8 @@ import { FinancialHubLayout } from "@/features/financial-hub/components/layout/F
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
 import { jwtDecode } from "jwt-decode"; 
-import { USE_COOKIE, getTimeDelta } from "@/services/session"; // Importação vital para a inteligência híbrida
+// 👇 CORREÇÃO: import do getTimeDelta adicionado aqui!
+import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session";  
 
 /**
  * SegurosGuard
@@ -26,8 +27,8 @@ const SegurosGuard = () => {
   // [ARQUITETURA]: sessionToken do contexto global
   const { sessionToken: contextToken, isLoading } = useFinancialAuth();
   
-  // 🔑 Resgata o token injetado pelo HTML Interceptor da Borda no sessionStorage
-  const sessionToken = contextToken || (typeof window !== 'undefined' ? sessionStorage.getItem('session_token') : null);
+  // 🔑 [SECURITY GATE]: Resgate encapsulado e seguro utilizando getTokenForPayload com proteção contra SSR
+  const sessionToken = contextToken || getTokenForPayload();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,8 +38,6 @@ const SegurosGuard = () => {
     if (isLoading) return;
 
     // 1. [BUSINESS LOGIC]: Bloqueio proativo de acesso não autenticado (Somente em DEV).
-    // Se USE_COOKIE for true (Prod), o token não estará no JS. Confiamos que o backend (gateway)
-    // devolverá 401 se o cookie for inválido, e o próprio interceptor fará o redirect.
     if (!USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
       navigate({ 
         to: '/accounts/signin',
@@ -48,8 +47,6 @@ const SegurosGuard = () => {
     }
 
     // 2. [SECURITY]: Validação Passiva de Expiração (UX Guard)
-    // Se o JS tiver acesso ao token (DEV/Lovable), realiza a validação de Clock Drift.
-    // Em Produção, essa validação será feita exclusivamente na Borda (Edge Function).
     if (sessionToken) {
       try {
         const decoded = jwtDecode<{ exp?: number }>(sessionToken);
@@ -64,7 +61,8 @@ const SegurosGuard = () => {
           return;
         }
       } catch (error) {
-        console.warn("⚠️ [UX Guard - Seguros] sessionToken malformado. Expulsando por segurança.");
+        // 👇 CORREÇÃO: Catch honesto que mostra o erro real se quebrar, em vez de culpar o token
+        console.error("⚠️ [UX Guard - Seguros] Erro crítico na validação (não é necessariamente o token):", error);
         window.dispatchEvent(new CustomEvent('session_expired'));
         return;
       }
@@ -84,8 +82,6 @@ const SegurosGuard = () => {
   }
 
   // [COMPLIANCE]: Fail-safe de renderização (Apenas em DEV).
-  // Em PROD (USE_COOKIE = true), permitimos renderizar o <Outlet /> para que a chamada
-  // fetch ao gateway dispare enviando o cookie e descubra a real situação da sessão.
   if (!USE_COOKIE && !sessionToken) return null;
 
   return (

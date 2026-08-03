@@ -7,7 +7,7 @@
  * - Ponto de entrada único para chamadas à API.
  * - Centraliza autenticação (Bearer) e headers.
  * - [GEMINI PRO]: Tratamento enriquecido de erros e montagem dinâmica de query params.
- * - [SECURITY E2]: Eliminação rigorosa de dependência do localStorage (Zero LocalStorage policy).
+ * - [SECURITY E2]: Eliminação rigorosa de dependência de leitura externa direta (Zero LocalStorage policy).
  */
 
 import { authHeaders, fetchOptions } from "@/services/session";
@@ -49,14 +49,6 @@ export async function callOrchestrator(
   if (method !== "GET" && method !== "POST") {
     console.error("[DEBUG] Gateway chamado com método inválido:", method);
     console.trace("[DEBUG] Stack Trace de quem chamou:");
-  }
-
-  // BLINDAGEM: Se o ID estiver faltando, busca no storage antes de sair do navegador
-  if (!payload.visit_update_id) {
-    const storedUpdateId = sessionStorage.getItem("sbx_last_update_id");
-    if (storedUpdateId) {
-      payload.visit_update_id = storedUpdateId;
-    }
   }
 
   const productId = String(payload.product_id);

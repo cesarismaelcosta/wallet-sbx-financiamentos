@@ -751,13 +751,17 @@ function SandboxPage() {
 
     if (method === "fetch") {
       try {
+        // Desestrutura o auth_token para fora do body
+        const { auth_token, ...bodyPayload } = payload; 
+        
         const res = await fetch(gatewayUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Accept: "application/json",
+            "Accept": "application/json",
+            "x-access-token": String(auth_token), // 👈 HEADER AQUI
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(bodyPayload), // 👈 BODY SEM O TOKEN
         });
 
         const data = await res.json();
@@ -980,17 +984,16 @@ function SandboxPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json",
+          "Accept": "application/json",
+          "x-access-token": tokenToUse, // 👈 HEADER AQUI
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          auth_token: tokenToUse,
-          offer_id: String(offerId),
-          product_id: String(productId || ""),
+          target_url: "/sbxpay",
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
           utm_medium: "referral",
-          utm_campaign: `flow_${flowKey.toLowerCase()}_ajax`,
+          utm_campaign: "flow_sbxpay_ajax",
         }),
       });
 
@@ -1123,11 +1126,11 @@ function SandboxPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json",
+          "Accept": "application/json",
+          "x-access-token": tokenToUse, // 👈 HEADER AQUI
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          auth_token: tokenToUse,
           target_url: "/sbxpay",
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
@@ -1260,11 +1263,12 @@ function SandboxPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json",
+          "Accept": "application/json",
+          "x-access-token": tokenToUse, // 👈 HEADER AQUI
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          auth_token: tokenToUse,
+          // auth_token removido daqui
           product_id: String(productId),
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",

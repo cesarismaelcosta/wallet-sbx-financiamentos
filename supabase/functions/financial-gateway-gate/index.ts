@@ -108,16 +108,22 @@ serve(
     } = payload;
 
     // =====================================================================
-    // [STEP 2] RESOLUÇÃO DE CREDENCIAL: Payload (auth_token) vs Cookie HttpOnly
+    // [STEP 2] RESOLUÇÃO DE CREDENCIAL SBX (Header Custom > Payload)
     // =====================================================================
-    let inputToken = auth_token;
+    let inputToken = "";
 
-    if (!inputToken) {
-      const cookieHeader = req.headers.get("cookie") || "";
-      const cookieMatch = cookieHeader.match(/session_token=([^;]+)/);
-      if (cookieMatch) {
-        inputToken = cookieMatch[1];
-      }
+    // 1. Prioridade Máxima: Header Customizado
+    inputToken = req.headers.get("x-access-token") || "";
+
+    // 2. Fallback: Payload Body (Exclusivo para <form method="POST"> do Sandbox/Sistemas Externos)
+    if (!inputToken && payload?.auth_token) {
+      inputToken = String(payload.auth_token).trim();
+    }
+
+    // 🔒 [SECURITY PATCH]: Purga o token do payload IMEDIATAMENTE após a extração
+    // Impede o vazamento da credencial e a passagem indevida para o Orquestrador
+    if (payload?.auth_token) {
+      delete payload.auth_token;
     }
 
     if (!inputToken) {
@@ -125,7 +131,7 @@ serve(
         isAjax,
         400,
         "BAD_REQUEST",
-        "Credencial (auth_token) ausente no payload e nos cookies.",
+        "Credencial de acesso SBX ausente (Headers e Payload vazios).",
         return_uri,
         req,
         payload,

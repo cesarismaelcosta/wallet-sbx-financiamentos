@@ -11,8 +11,8 @@
  * [RESPONSABILIDADES DA REFATORAÇÃO (BFF & Edge Gateway)]
  * 1. Interface: Renderização fiel do layout original (tabelas, carrossel, banners).
  * 2. Visualização (BFF): Busca os dados da oferta apenas para exibição local na tela.
- * 3. Delegação Segura: Submete via AJAX (fetch) para a Edge Function 
- *    (financial-gateway-gate), delegando a orquestração e autenticação à Borda.
+ * 3. Delegação Segura: Submete via callOrchestrator para o endpoint central,
+ *    delegando a orquestração e autenticação à Borda/Gateway.
  */
 
 import { useState, useMemo, useEffect, useContext } from "react";
@@ -24,7 +24,8 @@ import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { UserDataContext } from "./sbxpay.lazy";
 import { fetchOfferDetails } from "@/services/offer";
 import { logSystemError } from "@/services/systemNotification";
-import { getDefaultSbxEnvironment, setSessionToken, getTokenForPayload } from "@/services/session";
+import { getDefaultSbxEnvironment, clearSession } from "@/services/session";
+import { callOrchestrator } from "@/features/financial-hub/core/services/gateway"; // 👈 [GATEWAY]: Importa a função centralizada de orquestração
 
 // =========================================================================
 // [FORMATTERS & UTILS]: Utilitários de Apresentação e Validação de Segurança
@@ -275,83 +276,56 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
   if (!requestedFlow) return null;
 
   // =========================================================================
-  // [HANDLERS]: Ação de Delegação para o Gateway (AJAX com AbortController e Safety Timeout)
+  // [HANDLERS]: Ação de Delegação Unificada via callOrchestrator (CONSULT)
   // =========================================================================
   const handleSimulacao = async () => { 
     if (!activeOffer) return;
     setLoading(true);
-
-    // Recupera o token de forma segura através do helper centralizado do session.ts
-    const tokenForGateway = getTokenForPayload();
-    if (!tokenForGateway) {
-      setFetchError('TECHNICAL_INSTABILITY');
-      setLoading(false);
-      return;
-    }
-
-    // Configura controle de tempo limite (Timeout de 10s) para evitar travamento da UI
-    const controller = new AbortController();
-    const safetyTimeout = setTimeout(() => controller.abort(), 10000);
-
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-
-    // Montagem estrita do payload sanitizado para envio à Edge Function da Borda
-    const searchPayload: Record<string, string> = {
-      environment: ambiente,
-      auth_token: tokenForGateway, 
-      offer_id: String(targetOfferId),
-      product_id: String(currentFlow.product_id || ''),
-      // [SEGURANÇA]: Sanitizado para expor apenas origin e pathname (remove query params confidenciais)
-      return_uri: window.location.origin + window.location.pathname,
-      utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
-      utm_medium: "referral",
-      utm_campaign: `flow_${flowKey?.toLowerCase()}`,
-    };
-    
-    if (currentFlow.link !== "Banner" && activeOffer?.offer?.category_id) {
-      searchPayload.category_id = String(activeOffer.offer.category_id);
-    }
+    setFetchError(null);
 
     try {
-      // Disparo do POST AJAX híbrido para a Edge Function de gateway
-      const response = await fetch(`${supabaseUrl}/functions/v1/financial-gateway-gate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(searchPayload),
-        signal: controller.signal
-      });
+      const currentHref = window.location.href;
 
-      clearTimeout(safetyTimeout);
+      // Montagem do payload idêntico ao padrão validador da Home para a ação CONSULT
+      const payload = {
+        action: "CONSULT",
+        environment: ambiente,
+        product_id: currentFlow.product_id ? String(currentFlow.product_id) : null,
+        offer: activeOffer?.offer || {},
+        seller: activeOffer?.seller || {},
+        event: activeOffer?.event || {},
+        manager: activeOffer?.manager || {},
+        origin_url: currentHref,
+        ...(userData && { entity: userData }), // Perfil injetado diretamente do Contexto global
+        interaction_context: {
+          origin_url: currentHref,
+          utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
+          utm_medium: "referral",
+          utm_campaign: `flow_${flowKey?.toLowerCase()}`
+        }
+      };
 
-      const data = await response.json();
+      // Disparo centralizado via gateway orquestrador
+      const response = await callOrchestrator(payload, "POST");
 
-      // Tratamento granular para sessões expiradas ou erros de autenticação na Borda (401)
-      if (response.status === 401 || data.code === 'SESSION_EXPIRED') {
-        sessionStorage.clear();
+      // Se bem-sucedido, redireciona para a url retornada pela esteira
+      if (response?.url) {
+        window.location.href = response.url;
+        return;
+      } else {
+        throw new Error("URL de redirecionamento ausente na resposta do orquestrador.");
+      }
+
+    } catch (error: any) {
+      console.error("🚨 [OFFER_SIMULATION_ERROR]:", error);
+
+      // Tratamento para sessão expirada na borda/orquestrador (401)
+      if (error?.code === 'SESSION_EXPIRED' || error?.status === 401) {
+        clearSession(); // Limpeza inteligente mantendo o sbx_env_pref
         navigate({ to: "/sbxpay" as any, replace: true });
         return;
       }
 
-      // Se bem-sucedido, rotaciona o token opcionalmente e executa o redirecionamento
-      if (data.success && data.redirect_url) {
-        if (data.session_token) {
-          setSessionToken(data.session_token); 
-        }
-        window.location.href = data.redirect_url;
-      } else {
-        setFetchError('TECHNICAL_INSTABILITY');
-        setLoading(false);
-      }
-    } catch (err: any) {
-      clearTimeout(safetyTimeout);
-      if (err.name === 'AbortError') {
-        console.error("[OFFER_SIMULATION_TIMEOUT]: Requisição abortada por tempo limite.");
-      } else {
-        console.error("[OFFER_SIMULATION_ERROR]:", err);
-      }
       setFetchError('TECHNICAL_INSTABILITY');
       setLoading(false);
     }

@@ -28,14 +28,14 @@ import { useProductConsult } from "@/features/financial-hub/core/contexts/Financ
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
 import { jwtDecode } from "jwt-decode"; 
-import { USE_COOKIE, getTimeDelta } from "@/services/session"; // Importação vital para a inteligência híbrida
+import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session";  // 👈 Resolução segura de ambiente, flag híbrida e encapsulamento de token
 
 const FinanciamentosGuard = () => {
   // [ARQUITETURA]: sessionToken do contexto global
   const { sessionToken: contextToken, isLoading } = useFinancialAuth();
-  // Se o contexto ainda não pegou, mas o token já foi 
-  // gravado no sessionStorage pelo HTML Interceptor da Borda, resgatamos ele aqui.
-  const sessionToken = contextToken || (typeof window !== 'undefined' ? sessionStorage.getItem('session_token') : null);
+  
+  // 🔑 [SECURITY GATE]: Resgate encapsulado do token utilizando getTokenForPayload com proteção anti-SSR
+  const sessionToken = contextToken || getTokenForPayload();
 
   const navigate = useNavigate();
   const location = useLocation();

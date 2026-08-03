@@ -32,6 +32,26 @@ export interface StandardResponse {
 }
 
 /**
+ * Realiza uma comparação segura em tempo constante (constant-time) entre duas strings 
+ * para prevenir timing attacks em segredos e chaves de API.
+ */
+function safeCompare(actual: string, expected: string): boolean {
+  const encoder = new TextEncoder();
+  const actualBuf = encoder.encode(actual);
+  const expectedBuf = encoder.encode(expected);
+
+  // O timingSafeEqual exige buffers de tamanhos estritamente iguais.
+  // Se os tamanhos divergirem, comparamos a entrada com ela mesma para manter 
+  // o fluxo simétrico de tempo, retornando falso em seguida.
+  if (actualBuf.byteLength !== expectedBuf.byteLength) {
+    crypto.subtle.timingSafeEqual(actualBuf, actualBuf);
+    return false;
+  }
+
+  return crypto.subtle.timingSafeEqual(actualBuf, expectedBuf);
+}
+
+/**
  * Envolve uma Edge Function com validações rigorosas de segurança, CORS e tratamento de erros.
  * 
  * @param {string} functionName - Identificador da função correspondente no `registry.ts`.
@@ -120,7 +140,7 @@ export const withSecurity = (
       
       if (expectedSecret && secretHeader) {
         const cleanHeader = secretHeader.replace(/^Bearer\s+/i, "").trim();
-        if (cleanHeader === expectedSecret.trim()) {
+        if (safeCompare(cleanHeader, expectedSecret.trim())) {
           perimeterAuthorized = true;
         }
       }

@@ -13,7 +13,7 @@ import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { Loader2, LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Building, UserPlus, AppWindow, Plus } from 'lucide-react';
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { getDefaultSbxEnvironment } from "@/services/session"; 
+import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload } from "@/services/session";  // 👈 Resolução segura de ambiente, flag híbrida e encapsulamento de token
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import { UserDataContext } from "@/routes/sbxpay.lazy"; 
 
@@ -135,7 +135,13 @@ export function sbXPAYHome() {
             if (config.isDirect) {
                 const currentHref = window.location.href;
                 const ambiente = getDefaultSbxEnvironment();
-                const currentSessionToken = sessionToken || sessionStorage.getItem('session_token') || "";
+                
+                // -------------------------------------------------------------------
+                // [SECURITY GATE]: Resgate encapsulado do token de sessão ativo.
+                // Substitui a chamada direta ao sessionStorage.getItem por uma 
+                // função segura com proteção contra SSR e centralização de chaves.
+                // -------------------------------------------------------------------
+                const currentSessionToken = sessionToken || getTokenForPayload() || "";
                 
                 const urlParams = new URLSearchParams(window.location.search);
                 const existingVisitId = urlParams.get('visit_id');
