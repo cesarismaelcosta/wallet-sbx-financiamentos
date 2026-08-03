@@ -28,18 +28,20 @@ const ENV_URLS = {
 
 serve(withSecurity('sbx-auth-exchange', async (req: Request) => {
   try {
-    const body = await req.json();
-    const { environment, sbx_raw_token_payload } = body;
+    // 1. Extrai o token OAuth exclusivamente do cabeçalho customizado
+    const sbxAccessToken = req.headers.get("x-access-token");
+    if (!sbxAccessToken) {
+      throw new Error("UNAUTHORIZED: Token de acesso da Superbid ausente no cabeçalho (x-access-token).");
+    }
+
+    // 2. Extrai apenas o ambiente do corpo JSON
+    const body = await req.json().catch(() => ({}));
+    const { environment } = body;
 
     if (!environment || (environment !== 'production' && environment !== 'staging')) {
       throw new Error("BAD_REQUEST: Ambiente inválido ou não especificado.");
     }
 
-    if (!sbx_raw_token_payload || !sbx_raw_token_payload.access_token) {
-      throw new Error("BAD_REQUEST: Payload OAuth da Superbid ausente ou sem access_token.");
-    }
-
-    const sbxAccessToken = sbx_raw_token_payload.access_token;
     const baseUrl = ENV_URLS[environment as keyof typeof ENV_URLS];
 
     debugLog(`[sbx-auth-exchange] Validando token OAuth e buscando perfil no ambiente: ${environment}`);

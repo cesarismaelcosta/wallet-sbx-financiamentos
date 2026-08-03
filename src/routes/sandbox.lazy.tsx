@@ -397,13 +397,22 @@ const autenticarAccountsSBX = async (username: string, password: string, environ
 const trocarTokenNaEdgeFunction = async (rawTokenPayload: any, environment: "staging" | "production") => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const sbxAccessToken = rawTokenPayload?.access_token || "";
+
+  if (!sbxAccessToken) {
+    throw new Error("BAD_REQUEST: Access token ausente no payload OAuth.");
+  }
 
   const res = await fetch(`${supabaseUrl}/functions/v1/sbx-auth-exchange`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseAnonKey}` },
+    headers: { 
+      "Content-Type": "application/json", 
+      "Authorization": `Bearer ${supabaseAnonKey}`,
+      "x-access-token": sbxAccessToken // 👈 Token da Superbid limpo no Header de Borda
+    },
     body: JSON.stringify({
       environment: environment,
-      sbx_raw_token_payload: rawTokenPayload,
+      // Nenhum token opaco trafega mais dentro do JSON do body!
     }),
   });
 
@@ -413,10 +422,6 @@ const trocarTokenNaEdgeFunction = async (rawTokenPayload: any, environment: "sta
   }
   return data;
 };
-
-export const Route = createLazyFileRoute("/sandbox")({
-  component: SandboxPage,
-});
 
 /**
  * =========================================================================
@@ -989,7 +994,8 @@ function SandboxPage() {
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          target_url: "/sbxpay",
+          offer_id: String(offerId), 
+          product_id: String(productId || ""), 
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
           utm_medium: "referral",
@@ -1268,7 +1274,6 @@ function SandboxPage() {
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          // auth_token removido daqui
           product_id: String(productId),
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
@@ -2529,3 +2534,7 @@ function SandboxPage() {
     </div>
   );
 }
+
+export const Route = createLazyFileRoute("/sandbox")({
+  component: SandboxPage,
+});
