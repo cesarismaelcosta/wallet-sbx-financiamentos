@@ -33,25 +33,33 @@ export function HowItWorks() {
     <section id="como-funciona" className="scroll-mt-24 bg-background py-16 sm:py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <h2 className="text-center text-3xl font-semibold mb-12 text-slate-800 tracking-tight">
-          Em <span style={{ color: "var(--primary)" }}>3 passos</span> você realiza seu pagamento na{" "}
-          <span style={{ color: "var(--primary)" }} className="font-bold">
-            Superbid
+          Em <span style={{ color: "var(--primary)" }}>3 passos</span> você usa{" "}
+          <span style={{ color: "var(--primary)" }}>
+            com cartão de crédito
           </span>{" "}
-          com cartão de crédito.
+          na Superbid.
         </h2>
         
         <div className="grid gap-6 md:grid-cols-3">
           {steps.map((s, i) => (
             <div
               key={i}
-              className="bg-white p-8 shadow-sm transition-all hover:shadow-md border border-slate-200 rounded-3xl"
+              className="bg-white p-8 shadow-sm transition-all hover:shadow-md border border-slate-200 rounded-3xl flex flex-col gap-4"
             >
-              <div className="mb-5" style={{ color: "var(--primary)" }}>
-                {s.i}
+              {/* Linha superior: Ícone e Título lado a lado */}
+              <div className="flex items-center gap-4" style={{ color: "var(--primary)" }}>
+                <div className="shrink-0">
+                  {s.i}
+                </div>
+                <h3 className="font-bold text-lg text-slate-800 leading-tight">
+                  {s.t}
+                </h3>
               </div>
 
-              <h3 className="font-bold text-lg text-slate-800 mb-2">{s.t}</h3>
-              <p className="text-sm text-slate-500 leading-relaxed">{s.d}</p>
+              {/* Descrição abaixo ocupando a largura total */}
+              <p className="text-sm text-slate-500 leading-relaxed">
+                {s.d}
+              </p>
             </div>
           ))}
         </div>

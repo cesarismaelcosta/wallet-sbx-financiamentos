@@ -18,7 +18,7 @@ export function StepLayout({ children }: StepLayoutProps) {
        - h-auto: Permite que cresça para acomodar o Passo 2.
        - overflow-hidden: Mantém as bordas arredondadas.
     */
-    <div className="w-full lg:col-span-2 bg-white min-h-[500px] h-auto overflow-hidden flex flex-col">
+    <div className="w-full lg:col-span-2 bg-white min-h-[600px] h-auto overflow-hidden flex flex-col">
        {children}
     </div>
   );

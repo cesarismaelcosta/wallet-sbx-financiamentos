@@ -189,7 +189,7 @@ export function sbXPAYLayOut() {
 
   // Exibe o spinner nativo enquanto o contexto de auth carrega
   if (isLoading) {
-    return <Spinner msg="Validando seus dados e preparando o ambiente Wallet sbX..." />;
+    return <Spinner msg="Carregando seus dados..." />;
   }
 
   // Fail-safe em DEV caso não haja sessionToken (confia no cookie HttpOnly em PROD)
@@ -197,7 +197,7 @@ export function sbXPAYLayOut() {
 
   // Exibe o spinner enquanto o perfil e a visita são validados
   if (isVerifying) {
-    return <Spinner msg="Validando seus dados e preparando o ambiente Wallet sbX..." />;
+    return <Spinner msg="Carregando seus dados..." />;
   }
 
   // Sessão validada e visita aberta: Renderiza o esqueleto e distribui o contexto para as rotas filhas

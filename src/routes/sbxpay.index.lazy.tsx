@@ -7,12 +7,12 @@
  * 2. Fluxos Diretos: Acionam o `callOrchestrator` diretamente com `action: "CONSULT"` 
  *    e o `productId` correspondente, sem passar por rotas intermediárias.
  * 
- * @author Gemini Pro
+ * @author César Ismael Pereira da Costa
  */
 
 import React, { useState, useEffect, useContext } from 'react';
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Building, UserPlus, AppWindow, Plus } from 'lucide-react';
+import { Loader2, LogOut, LogIn, CreditCard, Car, Home, TrendingUp, Truck, Building, UserPlus, AppWindow, Plus, Settings } from 'lucide-react';
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload } from "@/services/session";  // 👈 Resolução segura de ambiente, flag híbrida e encapsulamento de token
@@ -275,22 +275,21 @@ export function sbXPAYHome() {
             {/* HEADER ATUAL */}
             <header className={`fixed top-0 left-0 w-full z-50 glass border-b border-gray-100 transition-all duration-300 ${isScrolled ? 'shadow-sm py-2' : 'py-3'}`}>
                 <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-                    <a href="#" className="flex items-center">
+                    <a href="#" className="flex items-center outline-none border-none focus:outline-none focus:ring-0">
                         <WalletLogo size="md" withTagline />
                     </a>
                     
-                    <nav className="hidden md:flex items-center space-x-6 text-[13px] font-semibold text-slate-600">
-                        <a href="#seguranca" className="hover:text-purple-600 transition-colors">Segurança</a>
-                        <a href="#cartao" className="hover:text-purple-600 transition-colors">Cartão</a>
-                        <a href="#veiculos" className="hover:text-purple-600 transition-colors">Veículos</a>
-                        <a href="#imoveis" className="hover:text-purple-600 transition-colors">Imóveis</a>
-                        <a href="#investidores" className="hover:text-purple-600 transition-colors">Investidores</a>
-                        <a href="#floorplan" className="hover:text-purple-600 transition-colors">Floor Plan</a>
-                        <a href="#seguros" className="hover:text-purple-600 transition-colors">Seguros</a>
+                    <nav className="hidden md:flex items-center space-x-1 text-[13px] font-semibold text-slate-600">
+                        <a href="#seguranca" className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all">Segurança</a>
+                        <a href="#cartao" className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all">Cartão</a>
+                        <a href="#veiculos" className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all">Veículos</a>
+                        <a href="#imoveis" className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all">Imóveis</a>
+                        <a href="#investidores" className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all">Investidores</a>
+                        <a href="#floorplan" className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all">Floor Plan</a>
+                        <a href="#seguros" className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all">Seguros</a>
                     </nav>
 
                     <div className="hidden md:flex items-center space-x-3">
-                        <a href="/backoffice" className={ghostBtn}>Backoffice</a>
                         {sessionToken ? (
                             <button onClick={() => logout({ purgeEnv: true })} className={`flex items-center gap-2 ${ghostBtn}`}>
                                 Sair <LogOut className="w-3 h-3" />
@@ -300,34 +299,44 @@ export function sbXPAYHome() {
                                 Entrar <LogIn className="w-3 h-3" />
                             </button>
                         )}
+                        <div className="flex flex-col space-y-1">
+                            <a href="/backoffice" target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded-md outline-none focus:outline-none hover:bg-purple-50 focus:bg-purple-50 text-[11px] font-bold text-purple-600 transition-colors">backoffice</a>
+                            <a href="/sandbox" target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded-md outline-none focus:outline-none hover:bg-purple-50 focus:bg-purple-50 text-[11px] font-bold text-purple-600 transition-colors">sandbox</a>
+                        </div>
                     </div>
                 </div>
             </header>
 
             {/* HERO SECTION - Segurança */}
-            <section id="seguranca" className="relative pt-28 pb-16 md:pt-32 md:pb-20 overflow-hidden bg-white border-b border-gray-100">
+            <section id="seguranca" className="relative pt-28 pb-10 md:pt-32 md:pb-12 overflow-hidden bg-white border-b border-gray-100">
                 <div className="max-w-7xl mx-auto px-6 relative z-10">
                     <div className="flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-12">
-                        <div className="w-full lg:w-6/12 space-y-5 text-center lg:text-left">
-                            <div className="flex justify-center lg:justify-start">
-                                <img 
-                                    src="/assets/home/sbxpay_p_sem_borda.png" 
-                                    alt="sbX PAY" 
-                                    className="h-14 md:h-14 w-auto object-contain" 
-                                />
-                            </div>
+                        <div className="w-full lg:w-6/12 space-y-5">
                             
-                            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-[1.15]">
-                                Segurança e agilidade para você comprar e vender na <span className="bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent">Superbid.</span>
-                            </h1>
+                            {/* Bloco mobile: Imagem orgânica na esquerda + Título/Tag na direita */}
+                            <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
+                                <div className="w-24 sm:hidden flex-shrink-0 relative flex justify-start">
+                                    <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
+                                    <div className="relative w-full p-0 flex items-center justify-center z-0">
+                                        <img src="/assets/home/conta.png" alt="Segurança sbX Wallet" className="mix-blend-multiply w-full h-auto object-contain relative" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 flex-1 text-left">
+                                    <div className="inline-flex items-center space-x-2 bg-purple-100/80 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
+                                        <span>Conta sbXPAY</span>
+                                    </div>
+                                    <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-slate-900 leading-[1.15]">
+                                        Segurança para <span className="bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent"> comprar e vender.</span>
+                                    </h1>
+                                </div>
+                            </div>
                             
                             <p className="text-sm md:text-base text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
                                 A plataforma líder da América Latina tem uma infraestrutura segura e inovadora, com a proteção que seu patrimônio exige.
                             </p>
 
                             <div className="border-t border-gray-100 pt-5 space-y-4 text-left max-w-xl mx-auto lg:mx-0">
-                                <h3 className="text-xs font-bold text-purple-600 uppercase tracking-wider">Conta sbXPAY: Prática e Segura</h3>
-                                
                                 <div className="flex items-start space-x-3">
                                     <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
                                         <Plus className="w-4 h-4 text-purple-500" strokeWidth={3} />
@@ -362,7 +371,8 @@ export function sbXPAYHome() {
                             </div>
                         </div>
 
-                        <div className="w-full lg:w-5/12 relative flex justify-center mt-8 lg:mt-0">
+                        {/* Imagem original para desktop */}
+                        <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
                             <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                                 <div className="absolute inset-0 animate-blob-float blob-shadow flex items-center justify-center">
                                     <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full fill-slate-100">
@@ -377,17 +387,32 @@ export function sbXPAYHome() {
             </section>
 
             {/* SEÇÃO CARTÃO */}
-            <section id="cartao" className="py-16 md:py-20 bg-white border-b border-gray-100 overflow-hidden relative">
+            <section id="cartao" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative">
                 <div className="max-w-7xl mx-auto px-6 relative z-10">
                     <div className="flex flex-col lg:flex-row-reverse items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
-                            <div className="inline-flex items-center space-x-2 bg-purple-100/80 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <span>Até R$ 120 mil</span>
+                            
+                            {/* Bloco mobile: Imagem orgânica na esquerda + Título/Tag na direita */}
+                            <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
+                                <div className="w-24 sm:hidden flex-shrink-0 relative flex justify-start">
+                                    <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
+                                    <div className="relative w-full p-0 flex items-center justify-center z-0">
+                                        <img src="/assets/home/cartao.png" alt="Cartão" className="mix-blend-multiply w-full h-auto object-contain relative" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 flex-1">
+                                    <div className="inline-flex items-center space-x-2 bg-purple-100/80 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
+                                        <span>Até R$ 120 mil</span>
+                                    </div>
+                                    <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">Parcele em até 18x com seu cartão.</h2>
+                                </div>
                             </div>
-                            <div className="space-y-3">
-                                <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Parcele em até 18x com seu cartão.</h2>
-                                <p className="text-sm md:text-base text-slate-600 leading-relaxed">Não deixe um bom negócio escapar. Amplie seu poder de compra usando o seu limite do cartão de crédito com total tranquilidade na hora de arrematar.</p>
-                            </div>
+
+                            <p className="text-xs md:text-base text-slate-600 leading-relaxed">
+                                Não deixe um bom negócio escapar. Amplie seu poder de compra usando o seu limite do cartão de crédito com total tranquilidade na hora de arrematar.
+                            </p>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                                 <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4 flex flex-col gap-2 transition-colors hover:bg-slate-50">
                                     <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
@@ -412,7 +437,9 @@ export function sbXPAYHome() {
                                 {renderButton("Ofertas parceladas com cartão", CreditCard, "cartao", true)}
                             </div>
                         </div>
-                        <div className="w-full lg:w-5/12 relative flex justify-center mt-8 lg:mt-0">
+
+                        {/* Imagem original para desktop */}
+                        <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
                             <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                                 <div className="absolute inset-0 animate-blob-float-reverse blob-shadow flex items-center justify-center">
                                     <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full fill-slate-100">
@@ -427,14 +454,28 @@ export function sbXPAYHome() {
             </section>
 
             {/* SEÇÃO VEÍCULOS */}
-            <section id="veiculos" className="py-16 md:py-20 bg-white border-b border-gray-100 overflow-hidden relative">
+            <section id="veiculos" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative">
                 <div className="max-w-7xl mx-auto px-6 relative z-10">
                     <div className="flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
-                            <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <span>PROCESSO DIGITAL COM APOIO DE ESPECIALISTAS</span>
+                            
+                            {/* Bloco mobile: Imagem orgânica na esquerda + Título/Tag na direita */}
+                            <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
+                                <div className="w-24 sm:hidden flex-shrink-0 relative flex justify-start">
+                                    <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
+                                    <div className="relative w-full p-0 flex items-center justify-center z-0">
+                                        <img src="/assets/home/financiamentoveiculos.png" alt="Veículos" className="mix-blend-multiply w-full h-auto object-contain relative" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 flex-1">
+                                    <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
+                                        <span>EM ATÉ 60x</span>
+                                    </div>
+                                    <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">Financie seu carro ou caminhão.</h2>
+                                </div>
                             </div>
-                            <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Financie seu veículo em até 60x.</h2>
+
                             <p className="text-sm md:text-base text-slate-600 leading-relaxed max-w-2xl">Compre seu carro ou caminhão com as melhores taxas do mercado. Nós fazemos o trabalho pesado de assessoria, buscando as melhores opções nos maiores bancos do Brasil.</p>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 w-full max-w-2xl">
@@ -459,7 +500,9 @@ export function sbXPAYHome() {
                                 {renderButton("Caminhões financiados", Truck, "caminhoes")}
                             </div>
                         </div>
-                        <div className="w-full lg:w-5/12 flex justify-center mt-8 lg:mt-0 relative">
+
+                        {/* Imagem original para desktop */}
+                        <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
                             <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                                 <div className="absolute inset-0 animate-blob-float blob-shadow flex items-center justify-center">
                                     <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full fill-slate-100">
@@ -474,20 +517,36 @@ export function sbXPAYHome() {
             </section>
 
             {/* SEÇÃO IMÓVEIS */}
-            <section id="imoveis" className="py-16 md:py-20 bg-white border-b border-gray-100 overflow-hidden relative">
+            <section id="imoveis" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative">
                 <div className="max-w-7xl mx-auto px-6 relative z-10">
                     <div className="flex flex-col lg:flex-row-reverse items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
-                            <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <span>INVISTA PAGANDO EM ATÉ 240x</span>
+                            
+                            {/* Bloco mobile: Imagem orgânica na esquerda + Título/Tag na direita */}
+                            <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
+                                <div className="w-24 sm:hidden flex-shrink-0 relative flex justify-start">
+                                    <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
+                                    <div className="relative w-full p-0 flex items-center justify-center z-0">
+                                        <img src="/assets/home/financiamentoimoveis.png" alt="Imóveis" className="mix-blend-multiply w-full h-auto object-contain relative" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 flex-1">
+                                    <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
+                                        <span>EM ATÉ 240 MESES</span>
+                                    </div>
+                                    <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">Financie seu imóvel.</h2>
+                                </div>
                             </div>
-                            <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Financie seu imóvel em até 240x.</h2>
+
                             <p className="text-sm md:text-base text-slate-600 leading-relaxed">Realize o sonho do imóvel próprio com negociações bem abaixo do valor de mercado, agora também com prazos e condições especiais. Buscamos as melhores taxas em parceria com os maiores bancos do país.</p>
                             <div className="pt-2">
                                 {renderButton("Imóveis financiados", Home, "imoveis", true)}
                             </div>
                         </div>
-                        <div className="w-full lg:w-5/12 flex justify-center mt-8 lg:mt-0 relative">
+
+                        {/* Imagem original para desktop */}
+                        <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
                             <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                                 <div className="absolute inset-0 animate-blob-float-reverse blob-shadow flex items-center justify-center">
                                     <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full fill-slate-100">
@@ -502,21 +561,37 @@ export function sbXPAYHome() {
             </section>
 
             {/* SEÇÃO INVESTIDORES */}
-            <section id="investidores" className="py-16 md:py-20 bg-white border-b border-gray-100 overflow-hidden relative">
+            <section id="investidores" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative">
                 <div className="max-w-7xl mx-auto px-6 relative z-10">
                     <div className="flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
-                            <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <span>TAXAS DIFERENCIADAS PARA VOCÊ INVESTIR</span>
+                            
+                            {/* Bloco mobile: Imagem orgânica na esquerda + Título/Tag na direita */}
+                            <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
+                                <div className="w-24 sm:hidden flex-shrink-0 relative flex justify-start">
+                                    <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
+                                    <div className="relative w-full p-0 flex items-center justify-center z-0">
+                                        <img src="/assets/home/carhomeequity.png" alt="Rentabilize Ativos" className="mix-blend-multiply w-full h-auto object-contain relative" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 flex-1">
+                                    <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
+                                        <span>TAXAS DIFERENCIADAS</span>
+                                    </div>
+                                    <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">Transforme ativos em investimento.</h2>
+                                </div>
                             </div>
-                            <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Transforme ativos em investimento.</h2>
+
                             <p className="text-sm md:text-base text-slate-600 leading-relaxed max-w-2xl">Use seu próprio imóvel ou carro como garantia e consiga empréstimos com taxas reduzidas para comprar ativos únicos na sbX. Tenha prazos de até 240x para aproveitar nossas oportunidades.</p>
                             <div className="flex flex-col md:flex-row gap-4 w-full max-w-2xl">
                                 {renderButton("Crédito usando seu carro", Car, "equityCarro")}
                                 {renderButton("Crédito usando seu imóvel", Home, "equityImovel")}
                             </div>
                         </div>
-                        <div className="w-full lg:w-5/12 flex justify-center mt-8 lg:mt-0 relative">
+
+                        {/* Imagem original para desktop */}
+                        <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
                             <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                                 <div className="absolute inset-0 animate-blob-float blob-shadow flex items-center justify-center">
                                     <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full fill-slate-100">
@@ -531,20 +606,36 @@ export function sbXPAYHome() {
             </section>
 
             {/* SEÇÃO FLOOR PLAN */}
-            <section id="floorplan" className="py-16 md:py-20 bg-white border-b border-gray-100 overflow-hidden relative">
+            <section id="floorplan" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative">
                 <div className="max-w-7xl mx-auto px-6 relative z-10">
                     <div className="flex flex-col lg:flex-row-reverse items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
-                            <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <span>Lojistas AutoArremate</span>
+                            
+                            {/* Bloco mobile: Imagem orgânica na esquerda + Título/Tag na direita */}
+                            <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
+                                <div className="w-24 sm:hidden flex-shrink-0 relative flex justify-start">
+                                    <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
+                                    <div className="relative w-full p-0 flex items-center justify-center z-0">
+                                        <img src="/assets/home/floorplan.png" alt="Floor Plan" className="mix-blend-multiply w-full h-auto object-contain relative" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 flex-1">
+                                    <div className="inline-flex items-center space-x-2 bg-purple-50 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
+                                        <span>Lojistas AutoArremate</span>
+                                    </div>
+                                    <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">Floor Plan com prazo de 90 dias.</h2>
+                                </div>
                             </div>
-                            <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Floor Plan com prazo de 90 dias.</h2>
+
                             <p className="text-sm md:text-base text-slate-600 leading-relaxed">Você é lojista? Aproveite nossa linha de crédito exclusiva para a compra de veículos na nossa plataforma com pagamento em até 90 dias.</p>
                             <div className="pt-2">
                                 {renderButton("Conheça as condições", Building, "floorPlan", true)}
                             </div>
                         </div>
-                        <div className="w-full lg:w-5/12 flex justify-center mt-8 lg:mt-0 relative">
+
+                        {/* Imagem original para desktop */}
+                        <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
                             <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                                 <div className="absolute inset-0 animate-blob-float-reverse blob-shadow flex items-center justify-center">
                                     <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full fill-slate-100">
@@ -559,17 +650,30 @@ export function sbXPAYHome() {
             </section>
 
             {/* SEÇÃO SEGUROS */}
-            <section id="seguros" className="py-16 md:py-20 bg-white overflow-hidden relative">
+            <section id="seguros" className="py-10 md:py-12 bg-white overflow-hidden relative">
                 <div className="max-w-7xl mx-auto px-6 relative z-10">
                     <div className="flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-12">
                         <div className="w-full lg:w-6/12 space-y-5">
-                            <div className="inline-flex items-center space-x-2 bg-purple-100/80 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                                <span>SEGURE SEU VEÍCULO OU SUA RESIDÊNCIA</span>
+                            
+                            {/* Bloco mobile: Imagem orgânica na esquerda + Título/Tag na direita */}
+                            <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
+                                <div className="w-24 sm:hidden flex-shrink-0 relative flex justify-start">
+                                    <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
+                                    <div className="relative w-full p-0 flex items-center justify-center z-0">
+                                        <img src="/assets/home/seguros.png" alt="Proteção sbX" className="mix-blend-multiply w-full h-auto object-contain relative" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 flex-1">
+                                    <div className="inline-flex items-center space-x-2 bg-purple-100/80 px-3 py-1 rounded-full text-purple-700 text-[10px] font-bold uppercase tracking-wider">
+                                        <span>10 SEGURADORAS</span>
+                                    </div>
+                                    <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">Seu patrimônio protegido agora.</h2>
+                                </div>
                             </div>
-                            <div className="space-y-3">
-                                <h2 className="text-lg md:text-3xl font-bold text-slate-900 tracking-tight">Seu patrimônio protegido agora.</h2>
-                                <p className="text-sm md:text-base text-slate-600">Use a Wallet sBX para desfrutar de condições diferenciadas e garantir seus bens contra imprevistos.</p>
-                            </div>
+
+                            <p className="text-sm md:text-base text-slate-600">Use a Wallet sBX para desfrutar de condições diferenciadas e garantir seus bens contra imprevistos.</p>
+                            
                             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-md shadow-purple-500/5 space-y-3">
                                 <h3 className="text-xs font-bold text-purple-600 uppercase tracking-wider">Cotação 100% Online, em segundos, sem compromisso</h3>
                                 <p className="text-slate-600 text-xs leading-relaxed">Simulação nas seguradoras líderes de mercado. Se você comprou ou já tem um imóvel ou veículo, conheça nossas condições, sem burocracias, sem cobranças, tudo online.</p>
@@ -579,7 +683,9 @@ export function sbXPAYHome() {
                                 {renderButton("Seguros de veículos", Car, "seguroAuto")}
                             </div>
                         </div>
-                        <div className="w-full lg:w-5/12 flex justify-center mt-8 lg:mt-0 relative">
+
+                        {/* Imagem original para desktop */}
+                        <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
                             <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                                 <div className="absolute inset-0 animate-blob-float blob-shadow flex items-center justify-center">
                                     <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full fill-slate-100">
@@ -625,26 +731,31 @@ export function sbXPAYHome() {
                 </div>      
             )}
 
-            {/* MOBILE TAB BAR (Visível apenas no celular) */}
+            {/* MOBILE TAB BAR (Visível apenas no celular - 4 Atalhos) */}
             <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-50 flex justify-around items-center pt-2 pb-4 md:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                <a href="#" className="flex flex-col items-center justify-center text-purple-600 min-w-[70px] gap-1">
-                    <Home className="w-6 h-6" strokeWidth={1.5} />
+                <a href="#" className="flex flex-col items-center justify-center text-purple-600 min-w-[60px] gap-1">
+                    <Home className="w-5 h-5" strokeWidth={1.5} />
                     <span className="text-[10px] font-bold">Início</span>
                 </a>
 
-                <a href="/backoffice" className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[70px] gap-1">
-                    <AppWindow className="w-6 h-6" strokeWidth={1.5} />
+                <a href="/sandbox" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[60px] gap-1">
+                    <Settings className="w-5 h-5" strokeWidth={1.5} />
+                    <span className="text-[10px] font-medium">Sandbox</span>
+                </a>
+
+                <a href="/backoffice" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[60px] gap-1">
+                    <AppWindow className="w-5 h-5" strokeWidth={1.5} />
                     <span className="text-[10px] font-medium">Backoffice</span>
                 </a>
 
                 {sessionToken ? (
-                    <button onClick={() => logout()} className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[70px] gap-1">
-                        <LogOut className="w-6 h-6" strokeWidth={1.5} />
+                    <button onClick={() => logout()} className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[60px] gap-1">
+                        <LogOut className="w-5 h-5" strokeWidth={1.5} />
                         <span className="text-[10px] font-medium">Sair</span>
                     </button>
                 ) : (
-                    <button onClick={() => navigate({ to: '/accounts/signin' })} className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[70px] gap-1">
-                        <LogIn className="w-6 h-6" strokeWidth={1.5} />
+                    <button onClick={() => navigate({ to: '/accounts/signin' })} className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[60px] gap-1">
+                        <LogIn className="w-5 h-5" strokeWidth={1.5} />
                         <span className="text-[10px] font-medium">Entrar</span>
                     </button>
                 )}

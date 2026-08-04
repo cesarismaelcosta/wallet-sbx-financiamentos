@@ -1,12 +1,7 @@
 /**
  * @fileoverview Sandbox de Simulação de Jornadas (Topo de Funil / sbX - Stateless)
- * @module Sandbox/Index
- * @route /sandbox
- *
- * ============================================================================
- * [ARQUITETURA, CLEAN ARCHITECTURE & DESIGN SYSTEM]
- * ============================================================================
- * Painel de controle, debug e testes integrado com a API de Ofertas, Sessão
+ * @path src/routes/sandbox.tsx
+ * @description Painel de controle, debug e testes integrado com a API de Ofertas, Sessão
  * corporativa e Gateways de Borda. 
  * 
  * [MUDANÇAS CRÍTICAS DA ARQUITETURA STATELESS]:
@@ -17,10 +12,11 @@
  *    recuperado instantaneamente na montagem, eliminando roundtrips desnecessários.
  * 3. Zero Banco de Dados: Toda a validação de acesso depende exclusivamente do 
  *    JWT assinado criptografamente em memória.
+ * 4. Idle & Session Integrity Guard: Monitoramento de foco/visibilidade da aba para 
+ *    expurgar tokens expirados após longos períodos de inatividade.
  *
  * @author César Ismael Pereira da Costa
- * @version 4.0.1 (Stateless UI Cleanup - Gateway Entry Alignment)
- * ============================================================================
+ * @author Gemini Pro
  */
 
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
@@ -461,21 +457,88 @@ function SandboxPage() {
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [simulating, setSimulating] = useState(false);
 
+  /**
+   * =========================================================================
+   * [IDLE & SESSION INTEGRITY GUARD]: Validação de Expiração por Inatividade
+   * =========================================================================
+   * Intercepta períodos prolongados de inatividade (ex: 10h com a aba aberta)
+   * decodificando o JWT e forçando o redirecionamento imediato para o login 
+   * caso a sessão tenha perecido.
+   */
+  const handleExpiredSession = () => {
+    sessionStorage.removeItem("access_token_sbx");
+    sessionStorage.removeItem("user_profile");
+    sessionStorage.removeItem("session_token");
+
+    if (logout) {
+      try {
+        logout({ purgeEnv: true } as any);
+      } catch (e) {
+        // Ignora falhas no contexto caso já limpo
+      }
+    }
+
+    const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `/accounts/signin?redirect_uri=${currentPath}`;
+  };
+
+  const validateSessionBeforeAction = () => {
+    const token = sessionStorage.getItem("access_token_sbx") || sessionToken;
+    if (!token) {
+      handleExpiredSession();
+      return false;
+    }
+
+    try {
+      const payloadBase64 = token.split(".")[1];
+      if (payloadBase64) {
+        const payloadJson = JSON.parse(atob(payloadBase64));
+        if (payloadJson.exp) {
+          const expirationTime = payloadJson.exp * 1000;
+          if (Date.now() >= expirationTime) {
+            handleExpiredSession();
+            return false;
+          }
+        }
+      }
+    } catch (e) {
+      // Ignora erro de parsing em tokens opacos puros, delegando para a borda
+    }
+
+    return true;
+  };
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        validateSessionBeforeAction();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [sessionToken]);
+
   useEffect(() => {
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted || window.performance?.navigation?.type === 2) {
         setLoadingAction(null);
+        validateSessionBeforeAction();
       }
     };
     window.addEventListener("pageshow", handlePageShow);
-    const handleFocus = () => setLoadingAction(null);
+    const handleFocus = () => {
+      setLoadingAction(null);
+      validateSessionBeforeAction();
+    };
     window.addEventListener("focus", handleFocus);
 
     return () => {
       window.removeEventListener("pageshow", handlePageShow);
       window.removeEventListener("focus", handleFocus);
     };
-  }, []);
+  }, [sessionToken]);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -583,6 +646,8 @@ function SandboxPage() {
     const loadSandboxData = async () => {
       if (!activeToken) return;
 
+      if (!validateSessionBeforeAction()) return;
+
       setLoading(true);
       setError(null);
 
@@ -622,7 +687,7 @@ function SandboxPage() {
           errorMsg.includes("expired") ||
           errorMsg.includes("falha de autenticação")
         ) {
-          setError("Sua sessão expirou. Utilize o botão 'Sair' no topo para entrar novamente.");
+          handleExpiredSession();
         } else {
           setError(err.message || "Erro ao carregar dados do sandbox.");
         }
@@ -634,6 +699,8 @@ function SandboxPage() {
   }, [activeToken, customOfferId, ambienteAtivo]);
 
   const handleInspectOffer = async () => {
+    if (!validateSessionBeforeAction()) return;
+
     if (!activeToken) {
       alert("Autentique-se primeiro no formulário abaixo.");
       return;
@@ -656,6 +723,8 @@ function SandboxPage() {
   };
 
   const handleOpenConsultarOferta = async (targetOfferId: string) => {
+    if (!validateSessionBeforeAction()) return;
+
     if (!activeToken) {
       alert("Faça o login primeiro!");
       return;
@@ -678,6 +747,8 @@ function SandboxPage() {
 
   const handleOpenConsultarRota = async (item: any) => {
     if (!item) return;
+
+    if (!validateSessionBeforeAction()) return;
 
     if (!sessionToken) {
       alert("Faça o login primeiro!");
@@ -717,6 +788,8 @@ function SandboxPage() {
   };
 
   const handleOpenSimularErro = (type: "offer" | "direct", item?: any) => {
+    if (!validateSessionBeforeAction()) return;
+
     setSimulationResult(null);
     setErrorDrawerConfig({
       type,
@@ -730,6 +803,8 @@ function SandboxPage() {
   };
 
   const executeErrorSimulation = async (method: "form" | "fetch", errorTarget: "offer" | "token" | "product") => {
+    if (!validateSessionBeforeAction()) return;
+
     setSimulating(true);
     setSimulationResult(null);
 
@@ -756,7 +831,6 @@ function SandboxPage() {
 
     if (method === "fetch") {
       try {
-        // Desestrutura o auth_token para fora do body
         const { auth_token, ...bodyPayload } = payload; 
         
         const res = await fetch(gatewayUrl, {
@@ -764,9 +838,9 @@ function SandboxPage() {
           headers: {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "x-access-token": String(auth_token), // 👈 HEADER AQUI
+            "x-access-token": String(auth_token),
           },
-          body: JSON.stringify(bodyPayload), // 👈 BODY SEM O TOKEN
+          body: JSON.stringify(bodyPayload),
         });
 
         const data = await res.json();
@@ -857,7 +931,6 @@ function SandboxPage() {
           sessionStorage.setItem("access_token_sbx", loginResponse.access_token);
           setAccessTokenSBX(loginResponse.access_token);
 
-          // Armazena e injeta o perfil unificado vindo direto do login/exchange
           if (exchangeResponse.user_profile) {
             sessionStorage.setItem("user_profile", JSON.stringify(exchangeResponse.user_profile));
             setUserData(exchangeResponse.user_profile);
@@ -910,6 +983,8 @@ function SandboxPage() {
     isDisabled?: boolean,
   ) => {
     if (isDisabled) return;
+
+    if (!validateSessionBeforeAction()) return;
 
     const tokenToUse: string | null = accessTokenSBX || activeToken;
 
@@ -971,6 +1046,8 @@ function SandboxPage() {
   ) => {
     if (isDisabled) return;
 
+    if (!validateSessionBeforeAction()) return;
+
     const tokenToUse: string | null = accessTokenSBX || activeToken;
 
     if (!tokenToUse) {
@@ -990,7 +1067,7 @@ function SandboxPage() {
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
-          "x-access-token": tokenToUse, // 👈 HEADER AQUI
+          "x-access-token": tokenToUse,
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
@@ -1026,7 +1103,7 @@ function SandboxPage() {
     }
   };
 
-/**
+  /**
    * =========================================================================
    * [GATEWAY TRANSPORT]: handleSbxPayGatewayForm
    * =========================================================================
@@ -1043,7 +1120,8 @@ function SandboxPage() {
    *    página inteira (Full Page Redirection) para a borda.
    */
   const handleSbxPayGatewayForm = () => {
-    // Garante a utilização prioritária do token bruto da Superbid (sbx_access_token)
+    if (!validateSessionBeforeAction()) return;
+
     const tokenToUse: string | null = accessTokenSBX || activeToken;
 
     if (!tokenToUse) {
@@ -1057,7 +1135,6 @@ function SandboxPage() {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
     const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
 
-    // Criação dinâmica do elemento form para submissão POST nativa
     const form = document.createElement("form");
     form.method = "POST";
     form.action = gatewayUrl;
@@ -1072,7 +1149,6 @@ function SandboxPage() {
       utm_campaign: "flow_sbxpay_form",
     };
 
-    // Serializa cada chave do payload em um input oculto do formulário
     Object.entries(searchPayload).forEach(([key, value]) => {
       const input = document.createElement("input");
       input.type = "hidden";
@@ -1084,13 +1160,12 @@ function SandboxPage() {
     document.body.appendChild(form);
 
     try {
-      form.submit(); // Dispara o POST para o Edge Gateway de borda
+      form.submit();
     } catch (err: any) {
       console.error("[FORM_POST_ERROR]:", err);
       setError(`Erro ao submeter formulário: ${err.message}`);
       setLoadingAction(null);
     } finally {
-      // Limpeza controlada do DOM após o disparo
       setTimeout(() => {
         if (document.body.contains(form)) document.body.removeChild(form);
         setLoadingAction(null);
@@ -1113,7 +1188,8 @@ function SandboxPage() {
    *    nova aba (`window.open`), mantendo o painel do Sandbox intacto.
    */
   const handleSbxPayGatewayAjax = async () => {
-    // Garante a utilização prioritária do token bruto da Superbid (sbx_access_token)
+    if (!validateSessionBeforeAction()) return;
+
     const tokenToUse: string | null = accessTokenSBX || activeToken;
 
     if (!tokenToUse) {
@@ -1133,7 +1209,7 @@ function SandboxPage() {
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
-          "x-access-token": tokenToUse, // 👈 HEADER AQUI
+          "x-access-token": tokenToUse,
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
@@ -1150,12 +1226,10 @@ function SandboxPage() {
         throw new Error(data.message || `Erro no gateway AJAX: ${res.status}`);
       }
 
-      // Atualiza o token stateless em memória se retornado pelo gateway
       if (data.session_token) {
         sessionStorage.setItem("session_token", data.session_token);
       }
 
-      // Abre o fluxo de destino programaticamente em nova aba
       if (data.redirect_url) {
         window.open(data.redirect_url, "_blank");
       } else {
@@ -1184,7 +1258,8 @@ function SandboxPage() {
    * 3. Navegação: Realiza a submissão do DOM form provocando redirecionamento total.
    */
   const handleDirectGatewayForm = (flowKey: string, productId: string) => {
-    // Garante a utilização prioritária do token bruto da Superbid (sbx_access_token)
+    if (!validateSessionBeforeAction()) return;
+
     const tokenToUse: string | null = accessTokenSBX || activeToken;
 
     if (!tokenToUse) {
@@ -1250,7 +1325,8 @@ function SandboxPage() {
    *    atualizado e abre a URL de destino em uma nova aba via `window.open`.
    */
   const handleDirectGatewayAjax = async (flowKey: string, productId: string) => {
-    // Garante a utilização prioritária do token bruto da Superbid (sbx_access_token)
+    if (!validateSessionBeforeAction()) return;
+
     const tokenToUse: string | null = accessTokenSBX || activeToken;
 
     if (!tokenToUse) {
@@ -1270,7 +1346,7 @@ function SandboxPage() {
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
-          "x-access-token": tokenToUse, // 👈 HEADER AQUI
+          "x-access-token": tokenToUse,
         },
         body: JSON.stringify({
           environment: ambienteAtivo,

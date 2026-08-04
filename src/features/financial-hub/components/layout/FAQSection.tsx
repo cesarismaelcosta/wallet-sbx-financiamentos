@@ -5,19 +5,22 @@
  * --------------------------------------------------------------------------------
  * src/
  * ├── components/
- * │   ├── auto-equity/
+ * │   ├── layout/
  * │   │   ├── FAQSection.tsx        # [AQUI] Seção de perguntas frequentes
  * │   │   └── ...
- * │   └── ui/
- * │       └── accordion.tsx         # Componente base Shadcn
+ * │   └── products/
+ * │       └── credit         
  * └── ...
  * --------------------------------------------------------------------------------
  * * PROPÓSITO:
- * Exibir perguntas e respostas frequentes em um formato de acordeão organizado em duas colunas.
+ * Exibir perguntas e respostas frequentes em um formato de acordeão organizado.
  * * INTEGRAÇÃO:
  * - Recebe um array `items` que é automaticamente ordenado pela prop `position`.
  * * INTERDEPENDÊNCIAS:
  * - UI: Shadcn Accordion.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -41,23 +44,22 @@ export function FAQSection({ items }: FAQSectionProps) {
 
   return (
     <section id="duvidas" className="py-20 relative overflow-hidden bg-white">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 relative z-10">
+      <div className="mx-auto max-w-7xl px-2 sm:px-6 relative z-10">
         <h2 className="text-center text-3xl font-bold mb-16 text-foreground/90">
           Dúvidas Frequentes
         </h2>
-        <div className="grid md:grid-cols-2 gap-x-12 gap-y-4">
+        {/* Ajustado: grid-cols-1 no mobile para evitar vãos, md:grid-cols-2 no desktop */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
           
           {/* Coluna 1 */}
           <div className="space-y-4">
-            <Accordion type="single" collapsible className="w-full">
+            <Accordion type="single" collapsible className="w-full space-y-4">
               {sortedItems.slice(0, half).map((item, i) => (
-                // Adicionamos 'focus-within:border-[var(--brand-primary)]' aqui
                 <AccordionItem 
                   key={i} 
                   value={`item-col1-${i}`} 
                   className="border border-border rounded-xl px-4 bg-white/60 shadow-sm transition-all focus-within:border-[var(--brand-primary)]"
                 >
-                  {/* Adicionamos 'focus-visible:text-[var(--brand-primary)]' e removemos os rings */}
                   <AccordionTrigger className="text-left font-semibold text-foreground/90 hover:text-[var(--brand-primary)] transition-colors focus-visible:outline-none focus-visible:text-[var(--brand-primary)]">
                     {item.question}
                   </AccordionTrigger>
@@ -81,7 +83,7 @@ export function FAQSection({ items }: FAQSectionProps) {
 
           {/* Coluna 2 */}
           <div className="space-y-4">
-            <Accordion type="single" collapsible className="w-full">
+            <Accordion type="single" collapsible className="w-full space-y-4">
               {sortedItems.slice(half).map((item, i) => (
                 <AccordionItem 
                   key={i} 

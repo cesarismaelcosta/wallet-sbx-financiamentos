@@ -14,6 +14,8 @@
  * 1. Simulação: Dispara a chamada para o gateway financeiro ao identificar uma oferta válida.
  * 2. Segurança: Implementa travas de fluxo (isSimulating/hasAttempted) para impedir chamadas duplicadas e loops de renderização.
  * 3. Renderização: Exibe as opções de parcelamento (consults) retornadas pela API, permitindo a escolha do usuário.
+ * 
+ * @author César Ismael Pereira da Costa
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -37,6 +39,7 @@ export function Step1Simulation() {
   // ANTES de qualquer return condicional, obedecendo às regras do React.
   const offerValue = state?.data?.offer?.offer_value;
   const simResult = state?.data?.simulationResult;
+  const offer = state?.data?.offer;
 
   useEffect(() => {
     // Só dispara se houver oferta, se não houver resultado E se nunca tentou antes
@@ -110,39 +113,41 @@ export function Step1Simulation() {
   }
 
   const simulationResult = state.data?.simulationResult;
-  const offer = state.data?.offer;
+  
+  // Atributos ajustados do lote para igualar ao padrão de Veículos
+  const loteSubIndex = offer?.lote_index || offer?.lote_numero || "1";
+  const offerDescText = offer?.offer_description ? offer.offer_description.replace(/[.,]+$/, "") : "";
 
   return (
-    <div className="w-full space-y-10">
-      <div className="bg-white space-y-4">
-        <div className="flex items-start gap-6">
-          {/* shrink-0 garante que o ícone nunca seja amassado se o texto for grande */}
-          <div className="bg-primary/10 p-2 rounded-full shrink-0">
+    <div className="w-full space-y-8">
+      <div className="bg-white space-y-6">
+        
+        {/* HEADER LIMPO COM PADRÃO EXATO DE VEÍCULOS */}
+        <div className="flex items-start gap-4">
+          <div className="bg-primary/10 p-2.5 rounded-full shrink-0 hidden sm:flex">
             <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
           </div>
           
-          {/* w-0 flex-1 obriga o container a respeitar o limite e cortar com "..." */}
-          <div className="space-y-1 flex-1 w-0">
-            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">
+          {/* Ajuste de espaçamento (space-y-0.5) para as linhas ficarem perfeitamente unidas */}
+          <div className="space-y-0.5 flex-1 w-0 min-w-0">
+            <h3 className="text-base sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full">
               Simulação de parcelamento*!
             </h3>
             
-            {/* O truncate vai cortar com "..." sem quebrar a linha */}
-            <p className="text-xs text-muted-foreground truncate">
-              {offer?.offer_description 
-                ? offer.offer_description.replace(/[.,]+$/, "") 
-                : "Selecione o melhor parcelamento no cartão para você."}
+            {/* Linha 1: Descrição do item em cinza claro */}
+            <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
+              {offerDescText}
             </p>
-            
-            <p className="flex items-baseline gap-1 mt-1">
-              <span className="text-slate-900 text-sm">{BRL(offerValue || 0)}</span>
+
+            {/* Linha 2: Lote e valor com destaque */}
+            <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
+              Lote {loteSubIndex} • <strong className="text-slate-900 font-bold">{BRL(offerValue || 0)}</strong>
             </p>
           </div>
         </div>
         
-        {/* BLOCO DE AJUSTE DE ESPAÇAMENTO APLICADO AQUI ABAIXO */}
-        {/* Reduzimos o padding vertical e horizontal e removemos o redundant space-y-4 */}
-        <div className="py-2 md:py-3 px-4 md:px-6">
+        {/* BLOCO DE OPÇÕES DE PARCELAMENTO */}
+        <div className="py-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {(simulationResult?.consults || []).map((item: any, index: number) => {
               const qtdParcelas = item.installments;
@@ -154,12 +159,7 @@ export function Step1Simulation() {
                   key={index}
                   className="w-full flex flex-col items-start p-4 bg-white border border-[var(--brand-primary)] rounded-xl overflow-hidden hover:bg-slate-50 transition-colors focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
                 >
-                  
-                  {/* CONTAINER UNIFICADO ELÁSTICO */}
-                  {/* flex-nowrap e whitespace-nowrap proíbem o texto de quebrar de linha */}
                   <div className="flex flex-nowrap items-baseline gap-1.5 w-full whitespace-nowrap">
-                    
-                    {/* Parcela (ex: 18x): Encolhe proporcionalmente */}
                     <span 
                       className="font-black shrink-0" 
                       style={{ color: "var(--brand-primary)", fontSize: "clamp(0.9rem, 3.5vw, 1.1rem)" }}
@@ -167,28 +167,24 @@ export function Step1Simulation() {
                       {qtdParcelas}x
                     </span>
                     
-                    {/* Valor Principal: Encolhe junto sem NUNCA usar reticências (...) */}
                     <span 
                       className="font-black text-slate-900 tracking-tight shrink-0"
                       style={{ fontSize: "clamp(1.1rem, 4.5vw, 1.35rem)" }}
                     >
                       {BRL(valorParcela)}
                     </span>
-                    
                   </div>
                   
-                  {/* Valor Total fica embaixo tranquilo */}
                   <span className="text-xs text-slate-500 mt-1.5">
                     Total {BRL(totalOpcao)}
                   </span>
-                  
                 </button>
               );
             })}
           </div>
         </div>
         
-        <p className="text-[12px] text-slate-400 font-medium leading-relaxed px-6 md:px-8 pb-4">
+        <p className="text-[12px] text-slate-400 font-medium leading-relaxed pb-4">
           * Considera o valor do lance no momento da simulação, sem adicionar eventuais comissões ou outras taxas que também podem ser parceladas.
         </p>
       </div>

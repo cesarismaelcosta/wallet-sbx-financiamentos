@@ -49,13 +49,13 @@ const SENSITIVE_REGISTRY: Record<string, RedactConfig> = {
   // ==========================================
   // Dados Financeiros, Veículo e Endereço
   // ==========================================
-  "valorparcela": { mask: true },
-  "valorentrada": { mask: true },
-  "valorfinanciado": { mask: true },
-  "valor": { mask: true },
-  "valorveiculo": { mask: true },
-  "requested_value": { mask: true },
-  "down_payment_amount": { mask: true },
+  "valorparcela": { mask: false },
+  "valorentrada": { mask: false },
+  "valorfinanciado": { mask: false },
+  "valor": { mask: false },
+  "valorveiculo": { mask: false },
+  "requested_value": { mask: false },
+  "down_payment_amount": { mask: false },
   "chassi": { mask: true },
   "renavam": { mask: true },
   "placa": { mask: true },
