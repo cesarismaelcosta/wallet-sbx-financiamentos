@@ -327,7 +327,8 @@ function SimulationsPage() {
         status_types(id, name),
         financial_institutions(id, name, logo_url),
         simulation_offers(*),
-        simulation_consents(*)
+        simulation_consents(*),
+        simulation_updates(*)
       `).order('created_at', { ascending: false }),
       supabase.from("status_types").select("name")
     ]);
@@ -766,6 +767,7 @@ function SimulationsPage() {
                     <div className="space-y-1 text-xs">
                       <div><span className="text-slate-500">Início:</span> <strong className="ml-1">{created.d} às {created.h}</strong></div>
                       <div><span className="text-slate-500">Localização:</span> <strong className="ml-1">{firstUpdate.country || "BR"} / {firstUpdate.state || "—"} / {firstUpdate.city || "—"}</strong></div>
+                      <div><span className="text-slate-500">IP / Device:</span> <strong className="ml-1">{firstUpdate.ip_address || "—"} / {firstUpdate.operating_system || "—"} ({firstUpdate.device_type || "—"})</strong></div>
                       <div><span className="text-slate-500">Visit ID:</span> <strong className="font-mono ml-1">{sim.visit_id || "Não rastreado"}</strong></div>
                     </div>
                   </div>
