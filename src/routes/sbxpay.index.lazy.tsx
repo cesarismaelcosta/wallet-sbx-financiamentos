@@ -458,7 +458,7 @@ export function sbXPAYHome() {
             </div>
 
             {/* Imagem original para desktop */}
-            <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
+            <div className="hidden sm:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
               <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                 <div className="absolute inset-0 animate-blob-float blob-shadow flex items-center justify-center">
                   <svg
@@ -542,7 +542,7 @@ export function sbXPAYHome() {
             </div>
 
             {/* Imagem original para desktop */}
-            <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
+            <div className="hidden sm:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
               <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                 <div className="absolute inset-0 animate-blob-float-reverse blob-shadow flex items-center justify-center">
                   <svg
@@ -629,7 +629,7 @@ export function sbXPAYHome() {
             </div>
 
             {/* Imagem original para desktop */}
-            <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
+            <div className="hidden sm:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
               <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                 <div className="absolute inset-0 animate-blob-float blob-shadow flex items-center justify-center">
                   <svg
@@ -690,7 +690,7 @@ export function sbXPAYHome() {
             </div>
 
             {/* Imagem original para desktop */}
-            <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
+            <div className="hidden sm:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
               <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                 <div className="absolute inset-0 animate-blob-float-reverse blob-shadow flex items-center justify-center">
                   <svg
@@ -754,7 +754,7 @@ export function sbXPAYHome() {
             </div>
 
             {/* Imagem original para desktop */}
-            <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
+            <div className="hidden sm:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
               <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                 <div className="absolute inset-0 animate-blob-float blob-shadow flex items-center justify-center">
                   <svg
@@ -815,7 +815,7 @@ export function sbXPAYHome() {
             </div>
 
             {/* Imagem original para desktop */}
-            <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
+            <div className="hidden sm:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
               <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                 <div className="absolute inset-0 animate-blob-float-reverse blob-shadow flex items-center justify-center">
                   <svg
@@ -888,7 +888,7 @@ export function sbXPAYHome() {
             </div>
 
             {/* Imagem original para desktop */}
-            <div className="hidden lg:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
+            <div className="hidden sm:flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
               <div className="relative w-full max-w-sm p-2 flex items-center justify-center z-0">
                 <div className="absolute inset-0 animate-blob-float blob-shadow flex items-center justify-center">
                   <svg

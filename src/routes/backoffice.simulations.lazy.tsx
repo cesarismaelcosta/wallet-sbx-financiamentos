@@ -12,11 +12,14 @@
  * [AJUSTES DESTA VERSÃO]:
  * - Solução DEFINITIVA de impressão usando Iframe Isolado. Ignora bloqueios do Radix UI,
  *   preserva 100% das classes Tailwind e evita telas em branco no PDF.
+ * - Remoção de Fallbacks: O código agora lê os dados unicamente das colunas físicas 
+ *   do banco de dados (simulations e simulation_offers), conforme schema oficial.
  * ============================================================================
  */
 
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useRef } from "react";
+import * as XLSX from "xlsx";
 import {
   RefreshCw, Search, Filter, Download, ChevronDown, Camera, Building2, User,
   Calendar as CalendarIcon, CreditCard, MapPin, Smartphone, Briefcase, Layers,
@@ -381,6 +384,65 @@ function SimulationsPage() {
   }, [rows, search, selectedStatus, dateRange, customRange, selectedPartners, selectedProducts]);
 
   // ============================================================================
+  // [HANDLE DE EXPORTAÇÃO EXCEL - DADOS ESTRITOS AO BANCO]
+  // ============================================================================
+  const handleExportExcel = () => {
+    const dataToExport = filtered.map((sim) => {
+      const bank = Array.isArray(sim.financial_institutions) ? sim.financial_institutions[0] : sim.financial_institutions;
+      const created = formatDate(sim.created_at);
+      const offerRow = Array.isArray(sim.simulation_offers) ? sim.simulation_offers[0] : (sim.simulation_offers || {});
+      
+      const eventoFull = offerRow.event_description ? `[${offerRow.event_id || "—"}] ${offerRow.event_description}` : "—";
+
+      return {
+        "ID": sim.id,
+        "Data": `${created.d} ${created.h}`,
+        "Cliente": sim.name || "—",
+        "Documento": sim.document || "—",
+        "Telefone": sim.phone || "—",
+        "E-mail": sim.email || "—",
+        "Estágio": sim.stage_types?.name || "—",
+        "Produto": sim.product_types?.name || "—",
+        "Status": sim.status_types?.name || "—",
+        "Parceiro Origem": sim.partners?.name || "—",
+        "Banco Destino": bank?.name || "—",
+        "Valor Financiado": sim.financed_amount || 0, 
+        "Valor Parcela": sim.installment_value || 0,  
+        "Qtd Parcelas": sim.installments || 0,
+        "Descrição da Oferta": offerRow.offer_description || "—",
+        "Oferta ID": offerRow.offer_id || "—",
+        "Valor da Oferta": offerRow.offer_value || 0,
+        "Evento": eventoFull,
+        "Organizador": offerRow.manager_name || "—",
+        "Vendedor (Razão Social)": offerRow.legal_name || "—",
+        "Seller ID": offerRow.seller_id || "—"
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+
+    const colWidths = Object.keys(dataToExport[0] || {}).map(key => {
+      const maxLength = Math.max(
+        key.length,
+        ...dataToExport.map(row => String(row[key as keyof typeof row] || "").length)
+      );
+      return { wch: maxLength + 2 }; 
+    });
+    worksheet["!cols"] = colWidths;
+
+    if (worksheet['!ref']) {
+      const range = XLSX.utils.decode_range(worksheet['!ref']);
+      worksheet['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
+    }
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Simulações");
+    
+    const today = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(workbook, `Monitor_Simulacoes_${today}.xlsx`);
+  };
+
+  // ============================================================================
   // [HANDLE DE IMPRESSÃO: IFRAME ISOLADO]
   // ============================================================================
   /**
@@ -455,21 +517,26 @@ function SimulationsPage() {
           <p className="text-sm text-muted-foreground">Acompanhe simulações, análises e aprovações em tempo real.</p>
         </div>
         <div className="flex items-center gap-2">
-            <Button variant="outline" className="rounded-xl"><Download className="mr-2 h-4 w-4" /> Exportar</Button>
+            <Button variant="outline" onClick={handleExportExcel} className="rounded-xl hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200 transition-colors">
+              <Download className="mr-2 h-4 w-4" /> Exportar Excel
+            </Button>
             <Button onClick={load} className="rounded-xl"><RefreshCw className="mr-2 h-4 w-4" /> Atualizar</Button>
         </div>
       </div>
 
       {/* BLOCO DE KPIS */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         {[
-            { label: "Total de propostas", value: totals.total, highlight: false },
+            { label: "Propostas", value: totals.total, highlight: false },
             { label: "Em simulação", value: totals.simulacao, highlight: false },
             { label: "Em análise", value: totals.analise, highlight: false },
             { label: "Aprovadas", value: totals.aprovada, highlight: false },
             { label: "Volume aprovado", value: BRL(totals.volume), highlight: true }
-        ].map((t) => (
-            <div key={t.label} className={`rounded-2xl border p-5 ${t.highlight ? "bg-[#fdf2f8] border-[#fbcfe8] text-[#d946ef]" : "border-border bg-card text-card-foreground"}`}>
+        ].map((t, index) => (
+            <div 
+              key={t.label} 
+              className={`rounded-2xl border p-5 ${index === 4 ? "lg:col-span-2" : ""} ${t.highlight ? "bg-[#fdf2f8] border-[#fbcfe8] text-[#d946ef]" : "border-border bg-card text-card-foreground"}`}
+            >
                 <div className={`text-xs font-semibold uppercase ${t.highlight ? "text-[#d946ef]" : "text-muted-foreground"}`}>{t.label}</div>
                 <div className="mt-2 text-2xl font-bold">{t.value}</div>
             </div>
@@ -558,20 +625,25 @@ function SimulationsPage() {
             const sim = activeSimulation;
             // 🟢 Tratamento do resultado da simulação
             const statusName = (sim.status_types?.name ?? "").toLowerCase();
-            const isNegadaOuFalha = statusName.includes("recus") || statusName.includes("falha");
-            const motivoRecusa = sim.result_partner_types?.description || "Simulação não aprovada pelo parceiro.";
 
             const created = formatDate(sim.created_at);
-            const offerRow = Array.isArray(sim.simulation_offers) ? sim.simulation_offers[0] : (sim.simulation_offers || {});
-            const bank = Array.isArray(sim.financial_institutions) ? sim.financial_institutions[0] : sim.financial_institutions;
-            const ed = sim.entity_details || sim.details || {};
-            const rawDoc = sim.document?.replace(/\D/g, "") || ed.document?.replace(/\D/g, "") || "";
-            const isPJ = (ed.entity_type || (rawDoc.length === 14 ? "J" : "P")) === "J";
-            const doc = rawDoc.length === 14 ? rawDoc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : rawDoc.length === 11 ? rawDoc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4") : sim.document || "—";
+            const offerRow = (Array.isArray(sim.simulation_offers) ? sim.simulation_offers[0] : sim.simulation_offers) || {};
+            const bank = (Array.isArray(sim.financial_institutions) ? sim.financial_institutions[0] : sim.financial_institutions) || {};
+
+            // Uso estrito das colunas da tabela "simulations"
+            const rawDoc = (sim.document || "").replace(/\D/g, "");
+            const isPJ = sim.entity_type === "J" || rawDoc.length === 14;
+            const doc = rawDoc.length === 14 
+              ? rawDoc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") 
+              : rawDoc.length === 11 
+              ? rawDoc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4") 
+              : sim.document || "—";
+
+            // Fallback para Endereço: Mantido o mapeamento via JSON porque não há colunas de endereço físicas em "simulations".
+            const ed = sim.entity_details || {};
             const fullAddress = [ed.address?.street, ed.address?.number, ed.address?.complement, ed.address?.neighborhood, ed.address?.city, ed.address?.state, ed.address?.zip_code, ed.address?.country].filter(Boolean).join(", ");
-            const od = offerRow.offer_details || offerRow || {};
-            const updatesArray = Array.isArray(sim.simulation_updates) ? sim.simulation_updates : [];
-            const firstUpdate = updatesArray.length > 0 ? updatesArray[0] : {};
+            
+            const firstUpdate = (Array.isArray(sim.simulation_updates) ? sim.simulation_updates[0] : null) || {};
 
             const rawPayloadObj = typeof sim.raw_payload === "string" ? (() => { try { return JSON.parse(sim.raw_payload); } catch { return {}; } })() : (sim.raw_payload || {});
             const pageConfigs = rawPayloadObj.page_configs || {};
@@ -597,7 +669,8 @@ function SimulationsPage() {
                           <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">{sim.product_types?.name || "Financiamento"}</span>
                           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${statusClass(sim.status_types?.name)}`}>{sim.status_types?.name || "Pendente"}</span>
                         </div>
-                        <SheetTitle className="text-xl font-bold text-slate-900 mt-1">{sim.name || ed.name || "Cliente sem nome"}</SheetTitle>
+                        {/* Uso de nome via coluna física "name" */}
+                        <SheetTitle className="text-xl font-bold text-slate-900 mt-1">{sim.name || "—"}</SheetTitle>
                       </div>
                     </div>
                   </SheetHeader>
@@ -612,7 +685,8 @@ function SimulationsPage() {
                     </div>
                     <div className="pt-2 border-t grid grid-cols-1 gap-2 text-xs">
                       <div className="flex items-center gap-1.5 text-slate-700"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" /><span><strong>Localização:</strong> {firstUpdate.country || "BR"} / {firstUpdate.state || "—"} / {firstUpdate.city || "—"}</span></div>
-                      <div className="flex items-center gap-1.5 text-slate-700"><Smartphone className="h-3.5 w-3.5 text-muted-foreground shrink-0" /><span><strong>IP / Device:</strong> {sim.ip_address || firstUpdate.ip_address || ed.metadata?.originIp || "179.218.11.57"} / {firstUpdate.operating_system || "Windows"} ({firstUpdate.device_type || "Desktop"})</span></div>
+                      {/* Uso estrito do firstUpdate ou metadata nativo */}
+                      <div className="flex items-center gap-1.5 text-slate-700"><Smartphone className="h-3.5 w-3.5 text-muted-foreground shrink-0" /><span><strong>IP / Device:</strong> {firstUpdate.ip_address || "—"} / {firstUpdate.operating_system || "—"} ({firstUpdate.device_type || "—"})</span></div>
                     </div>
                   </div>
 
@@ -620,22 +694,52 @@ function SimulationsPage() {
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><User className="h-3.5 w-3.5 text-primary" /> Dados Cadastrais ({isPJ ? "Pessoa Jurídica" : "Pessoa Física"})</h4>
                     <div className="grid grid-cols-2 gap-3 text-xs">
                       <div><span className="text-muted-foreground block">{isPJ ? "CNPJ:" : "CPF:"}</span><strong className="text-slate-800 font-mono">{doc}</strong></div>
-                      <div><span className="text-muted-foreground block">{isPJ ? "Data de Fundação:" : "Data de Nascimento:"}</span><strong className="text-slate-800">{ed.birth_date ? new Date(ed.birth_date).toLocaleDateString("pt-BR") : "—"}</strong></div>
-                      <div><span className="text-muted-foreground block">Telefone:</span><strong className="text-slate-800">{sim.phone || ed.phone || "—"}</strong></div>
-                      <div><span className="text-muted-foreground block">Login de Acesso:</span><strong className="text-slate-800">{ed.login || "—"}</strong></div>
-                      <div className="col-span-2 pt-2 border-t"><span className="text-muted-foreground block">E-mail:</span><strong className="text-slate-800 truncate block" title={sim.email || ed.email}>{sim.email || ed.email || "—"}</strong></div>
+                      {/* Uso de birth_date via coluna física "birth_date" */}
+                      <div><span className="text-muted-foreground block">{isPJ ? "Data de Fundação:" : "Data de Nascimento:"}</span><strong className="text-slate-800">{sim.birth_date ? new Date(sim.birth_date).toLocaleDateString("pt-BR") : "—"}</strong></div>
+                      {/* Uso de phone via coluna física "phone" */}
+                      <div><span className="text-muted-foreground block">Telefone:</span><strong className="text-slate-800">{sim.phone || "—"}</strong></div>
+                      {/* Uso de gender via coluna física "gender" */}
+                      <div><span className="text-muted-foreground block">Gênero:</span><strong className="text-slate-800">{sim.gender || "—"}</strong></div>
+                      {/* Uso de email via coluna física "email" */}
+                      <div className="col-span-2 pt-2 border-t"><span className="text-muted-foreground block">E-mail:</span><strong className="text-slate-800 truncate block" title={sim.email}>{sim.email || "—"}</strong></div>
                     </div>
+                    {/* Renderização do Endereço (Mantida a leitura do JSON, pois tabela "simulations" não tem rua, cidade, etc.) */}
                     {fullAddress && (<div className="mt-3 pt-3 border-t text-xs"><span className="text-muted-foreground block">Endereço Completo:</span><strong className="text-slate-800 font-normal">{fullAddress}</strong></div>)}
                   </div>
 
-                  {od.offer_description && (
+                  {offerRow.offer_id && (
                     <div className="rounded-xl border bg-card p-4 space-y-4">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><CreditCard className="h-3.5 w-3.5 text-primary" /> Oferta / Lote</h4>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                        <CreditCard className="h-3.5 w-3.5 text-primary" /> Oferta / Lote
+                      </h4>
                       <div className="space-y-3 text-xs">
-                        <div><span className="text-muted-foreground block">Descrição da Oferta:</span><strong className="text-slate-900 text-sm font-semibold">{od.offer_description}</strong></div>
+                        <div>
+                          <span className="text-muted-foreground block">Descrição da Oferta:</span>
+                          <strong className="text-slate-900 text-sm font-semibold">{offerRow.offer_description}</strong>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-3 pt-1 border-t items-center">
-                          <div><span className="text-muted-foreground block">Categoria:</span><strong className="text-slate-800">{od.category || "—"}</strong></div>
-                          <div className="text-right"><span className="text-muted-foreground block">Número:</span><strong className="text-slate-800 font-mono">Lote #{od.lot_number || "—"} / Oferta #{od.offer_id || "—"}</strong></div>
+                          <div className="text-right">
+                            <span className="text-muted-foreground block">Identificação:</span>
+                            <strong className="text-slate-800 font-mono">Oferta #{offerRow.offer_id}</strong>
+                          </div>
+                        </div>
+
+                        {offerRow.event_description && (
+                          <div className="pt-1 border-t">
+                            <span className="text-muted-foreground block">Evento / Leilão:</span>
+                            <strong className="text-slate-800">[{offerRow.event_id}] {offerRow.event_description}</strong>
+                            <div className="text-[11px] text-muted-foreground mt-0.5">
+                              Início: {offerRow.event_start_date ? new Date(offerRow.event_start_date).toLocaleDateString("pt-BR") : "—"} | Término: {offerRow.event_end_date ? new Date(offerRow.event_end_date).toLocaleDateString("pt-BR") : "—"}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="pt-1 border-t flex items-center justify-between">
+                          <div>
+                            <span className="text-muted-foreground block text-[10px]">Valor da Oferta:</span>
+                            <strong className="text-slate-900 font-bold text-sm">{BRL(offerRow.offer_value)}</strong>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -643,10 +747,28 @@ function SimulationsPage() {
 
                   {(offerRow.manager_name || offerRow.legal_name || offerRow.seller_id) && (
                     <div className="rounded-xl border bg-slate-50 p-4 space-y-4">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><Briefcase className="h-3.5 w-3.5 text-primary" /> Organizador & Vendedor</h4>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                        <Briefcase className="h-3.5 w-3.5 text-primary" /> Organizador & Vendedor
+                      </h4>
                       <div className="grid grid-cols-2 gap-3 text-xs">
-                        {offerRow.manager_name && (<div><span className="text-muted-foreground block">Organizador:</span><strong className="text-slate-800">{offerRow.manager_name}</strong></div>)}
-                        {offerRow.seller_id && (<div><span className="text-muted-foreground block">Seller ID:</span><strong className="text-slate-800 font-mono">{offerRow.seller_id}</strong></div>)}
+                        {offerRow.manager_name && (
+                          <div>
+                            <span className="text-muted-foreground block">Organizador:</span>
+                            <strong className="text-slate-800">{offerRow.manager_name}</strong>
+                          </div>
+                        )}
+                        {offerRow.seller_id && (
+                          <div>
+                            <span className="text-muted-foreground block">Seller ID:</span>
+                            <strong className="text-slate-800 font-mono">{offerRow.seller_id}</strong>
+                          </div>
+                        )}
+                        {offerRow.legal_name && (
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground block">Razão Social (Vendedor):</span>
+                            <strong className="text-slate-800">{offerRow.legal_name} ({offerRow.trade_name || "—"})</strong>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -751,6 +873,10 @@ function SimulationsPage() {
             const od = offerRow.offer_details || offerRow || {};
             const bank = Array.isArray(sim.financial_institutions) ? sim.financial_institutions[0] : sim.financial_institutions;
             
+            const managerDetails = offerRow.manager_details || {};
+            const sellerDetails = offerRow.seller_details || {};
+            const eventDetails = offerRow.event_details || {};
+
             const rawDoc = sim.document?.replace(/\D/g, "") || ed.document?.replace(/\D/g, "") || "";
             const isPJ = (ed.entity_type || (rawDoc.length === 14 ? "J" : "P")) === "J";
             const doc = rawDoc.length === 14 
@@ -810,29 +936,88 @@ function SimulationsPage() {
                 </div>
 
                 {od.offer_description && (
-                  <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><CreditCard size={14} className="text-slate-400" /> Oferta / Lote</h4>
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                      <div className="col-span-2"><span className="text-slate-500 block">Descrição da Oferta:</span><strong className="text-sm text-[#B300FF]">{od.offer_description}</strong></div>
-                      <div><span className="text-slate-500 block">Categoria:</span> <strong>{od.category || "—"}</strong></div>
-                      <div><span className="text-slate-500 block">Número:</span> <strong className="font-mono">Lote #{od.lot_number || "—"} / Oferta #{od.offer_id || "—"}</strong></div>
+                  <div className="rounded-xl border bg-card p-4 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                      <CreditCard className="h-3.5 w-3.5 text-primary" /> Oferta / Lote
+                    </h4>
+                    <div className="space-y-3 text-xs">
+                      <div>
+                        <span className="text-muted-foreground block">Descrição da Oferta:</span>
+                        <strong className="text-slate-900 text-sm font-semibold">{od.offer_description}</strong>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 pt-1 border-t items-center">
+                        <div>
+                          <span className="text-muted-foreground block">Categoria:</span>
+                          <strong className="text-slate-800">{od.category || "—"} {od.sub_category ? `(${od.sub_category})` : ""}</strong>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-muted-foreground block">Identificação:</span>
+                          <strong className="text-slate-800 font-mono">Lote #{od.lot_number || "—"} / Oferta #{offerRow.offer_id || "—"}</strong>
+                        </div>
+                      </div>
+                      {(offerRow.event_description || od.event_description) && (
+                        <div className="pt-1 border-t">
+                          <span className="text-muted-foreground block">Evento / Leilão:</span>
+                          <strong className="text-slate-800">[{offerRow.event_id || od.event_id}] {offerRow.event_description || od.event_description}</strong>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            Início: {offerRow.event_start_date ? new Date(offerRow.event_start_date).toLocaleDateString("pt-BR") : "—"} | Término: {offerRow.event_end_date ? new Date(offerRow.event_end_date).toLocaleDateString("pt-BR") : "—"}
+                          </div>
+                        </div>
+                      )}
+                      <div className="pt-1 border-t flex items-center justify-between">
+                        <div>
+                          <span className="text-muted-foreground block text-[10px]">Valor da Oferta:</span>
+                          <strong className="text-slate-900 font-bold text-sm">{BRL(offerRow.offer_value || od.offer_value)}</strong>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
 
+                {(offerRow.manager_name || managerDetails.manager_name || offerRow.legal_name || offerRow.seller_id || managerDetails.seller_id) && (
+                  <div className="rounded-xl border bg-slate-50 p-4 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                      <Briefcase className="h-3.5 w-3.5 text-primary" /> Organizador & Vendedor
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      {(offerRow.manager_name || managerDetails.manager_name) && (
+                        <div>
+                          <span className="text-muted-foreground block">Organizador:</span>
+                          <strong className="text-slate-800">
+                            {offerRow.manager_name || managerDetails.manager_name}
+                            {(managerDetails.manager_id || offerRow.manager_id) ? ` (${managerDetails.manager_id || offerRow.manager_id})` : ""}
+                          </strong>
+                        </div>
+                      )}
+                      {(offerRow.seller_id || sellerDetails.seller_id || managerDetails.seller_id) && (
+                        <div>
+                          <span className="text-muted-foreground block">Seller ID:</span>
+                          <strong className="text-slate-800 font-mono">
+                            {offerRow.seller_id || sellerDetails.seller_id || managerDetails.seller_id}
+                          </strong>
+                        </div>
+                      )}
+                      {(offerRow.legal_name || sellerDetails.legal_name) && (
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground block">Razão Social (Vendedor):</span>
+                          <strong className="text-slate-800">
+                            {offerRow.legal_name || sellerDetails.legal_name} ({offerRow.trade_name || sellerDetails.trade_name || "—"})
+                          </strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                     <Building2 size={14} className="text-slate-400" /> Condições da Simulação
                   </h4>
-
-                  {/* Condições financeiras sempre visíveis para análise */}
                   <div className="grid grid-cols-3 gap-4 text-xs">
                     <div><span className="text-slate-500 block">Instituição Financeira:</span> <strong className="text-slate-800">{bank?.name || "—"}</strong></div>
                     <div><span className="text-slate-500 block">Valor Financiado:</span> <strong className="text-slate-900 text-sm">{BRL(sim.financed_amount)}</strong></div>
                     <div><span className="text-slate-500 block">Parcelas:</span> <strong className="text-primary font-bold text-sm">{sim.installments && sim.installment_value ? `${sim.installments}x ${BRL(sim.installment_value)}` : "—"}</strong></div>
                   </div>
-
-                  {/* Motivo do parceiro exibido logo abaixo, caso exista */}
                   {sim.result_partner_types?.description && (
                     <div className="pt-3 border-t border-slate-200 text-xs space-y-1">
                       <span className="text-slate-500 block font-bold uppercase text-[10px]">Retorno do Parceiro / Motivo:</span>
@@ -855,7 +1040,7 @@ function SimulationsPage() {
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><FileText size={14} className="text-slate-400" /> Auditoria de Aceite (LGPD)</h4>
                     <div className="grid grid-cols-2 gap-2 text-[10px]">
                       {sim.simulation_consents.map((c: any) => (
-                        <div key={c.id} className="bg-white border rounded-md p-2"><strong className="block text-slate-700 uppercase">✓ {c.consent_id || "Termo"}</strong><span className="text-slate-500">Aceito em {formatDate(c.accepted_at).d} às {formatDate(c.accepted_at).h}</span></div>
+                        <div key={c.id} className="bg-white border rounded-md p-2"><strong className="block text-slate-700 uppercase">✓ {c.consent_id || "Termo"}</strong><span className="text-slate-500">Aceito em {formatDate(c.accepted_at).d} às {formatDate(c.accepted_at).h} via IP: {c.ip_address || "—"}</span></div>
                       ))}
                     </div>
                   </div>
