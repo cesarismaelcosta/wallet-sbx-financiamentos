@@ -13,7 +13,7 @@
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { Button } from "@/components/ui/button";
 import { ButtonWhatsApp } from "@/features/financial-hub/components/layout/ButtonWhatsApp";
-import { ThumbsUp, ShieldCheck, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 
 export function Step2Confirm() {
@@ -49,10 +49,14 @@ export function Step2Confirm() {
         
         {isApproved ? (
           <>
-            {/* Header: Ícone oculto no mobile (hidden sm:flex), linhas mais juntas (space-y-0.5) e maior respiro (mb-6) */}
-            <div className="flex items-start gap-4 mb-6">
-              <div className="bg-primary/10 p-2.5 rounded-full shrink-0 hidden sm:flex">
-                <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
+            {/* Header: Imagem de simulação idêntica ao Step 1 no desktop */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
+                <img 
+                  src="/assets/home/financiamentoveiculossimulacao.png" 
+                  alt="Simulação de Financiamento" 
+                  className="w-full h-full object-contain"
+                />
               </div>
               
               <div className="space-y-0.5 flex-1 w-0 min-w-0">
@@ -154,11 +158,15 @@ export function Step2Confirm() {
             </div>
           </>
         ) : (
-          /* Estado de Recusa - Padronizado e Minimalista */
-          <div className="text-center py-12 space-y-6 flex flex-col items-center">
+          /* Estado de Recusa - Com a ilustração refinada */
+          <div className="text-center py-8 space-y-6 flex flex-col items-center">
             
-            <div className="bg-red-50 p-4 rounded-full w-fit border border-slate-100">
-              <ShieldCheck className="h-8 w-8 text-red-500" />
+            <div className="w-36 h-36 flex items-center justify-center">
+              <img 
+                src="/assets/home/financiamentocreditonegada.png" 
+                alt="Nenhuma oferta disponível" 
+                className="w-full h-full object-contain"
+              />
             </div>
 
             <div className="space-y-2 max-w-xs mx-auto">

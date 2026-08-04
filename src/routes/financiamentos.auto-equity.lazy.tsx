@@ -58,7 +58,7 @@ function AutoEquityPage() {
   
   return (
     <>
-      <section className="relative py-4 px-4 min-h-[85vh] flex items-center justify-center overflow-hidden">
+      <section className="relative -mt-8 pb-12 px-4 w-full flex justify-center overflow-hidden">
         <div className="absolute inset-0 z-0 bg-white" />
         
         <main className="relative z-10 w-full max-w-6xl">

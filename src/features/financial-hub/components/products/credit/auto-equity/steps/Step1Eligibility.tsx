@@ -1,5 +1,6 @@
 /**
  * @fileoverview Passo 1: Elegibilidade (Jornada Auto Equity)
+ * @path src/features/financial-hub/components/products/credit/auto-equity/steps/Step1Eligibility.tsx
  * * PROPÓSITO:
  * Realiza a triagem inicial do cliente. Valida CPF, e-mail e celular, 
  * gerencia o aceite dos termos (LGPD) e consulta a elegibilidade no gateway.
@@ -20,6 +21,18 @@ import { DynamicConsents } from "@/features/financial-hub/components/layout/Dyna
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 
+// Função utilitária para formatar de YYYY-MM-DD para DD/MM/YYYY
+const formatBirthDateBR = (dateStr?: string) => {
+  if (!dateStr) return "";
+  const clean = dateStr.split("T")[0]; // Remove hora caso venha em ISO
+  const parts = clean.split("-");
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    return `${day}/${month}/${year}`;
+  }
+  return dateStr;
+};
+
 export function Step1Eligibility() {
   // Acesso ao estado global do Wizard para navegação e dados
   const { state, next, update } = useWizard<any>();
@@ -33,20 +46,6 @@ export function Step1Eligibility() {
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
 
-  // Funções para formatar os dados ao carregar a tela
-  const formatCpf = (value: string) => {
-    return value
-      .replace(/\D/g, '')
-      .replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  };
-
-  const formatPhone = (value: string) => {
-    const clean = value.replace(/\D/g, ''); 
-    // Padrão solicitado: (55) 21 888888888
-    // Regex: 2 dígitos, 2 dígitos, resto
-    return clean.replace(/(\d{2})(\d{2})(\d+)/, '($1) $2 $3');
-  };
-
   // Inicialização do formulário
   const form = useForm<EligibilityData>({
     resolver: zodResolver(eligibilitySchema),
@@ -58,12 +57,13 @@ export function Step1Eligibility() {
     if (entity) {
       const cpfFormatado = (entity.document || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
       const phoneFormatado = (entity.phone || "").replace(/(\d{2})(\d{2})(\d+)/, '($1) $2 $3');
+      const birthDateFormatted = formatBirthDateBR(entity.birth_date);
 
       // Usa setValue para injetar o valor diretamente no campo
       form.setValue("fullName", entity.name || "", { shouldValidate: true });
       form.setValue("cpf", cpfFormatado, { shouldValidate: true });
       form.setValue("phone", phoneFormatado, { shouldValidate: true });
-      form.setValue("birthDate", entity.birth_date || "", { shouldValidate: true });
+      form.setValue("birthDate", birthDateFormatted, { shouldValidate: true });
       form.setValue("email", entity.email || "", { shouldValidate: true });
     }
   }, [entity, form]);
@@ -159,19 +159,18 @@ export function Step1Eligibility() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground">CPF</p>
-            {/* Agora lê o valor processado do formulário */}
             <p className="text-sm font-medium text-foreground">{form.watch("cpf") || entity?.document}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Data de nascimento</p>
-            <p className="text-sm font-medium text-foreground">{form.watch("birthDate") || entity?.birth_date}</p>
+            {/* Agora exibe a data formatada corretamente em DD/MM/AAAA */}
+            <p className="text-sm font-medium text-foreground">{form.watch("birthDate") || formatBirthDateBR(entity?.birth_date)}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground">Celular</p>
-            {/* Agora lê o valor processado do formulário */}
             <p className="text-sm font-medium text-foreground">{form.watch("phone") || entity?.phone}</p>
           </div>
           <div>

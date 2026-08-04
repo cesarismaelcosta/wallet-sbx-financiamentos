@@ -326,6 +326,7 @@ function SimulationsPage() {
         stage_types(id, name),
         status_types(id, name),
         financial_institutions(id, name, logo_url),
+        result_partner_types(*),
         simulation_offers(*),
         simulation_consents(*),
         simulation_updates(*)
@@ -555,6 +556,11 @@ function SimulationsPage() {
         <SheetContent className="w-full sm:max-w-xl flex flex-col h-full p-0 overflow-hidden bg-white">
           {activeSimulation && (() => {
             const sim = activeSimulation;
+            // 🟢 Tratamento do resultado da simulação
+            const statusName = (sim.status_types?.name ?? "").toLowerCase();
+            const isNegadaOuFalha = statusName.includes("recus") || statusName.includes("falha");
+            const motivoRecusa = sim.result_partner_types?.description || "Simulação não aprovada pelo parceiro.";
+
             const created = formatDate(sim.created_at);
             const offerRow = Array.isArray(sim.simulation_offers) ? sim.simulation_offers[0] : (sim.simulation_offers || {});
             const bank = Array.isArray(sim.financial_institutions) ? sim.financial_institutions[0] : sim.financial_institutions;
@@ -662,12 +668,27 @@ function SimulationsPage() {
                     </div>
                   )}
 
-                  <div className="rounded-xl border bg-slate-50 p-4 space-y-4">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><Building2 className="h-3.5 w-3.5 text-primary" /> Simulação</h4>
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div className="bg-white p-3 rounded-xl border"><span className="text-muted-foreground block">Valor Financiado:</span><span className="text-sm font-bold text-slate-900">{BRL(sim.financed_amount)}</span></div>
-                      <div className="bg-white p-3 rounded-xl border"><span className="text-muted-foreground block">Parcelas:</span><span className="text-sm font-bold text-primary">{sim.installments && sim.installment_value ? `${sim.installments}x ${BRL(sim.installment_value)}` : "—"}</span></div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                      <Building2 size={14} className="text-slate-400" /> Condições da Simulação
+                    </h4>
+
+                    {/* Condições financeiras sempre visíveis para análise */}
+                    <div className="grid grid-cols-3 gap-4 text-xs">
+                      <div><span className="text-slate-500 block">Instituição Financeira:</span> <strong className="text-slate-800">{bank?.name || "—"}</strong></div>
+                      <div><span className="text-slate-500 block">Valor Financiado:</span> <strong className="text-slate-900 text-sm">{BRL(sim.financed_amount)}</strong></div>
+                      <div><span className="text-slate-500 block">Parcelas:</span> <strong className="text-primary font-bold text-sm">{sim.installments && sim.installment_value ? `${sim.installments}x ${BRL(sim.installment_value)}` : "—"}</strong></div>
                     </div>
+
+                    {/* Motivo do parceiro exibido logo abaixo, caso exista */}
+                    {sim.result_partner_types?.description && (
+                      <div className="pt-3 border-t border-slate-200 text-xs space-y-1">
+                        <span className="text-slate-500 block font-bold uppercase text-[10px]">Retorno do Parceiro / Motivo:</span>
+                        <p className="text-slate-700 font-normal leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
+                          {sim.result_partner_types.description}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {pageConfigs?.offer_panel && (
@@ -719,6 +740,11 @@ function SimulationsPage() {
         <div ref={printRef} className="w-full text-slate-900 bg-white p-8">
           {activeSimulation && (() => {
             const sim = activeSimulation;
+            // 🟢 Tratamento do resultado da simulação
+            const statusName = (sim.status_types?.name ?? "").toLowerCase();
+            const isNegadaOuFalha = statusName.includes("recus") || statusName.includes("falha");
+            const motivoRecusa = sim.result_partner_types?.description || "Simulação não aprovada pelo parceiro.";
+
             const created = formatDate(sim.created_at);
             const offerRow = Array.isArray(sim.simulation_offers) ? sim.simulation_offers[0] : (sim.simulation_offers || {});
             const ed = sim.entity_details || sim.details || {};
@@ -794,13 +820,27 @@ function SimulationsPage() {
                   </div>
                 )}
 
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2"><Building2 size={14} className="text-slate-400" /> Condições da Simulação</h4>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                    <Building2 size={14} className="text-slate-400" /> Condições da Simulação
+                  </h4>
+
+                  {/* Condições financeiras sempre visíveis para análise */}
                   <div className="grid grid-cols-3 gap-4 text-xs">
-                    <div><span className="text-slate-500 block">Instituição Financeira:</span> <strong>{bank?.name || "—"}</strong></div>
-                    <div><span className="text-slate-500 block">Valor Financiado:</span> <strong className="text-emerald-700 text-sm">{BRL(sim.financed_amount)}</strong></div>
-                    <div><span className="text-slate-500 block">Parcelas:</span> <strong className="text-[#B300FF] font-bold text-sm">{sim.installments && sim.installment_value ? `${sim.installments}x ${BRL(sim.installment_value)}` : "—"}</strong></div>
+                    <div><span className="text-slate-500 block">Instituição Financeira:</span> <strong className="text-slate-800">{bank?.name || "—"}</strong></div>
+                    <div><span className="text-slate-500 block">Valor Financiado:</span> <strong className="text-slate-900 text-sm">{BRL(sim.financed_amount)}</strong></div>
+                    <div><span className="text-slate-500 block">Parcelas:</span> <strong className="text-primary font-bold text-sm">{sim.installments && sim.installment_value ? `${sim.installments}x ${BRL(sim.installment_value)}` : "—"}</strong></div>
                   </div>
+
+                  {/* Motivo do parceiro exibido logo abaixo, caso exista */}
+                  {sim.result_partner_types?.description && (
+                    <div className="pt-3 border-t border-slate-200 text-xs space-y-1">
+                      <span className="text-slate-500 block font-bold uppercase text-[10px]">Retorno do Parceiro / Motivo:</span>
+                      <p className="text-slate-700 font-normal leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm">
+                        {sim.result_partner_types.description}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {pageConfigs?.offer_panel && (

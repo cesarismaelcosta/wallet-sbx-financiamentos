@@ -4,7 +4,7 @@
  * * * * ÁRVORE DE DEPENDÊNCIAS:
  * --------------------------------------------------------------------------------
  * src/components/veiculos/steps/
- * └── Step1Simulation.tsx               # [FIX] Integração consolidada via callOrchestrator
+ * └── Step1Simulation.tsx              # [FIX] Integração consolidada via callOrchestrator
  * --------------------------------------------------------------------------------
  * * * * INTEGRAÇÃO:
  * - Engine: Renderizado pela WizardEngine.
@@ -20,7 +20,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Loader2, ThumbsUp } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { DynamicConsents } from "@/features/financial-hub/components/layout/DynamicConsents";
 import { SliderCustomizado } from "@/features/financial-hub/components/shared/SliderCustomizado";
@@ -132,12 +132,16 @@ export function Step1Simulation() {
   const offerDescText = offer?.offer_description ? offer.offer_description.replace(/[.,]+$/, "") : "";
 
   return (
-    <div className="space-y-5 max-w-xl mx-auto lg:mx-0">
+    <div className="space-y-4 max-w-xl mx-auto lg:mx-0">
       
-      {/* HEADER EXATO COM 2 LINHAS: Linha 1 = Descrição em cinza claro, Linha 2 = Lote e Valor em destaque */}
-      <div className="flex items-start gap-4 mb-6">
-        <div className="bg-primary/10 p-2.5 rounded-full shrink-0 hidden sm:flex">
-          <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
+      {/* HEADER RESPONSIVO COM A ILUSTRAÇÃO DE VEÍCULOS NO PADRÃO EXATO - mb-4 enxuto */}
+      <div className="flex items-center gap-4 mb-4">
+        <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
+          <img 
+            src="/assets/home/financiamentoveiculossimulacao.png" 
+            alt="Veículos" 
+            className="w-full h-full object-contain"
+          />
         </div>
         
         <div className="space-y-0.5 flex-1 w-0 min-w-0">
@@ -146,12 +150,12 @@ export function Step1Simulation() {
             Simule seu financiamento*!
           </h3>
 
-          {/* Linha 1 (antiga linha 2): Descrição do veículo em cinza claro */}
+          {/* Linha 1: Descrição do veículo em cinza claro */}
           <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
             {offerDescText}
           </p>
 
-          {/* Linha 2 (antiga linha 3): Lote e valor com destaque */}
+          {/* Linha 2: Lote e valor com destaque */}
           <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
             Lote {loteSubIndex} • <strong className="text-slate-900 font-bold">{BRL(localValorVeiculo)}</strong>
           </p>
@@ -246,7 +250,8 @@ export function Step1Simulation() {
         </div>
       </div>
       
-      <div className={`transition-opacity duration-200 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}>
+      {/* Espaçamento interno reduzido via space-y-4 geral e margem controlada */}
+      <div className={`transition-opacity duration-200 pt-1 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}>
         <DynamicConsents 
           configs={consent_configs} 
           value={acceptedConsents} 
@@ -254,20 +259,20 @@ export function Step1Simulation() {
         />
       </div>
 
-    <button 
-      type="button"
-      onClick={handleSimular} 
-      disabled={!areConsentsValid || !localParcelas || loading}
-      className="w-full h-12 rounded-xl text-white shadow-sm transition-all active:scale-[0.98] bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 disabled:opacity-50 disabled:!cursor-wait focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 flex items-center justify-center gap-2"
-    >
-      {loading ? (
-        <span className="flex items-center justify-center gap-2 animate-pulse">
-          <Loader2 className="h-4 w-4 animate-spin" /> Consultando ofertas...
-        </span>
-      ) : (
-        "Simular financiamento"
-      )}
-    </button>
+      <button 
+        type="button"
+        onClick={handleSimular} 
+        disabled={!areConsentsValid || !localParcelas || loading}
+        className="w-full h-12 rounded-xl text-white shadow-sm transition-all active:scale-[0.98] bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 disabled:opacity-50 disabled:!cursor-wait focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 flex items-center justify-center gap-2 mt-1"
+      >
+        {loading ? (
+          <span className="flex items-center justify-center gap-2 animate-pulse">
+            <Loader2 className="h-4 w-4 animate-spin" /> Consultando ofertas...
+          </span>
+        ) : (
+          "Simular financiamento"
+        )}
+      </button>
     </div>
   );
 }

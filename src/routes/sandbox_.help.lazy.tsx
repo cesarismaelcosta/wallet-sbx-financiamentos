@@ -22,7 +22,8 @@ import {
   ServerCrash,
   Layers,
   Cpu,
-  KeyRound
+  KeyRound,
+  Lock
 } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -82,7 +83,7 @@ function SandboxHelpPage() {
           </h1>
           <p className="text-sm text-muted-foreground max-w-4xl leading-relaxed">
             Documentação estruturada com base na auditoria dos arquivos-fonte do projeto. 
-            Abrange o roteamento lazy do TanStack, o ecossistema de serviços, a segurança de borda em Deno (_shared) e o modelo de autenticação puramente Stateless em memória.
+            Abrange o roteamento lazy do TanStack, o ecossistema de serviços, a segurança de borda em Deno (_shared), o modelo de autenticação Stateless em memória e o tratamento automatizado de sessões expiradas.
           </p>
         </div>
 
@@ -129,7 +130,7 @@ function SandboxHelpPage() {
                         q: "Como o TanStack Router gerencia as telas e o carregamento da aplicação?",
                         a: "Mapeado através do diretório 'routes/', o sistema emprega roteamento baseado em arquivos com carregamento assíncrono (.lazy.tsx):",
                         bullets: [
-                          <><b>Sandbox & Ajuda:</b> Os arquivos <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sandbox.lazy.tsx</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sandbox_.help.lazy.tsx</code> utilizam o sufixo com underline (_) para isolar rotas e prevenir herança de layouts indesejados.</>,
+                          <><b>Sandbox & Ajuda:</b> Os arquivos <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sandbox.tsx</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sandbox_.help.lazy.tsx</code> gerenciam o painel de debug e o manual técnico com redirecionamento automático de sessões expiradas.</>,
                           <><b>Portal do Cliente (SBX Pay):</b> Gerenciado por <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sbxpay.lazy.tsx</code> e suas extensões para a página inicial, visualização de ofertas e histórico de consultas.</>,
                           <><b>Backoffice Administrativo:</b> Módulos isolados em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">backoffice.*.lazy.tsx</code> cobrindo alertas, auditorias, configurações, domínios, relatórios, rotas, simulações e controle de usuários.</>,
                           <><b>Jornadas Verticais:</b> Telas específicas para produtos como Auto Equity, Cartão, Financiamento de Veículos e Seguros localizadas em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">financiamentos.*</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">seguros.*</code>.</>
@@ -154,8 +155,8 @@ function SandboxHelpPage() {
             <TabsContent value="services" className="space-y-6 animate-in fade-in duration-300">
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
-                  <CardTitle className="text-lg text-slate-800">Autenticação Stateless e Arquitetura Zero-Database</CardTitle>
-                  <CardDescription>Como o sistema substituiu tabelas de sessão por assinaturas criptográficas em memória.</CardDescription>
+                  <CardTitle className="text-lg text-slate-800">Autenticação Stateless e Tratamento de Sessão Expirada</CardTitle>
+                  <CardDescription>Como o sistema unificou a validação em memória e o redirecionamento automático por resiliência.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6 bg-slate-50/30">
                   <HelpAccordion 
@@ -170,21 +171,12 @@ function SandboxHelpPage() {
                         ]
                       },
                       {
-                        q: "Como funciona a Validação em Memória (Gatekeeper e Auth)?",
-                        a: "Módulos de segurança críticos operam de forma totalmente autônoma:",
+                        q: "Como o Sandbox lida com o erro SESSION_EXPIRED em chamadas AJAX (Fetch)?",
+                        a: "O painel de testes implementa resiliência automatizada por meio da rotina 'checkAndHandleSessionError':",
                         bullets: [
-                          <><b>Verificação Criptográfica:</b> As funções <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">verifySessionToken</code> (em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">jwt.ts</code>) decodificam a identidade e o ambiente diretamente da assinatura do token.</>,
-                          <><b>Zero Roundtrips:</b> O <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">gatekeeper.ts</code> e o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">auth.ts</code> extraem o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">user_id</code> e o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">environment</code> em frações de milésimos de segundo, sem consultar tabelas relacionais.</>,
-                          <><b>Resiliência e Performance:</b> O modelo stateless blinda a aplicação contra gargalos de I/O no PostgreSQL em rotas de alta frequência.</>
-                        ]
-                      },
-                      {
-                        q: "Como o FinancialAuthContext e os serviços operam no front-end?",
-                        a: "A gestão de estado local e chamadas de serviço segue o padrão clean architecture:",
-                        bullets: [
-                          <><b>FinancialAuthContext:</b> Localizado em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">integrations/auth/FinancialAuthContext.tsx</code>, gerencia a sessão reativa e propaga o token stateless.</>,
-                          <><b>Armazenamento Seguro:</b> O perfil do usuário e o token bruto são mantidos em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sessionStorage</code> para isolamento adequado da sessão ativa.</>,
-                          <><b>Camada de Serviços:</b> Módulos como <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">offer.ts</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session.ts</code> abstraem a comunicação REST com as Edge Functions.</>
+                          <><b>Interceptação Inteligente:</b> Caso uma chamada assíncrona retorne código <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">SESSION_EXPIRED</code> ou status 401, a aplicação não exibe apenas um aviso estático, mas limpa o storage e executa o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">handleExpiredSession()</code>.</>,
+                          <><b>Redirecionamento com Retorno Preservado:</b> O usuário é redirecionado instantaneamente para <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">/accounts/signin?redirect_uri=...</code>, garantindo que ele retorne ao ponto exato após reautenticar.</>,
+                          <><b>Guarda de Visibilidade e Inatividade:</b> Eventos de <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">visibilitychange</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">pageshow</code> inspecionam o tempo de expiração do JWT (claim <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">exp</code>) preventivamente ao focar na aba.</>
                         ]
                       }
                     ]}
@@ -197,12 +189,21 @@ function SandboxHelpPage() {
             <TabsContent value="edge" className="space-y-6 animate-in fade-in duration-300">
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
-                  <CardTitle className="text-lg text-slate-800">Edge Functions em Deno e Núcleo Compartilhado (_shared)</CardTitle>
-                  <CardDescription>Arquitetura de microsserviços serverless e validação de borda.</CardDescription>
+                  <CardTitle className="text-lg text-slate-800">Edge Functions em Deno, Borda Híbrida e _shared</CardTitle>
+                  <CardDescription>Segurança de borda com suporte flexível a cabeçalhos e payloads protegidos.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6 bg-slate-50/30">
                   <HelpAccordion 
                     items={[
+                      {
+                        q: "Como a borda 'financial-gateway-gate' resolve credenciais de forma híbrida?",
+                        a: "A Edge Function aceita tokens de acesso por múltiplas vias de transporte com purificação de segurança integrada:",
+                        bullets: [
+                          <><b>Prioridade por Header:</b> O sistema prioriza a leitura do token bruto no cabeçalho customizado <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">x-access-token</code> para requisições AJAX seguras via Fetch.</>,
+                          <><b>Fallback por Payload:</b> Caso o envio ocorra via submissão tradicional de formulário HTML (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">&lt;form method="POST"&gt;</code>), o parâmetro <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">auth_token</code> é extraído do corpo.</>,
+                          <><b>Security Patch (Purga Automática):</b> Imediatamente após a captura, a propriedade <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">auth_token</code> é apagada do objeto payload (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">delete payload.auth_token</code>), impedindo vazamentos ou o reenvio indevido da credencial opaca para serviços downstream (Orquestrador).</>
+                        ]
+                      },
                       {
                         q: "Como o diretório 'supabase/functions/_shared/' padroniza o back-end?",
                         a: "O código serverless utiliza utilitários universais centralizados:",
@@ -210,15 +211,6 @@ function SandboxHelpPage() {
                           <><b>server.ts:</b> Define os cabeçalhos de CORS e o wrapper de segurança <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">withSecurity</code>.</>,
                           <><b>jwt.ts e auth.ts:</b> Concentram a lógica de emissão (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">generateSessionToken</code>) e validação em memória (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">verifySessionToken</code>).</>,
                           <><b>gateKeeper.ts, logger.ts e db.ts:</b> Asseguram regras de IDOR, logs estruturados e conexões seguras com o Supabase.</>
-                        ]
-                      },
-                      {
-                        q: "Como a borda (financial-gateway-gate) processa as requisições de entrada?",
-                        a: "Atua como a porta de entrada frontal unificada do ecossistema:",
-                        bullets: [
-                          <><b>Recepção do Token Externo:</b> Recebe o token bruto da Superbid enviado pelo front-end ou sistemas externos.</>,
-                          <><b>Validação Upstream & Emissão Stateless:</b> Valida o token no endpoint <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">/account/v2/user/me</code> da Superbid e emite o nosso JWT interno assinado em memória.</>,
-                          <><b>Smart Delivery:</b> Retorna o token via cookie HttpOnly ou corpo JSON (segundo negociação de conteúdo), redirecionando o fluxo com segurança.</>
                         ]
                       }
                     ]}
@@ -241,7 +233,7 @@ function SandboxHelpPage() {
                         q: "Qual é a função do motor Orchestrator no projeto?",
                         a: "Desacopla as regras de navegação e apresentação do código estático do front-end:",
                         bullets: [
-                          <>A Edge Function <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">orchestrator</code> lê o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">user_id</code> diretamente do token stateless validado em memória (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">auth.user_id</code>).</>,
+                          <>A Edge Function <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">orchestrator</code> lê o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">user_id</code> diretamente do token stateless validado em memória (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">auth.user_id</code>) via header <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">x-session-token</code>.</>,
                           "Entrega payloads JSON estruturados com configurações de rotas, painéis de propostas, FAQs e termos LGPD."
                         ]
                       },

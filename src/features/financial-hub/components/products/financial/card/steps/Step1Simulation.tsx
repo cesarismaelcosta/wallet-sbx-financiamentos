@@ -122,24 +122,25 @@ export function Step1Simulation() {
     <div className="w-full space-y-8">
       <div className="bg-white space-y-6">
         
-        {/* HEADER LIMPO COM PADRÃO EXATO DE VEÍCULOS */}
-        <div className="flex items-start gap-4">
-          <div className="bg-primary/10 p-2.5 rounded-full shrink-0 hidden sm:flex">
-            <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
+        {/* HEADER RESPONSIVO: GRAFISMO DO CARTÃO DA HOME APENAS NO DESKTOP, OCULTA NO MOBILE */}
+        <div className="flex items-center gap-4">
+          <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
+            <img 
+              src="/assets/home/cartao.png" 
+              alt="Cartão" 
+              className="w-full h-full object-contain"
+            />
           </div>
           
-          {/* Ajuste de espaçamento (space-y-0.5) para as linhas ficarem perfeitamente unidas */}
           <div className="space-y-0.5 flex-1 w-0 min-w-0">
             <h3 className="text-base sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full">
               Simulação de parcelamento*!
             </h3>
             
-            {/* Linha 1: Descrição do item em cinza claro */}
             <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
               {offerDescText}
             </p>
 
-            {/* Linha 2: Lote e valor com destaque */}
             <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
               Lote {loteSubIndex} • <strong className="text-slate-900 font-bold">{BRL(offerValue || 0)}</strong>
             </p>

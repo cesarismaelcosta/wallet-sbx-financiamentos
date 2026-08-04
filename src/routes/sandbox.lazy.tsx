@@ -470,16 +470,11 @@ function SandboxPage() {
     sessionStorage.removeItem("user_profile");
     sessionStorage.removeItem("session_token");
 
-    if (logout) {
-      try {
-        logout({ purgeEnv: true } as any);
-      } catch (e) {
-        // Ignora falhas no contexto caso já limpo
-      }
-    }
-
-    const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
-    window.location.href = `/accounts/signin?redirect_uri=${currentPath}`;
+    // Reseta o state para forçar o render do formulário interno na mesma página
+    setAccessTokenSBX("");
+    setUserData(null);
+    setApiOfferData(null);
+    setVitrineOffers({});
   };
 
   const validateSessionBeforeAction = () => {
@@ -506,6 +501,32 @@ function SandboxPage() {
     }
 
     return true;
+  };
+
+  /**
+   * Helper unificado para checar se o erro retornado indica expiração/falha de sessão
+   */
+  const checkAndHandleSessionError = (errMessage: string, errorCode?: string) => {
+    const msg = (errMessage || "").toLowerCase();
+    const code = (errorCode || "").toUpperCase();
+    
+    if (
+      code === "SESSION_EXPIRED" ||
+      code === "UNAUTHORIZED" ||
+      code === "TOKEN_EXPIRED" ||
+      code === "SBX_LOADER_FAIL_USER" ||
+      msg.includes("401") ||
+      msg.includes("403") ||
+      msg.includes("unauthorized") ||
+      msg.includes("session") ||
+      msg.includes("expired") ||
+      msg.includes("upstream_user_error") ||
+      msg.includes("falha de autenticação")
+    ) {
+      handleExpiredSession();
+      return true;
+    }
+    return false;
   };
 
   useEffect(() => {
@@ -636,7 +657,8 @@ function SandboxPage() {
     },
   ];
 
-  const activeToken = sessionToken || accessTokenSBX;
+  // O Sandbox agora é 100% isolado. Ele só olha para o token bruto guardado no sessionStorage.
+  const activeToken = accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
   /**
    * [HIDRATAÇÃO DE PRATELEIRA DE OFERTAS]
@@ -678,17 +700,7 @@ function SandboxPage() {
         setVitrineOffers(newVitrine);
       } catch (err: any) {
         console.error("Erro ao carregar dados do sandbox:", err);
-        const errorMsg = (err.message || "").toLowerCase();
-
-        if (
-          errorMsg.includes("401") ||
-          errorMsg.includes("unauthorized") ||
-          errorMsg.includes("session") ||
-          errorMsg.includes("expired") ||
-          errorMsg.includes("falha de autenticação")
-        ) {
-          handleExpiredSession();
-        } else {
+        if (!checkAndHandleSessionError(err.message)) {
           setError(err.message || "Erro ao carregar dados do sandbox.");
         }
       } finally {
@@ -715,7 +727,9 @@ function SandboxPage() {
       const offer = await fetchOfferDetails(tempOfferId);
       setApiOfferData(offer);
     } catch (err: any) {
-      setError(err.message || `Oferta não encontrada (Lote: ${tempOfferId}).`);
+      if (!checkAndHandleSessionError(err.message)) {
+        setError(err.message || `Oferta não encontrada (Lote: ${tempOfferId}).`);
+      }
       setApiOfferData(null);
     } finally {
       setLoading(false);
@@ -740,6 +754,7 @@ function SandboxPage() {
       setSelectedOfferPayload(data);
     } catch (err: any) {
       console.error("[DRAWER_FETCH_ERROR]:", err);
+      checkAndHandleSessionError(err.message);
     } finally {
       setDrawerLoading(false);
     }
@@ -782,6 +797,7 @@ function SandboxPage() {
       setRouteConfigData(data);
     } catch (err: any) {
       console.error("[ROUTE_CONFIG_ERROR]:", err);
+      checkAndHandleSessionError(err.message);
     } finally {
       setRouteDrawerLoading(false);
     }
@@ -815,7 +831,7 @@ function SandboxPage() {
     const invalidToken =
       errorTarget === "token"
         ? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid_token_payload_test.signature"
-        : activeToken;
+        : (accessTokenSBX || sessionStorage.getItem("access_token_sbx"));
     const invalidProductId = errorTarget === "product" ? "999" : errorDrawerConfig.item?.product_id || "8";
 
     const payload = {
@@ -1082,6 +1098,10 @@ function SandboxPage() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        // Verifica se é erro de sessão expirada ou token inválido para redirecionar automático
+        if (checkAndHandleSessionError(data.message || "", data.code)) {
+          return;
+        }
         throw new Error(data.message || `Erro no gateway AJAX: ${res.status}`);
       }
 
@@ -1096,14 +1116,16 @@ function SandboxPage() {
       }
     } catch (err: any) {
       console.error("[AJAX_GATEWAY_ERROR]:", err);
-      const errorMsg = err.message || "Erro desconhecido";
-      setError(`Erro no disparo AJAX: ${errorMsg}`);
+      if (!checkAndHandleSessionError(err.message)) {
+        const errorMsg = err.message || "Erro desconhecido";
+        setError(`Erro no disparo AJAX: ${errorMsg}`);
+      }
     } finally {
       setLoadingAction(null);
     }
   };
 
-  /**
+/**
    * =========================================================================
    * [GATEWAY TRANSPORT]: handleSbxPayGatewayForm
    * =========================================================================
@@ -1122,10 +1144,12 @@ function SandboxPage() {
   const handleSbxPayGatewayForm = () => {
     if (!validateSessionBeforeAction()) return;
 
-    const tokenToUse: string | null = accessTokenSBX || activeToken;
+    // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
+    const tokenToUse: string | null = accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
     if (!tokenToUse) {
-      alert("Token de autenticação não encontrado. Faça o login primeiro.");
+      alert("Token bruto da Superbid não encontrado. Faça o login primeiro.");
+      handleExpiredSession();
       return;
     }
 
@@ -1141,7 +1165,7 @@ function SandboxPage() {
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: tokenToUse,
+      auth_token: tokenToUse, // Correto para Form: enviado no payload para a borda ler
       target_url: "/sbxpay",
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
@@ -1173,7 +1197,7 @@ function SandboxPage() {
     }
   };
 
-  /**
+/**
    * =========================================================================
    * [GATEWAY TRANSPORT]: handleSbxPayGatewayAjax
    * =========================================================================
@@ -1190,10 +1214,12 @@ function SandboxPage() {
   const handleSbxPayGatewayAjax = async () => {
     if (!validateSessionBeforeAction()) return;
 
-    const tokenToUse: string | null = accessTokenSBX || activeToken;
+    // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
+    const tokenToUse: string | null = accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
     if (!tokenToUse) {
-      alert("Token de autenticação não encontrado. Faça o login primeiro.");
+      alert("Token bruto da Superbid não encontrado. Faça o login primeiro.");
+      handleExpiredSession();
       return;
     }
 
@@ -1209,7 +1235,7 @@ function SandboxPage() {
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
-          "x-access-token": tokenToUse,
+          "x-access-token": tokenToUse, // Correto para AJAX: token vai no header
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
@@ -1223,6 +1249,9 @@ function SandboxPage() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        if (checkAndHandleSessionError(data.message || "", data.code)) {
+          return;
+        }
         throw new Error(data.message || `Erro no gateway AJAX: ${res.status}`);
       }
 
@@ -1237,14 +1266,16 @@ function SandboxPage() {
       }
     } catch (err: any) {
       console.error("[AJAX_GATEWAY_ERROR]:", err);
-      const errorMsg = err.message || "Erro desconhecido";
-      setError(`Erro no disparo AJAX: ${errorMsg}`);
+      if (!checkAndHandleSessionError(err.message)) {
+        const errorMsg = err.message || "Erro desconhecido";
+        setError(`Erro no disparo AJAX: ${errorMsg}`);
+      }
     } finally {
       setLoadingAction(null);
     }
   };
 
-  /**
+/**
    * =========================================================================
    * [GATEWAY TRANSPORT]: handleDirectGatewayForm
    * =========================================================================
@@ -1260,10 +1291,12 @@ function SandboxPage() {
   const handleDirectGatewayForm = (flowKey: string, productId: string) => {
     if (!validateSessionBeforeAction()) return;
 
-    const tokenToUse: string | null = accessTokenSBX || activeToken;
+    // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
+    const tokenToUse: string | null = accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
     if (!tokenToUse) {
-      alert("Token de autenticação não encontrado. Faça o login primeiro.");
+      alert("Token bruto da Superbid não encontrado. Faça o login primeiro.");
+      handleExpiredSession();
       return;
     }
 
@@ -1279,7 +1312,7 @@ function SandboxPage() {
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: tokenToUse,
+      auth_token: tokenToUse, // Correto para Form: enviado no payload para a borda ler
       product_id: String(productId),
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
@@ -1311,7 +1344,7 @@ function SandboxPage() {
     }
   };
 
-  /**
+/**
    * =========================================================================
    * [GATEWAY TRANSPORT]: handleDirectGatewayAjax
    * =========================================================================
@@ -1327,10 +1360,12 @@ function SandboxPage() {
   const handleDirectGatewayAjax = async (flowKey: string, productId: string) => {
     if (!validateSessionBeforeAction()) return;
 
-    const tokenToUse: string | null = accessTokenSBX || activeToken;
+    // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
+    const tokenToUse: string | null = accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
     if (!tokenToUse) {
-      alert("Token de autenticação não encontrado. Faça o login primeiro.");
+      alert("Token bruto da Superbid não encontrado. Faça o login primeiro.");
+      handleExpiredSession();
       return;
     }
 
@@ -1346,7 +1381,7 @@ function SandboxPage() {
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
-          "x-access-token": tokenToUse,
+          "x-access-token": tokenToUse, // Correto para AJAX: token vai no header
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
@@ -1360,6 +1395,9 @@ function SandboxPage() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        if (checkAndHandleSessionError(data.message || "", data.code)) {
+          return;
+        }
         throw new Error(data.message || `Erro no gateway AJAX: ${res.status}`);
       }
 
@@ -1374,8 +1412,10 @@ function SandboxPage() {
       }
     } catch (err: any) {
       console.error("[AJAX_GATEWAY_ERROR]:", err);
-      const errorMsg = err.message || "Erro desconhecido";
-      setError(`Erro no disparo AJAX: ${errorMsg}`);
+      if (!checkAndHandleSessionError(err.message)) {
+        const errorMsg = err.message || "Erro desconhecido";
+        setError(`Erro no disparo AJAX: ${errorMsg}`);
+      }
     } finally {
       setLoadingAction(null);
     }
