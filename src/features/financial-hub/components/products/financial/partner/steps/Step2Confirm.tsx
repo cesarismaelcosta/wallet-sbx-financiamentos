@@ -1,60 +1,89 @@
-
 /**
  * @fileoverview Componente: Step2Confirm
  * * PROPÓSITO:
- * Exibir o resultado final da simulação.
- * Atua como o segundo e último passo da jornada de Veículos.
+ * Exibir o resultado final da simulação (aprovado/recusado/análise).
+ * Atua como o segundo e último passo da jornada de Partner.
  * * INTEGRAÇÃO:
  * - Consome o estado final do `WizardProvider`.
  */
 
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { Button } from "@/components/ui/button";
-import { ThumbsUp, ShieldCheck, MessageCircle, ArrowLeft } from "lucide-react";
-import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { ButtonWhatsApp } from "@/features/financial-hub/components/layout/ButtonWhatsApp";
+import { ThumbsUp, ShieldCheck, ArrowLeft } from "lucide-react";
+import { BRL } from "@/features/financial-hub/components/shared/formatters";
 
 export function Step2Confirm() {
   const { state, back } = useWizard<any>();
   const result = state.data.simulationResult;
   const isApproved = result?.status_id === 1;
   const mainConsult = result?.consults?.[0];
-  const financiado = (mainConsult.financed_amount || 0);
-
-  console.log("Resultado da simulação:", mainConsult);
-  console.log("Dados do estado:", isApproved, financiado, mainConsult.cet_rate);
-
+  
   // Extraindo a config para verificar o WhatsApp
   const config = state.data?.integration_details;
   const whatsappContact = config?.urlWhatsApp || config?.whatsapp_number;
 
+  // Dados do lote obtidos do estado para manter o padrão visual do Step 1
+  const offer = state.data?.offer;
+  
+  // Atributos ajustados do lote e valor
+  const loteSubIndex = offer?.lote_index || offer?.lote_numero || "1";
+  const offerDescText = offer?.offer_description ? offer.offer_description.replace(/[.,]+$/, "") : "";
+  
+  const valorOferta = state.data?.valorOferta || offer?.offer_value || 0;
+  
+  // PEGANDO OS VALORES EXATOS DO RETORNO DA API (Entrada + Valor Financiado)
+  const valorEntradaAPI = mainConsult?.down_payment_amount || result?.retorno?.valorEntrada || result?.valorEntrada || state.data?.valorEntrada || 0;
+  const valorFinanciadoAPI = mainConsult?.financed_amount || result?.retorno?.valorFinanciado || result?.valorFinanciado || 0;
+
   return (
     // Max-w-lg e mx-auto centralizam e dão respiro lateral em telas grandes
     <div className="w-full max-w-lg mx-auto space-y-10">
-        <div className="bg-white space-y-4">
+      <div className="bg-white space-y-4">
         
-            {/* Header: Ícone e Texto */}
-            <div className="flex items-start gap-6">
-                <div className="bg-primary/10 p-2 rounded-full">
-                    <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
-                </div>
-                <div className="space-y-1">
-                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Condição encontrada!</h3>
-                <p className="text-sm text-slate-500">Temos uma referência de preço para você.</p>
-                </div>
+        {isApproved ? (
+          <>
+            {/* Header: Ícone oculto no mobile (hidden sm:flex), linhas mais juntas (space-y-0.5) e maior respiro (mb-6) */}
+            <div className="flex items-start gap-4 mb-6">
+              <div className="bg-primary/10 p-2.5 rounded-full shrink-0 hidden sm:flex">
+                <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
+              </div>
+              
+              <div className="space-y-0.5 flex-1 w-0 min-w-0">
+                <h3 className="text-base sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full">
+                  Oferta encontrada!
+                </h3>
+                
+                {/* Linha 1: Descrição do item em cinza claro */}
+                <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
+                  {offerDescText}
+                </p>
+
+                {/* Linha 2: Lote e valor com destaque */}
+                <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
+                  Lote {loteSubIndex} • <strong className="text-slate-900 font-bold">{BRL(valorOferta)}</strong>
+                </p>
+              </div>
             </div>
 
-            {/* Box da Oferta: Estruturado com wrap para evitar estouro */}
-            {/* Ajustado com Fonte Proporcional (Elástica) */}
+            {/* Box da Oferta: Estruturado com wrap para exibir Entrada + Financiado */}
             <div className="bg-slate-50 border border-border rounded-lg p-6 sm:p-8 space-y-3 overflow-hidden">
-              <p className="text-slate-600 text-xs sm:text-sm font-medium mb-0 leading-tight w-full">
-                {BRL(financiado)} em
+              <p className="text-slate-600 text-xs sm:text-sm font-medium mb-0 leading-tight w-full flex flex-wrap items-center gap-1">
+                <span>ent.</span> 
+                <span className="font-medium text-slate-600">
+                  <span className="text-[0.85em]">R$</span> {BRL(valorEntradaAPI).replace("R$", "").trim()}
+                </span> 
+                <span>+</span> 
+                <span className="font-medium text-slate-600">
+                  <span className="text-[0.85em]">R$</span> {BRL(valorFinanciadoAPI).replace("R$", "").trim()}
+                </span> 
+                <span>em</span>
               </p>
               
               {/* CONTAINER EM UMA ÚNICA LINHA - PROIBIDO QUEBRAR (flex-nowrap) */}
               <div className="flex flex-nowrap items-baseline gap-1 sm:gap-1.5 w-full whitespace-nowrap">
                 
-                {/* Parcelas: Encolhe proporcionalmente até no mínimo 18px (1.1rem) */}
+                {/* Parcelas */}
                 <span 
                   className="font-black shrink-0" 
                   style={{ color: "var(--brand-primary)", fontSize: "clamp(1.1rem, 5vw, 1.5rem)" }}
@@ -62,15 +91,16 @@ export function Step2Confirm() {
                   {mainConsult?.installments}x
                 </span>
                 
-                {/* Valor Principal: Encolhe proporcionalmente até no mínimo 26px (1.6rem) */}
+                {/* Valor Principal */}
                 <span 
-                  className="font-black text-slate-900 tracking-tight shrink-0"
+                  className="font-black text-slate-900 tracking-tight shrink-0 flex items-baseline gap-0.5"
                   style={{ fontSize: "clamp(1.6rem, 7vw, 2.25rem)" }}
                 >
-                  {BRL(mainConsult?.installment_value || 0).replace("R$", "").trim()}
+                  <span className="text-[0.75em] font-bold">R$</span>
+                  <span>{BRL(mainConsult?.installment_value || 0).replace("R$", "").trim()}</span>
                 </span>
 
-                {/* Sufixo (/mês): Encolhe um pouco, mas nunca some */}
+                {/* Sufixo (/mês) */}
                 <span 
                   className="text-slate-400 font-medium shrink-0"
                   style={{ fontSize: "clamp(0.7rem, 3vw, 0.875rem)" }}
@@ -86,10 +116,10 @@ export function Step2Confirm() {
 
             {/* Disclaimer */}
             <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                *O valor de parcela é baseado em taxas de referência para financiamentos com nosso parceiro e não representa garantia de aprovação. Fale com nossos especialistas para seguirmos com a análise de crédito e buscarmos as melhores condições para você financiar essa oferta.
+              *As condições apresentadas não são garantia de aprovação. Fale com nossos especialistas para seguirmos com a análise da sua linha de crédito.
             </p>
 
-            {/* Botões: Layout Responsivo (Empilhado no Mobile, Lado a Lado no Desktop) */}
+            {/* Botões: Layout Horizontal */}
             <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 pt-6 w-full">
               
               {/* Botão Voltar */}
@@ -102,8 +132,7 @@ export function Step2Confirm() {
                 Voltar
               </Button>
               
-              {/* Botão de contato: O w-full dentro de uma div faz ele crescer até o limite no mobile, 
-                  mas a classe sm:w-auto garante que ele se comporte no PC */}
+              {/* Botão de contato */}
               <div className="w-full sm:w-auto flex-1 flex justify-end">
                 <ButtonWhatsApp 
                     variant="button"
@@ -113,7 +142,39 @@ export function Step2Confirm() {
               </div>
 
             </div>
-        </div>
+          </>
+        ) : (
+          /* Estado de Recusa - Padronizado e Minimalista */
+          <div className="text-center py-12 space-y-6 flex flex-col items-center">
+            
+            <div className="bg-red-50 p-4 rounded-full w-fit border border-slate-100">
+              <ShieldCheck className="h-8 w-8 text-red-500" />
+            </div>
+
+            <div className="space-y-2 max-w-xs mx-auto">
+              <h3 className="text-xl font-bold text-slate-900 tracking-tight">Nenhuma oferta disponível</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                No momento não encontramos condições para os dados informados.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 px-4 py-2 rounded-lg border border-slate-100">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                Sugestão: Tente aumentar a entrada.
+              </p>
+            </div>
+
+            {/* Botão Voltar Padronizado */}
+            <Button 
+              variant="ghost" 
+              onClick={back}
+              className="text-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/10 hover:text-[var(--brand-primary)] transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" /> Simular novamente
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

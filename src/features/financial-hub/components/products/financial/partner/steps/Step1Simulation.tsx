@@ -5,9 +5,8 @@
  * Centralizar captura de dados e disparar simulação via callOrchestrator com paridade total.
  */
 
-
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, ThumbsUp } from "lucide-react";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { DynamicConsents } from "@/features/financial-hub/components/layout/DynamicConsents";
 import { SliderCustomizado } from "@/features/financial-hub/components/shared/SliderCustomizado";
@@ -100,23 +99,42 @@ export function Step1Simulation() {
   const { rules, consent_configs, offer } = state.data;
   const tetoMaximo = offer?.vehicle_details?.fipe_value ?? (offer?.offer_value * (1 + (rules?.max_offer_cap_percent ?? 20) / 100));
 
+  // Atributos extraídos com segurança idênticos aos de Veículos
+  const loteSubIndex = offer?.lote_index || offer?.lote_numero || "1";
+  const offerDescText = offer?.offer_description ? offer.offer_description.replace(/[.,]+$/, "") : "";
+
   return (
     <div className="space-y-5 max-w-xl mx-auto lg:mx-0">
-      {/* HEADER: texto estático e descrição da oferta */}
-      <div className="mb-4 space-y-0.5">
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-          Consulte nossas condições
-        </h2>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          {offer?.offer_description ? offer.offer_description.replace(/[.,]+$/, "") : "Vamos procurar uma oferta disponível para você:"}
-        </p>
+      
+      {/* HEADER EXATO COM 2 LINHAS (Paridade com Veículos) */}
+      <div className="flex items-start gap-4 mb-6">
+        <div className="bg-primary/10 p-2.5 rounded-full shrink-0 hidden sm:flex">
+          <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
+        </div>
+        
+        <div className="space-y-0.5 flex-1 w-0 min-w-0">
+          {/* Título Principal */}
+          <h3 className="text-base sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full">
+            Simule seu financiamento*!
+          </h3>
+
+          {/* Linha 1: Descrição do item em cinza claro */}
+          <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
+            {offerDescText}
+          </p>
+
+          {/* Linha 2: Lote e valor com destaque */}
+          <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
+            Lote {loteSubIndex} • <strong className="text-slate-900 font-bold">{BRL(localValorOferta)}</strong>
+          </p>
+        </div>
       </div>
 
-      {/* Container: p-8 dá um respiro maior em relação às bordas */}
-      <div className="bg-slate-50 border border-border rounded-lg p-7 space-y-4">
+      {/* Container adaptativo p-4 (mobile) / p-7 (desktop) */}
+      <div className="bg-slate-50 border border-border rounded-lg p-4 sm:p-7 space-y-4">
 
-        {/* Grid: gap-8 garante que os dois campos não fiquem colados horizontalmente */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+        {/* Grid com espaçamento responsivo */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4">
 
           {/* Valor do lance */}
           <div className="space-y-1">
@@ -179,10 +197,10 @@ export function Step1Simulation() {
               const val = Number(v);
               setLocalParcelas(val);
             }}
-            className="grid grid-cols-4 gap-2"
+            className="flex flex-wrap gap-2"
           >
             {(state.data?.rules?.installment_options || []).map((p: number) => (
-              <div key={p}>
+              <div key={p} className="flex-1">
                 <RadioGroupItem value={String(p)} id={`p-${p}`} className="peer sr-only" disabled={loading} />
                 <Label htmlFor={`p-${p}`} className={`flex items-center justify-center p-2 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 peer-data-[state=checked]:border-[var(--brand-primary)] peer-data-[state=checked]:bg-white transition-all shadow-sm ${loading ? "!cursor-wait opacity-50" : "cursor-pointer"}`}>
                   <span className="font-bold text-xs text-black">{p}x</span>
@@ -209,13 +227,12 @@ export function Step1Simulation() {
       >
         {loading ? (
           <span className="flex items-center justify-center gap-2 animate-pulse">
-            <Loader2 className="h-4 w-4 animate-spin" /> Consultando condições...
+            <Loader2 className="h-4 w-4 animate-spin" /> Consultando ofertas...
           </span>
         ) : (
-          "Consultar condições"
+          "Simular financiamento"
         )}
       </button>
     </div>
   );
 }
-      
