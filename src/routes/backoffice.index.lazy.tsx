@@ -755,7 +755,7 @@ function DashboardPage() {
                       className="fill-foreground"
                       fontSize={11}
                       fontWeight={600}
-                      formatter={(v: number) => (v > 0 ? v : "")}
+                      formatter={(v: any) => (v > 0 ? v : "")}
                     />
                   </Bar>
                 </BarChart>
@@ -960,7 +960,7 @@ function DashboardPage() {
                       className="fill-foreground"
                       fontSize={11}
                       fontWeight={600}
-                      formatter={(v: number) => (v > 0 ? v : "")}
+                      formatter={(v: any) => (v > 0 ? v : "")}
                     />
                   </Bar>
                 </BarChart>

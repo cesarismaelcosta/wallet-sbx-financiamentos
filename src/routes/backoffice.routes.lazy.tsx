@@ -56,7 +56,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -226,8 +227,8 @@ function OfferPanelRender({ config }: { config: any }) {
   };
 
   return (
-    <div className="space-y-3" style={{ '--brand-primary': brandColor } as React.CSSProperties}>
-      <div className="space-y-1.5">
+    <div className="space-y-4" style={{ '--brand-primary': brandColor } as React.CSSProperties}>
+      <div className="space-y-2">
         <h2 className="text-base font-semibold leading-tight text-foreground sm:text-lg">
           {panel.headline.parts.map((part: any, i: number) => (
             <span key={i} className={getTextStyle(part.type)}>{part.text}</span>
@@ -241,13 +242,13 @@ function OfferPanelRender({ config }: { config: any }) {
       </div>
 
       {panel.benefits && Array.isArray(panel.benefits) && (
-        <ul className="grid grid-cols-1 gap-2 pt-1">
+        <ul className="flex flex-col gap-2.5">
           {panel.benefits.map((b: any, i: number) => {
-            const IconComponent = ICON_MAP[b.icon] || ICON_MAP[b.icon?.toLowerCase()] || CheckCircle2;
+            const Icon = ICON_MAP[b.icon] || ICON_MAP[b.icon?.toLowerCase()] || CheckCircle2;
             return (
-              <li key={i} className="flex items-start gap-2 text-xs">
+              <li key={i} className="flex items-start gap-2.5 text-xs">
                 <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-[#B300FF]/10 text-[#B300FF]">
-                  <IconComponent className="h-3.5 w-3.5" />
+                  {Icon && <Icon className="h-3.5 w-3.5" />}
                 </span>
                 <div>
                   <p className="font-medium text-foreground text-xs">{b.title}</p>
@@ -260,9 +261,13 @@ function OfferPanelRender({ config }: { config: any }) {
       )}
 
       {panel.partner?.name && (
-        <div className="rounded-xl border border-border bg-muted/40 p-2.5 text-[11px] text-muted-foreground">
-          {panel.partner.label}{" "}
-          <strong className="text-foreground">{panel.partner.name}</strong>.
+        <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3 flex flex-col items-start gap-0.5 overflow-hidden w-full">
+          <span className="text-[11px] text-muted-foreground">
+            {panel.partner.label}
+          </span>
+          <strong className="text-[clamp(8px,3.5vw,10px)] sm:text-xs text-foreground truncate w-full block">
+            {panel.partner.name}
+          </strong>
         </div>
       )}
     </div>
@@ -288,12 +293,50 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
                     if (part.startsWith("{") && part.endsWith("}")) {
                       const cleanText = part.replace(/[{}]/g, "");
                       const linkConfig = opt.links?.find((l: any) => l.text === cleanText);
+
                       if (!linkConfig) return <span key={i} className="font-bold text-foreground">{cleanText}</span>;
-                      return (
-                        <span key={i} className="underline font-bold inline mx-0.5" style={{ color: "var(--brand-primary)" }}>
-                          {cleanText}
-                        </span>
-                      );
+
+                      // Tipo: WEB (Link externo clicável)
+                      if (linkConfig.type === "web") {
+                        return (
+                          <a
+                            key={i}
+                            href={linkConfig.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline font-bold inline mx-0.5 hover:opacity-80"
+                            style={{ color: "var(--brand-primary)" }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {cleanText}
+                          </a>
+                        );
+                      }
+
+                      // Tipo: TOOLTIP (Balão de ajuda interativo)
+                      if (linkConfig.type === "tooltip") {
+                        return (
+                          <Tooltip key={i}>
+                            <TooltipTrigger asChild>
+                              <span
+                                className="underline font-bold cursor-help border-b border-dashed inline mx-0.5 hover:opacity-80"
+                                style={{ color: "var(--brand-primary)", borderColor: "var(--brand-primary)" }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {cleanText}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="bottom"
+                              align="start"
+                              sideOffset={6}
+                              className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-lg leading-relaxed z-[100]"
+                            >
+                              <p className="font-normal">{linkConfig.tooltip_text}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      }
                     }
                     return <span key={i}>{part}</span>;
                   })
@@ -1898,7 +1941,7 @@ function OrchestratorConfigsBackofficePage() {
         {/* HEADER DA TELA E CONTROLES */}
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Consulta de Rotas & Orchestrator</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Consulta de Rotas</h1>
             <p className="text-sm text-muted-foreground">
               Gerenciamento e inspeção ordenada das configurações de rotas do sistema.
             </p>
@@ -1907,56 +1950,60 @@ function OrchestratorConfigsBackofficePage() {
             <Button variant="outline" onClick={load} className="rounded-xl bg-white" disabled={loading}>
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
             </Button>
+            {/* Botão Nova Rota oculto no mobile, exibido apenas a partir de sm (desktop/tablet) */}
             <Button 
               onClick={() => { setEditingConfig(null); setIsEditorOpen(true); }} 
-              className="rounded-xl bg-[#B300FF] hover:bg-[#9f00e6]"
+              className="rounded-xl bg-[#B300FF] hover:bg-[#9f00e6] hidden sm:flex"
             >
               <Plus className="mr-2 h-4 w-4" /> Nova Rota
             </Button>
           </div>
         </div>
 
-        {/* BARRA DE FILTROS E BUSCA */}
+        {/* BARRA DE FILTROS E BUSCA: Padronizada no Estilo App (Pílula) */}
         <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-3">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4 border-b border-border p-4">
             
-            <div className="relative flex-1 min-w-[240px] max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            {/* BARRA DE BUSCA: Estilo Pílula idêntico aos demais monitores */}
+            <div className="relative w-full lg:flex-1 lg:max-w-md">
               <Input 
                 value={search} 
                 onChange={(e) => setSearch(e.target.value)} 
                 placeholder="Buscar por ID, URL, Nome do Produto..." 
-                className="h-10 rounded-xl pl-9" 
+                className="h-11 w-full rounded-full bg-slate-100/70 border-transparent pl-5 pr-12 text-[13px] text-slate-700 placeholder:text-slate-500 focus-visible:ring-primary/20 focus-visible:bg-white focus-visible:border-primary/30 transition-all shadow-none" 
               />
+              <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-[#B300FF]" />
             </div>
 
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white">
-                  <Filter className="h-3.5 w-3.5 opacity-70" />
-                  Status: {statusFilter === "active" ? "Ativas" : statusFilter === "inactive" ? "Inativas" : "Todas"}
-                  <ChevronDown className="h-3 w-3 opacity-60" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-48 p-0" align="end">
-                <Command>
-                  <CommandList>
-                    <CommandGroup>
-                      <CommandItem onSelect={() => setStatusFilter("active")} className="cursor-pointer">
-                        Apenas Ativas
-                      </CommandItem>
-                      <CommandItem onSelect={() => setStatusFilter("inactive")} className="cursor-pointer">
-                        Apenas Inativas
-                      </CommandItem>
-                      <CommandItem onSelect={() => setStatusFilter("all")} className="cursor-pointer">
-                        Todas
-                      </CommandItem>
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-
+            {/* FILTRO DE STATUS: Estilo Pílula / Botão Arredondado */}
+            <div className="flex items-center gap-2 lg:ml-auto">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
+                    <Filter className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Status: {statusFilter === "active" ? "Ativas" : statusFilter === "inactive" ? "Inativas" : "Todas"}</span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-48 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                  <Command className="bg-transparent">
+                    <CommandList>
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setStatusFilter("active")} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                          Apenas Ativas
+                        </CommandItem>
+                        <CommandItem onSelect={() => setStatusFilter("inactive")} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                          Apenas Inativas
+                        </CommandItem>
+                        <CommandItem onSelect={() => setStatusFilter("all")} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                          Todas
+                        </CommandItem>
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
 
           {/* TABELA DE ROTAS */}
@@ -1968,7 +2015,7 @@ function OrchestratorConfigsBackofficePage() {
                   <th className="px-3 py-3 w-[260px]">Regra</th>
                   <th className="px-3 py-3 w-[150px]">Parceiro</th>
                   <th className="px-3 py-3 w-[300px]">URL da Página</th>
-                  <th className="px-3 py-3 w-[220px] text-right">Ações</th>
+                  <th className="px-3 py-3 w-[220px] text-right hidden sm:table-cell">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -2032,7 +2079,7 @@ function OrchestratorConfigsBackofficePage() {
                           {r.page_url || "—"}
                         </td>
 
-                        <td className="px-3 py-3 text-right">
+                        <td className="px-3 py-3 text-right hidden sm:table-cell">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button 
                               variant="ghost" 
@@ -2042,8 +2089,6 @@ function OrchestratorConfigsBackofficePage() {
                             >
                               <Search className="w-3.5 h-3.5 mr-1" /> Insp.
                             </Button>
-
-                            {/* Botão de Duplicação Inline */}
                             <Button 
                               variant="ghost" 
                               size="sm" 
@@ -2052,7 +2097,6 @@ function OrchestratorConfigsBackofficePage() {
                             >
                               <Copy className="w-3.5 h-3.5 mr-1" /> Duplicar
                             </Button>
-
                             <Button 
                               variant="ghost" 
                               size="sm" 
@@ -2073,30 +2117,37 @@ function OrchestratorConfigsBackofficePage() {
         </div>
 
         {/* ===================================================================== */}
-        {/* 2. PAINEL LATERAL (SHEET / DRAWER) DE INSPEÇÃO RÁPIDA DE DADOS        */}
+        {/* [PAINEL LATERAL / DRAWER DE INSPEÇÃO]                                */}
         {/* ===================================================================== */}
         {isRouteDrawerOpen && activeConfig && (
           <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-all">
-            <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
+            <div className="w-full sm:max-w-2xl bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
               
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-slate-50 flex-shrink-0">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#B300FF]" />
-                  <h3 className="text-sm font-black uppercase text-slate-800">Consulta de Rota: ID #{activeConfig.id} - {getProductOrCategoryName(activeConfig)}</h3>
+              {/* Header do Drawer */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-slate-50 shrink-0">
+                <div className="flex items-center gap-2 truncate pr-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#B300FF] shrink-0" />
+                  <h3 className="text-xs sm:text-sm font-black uppercase text-slate-800 truncate">
+                    Consulta de Rota: ID #{activeConfig.id} - {getProductOrCategoryName(activeConfig)}
+                  </h3>
                 </div>
-                <button onClick={() => setIsRouteDrawerOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 cursor-pointer">
+                <button 
+                  onClick={() => setIsRouteDrawerOpen(false)} 
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 cursor-pointer shrink-0"
+                >
                   <X size={18} />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Conteúdo Rolável */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
                 <div className="space-y-6">
                   
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-1.5 font-mono">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-[10px] sm:text-xs space-y-1.5 font-mono">
                     <p><b>ID Config:</b> {activeConfig.id} | <b>Lookup ID:</b> {activeConfig.lookup_id}</p>
                     <p><b>Tipo:</b> {activeConfig.config_type} ({activeConfig.entity_type})</p>
-                    <p><b>URL:</b> {activeConfig.page_url}</p>
                     <p><b>Método:</b> {activeConfig.integration_method || "—"}</p>
+                    <p className="break-words pt-1 border-t border-slate-200"><b>URL:</b> {activeConfig.page_url}</p>
                   </div>
 
                   {activeConfig.page_configs?.offer_panel && (
@@ -2145,7 +2196,6 @@ function OrchestratorConfigsBackofficePage() {
                       <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-1 flex items-center gap-1.5">
                         <HelpCircle size={14} /> FAQ & Perguntas Frequentes
                       </h4>
-                      {/* Na tela: Accordion padrão */}
                       <FAQSection items={activeConfig.page_faqs} />
                     </div>
                   )}
@@ -2159,29 +2209,33 @@ function OrchestratorConfigsBackofficePage() {
                 </div>
               </div>
 
-              {/* RODAPÉ DO DRAWER COM BOTÕES DE AÇÃO */}
-              <div className="p-4 border-t border-gray-200 bg-slate-50 flex items-center justify-between gap-3 shrink-0 shadow-lg">
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleDuplicateRoute(activeConfig)} 
-                  className="flex-1 rounded-xl text-xs gap-2 border-blue-500/35 text-blue-600 hover:bg-blue-50 h-10 font-semibold px-5"
-                >
-                  <Copy className="h-4 w-4" /> Duplicar Rota
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={handlePrintSheet} 
-                  className="flex-1 rounded-xl text-xs gap-2 border-[#B300FF]/35 text-[#B300FF] hover:bg-[#B300FF]/5 h-10 font-semibold"
-                >
-                  <Printer className="h-4 w-4" /> Imprimir / PDF
-                </Button>
+              {/* Rodapé do Drawer com Duplicar oculto no mobile */}
+              <div className="p-3 sm:p-4 border-t border-gray-200 bg-slate-50 flex flex-col gap-2 shrink-0 shadow-lg w-full">
+                <div className="flex items-center gap-2 w-full">
+                  {/* Botão Duplicar visível apenas no desktop */}
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleDuplicateRoute(activeConfig)} 
+                    className="hidden sm:flex flex-1 rounded-xl text-xs gap-1.5 border-blue-500/35 text-blue-600 hover:bg-blue-50 h-10 font-semibold px-2"
+                  >
+                    <Copy className="h-3.5 w-3.5 shrink-0" /> Duplicar
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handlePrintSheet} 
+                    className="flex-1 rounded-xl text-xs gap-1.5 border-[#B300FF]/35 text-[#B300FF] hover:bg-[#B300FF]/5 h-10 font-semibold px-2"
+                  >
+                    <Printer className="h-3.5 w-3.5 shrink-0" /> Imprimir
+                  </Button>
+                </div>
                 <Button 
                   onClick={() => setIsRouteDrawerOpen(false)} 
-                  className="flex-1 rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white h-10 font-semibold px-5"
+                  className="w-full rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white h-10 font-semibold"
                 >
-                  Fechar Inspeção
+                  Fechar
                 </Button>
               </div>
+
             </div>
           </div>
         )}

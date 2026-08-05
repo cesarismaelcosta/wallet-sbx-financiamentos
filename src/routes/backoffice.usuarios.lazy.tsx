@@ -264,57 +264,62 @@ function UsuariosPage() {
         </div>
       </div>
 
+{/* TABELA DE DADOS - Agora responsiva com Scroll Horizontal no Mobile */}
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <table className="w-full text-sm">
-          <tbody>
-            {users.map((u) => {
-              const isMe = backofficeUser?.email?.toLowerCase() === u.email.toLowerCase();
-              return (
-                <tr key={u.id} className="border-b border-border/60 hover:bg-accent/40">
-                  <td className="px-3 py-2">
-                    <div className="font-semibold">{u.name}</div>
-                    <div className="text-xs text-muted-foreground">{u.email}</div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Select value={u.role} onValueChange={(v: Role) => changeRole(u, v)} disabled={!isAdmin || isMe}>
-                      <SelectTrigger className={`h-7 w-40 text-xs ${ROLE_BADGE[u.role]}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">Administrador</SelectItem>
-                        <SelectItem value="manager">Gerente</SelectItem>
-                        <SelectItem value="viewer">Visualizador</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${u.is_active ? "bg-emerald-500/10 text-emerald-600" : "bg-destructive/10 text-destructive"}`}
-                    >
-                      {u.is_active ? <ShieldCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
-                      {u.is_active ? "Ativo" : "Inativo"}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {isAdmin && (
-                      <Button variant="ghost" size="sm" onClick={() => toggleActive(u)} disabled={isMe}>
-                        {u.is_active ? (
-                          <>
-                            <UserX className="mr-1 h-3 w-3" /> Desativar
-                          </>
-                        ) : (
-                          <>
-                            <UserCheck className="mr-1 h-3 w-3" /> Ativar
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {/* 👇 WRAPPER DE SCROLL ADICIONADO AQUI 👇 */}
+        <div className="overflow-x-auto w-full pb-2">
+          <table className="w-full text-sm">
+            <tbody>
+              {users.map((u) => {
+                const isMe = backofficeUser?.email?.toLowerCase() === u.email.toLowerCase();
+                return (
+                  <tr key={u.id} className="border-b border-border/60 hover:bg-accent/40">
+                    {/* 👇 whitespace-nowrap adicionado nas tds 👇 */}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="font-semibold">{u.name}</div>
+                      <div className="text-xs text-muted-foreground">{u.email}</div>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <Select value={u.role} onValueChange={(v: Role) => changeRole(u, v)} disabled={!isAdmin || isMe}>
+                        <SelectTrigger className={`h-7 w-40 text-xs ${ROLE_BADGE[u.role]}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">Administrador</SelectItem>
+                          <SelectItem value="manager">Gerente</SelectItem>
+                          <SelectItem value="viewer">Visualizador</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${u.is_active ? "bg-emerald-500/10 text-emerald-600" : "bg-destructive/10 text-destructive"}`}
+                      >
+                        {u.is_active ? <ShieldCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
+                        {u.is_active ? "Ativo" : "Inativo"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {isAdmin && (
+                        <Button variant="ghost" size="sm" onClick={() => toggleActive(u)} disabled={isMe}>
+                          {u.is_active ? (
+                            <>
+                              <UserX className="mr-1 h-3 w-3" /> Desativar
+                            </>
+                          ) : (
+                            <>
+                              <UserCheck className="mr-1 h-3 w-3" /> Ativar
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

@@ -30,7 +30,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Conexão centralizada com o Client do Supabase e Dicionários Gráficos
 import { supabase } from "@/integrations/supabase/client";
@@ -197,10 +197,15 @@ function OfferPanelRender({ config }: { config: any }) {
         </ul>
       )}
 
+      {/* RODAPÉ COPIADO DO OFFERPANEL ORIGINAL: Com borda superior, espaçamento e truncamento seguro */}
       {panel.partner?.name && (
-        <div className="rounded-xl border border-border bg-muted/40 p-2.5 text-[11px] text-muted-foreground">
-          {panel.partner.label}{" "}
-          <strong className="text-foreground">{panel.partner.name}</strong>.
+        <div className="mt-8 pt-4 border-t border-slate-200 rounded-xl bg-muted/40 p-3 sm:p-4 flex flex-col items-start gap-0.5 overflow-hidden w-full">
+          <span className="text-xs text-muted-foreground">
+            {panel.partner.label}
+          </span>
+          <strong className="text-[clamp(8px,3.5vw,10px)] sm:text-xs text-foreground truncate w-full block">
+            {panel.partner.name}
+          </strong>
         </div>
       )}
     </div>
@@ -225,7 +230,53 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
                   opt.template_text.split(/(\{.*?\})/g).map((part: string, i: number) => {
                     if (part.startsWith("{") && part.endsWith("}")) {
                       const cleanText = part.replace(/[{}]/g, "");
-                      return <span key={i} className="underline font-bold inline mx-0.5 text-[#B300FF]">{cleanText}</span>;
+                      const linkConfig = opt.links?.find((l: any) => l.text === cleanText);
+
+                      if (!linkConfig) {
+                        return <span key={i} className="font-bold text-foreground">{cleanText}</span>;
+                      }
+
+                      // Se o tipo for WEB, gera a tag <a> clicável
+                      if (linkConfig.type === "web" || linkConfig.url) {
+                        return (
+                          <a
+                            key={i}
+                            href={linkConfig.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline font-bold inline mx-0.5 hover:opacity-80"
+                            style={{ color: "var(--brand-primary)" }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {cleanText}
+                          </a>
+                        );
+                      }
+
+                      // Se o tipo for TOOLTIP, gera o balão de ajuda interativo
+                      if (linkConfig.type === "tooltip" || linkConfig.tooltip_text) {
+                        return (
+                          <Tooltip key={i}>
+                            <TooltipTrigger asChild>
+                              <span
+                                className="underline font-bold cursor-help border-b border-dashed inline mx-0.5 hover:opacity-80"
+                                style={{ color: "var(--brand-primary)", borderColor: "var(--brand-primary)" }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {cleanText}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="bottom"
+                              align="start"
+                              sideOffset={6}
+                              className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-lg leading-relaxed z-[100]"
+                            >
+                              <p className="font-normal">{linkConfig.tooltip_text}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      }
                     }
                     return <span key={i}>{part}</span>;
                   })
@@ -278,7 +329,7 @@ function SimulationsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [statusOptions, setStatusOptions] = useState<string[]>([]);
-  const [selectedStatus, setSelectedStatus] = useState<string>("Todos");
+  const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<"30" | "90" | "all" | "custom">("30");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
 
@@ -348,7 +399,7 @@ function SimulationsPage() {
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       const statusName = r.status_types?.name ?? "—";
-      const matchStatus = selectedStatus === "Todos" || statusName === selectedStatus;
+      const matchStatus = selectedStatus.length === 0 || selectedStatus.includes(statusName);
       
       const rawSearch = search.toLowerCase().trim();
       const rawDocSearch = search.replace(/\D/g, "");
@@ -538,58 +589,144 @@ function SimulationsPage() {
         ))}
       </div>
 
-{/* MÓDULO DE FILTROS & GRID DE PROPOSTAS */}
+      {/* MÓDULO DE FILTROS & GRID DE PROPOSTAS */}
       <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
         
-        {/* HEADER RESPONSIVO: Lista limpa no celular, Linha no Desktop */}
-        <div className="flex flex-col lg:flex-row gap-3 border-b border-border p-3">
+        {/* HEADER RESPONSIVO: Padrão exato de Consults */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4 border-b border-border p-4">
           
-          {/* BUSCA: 100% no celular, largura flexível no desktop */}
-          <div className="relative w-full lg:flex-1 lg:min-w-[240px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar nome ou CPF/CNPJ..." className="h-10 w-full rounded-xl pl-9" />
-          </div>
-
-          {/* FILTROS: 1 por linha 100% no celular (w-full), Lado a Lado no Desktop (lg:flex) */}
-          <div className="grid grid-cols-1 gap-2 w-full lg:flex lg:flex-row lg:w-auto">
-            
+          {/* BOTÃO DE FILTROS (Apenas Mobile) - Agrupa as opções num Popover */}
+          <div className="flex items-center lg:hidden">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between lg:justify-center bg-white hover:bg-muted/50 border border-border transition-colors">
-                  <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-70 shrink-0" /> Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span>
-                  <ChevronDown className="h-3 w-3 opacity-60 shrink-0" />
+                <Button variant="outline" className="h-9 rounded-full border-slate-300 text-slate-700 px-4 font-medium hover:bg-slate-50">
+                  <Filter className="h-4 w-4 mr-2 text-slate-500" /> Filtros
                 </Button>
               </PopoverTrigger>
+              <PopoverContent className="w-[calc(100vw-2rem)] p-4 ml-4 rounded-2xl border-slate-200 shadow-xl" align="start">
+                <div className="flex flex-col gap-3">
+                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Filtrar Resultados</h4>
+                  
+                  {/* Parceiro Mobile */}
+                  <Popover>
+                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-slate-50 border-slate-200 transition-colors"><span className="flex items-center gap-2 truncate text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
+                    <PopoverContent className="w-[calc(100vw-4rem)] p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>{partnersList.map((p) => { const isSelected = selectedPartners.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
+                  </Popover>
+
+                  {/* Produto Mobile */}
+                  <Popover>
+                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-slate-50 border-slate-200 transition-colors"><span className="flex items-center gap-2 truncate text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
+                    <PopoverContent className="w-[calc(100vw-4rem)] p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedProducts.length === 0 && "✓"}</div>Todos Produtos</CommandItem>{productsList.map((p) => { const isSelected = selectedProducts.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter(id => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
+                  </Popover>
+
+                  {/* Situação Mobile (MÚLTIPLA ESCOLHA e SEM CommandInput) */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
+                        <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 shrink-0" /> Situação: {selectedStatus.length === 0 ? "Todos" : `${selectedStatus.length} sel.`}</span>
+                        <ChevronDown className="h-3 w-3 shrink-0" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[calc(100vw-4rem)] bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                      <Command className="bg-transparent">
+                        <CommandList>
+                          <CommandGroup>
+                            <CommandItem onSelect={() => setSelectedStatus([])} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                                {selectedStatus.length === 0 && "✓"}
+                              </div>
+                              Todos
+                            </CommandItem>
+                            {statusOptions.map((s) => {
+                              const isSelected = selectedStatus.includes(s);
+                              return (
+                                <CommandItem key={s} onSelect={() => { if (isSelected) setSelectedStatus(selectedStatus.filter((item: string) => item !== s)); else setSelectedStatus([...selectedStatus, s]); }} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                                  <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                                    {isSelected && "✓"}
+                                  </div>
+                                  {s}
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  
+                  {/* Período Mobile */}
+                  <Popover>
+                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600"><span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
+                    <PopoverContent className="p-0 w-auto" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem><CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem><CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem></CommandGroup><div className="p-2 border-t"><p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command></PopoverContent>
+                  </Popover>
+
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* BARRA DE BUSCA: Lupa à Direita */}
+          <div className="relative w-full lg:flex-1 lg:max-w-md order-last lg:order-none mt-1 lg:mt-0">
+            <Input 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)} 
+              placeholder="Buscar nome ou CPF/CNPJ..." 
+              className="h-11 w-full rounded-full bg-slate-100/70 border-transparent pl-5 pr-12 text-[13px] text-slate-700 placeholder:text-slate-500 focus-visible:ring-primary/20 focus-visible:bg-white focus-visible:border-primary/30 transition-all shadow-none" 
+            />
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-[#B300FF]" />
+          </div>
+
+          {/* FILTROS DESKTOP: Lado a Lado (Escondidos no Mobile) */}
+          <div className="hidden lg:flex lg:items-center lg:gap-2 lg:ml-auto">
+            
+            <Popover>
+              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
               <PopoverContent className="w-56 p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>{partnersList.map((p) => { const isSelected = selectedPartners.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
             </Popover>
 
             <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between lg:justify-center bg-white hover:bg-muted/50 border border-border transition-colors">
-                  <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-70 shrink-0" /> Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span>
-                  <ChevronDown className="h-3 w-3 opacity-60 shrink-0" />
-                </Button>
-              </PopoverTrigger>
+              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
               <PopoverContent className="w-56 p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedProducts.length === 0 && "✓"}</div>Todos Produtos</CommandItem>{productsList.map((p) => { const isSelected = selectedProducts.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter(id => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
             </Popover>
 
+            {/* Situação Desktop (MÚLTIPLA ESCOLHA e SEM CommandInput) */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between lg:justify-center bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
-                  <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 shrink-0" /> Situação: {selectedStatus}</span>
+                <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
+                  <Filter className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Situação: {selectedStatus.length === 0 ? "Todos" : `${selectedStatus.length} sel.`}</span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="p-0 w-56 bg-[#fdf2f8] border-[#fbcfe8]" align="start"><Command><CommandInput placeholder="Filtrar..." className="text-[#d946ef]" /><CommandList><CommandEmpty>Nenhum status encontrado.</CommandEmpty><CommandGroup><CommandItem onSelect={() => setSelectedStatus("Todos")} className="text-[#d946ef] cursor-pointer">Todos</CommandItem>{statusOptions.map((s) => (<CommandItem key={s} onSelect={() => setSelectedStatus(s)} className="text-[#d946ef] cursor-pointer">{s}</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent>
+              <PopoverContent className="p-0 w-56 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <Command className="bg-transparent">
+                  <CommandList>
+                    <CommandGroup>
+                      <CommandItem onSelect={() => setSelectedStatus([])} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                        <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                          {selectedStatus.length === 0 && "✓"}
+                        </div>
+                        Todos
+                      </CommandItem>
+                      {statusOptions.map((s) => {
+                        const isSelected = selectedStatus.includes(s);
+                        return (
+                          <CommandItem key={s} onSelect={() => { if (isSelected) setSelectedStatus(selectedStatus.filter((item: string) => item !== s)); else setSelectedStatus([...selectedStatus, s]); }} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                            <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                              {isSelected && "✓"}
+                            </div>
+                            {s}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
             </Popover>
             
             <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between lg:justify-center hover:bg-[#fce7f3] transition-colors">
-                  <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 shrink-0" /> Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span>
-                  <ChevronDown className="h-3 w-3 shrink-0" />
-                </Button>
-              </PopoverTrigger>
+              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
               <PopoverContent className="p-0 w-auto" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem><CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem><CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem></CommandGroup><div className="p-2 border-t"><p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command></PopoverContent>
             </Popover>
 
@@ -688,25 +825,49 @@ function SimulationsPage() {
 
             return (
               <div className="flex flex-col h-full overflow-hidden">
-                <div className="p-6 pb-4 border-b bg-white shrink-0">
+                <div className="p-4 sm:p-6 pb-4 border-b bg-white shrink-0">
                   <SheetHeader className="space-y-3">
-                    <div className="flex items-center justify-between pr-8">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-md overflow-hidden border bg-white">
-                          {sim.partners?.logo_url ? <img src={sim.partners.logo_url} className="h-full w-full object-cover" alt={sim.partners?.name} /> : <span className="text-[9px] font-bold">{sim.partners?.name?.slice(0, 3)}</span>}
+                    {/* Linha Superior: Logo, Nome do Parceiro e ID */}
+                    <div className="flex items-center justify-between gap-2 pr-8">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-md overflow-hidden border bg-white shrink-0">
+                          {sim.partners?.logo_url ? (
+                            <img
+                              src={sim.partners.logo_url}
+                              className="h-full w-full object-cover"
+                              alt={sim.partners?.name}
+                            />
+                          ) : (
+                            <span className="text-[9px] font-bold">{sim.partners?.name?.slice(0, 3)}</span>
+                          )}
                         </div>
-                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">{sim.partners?.name || "Parceiro N/A"}</span>
+                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wide truncate">
+                          {sim.partners?.name || "Parceiro N/A"}
+                        </span>
                       </div>
-                      <span className="text-xs font-mono text-muted-foreground">ID: {sim.id}</span>
+                      <span className="text-[10px] sm:text-xs font-mono text-muted-foreground truncate max-w-[140px] sm:max-w-[200px]" title={sim.id}>
+                        ID: {sim.id}
+                      </span>
                     </div>
-                    <div className="flex flex-wrap items-center justify-between gap-2 pr-8">
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">{sim.product_types?.name || "Financiamento"}</span>
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${statusClass(sim.status_types?.name)}`}>{sim.status_types?.name || "Pendente"}</span>
+
+                    {/* Linha Inferior: Estágio/Produto, Status e Nome do Cliente */}
+                    <div className="space-y-1 pr-8">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
+                          {sim.product_types?.name || "Financiamento"}
+                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusClass(sim.status_types?.name)}`}
+                          >
+                            {sim.status_types?.name || "Pendente"}
+                          </span>
                         </div>
-                        <SheetTitle className="text-xl font-bold text-slate-900 mt-1">{sim.name || "—"}</SheetTitle>
                       </div>
+
+                      <SheetTitle className="text-lg sm:text-xl font-bold text-slate-900 break-words">
+                        {sim.name || "—"}
+                      </SheetTitle>
                     </div>
                   </SheetHeader>
                 </div>
@@ -833,14 +994,14 @@ function SimulationsPage() {
                                 key={consent.id}
                                 className="bg-white p-3 rounded-xl border border-border shadow-sm space-y-3"
                               >
-                                <div className="flex items-center justify-between border-b border-border pb-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-border pb-2">
                                   <div className="flex items-center gap-1.5">
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide break-words">
                                       {consent.consent_id || "Termo de Aceite"}
                                     </span>
                                   </div>
-                                  <span className="text-[10px] text-muted-foreground font-medium">
+                                  <span className="text-[10px] text-muted-foreground font-medium pl-5 sm:pl-0">
                                     {acceptedAt.d} às {acceptedAt.h}
                                   </span>
                                 </div>
@@ -887,15 +1048,28 @@ function SimulationsPage() {
                     </div>
                   )}
 
+
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
                       <Building2 size={14} className="text-slate-400" /> Condições da Simulação
                     </h4>
-                    <div className="grid grid-cols-3 gap-4 text-xs">
-                      <div><span className="text-slate-500 block">Instituição Financeira:</span> <strong className="text-slate-800">{bank?.name || "—"}</strong></div>
-                      <div><span className="text-slate-500 block">Valor Financiado:</span> <strong className="text-slate-900 text-sm">{BRL(sim.financed_amount)}</strong></div>
-                      <div><span className="text-slate-500 block">Parcelas:</span> <strong className="text-primary font-bold text-sm">{sim.installments && sim.installment_value ? `${sim.installments}x ${BRL(sim.installment_value)}` : "—"}</strong></div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-xs">
+                      <div className="flex flex-col">
+                        <span className="text-slate-500">Instituição Financeira:</span> 
+                        <strong className="text-slate-800 mt-0.5">{bank?.name || "—"}</strong>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-slate-500">Valor Financiado:</span> 
+                        <strong className="text-slate-900 text-sm mt-0.5">{BRL(sim.financed_amount)}</strong>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-slate-500">Parcelas:</span> 
+                        <strong className="text-primary font-bold text-sm mt-0.5">
+                          {sim.installments && sim.installment_value ? `${sim.installments}x ${BRL(sim.installment_value)}` : "—"}
+                        </strong>
+                      </div>
                     </div>
+
                     {sim.result_partner_types?.description && (
                       <div className="pt-3 border-t border-slate-200 text-xs space-y-1">
                         <span className="text-slate-500 block font-bold uppercase text-[10px]">Retorno do Parceiro / Motivo:</span>

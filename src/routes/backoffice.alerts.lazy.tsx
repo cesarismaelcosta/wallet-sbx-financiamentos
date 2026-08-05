@@ -252,68 +252,74 @@ function AlertsPage() {
         </div>
       </div>
 
-      {/* TABELA DE DADOS */}
-      <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <th className="px-4 py-3 w-[300px]">Destinatário</th>
-              <th className="px-4 py-3 w-[200px]">Categoria</th>
-              <th className="px-4 py-3 w-[150px]">Status</th>
-              <th className="px-4 py-3 text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recipients.length === 0 && !loading && (
-              <tr>
-                <td colSpan={4} className="p-8 text-center text-muted-foreground">
-                  Nenhum destinatário de alerta configurado.
-                </td>
+{/* TABELA DE DADOS */}
+      <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
+        <div className="overflow-x-auto w-full pb-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                <th className="px-4 py-3 w-[300px]">Destinatário</th>
+                <th className="px-4 py-3 w-[200px]">Categoria</th>
+                <th className="px-4 py-3 w-[150px]">Status</th>
+                <th className="px-4 py-3 text-right">Ações</th>
               </tr>
-            )}
-            
-            {recipients.map((r) => {
-              return (
-                <tr key={r.id} className="border-b border-border/60 hover:bg-accent/40">
-                  <td className="px-4 py-3">
-                    <div className="font-semibold text-slate-800">{r.name}</div>
-                    <div className="text-xs text-muted-foreground">{r.email}</div>
-                  </td>
-                  
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center rounded-md bg-purple-500/10 px-2 py-1 text-[11px] font-semibold text-purple-600">
-                      Todos os Erros
-                    </span>
-                  </td>
-                  
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                        r.is_active ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-slate-500"
-                      }`}
-                    >
-                      {r.is_active ? <BellRing className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
-                      {r.is_active ? "Ativo" : "Pausado"}
-                    </span>
-                  </td>
-                  
-                  <td className="px-4 py-3 text-right">
-                    {isAdmin && (
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => toggleActive(r)} className="h-8 px-2 text-xs">
-                          {r.is_active ? "Pausar" : "Ativar"}
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(r.id)} className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
+            </thead>
+            <tbody>
+              {recipients.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                    Nenhum destinatário de alerta configurado.
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+              
+              {recipients.map((r) => {
+                return (
+                  <tr key={r.id} className="border-b border-border/60 hover:bg-accent/40">
+                    {/* 👇 Adicionado whitespace-nowrap aqui 👇 */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="font-semibold text-slate-800">{r.name}</div>
+                      <div className="text-xs text-muted-foreground">{r.email}</div>
+                    </td>
+                    
+                    {/* 👇 Adicionado whitespace-nowrap aqui 👇 */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="inline-flex items-center rounded-md bg-purple-500/10 px-2 py-1 text-[11px] font-semibold text-purple-600">
+                        Todos os Erros
+                      </span>
+                    </td>
+                    
+                    {/* 👇 Adicionado whitespace-nowrap aqui 👇 */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                          r.is_active ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-slate-500"
+                        }`}
+                      >
+                        {r.is_active ? <BellRing className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
+                        {r.is_active ? "Ativo" : "Pausado"}
+                      </span>
+                    </td>
+                    
+                    {/* 👇 Adicionado whitespace-nowrap aqui 👇 */}
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {isAdmin && (
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => toggleActive(r)} className="h-8 px-2 text-xs">
+                            {r.is_active ? "Pausar" : "Ativar"}
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(r.id)} className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

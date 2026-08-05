@@ -70,11 +70,15 @@ export function OfferPanel({ config }: { config: any }) {
         </ul>
       )}
 
-      {/* RODAPÉ MANTIDO CONFORME ESTRUTURA ORIGINAL */}
+      {/* RODAPÉ MANTIDO CONFORME ESTRUTURA ORIGINAL (Com fonte fluida 8px-10px e trava de vazamento) */}
       {offer_panel.partner?.name && (
-        <div className="mt-8 rounded-xl border border-border bg-muted/40 p-4 text-xs text-muted-foreground flex flex-wrap items-center gap-1.5 break-words">
-          <span>{offer_panel.partner.label}</span>
-          <strong className="text-foreground">{offer_panel.partner.name}</strong>.
+        <div className="mt-8 rounded-xl border border-border bg-muted/40 p-3 sm:p-4 flex flex-col items-start gap-0.5 overflow-hidden w-full">
+          <span className="text-xs text-muted-foreground">
+            {offer_panel.partner.label}
+          </span>
+          <strong className="text-[clamp(8px,3.5vw,10px)] sm:text-xs text-foreground truncate w-full block">
+            {offer_panel.partner.name}
+          </strong>
         </div>
       )}
     </div>

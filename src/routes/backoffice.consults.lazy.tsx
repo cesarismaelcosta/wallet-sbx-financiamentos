@@ -43,7 +43,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Camada de Persistência (BaaS) e Dicionários Gráficos
 import { supabase } from "@/integrations/supabase/client";
@@ -222,9 +222,15 @@ function OfferPanelRender({ config }: { config: any }) {
         </ul>
       )}
 
+      {/* RODAPÉ COPIADO DO OFFERPANEL ORIGINAL: Com borda superior, espaçamento e truncamento seguro */}
       {panel.partner?.name && (
-        <div className="rounded-xl border border-border bg-muted/40 p-2.5 text-[11px] text-muted-foreground">
-          {panel.partner.label} <strong className="text-foreground">{panel.partner.name}</strong>.
+        <div className="mt-8 pt-4 border-t border-slate-200 rounded-xl bg-muted/40 p-3 sm:p-4 flex flex-col items-start gap-0.5 overflow-hidden w-full">
+          <span className="text-xs text-muted-foreground">
+            {panel.partner.label}
+          </span>
+          <strong className="text-[clamp(8px,3.5vw,10px)] sm:text-xs text-foreground truncate w-full block">
+            {panel.partner.name}
+          </strong>
         </div>
       )}
     </div>
@@ -245,19 +251,63 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
                 <Checkbox disabled checked={false} className="h-4 w-4 shrink-0 rounded-[4px] border-slate-400" />
               </div>
               <label className="text-[11px] text-muted-foreground leading-snug flex-1">
-                {opt.template_text
-                  ? opt.template_text.split(/(\{.*?\})/g).map((part: string, i: number) => {
-                      if (part.startsWith("{") && part.endsWith("}")) {
-                        const cleanText = part.replace(/[{}]/g, "");
+                {opt.template_text ? (
+                  opt.template_text.split(/(\{.*?\})/g).map((part: string, i: number) => {
+                    if (part.startsWith("{") && part.endsWith("}")) {
+                      const cleanText = part.replace(/[{}]/g, "");
+                      const linkConfig = opt.links?.find((l: any) => l.text === cleanText);
+
+                      if (!linkConfig) {
                         return (
                           <span key={i} className="underline font-bold inline mx-0.5 text-[#B300FF]">
                             {cleanText}
                           </span>
                         );
                       }
-                      return <span key={i}>{part}</span>;
-                    })
-                  : null}
+
+                      if (linkConfig.type === "web" || linkConfig.url) {
+                        return (
+                          <a
+                            key={i}
+                            href={linkConfig.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline font-bold inline mx-0.5 hover:opacity-80"
+                            style={{ color: "var(--brand-primary)" }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {cleanText}
+                          </a>
+                        );
+                      }
+
+                      if (linkConfig.type === "tooltip" || linkConfig.tooltip_text) {
+                        return (
+                          <Tooltip key={i}>
+                            <TooltipTrigger asChild>
+                              <span
+                                className="underline font-bold cursor-help border-b border-dashed inline mx-0.5 hover:opacity-80"
+                                style={{ color: "var(--brand-primary)", borderColor: "var(--brand-primary)" }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {cleanText}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="bottom"
+                              align="start"
+                              sideOffset={6}
+                              className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-lg leading-relaxed z-[100]"
+                            >
+                              <p className="font-normal">{linkConfig.tooltip_text}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      }
+                    }
+                    return <span key={i}>{part}</span>;
+                  })
+                ) : null}
               </label>
             </div>
           ))}
@@ -305,7 +355,7 @@ function ConsultsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
 
-  const [selectedStatus, setSelectedStatus] = useState<string>("Qualificadas");
+  const [selectedStatus, setSelectedStatus] = useState<string[]>(["Qualificadas"]);
   const [dateRange, setDateRange] = useState<"30" | "90" | "all" | "custom">("30");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [selectedPartners, setSelectedPartners] = useState<string[]>([]);
@@ -380,6 +430,7 @@ function ConsultsPage() {
         has_contact: contactSet.has(v.id),
         visit_entities: Array.isArray(v.visit_entities) ? v.visit_entities[0] || null : v.visit_entities,
         visit_offers: Array.isArray(v.visit_offers) ? v.visit_offers[0] || null : v.visit_offers,
+        visit_consents: v.visit_consents || [], // CORRIGIDO: Mapeia explicitamente os aceites da visita
       }));
 
       setRows(normalized);
@@ -420,12 +471,9 @@ function ConsultsPage() {
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       const statusName = getVisitStatus(r);
-      // Lógica atualizada para o filtro de Situação
       let matchStatus = true;
-      if (selectedStatus === "Qualificadas") {
-        matchStatus = statusName !== "VISITA";
-      } else if (selectedStatus !== "Todos") {
-        matchStatus = statusName === selectedStatus;
+      if (selectedStatus.length > 0) {
+        matchStatus = selectedStatus.includes(statusName) || (selectedStatus.includes("Qualificadas") && statusName !== "VISITA");
       }
 
       const entity = Array.isArray(r.visit_entities) ? r.visit_entities[0] : r.visit_entities || {};
@@ -458,9 +506,6 @@ function ConsultsPage() {
     });
   }, [rows, search, selectedStatus, dateRange, customRange, selectedPartners, selectedProducts]);
 
-  // ============================================================================
-  // [HANDLE DE EXPORTAÇÃO EXCEL - DADOS ESTRITOS AO BANCO]
-  // ============================================================================
   const handleExportExcel = () => {
     const dataToExport = filtered.map((r) => {
       const created = formatDate(r.created_at);
@@ -512,9 +557,6 @@ function ConsultsPage() {
     XLSX.writeFile(workbook, `Monitor_Consultas_${today}.xlsx`);
   };
 
-  // ============================================================================
-  // [HANDLE DE IMPRESSÃO: IFRAME ISOLADO]
-  // ============================================================================
   const handlePrintSheet = () => {
     if (!printRef.current) return;
 
@@ -569,10 +611,9 @@ function ConsultsPage() {
 
   return (
     <div className="font-sans space-y-6">
-      {/* HEADER DA TELA E CONTROLES GLOBAIS */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Monitor de Consultas e Visitas</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Consultas e Visitas</h1>
           <p className="text-sm text-muted-foreground">
             Acompanhe acessos, consultas, redirecionamentos e conversões em tempo real.
           </p>
@@ -592,7 +633,6 @@ function ConsultsPage() {
         </div>
       </div>
 
-      {/* PAINEL DE KPIS SUPERIORES (Totalizadores) */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Total de visitas", value: totals.total, highlight: false },
@@ -614,13 +654,8 @@ function ConsultsPage() {
         ))}
       </div>
 
-      {/* BARRA DE FERRAMENTAS E TABELA DE DADOS */}
       <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
-        
-        {/* HEADER RESPONSIVO: Estilo "App" com Busca Pílula e Filtros Agrupados no Mobile */}
         <div className="flex flex-col lg:flex-row lg:items-center gap-4 border-b border-border p-4">
-          
-          {/* BOTÃO DE FILTROS (Apenas Mobile) - Agrupa as opções */}
           <div className="flex items-center lg:hidden">
             <Popover>
               <PopoverTrigger asChild>
@@ -632,7 +667,6 @@ function ConsultsPage() {
                 <div className="flex flex-col gap-3">
                   <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Filtrar Resultados</h4>
                   
-                  {/* --- INÍCIO DOS FILTROS (VERSÃO MOBILE) --- */}
                   <Popover>
                     <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-slate-50 border-slate-200 transition-colors"><span className="flex items-center gap-2 truncate text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
                     <PopoverContent className="w-[calc(100vw-4rem)] p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>{partnersList.map((p) => { const isSelected = selectedPartners.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
@@ -644,22 +678,55 @@ function ConsultsPage() {
                   </Popover>
 
                   <Popover>
-                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"><span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 shrink-0" /> Situação: {selectedStatus === "Qualificadas" ? "Qualificadas" : selectedStatus}</span><ChevronDown className="h-3 w-3 shrink-0" /></Button></PopoverTrigger>
-                    <PopoverContent className="p-0 w-[calc(100vw-4rem)] bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start"><Command><CommandInput placeholder="Filtrar..." className="text-[#d946ef]" /><CommandList><CommandEmpty>Nenhum status encontrado.</CommandEmpty><CommandGroup><CommandItem onSelect={() => setSelectedStatus("Qualificadas")} className="text-[#d946ef] cursor-pointer">Qualificadas (Sem Visitas)</CommandItem><CommandItem onSelect={() => setSelectedStatus("Todos")} className="text-[#d946ef] cursor-pointer">Todos</CommandItem>{statusOptions.filter(s => s !== "Qualificadas").map((s) => (<CommandItem key={s} onSelect={() => setSelectedStatus(s)} className="text-[#d946ef] cursor-pointer">{s}</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
+                        <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 shrink-0" /> Situação: {selectedStatus.length === 0 ? "Todos" : selectedStatus.length === 1 && selectedStatus[0] === "Qualificadas" ? "Qualificadas" : `${selectedStatus.length} sel.`}</span>
+                        <ChevronDown className="h-3 w-3 shrink-0" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[calc(100vw-4rem)] bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                      <Command className="bg-transparent">
+                        <CommandList>
+                          <CommandGroup>
+                            <CommandItem onSelect={() => setSelectedStatus([])} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                                {selectedStatus.length === 0 && "✓"}
+                              </div>
+                              Todos
+                            </CommandItem>
+                            <CommandItem onSelect={() => { const isSel = selectedStatus.includes("Qualificadas"); setSelectedStatus(isSel ? selectedStatus.filter((s: string) => s !== "Qualificadas") : [...selectedStatus, "Qualificadas"]); }} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.includes("Qualificadas") ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                                {selectedStatus.includes("Qualificadas") && "✓"}
+                              </div>
+                              Qualificadas (Sem Visitas)
+                            </CommandItem>
+                            {statusOptions.filter(s => s !== "Qualificadas").map((s) => {
+                              const isSelected = selectedStatus.includes(s);
+                              return (
+                                <CommandItem key={s} onSelect={() => { if (isSelected) setSelectedStatus(selectedStatus.filter((item: string) => item !== s)); else setSelectedStatus([...selectedStatus, s]); }} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                                  <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                                    {isSelected && "✓"}
+                                  </div>
+                                  {s}
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
                   </Popover>
                   
                   <Popover>
                     <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600"><span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
                     <PopoverContent className="p-0 w-auto" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem><CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem><CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem></CommandGroup><div className="p-2 border-t"><p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command></PopoverContent>
                   </Popover>
-                  {/* --- FIM DOS FILTROS MOBILE --- */}
 
                 </div>
               </PopoverContent>
             </Popover>
           </div>
 
-          {/* BARRA DE BUSCA: Estilo Pílula (App) adaptada para Consults */}
           <div className="relative w-full lg:flex-1 lg:max-w-md order-last lg:order-none mt-1 lg:mt-0">
             <Input 
               value={search} 
@@ -670,9 +737,7 @@ function ConsultsPage() {
             <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-[#B300FF]" />
           </div>
 
-          {/* FILTROS DESKTOP: Lado a Lado (Escondidos no Mobile) */}
           <div className="hidden lg:flex lg:items-center lg:gap-2 lg:ml-auto">
-            {/* --- INÍCIO DOS FILTROS (VERSÃO DESKTOP) --- */}
             <Popover>
               <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
               <PopoverContent className="w-56 p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>{partnersList.map((p) => { const isSelected = selectedPartners.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
@@ -684,19 +749,53 @@ function ConsultsPage() {
             </Popover>
 
             <Popover>
-              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"><Filter className="h-3.5 w-3.5 shrink-0" /><span className="truncate">Situação: {selectedStatus === "Qualificadas" ? "Qualificadas" : selectedStatus}</span><ChevronDown className="h-3 w-3 shrink-0" /></Button></PopoverTrigger>
-              <PopoverContent className="p-0 w-56 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start"><Command><CommandInput placeholder="Filtrar..." className="text-[#d946ef]" /><CommandList><CommandEmpty>Nenhum status encontrado.</CommandEmpty><CommandGroup><CommandItem onSelect={() => setSelectedStatus("Qualificadas")} className="text-[#d946ef] cursor-pointer">Qualificadas (Sem Visitas)</CommandItem><CommandItem onSelect={() => setSelectedStatus("Todos")} className="text-[#d946ef] cursor-pointer">Todos</CommandItem>{statusOptions.filter(s => s !== "Qualificadas").map((s) => (<CommandItem key={s} onSelect={() => setSelectedStatus(s)} className="text-[#d946ef] cursor-pointer">{s}</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
+                  <Filter className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Situação: {selectedStatus.length === 0 ? "Todos" : selectedStatus.length === 1 && selectedStatus[0] === "Qualificadas" ? "Qualificadas" : `${selectedStatus.length} sel.`}</span>
+                  <ChevronDown className="h-3 w-3 shrink-0" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-56 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <Command className="bg-transparent">
+                  <CommandList>
+                    <CommandGroup>
+                      <CommandItem onSelect={() => setSelectedStatus([])} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                        <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                          {selectedStatus.length === 0 && "✓"}
+                        </div>
+                        Todos
+                      </CommandItem>
+                      <CommandItem onSelect={() => { const isSel = selectedStatus.includes("Qualificadas"); setSelectedStatus(isSel ? selectedStatus.filter((s: string) => s !== "Qualificadas") : [...selectedStatus, "Qualificadas"]); }} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                        <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.includes("Qualificadas") ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                          {selectedStatus.includes("Qualificadas") && "✓"}
+                        </div>
+                        Qualificadas (Sem Visitas)
+                      </CommandItem>
+                      {statusOptions.filter(s => s !== "Qualificadas").map((s) => {
+                        const isSelected = selectedStatus.includes(s);
+                        return (
+                          <CommandItem key={s} onSelect={() => { if (isSelected) setSelectedStatus(selectedStatus.filter((item: string) => item !== s)); else setSelectedStatus([...selectedStatus, s]); }} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                            <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                              {isSelected && "✓"}
+                            </div>
+                            {s}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
             </Popover>
             
             <Popover>
               <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
               <PopoverContent className="p-0 w-auto" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem><CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem><CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem></CommandGroup><div className="p-2 border-t"><p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command></PopoverContent>
             </Popover>
-            {/* --- FIM DOS FILTROS DESKTOP --- */}
           </div>
         </div>
 
-        {/* TABELA DE DADOS: Compacta, Fluida e Alinhada com Simulações */}
         <div className="overflow-x-auto w-full pb-2">
           <table className="w-full text-xs">
             <thead>
@@ -771,7 +870,7 @@ function ConsultsPage() {
       </div>
 
       {/* ===================================================================== */}
-      {/* PAINEL LATERAL DE DETALHES (SHEET / DRAWER) COM DADOS COMPLETOS       */}
+      {/* PAINEL LATERAL DE DETALHES (SHEET / DRAWER) COM DADOS COMPLETOS         */}
       {/* ===================================================================== */}
       <Sheet open={!!activeConsult} onOpenChange={(open) => !open && setActiveConsult(null)}>
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col h-full bg-white">
@@ -828,11 +927,12 @@ function ConsultsPage() {
 
               return (
                 <div className="flex flex-col h-full overflow-hidden">
-                  <div className="p-6 pb-4 border-b bg-white shrink-0">
+                  <div className="p-4 sm:p-6 pb-4 border-b bg-white shrink-0">
                     <SheetHeader className="space-y-3">
-                      <div className="flex items-center justify-between pr-8">
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-md overflow-hidden border bg-white">
+                      {/* Linha Superior: Logo, Nome do Parceiro e ID */}
+                      <div className="flex items-center justify-between gap-2 pr-8">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-md overflow-hidden border bg-white shrink-0">
                             {sim.partners?.logo_url ? (
                               <img
                                 src={sim.partners.logo_url}
@@ -843,38 +943,38 @@ function ConsultsPage() {
                               <span className="text-[9px] font-bold">{sim.partners?.name?.slice(0, 3)}</span>
                             )}
                           </div>
-                          <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                          <span className="text-xs font-bold text-slate-700 uppercase tracking-wide truncate">
                             {sim.partners?.name || "Parceiro N/A"}
                           </span>
                         </div>
-                        <span className="text-xs font-mono text-muted-foreground">ID: {sim.id}</span>
+                        <span className="text-[10px] sm:text-xs font-mono text-muted-foreground truncate max-w-[140px] sm:max-w-[200px]" title={sim.id}>
+                          ID: {sim.id}
+                        </span>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 pr-8">
-                        <div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
-                              {sim.product_types?.name || "Consulta / Visita"}
+                      {/* Linha Inferior: Produto, Situação / Visita e Nome do Cliente */}
+                      <div className="space-y-1 pr-8">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
+                            {sim.product_types?.name || "Consulta / Visita"}
+                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusClass(statusName)}`}
+                            >
+                              {statusName}
                             </span>
-
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${statusClass(statusName)}`}
-                              >
-                                {statusName}
+                            {sim.has_contact && (
+                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-slate-200 text-slate-700">
+                                CONTATO
                               </span>
-                              {sim.has_contact && (
-                                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold bg-slate-200 text-slate-700">
-                                  CONTATO
-                                </span>
-                              )}
-                            </div>
+                            )}
                           </div>
-
-                          <SheetTitle className="text-xl font-bold text-slate-900 mt-1">
-                            {entity?.name || "Lead sem nome"}
-                          </SheetTitle>
                         </div>
+
+                        <SheetTitle className="text-lg sm:text-xl font-bold text-slate-900 break-words">
+                          {entity?.name || "Lead sem nome"}
+                        </SheetTitle>
                       </div>
                     </SheetHeader>
                   </div>
@@ -1082,6 +1182,7 @@ function ConsultsPage() {
                       </div>
                     )}
 
+                    {/* AQUI ESTÁ A CORREÇÃO REAL: Usando visit_consents e DynamicConsentsStatic corretamente na tabela de Consultas */}
                     {sim.visit_consents && sim.visit_consents.length > 0 && (
                       <div className="rounded-xl border bg-slate-50 p-4 space-y-4">
                         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -1116,24 +1217,20 @@ function ConsultsPage() {
                                   </div>
 
                                   <div className="text-[11px] text-muted-foreground leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-border/50">
-                                    {legalTextSnapshot.template_text
-                                      ? legalTextSnapshot.template_text
-                                          .split(/(\{.*?\})/g)
-                                          .map((part: string, i: number) => {
-                                            if (part.startsWith("{") && part.endsWith("}")) {
-                                              const cleanText = part.replace(/[{}]/g, "");
-                                              return (
-                                                <span
-                                                  key={i}
-                                                  className="underline font-bold inline mx-0.5 text-[#B300FF]"
-                                                >
-                                                  {cleanText}
-                                                </span>
-                                              );
-                                            }
-                                            return <span key={i}>{part}</span>;
-                                          })
-                                      : "Registro de aceite verificado eletronicamente."}
+                                    {legalTextSnapshot.template_text ? (
+                                      <DynamicConsentsStatic
+                                        configs={[
+                                          {
+                                            id: consent.id,
+                                            position: 1,
+                                            template_text: legalTextSnapshot.template_text,
+                                            links: legalTextSnapshot.links || [],
+                                          },
+                                        ]}
+                                      />
+                                    ) : (
+                                      "Registro de aceite verificado eletronicamente."
+                                    )}
                                   </div>
 
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
@@ -1141,19 +1238,19 @@ function ConsultsPage() {
                                       <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
                                       <span
                                         className="truncate"
-                                        title={`${origin.city} / ${origin.state} / ${origin.country}`}
+                                        title={`${origin.city || consent.city || "N/A"} / ${origin.state || consent.state || "N/A"} / ${origin.country || consent.country || "N/A"}`}
                                       >
-                                        {origin.city || "N/A"} / {origin.state || "N/A"} / {origin.country || "N/A"}
+                                        {origin.city || consent.city || "N/A"} / {origin.state || consent.state || "N/A"} / {origin.country || consent.country || "N/A"}
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
                                       <Smartphone className="h-3 w-3 text-muted-foreground shrink-0" />
                                       <span
                                         className="truncate"
-                                        title={`${origin.ip_address} - ${origin.operating_system} (${origin.device_type})`}
+                                        title={`${origin.ip_address || consent.ip_address || "N/A"} - ${origin.operating_system || consent.operating_system || "N/A"} (${origin.device_type || consent.device_type || "N/A"})`}
                                       >
-                                        {origin.ip_address || "N/A"} - {origin.operating_system || "N/A"} (
-                                        {origin.device_type || "N/A"})
+                                        {origin.ip_address || consent.ip_address || "N/A"} - {origin.operating_system || consent.operating_system || "N/A"} (
+                                        {origin.device_type || consent.device_type || "N/A"})
                                       </span>
                                     </div>
                                   </div>
@@ -1426,30 +1523,69 @@ function ConsultsPage() {
                     </div>
                   )}
 
-                  {pageConfigs?.offer_panel && (
-                    <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 break-inside-avoid">
-                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#B300FF] flex items-center gap-1.5">
-                        <Layers size={14} /> Painel de Proposta (Offer Panel)
+                  {/* IMPRESSÃO DA AUDITORIA DE ACEITE (LGPD) - CONSULTAS CORRIGIDO */}
+                  {sim.visit_consents && sim.visit_consents.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4 break-inside-avoid">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                        <FileText className="h-3.5 w-3.5 text-primary" /> Auditoria de Aceite (LGPD)
                       </h4>
-                      <OfferPanelRender config={pageConfigs} />
+
+                      <div className="space-y-3">
+                        {sim.visit_consents
+                          .sort((a: any, b: any) => new Date(a.accepted_at).getTime() - new Date(b.accepted_at).getTime())
+                          .map((consent: any) => {
+                            const acceptedAt = formatDate(consent.accepted_at);
+                            const legalTextSnapshot = consent.page_snapshot?.legal_text || {};
+
+                            return (
+                              <div
+                                key={consent.id}
+                                className="bg-white p-3 rounded-xl border border-border shadow-sm space-y-3 break-inside-avoid"
+                              >
+                                <div className="flex items-center justify-between border-b border-border pb-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                                      {consent.consent_id || "Termo de Aceite"}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-muted-foreground font-medium">
+                                    {acceptedAt.d} às {acceptedAt.h}
+                                  </span>
+                                </div>
+
+                                <div className="text-[11px] text-muted-foreground leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-border/50">
+                                  {legalTextSnapshot.template_text ? (
+                                    <DynamicConsentsStatic
+                                      configs={[
+                                        {
+                                          id: consent.id,
+                                          position: 1,
+                                          template_text: legalTextSnapshot.template_text,
+                                          links: legalTextSnapshot.links || [],
+                                        },
+                                      ]}
+                                    />
+                                  ) : (
+                                    "Registro de aceite verificado eletronicamente."
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 pt-1 text-[10px] text-slate-600">
+                                  <div><MapPin className="h-3 w-3 inline mr-1 text-muted-foreground" />{consent.city || "N/A"} / {consent.state || "N/A"} / {consent.country || "N/A"}</div>
+                                  <div><Smartphone className="h-3 w-3 inline mr-1 text-muted-foreground" />{consent.ip_address || "N/A"} - {consent.operating_system || "N/A"}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
                     </div>
                   )}
 
-                  {sim.visit_consents && sim.visit_consents.length > 0 && (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 break-inside-avoid">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                        <FileText size={14} className="text-slate-400" /> Auditoria de Aceite (LGPD)
-                      </h4>
-                      <div className="grid grid-cols-2 gap-2 text-[10px]">
-                        {sim.visit_consents.map((c: any) => (
-                          <div key={c.id} className="bg-white border rounded-md p-2">
-                            <strong className="block text-slate-700 uppercase">✓ {c.consent_id || "Termo"}</strong>
-                            <span className="text-slate-500">
-                              Aceito em {formatDate(c.accepted_at).d} às {formatDate(c.accepted_at).h}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                  {pageConfigs?.offer_panel && (
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 break-inside-avoid">
+                      <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#B300FF] flex items-center gap-1.5"><Layers size={14} /> Painel de Proposta (Offer Panel)</h4>
+                      <OfferPanelRender config={pageConfigs} />
                     </div>
                   )}
 

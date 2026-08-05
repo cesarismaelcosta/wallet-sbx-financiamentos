@@ -67,12 +67,12 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
             <div key={opt.id} className="flex gap-2 items-start py-0.5 px-1 group">
               
               {/* Checkbox Container */}
-              <div className="flex items-center mt-0.5">
+              <div className="flex items-center pt-0.5">
                 <Checkbox
                   id={`consent-${opt.id}`}
                   checked={!!value[opt.id]}
                   onCheckedChange={(checked) => onChange({ ...value, [opt.id]: !!checked })}
-                  className="h-5 w-5 shrink-0 mt-0.5 rounded-[4px] border-2 border-slate-400 transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]"
+                  className="h-4 w-4 shrink-0 rounded-[4px] border border-slate-400 transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]"
                   style={
                     value[opt.id]
                       ? { backgroundColor: "var(--brand-primary)", borderColor: "var(--brand-primary)" }

@@ -145,18 +145,18 @@ export function Step1Simulation() {
         </div>
         
         <div className="space-y-0.5 flex-1 w-0 min-w-0">
-          {/* Título Principal */}
-          <h3 className="text-base sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full">
+          {/* Título Principal (Fonte fluida 14px a 20px) */}
+          <h3 className="text-[clamp(14px,4vw,20px)] sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full block">
             Simule seu financiamento*!
           </h3>
 
-          {/* Linha 1: Descrição do veículo em cinza claro */}
-          <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
+          {/* Linha 1: Descrição do veículo em cinza claro (Fonte fluida 10px a 12px) */}
+          <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-slate-600 truncate pt-0.5 w-full block">
             {offerDescText}
           </p>
 
           {/* Linha 2: Lote e valor com destaque */}
-          <p className="text-xs text-slate-600 truncate pt-0.5 w-full">
+          <p className="text-xs text-slate-600 truncate pt-0.5 w-full block">
             Lote {loteSubIndex} • <strong className="text-slate-900 font-bold">{BRL(localValorVeiculo)}</strong>
           </p>
         </div>
