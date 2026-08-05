@@ -320,25 +320,34 @@ function SimulationsPage() {
     loadDropdowns();
   }, []);
 
-  async function load() {
-    const [{ data: simData }, { data: statusData }] = await Promise.all([
-      supabase.from("simulations").select(`
-        *,
-        partners(id, name, logo_url),
-        product_types(id, name),
-        stage_types(id, name),
-        status_types(id, name),
-        financial_institutions(id, name, logo_url),
-        result_partner_types(*),
-        simulation_offers(*),
-        simulation_consents(*),
-        simulation_updates(*)
-      `).order('created_at', { ascending: false }),
-      supabase.from("status_types").select("name")
-    ]);
+  const [loading, setLoading] = useState(false);
 
-    if (simData) setRows(simData);
-    if (statusData) setStatusOptions(statusData.map(s => s.name));
+  async function load() {
+    setLoading(true);
+    try {
+      const [{ data: simData }, { data: statusData }] = await Promise.all([
+        supabase.from("simulations").select(`
+          *,
+          partners(id, name, logo_url),
+          product_types(id, name),
+          stage_types(id, name),
+          status_types(id, name),
+          financial_institutions(id, name, logo_url),
+          result_partner_types(*),
+          simulation_offers(*),
+          simulation_consents(*),
+          simulation_updates(*)
+        `).order('created_at', { ascending: false }),
+        supabase.from("status_types").select("name")
+      ]);
+
+      if (simData) setRows(simData);
+      if (statusData) setStatusOptions(statusData.map(s => s.name));
+    } catch (err) {
+      console.error("Erro ao carregar:", err);
+    } finally {
+      setLoading(false); // <--- Isso aqui é que para o giro da ventoinha!
+    }
   }
 
   useEffect(() => { load(); }, []);
@@ -520,7 +529,10 @@ function SimulationsPage() {
             <Button variant="outline" onClick={handleExportExcel} className="rounded-xl hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200 transition-colors">
               <Download className="mr-2 h-4 w-4" /> Exportar Excel
             </Button>
-            <Button onClick={load} className="rounded-xl"><RefreshCw className="mr-2 h-4 w-4" /> Atualizar</Button>
+            <Button onClick={() => load()} disabled={loading} className="rounded-xl">
+              <RefreshCw className={`mr-2 h-4 w-4 shrink-0 ${loading ? "animate-spin" : ""}`} /> 
+              Atualizar
+            </Button>
         </div>
       </div>
 
