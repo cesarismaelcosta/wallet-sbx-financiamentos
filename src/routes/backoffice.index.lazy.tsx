@@ -523,38 +523,26 @@ function DashboardPage() {
             <h1 className="text-2xl font-semibold tracking-tight">Visão geral</h1>
             <p className="text-sm text-muted-foreground">Métricas integradas de acessos e concessão de crédito.</p>
           </div>
-          <Button asChild variant="outline" className="rounded-xl">
-            <Link to="/backoffice/simulations">
-              Ver base de dados <ArrowUpRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 bg-muted/30 p-3 rounded-2xl border">
+        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 bg-muted/30 p-3 rounded-2xl border">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="h-9 rounded-xl gap-2 bg-white">
-                <CalendarIcon className="h-4 w-4" />
-                Período:{" "}
-                {dateRange === "custom"
-                  ? "Personalizado"
-                  : dateRange === "30"
-                    ? "30 dias"
-                    : dateRange === "7"
-                      ? "7 dias"
-                      : dateRange === "15"
-                        ? "15 dias"
-                        : "Tudo"}
-                <ChevronDown className="h-4 w-4 opacity-60" />
+              <Button variant="outline" className="h-10 w-full sm:w-auto rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
+                <span className="flex items-center gap-2 truncate">
+                  <CalendarIcon className="h-4 w-4 shrink-0" />
+                  Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "7" ? "7 dias" : dateRange === "15" ? "15 dias" : "Tudo"}
+                </span>
+                <ChevronDown className="h-3 w-3 shrink-0" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            <PopoverContent className="w-[calc(100vw-2rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
               <Command>
                 <CommandList>
                   <CommandGroup>
-                    <CommandItem onSelect={() => setDateRange("7")}>Últimos 7 dias</CommandItem>
-                    <CommandItem onSelect={() => setDateRange("15")}>Últimos 15 dias</CommandItem>
-                    <CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem>
+                    <CommandItem onSelect={() => setDateRange("7")} className="text-[#d946ef] cursor-pointer">Últimos 7 dias</CommandItem>
+                    <CommandItem onSelect={() => setDateRange("15")} className="text-[#d946ef] cursor-pointer">Últimos 15 dias</CommandItem>
+                    <CommandItem onSelect={() => setDateRange("30")} className="text-[#d946ef] cursor-pointer">Últimos 30 dias</CommandItem>
                   </CommandGroup>
                   <div className="border-t p-3">
                     <p className="text-xs text-muted-foreground mb-2">Personalizado:</p>
@@ -586,19 +574,19 @@ function DashboardPage() {
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className="h-9 px-3 border border-border rounded-xl text-sm bg-white hover:bg-muted/50 focus:border-primary outline-none transition-colors cursor-pointer flex gap-2"
+                className="h-10 w-full sm:w-auto rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"
               >
-                {selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s)`}
-                <ChevronDown className="h-4 w-4 opacity-60" />
+                <span className="truncate">{selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}</span>
+                <ChevronDown className="h-3 w-3 shrink-0" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-56 p-0" align="start">
+            <PopoverContent className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
               <Command>
                 <CommandList>
                   <CommandGroup>
-                    <CommandItem onSelect={() => setSelectedPartners([])}>
+                    <CommandItem onSelect={() => setSelectedPartners([])} className="text-[#d946ef] cursor-pointer">
                       <div
-                        className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}
+                        className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
                       >
                         {selectedPartners.length === 0 && "✓"}
                       </div>
@@ -616,9 +604,10 @@ function DashboardPage() {
                               setSelectedPartners([...selectedPartners, String(p.id)]);
                             }
                           }}
+                          className="text-[#d946ef] cursor-pointer"
                         >
                           <div
-                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}
+                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
                           >
                             {isSelected && "✓"}
                           </div>
@@ -636,19 +625,19 @@ function DashboardPage() {
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className="h-9 px-3 border border-border rounded-xl text-sm bg-white hover:bg-muted/50 focus:border-primary outline-none transition-colors cursor-pointer flex gap-2"
+                className="h-10 w-full sm:w-auto rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"
               >
-                {selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s)`}
-                <ChevronDown className="h-4 w-4 opacity-60" />
+                <span className="truncate">{selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}</span>
+                <ChevronDown className="h-3 w-3 shrink-0" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-56 p-0" align="start">
+            <PopoverContent className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
               <Command>
                 <CommandList>
                   <CommandGroup>
-                    <CommandItem onSelect={() => setSelectedProducts([])}>
+                    <CommandItem onSelect={() => setSelectedProducts([])} className="text-[#d946ef] cursor-pointer">
                       <div
-                        className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}
+                        className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
                       >
                         {selectedProducts.length === 0 && "✓"}
                       </div>
@@ -666,9 +655,10 @@ function DashboardPage() {
                               setSelectedProducts([...selectedProducts, String(p.id)]);
                             }
                           }}
+                          className="text-[#d946ef] cursor-pointer"
                         >
                           <div
-                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}
+                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
                           >
                             {isSelected && "✓"}
                           </div>

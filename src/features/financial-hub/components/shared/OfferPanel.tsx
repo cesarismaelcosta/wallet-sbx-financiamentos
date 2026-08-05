@@ -72,8 +72,8 @@ export function OfferPanel({ config }: { config: any }) {
 
       {/* RODAPÉ MANTIDO CONFORME ESTRUTURA ORIGINAL */}
       {offer_panel.partner?.name && (
-        <div className="mt-8 rounded-xl border border-border bg-muted/40 p-4 text-xs text-muted-foreground">
-          {offer_panel.partner.label}{" "}
+        <div className="mt-8 rounded-xl border border-border bg-muted/40 p-4 text-xs text-muted-foreground flex flex-wrap items-center gap-1.5 break-words">
+          <span>{offer_panel.partner.label}</span>
           <strong className="text-foreground">{offer_panel.partner.name}</strong>.
         </div>
       )}

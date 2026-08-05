@@ -1,9 +1,6 @@
 import { createLazyFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
-  Bell,
-  ChevronDown,
-  CircleUser,
   FileBarChart2,
   LayoutDashboard,
   LifeBuoy,
@@ -16,10 +13,11 @@ import {
   Globe,
   Layers,
   TriangleAlert,
+  Menu,
 } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { logLoginHistoryEvent } from "@/lib/login-history";
 
@@ -49,6 +47,7 @@ function BackofficeLayout() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, signOut, session } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     document.body.classList.add("backoffice-shell");
@@ -98,13 +97,13 @@ function BackofficeLayout() {
     .toUpperCase();
 
   const renderNavItem = (item: { to: string; label: string; icon: any }) => {
-    // Correção: Marca como ativo apenas se o caminho for exatamente o mesmo
     const active = pathname === item.to;
     const Icon = item.icon;
     return (
       <Link
         key={item.to}
         to={item.to as any}
+        onClick={() => setMobileMenuOpen(false)}
         className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
           active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
         }`}
@@ -115,83 +114,95 @@ function BackofficeLayout() {
     );
   };
 
+  const sidebarContent = (
+    <div className="flex h-full flex-col bg-card">
+      <div className="flex h-16 items-center border-b border-border px-5">
+        <WalletLogo size="sm" withTagline />
+      </div>
+
+      <nav className="flex-1 space-y-6 p-3 overflow-y-auto">
+        <div>
+          <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Operação
+          </p>
+          {OPERACAO_NAV.map(renderNavItem)}
+        </div>
+        <div>
+          <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Segurança
+          </p>
+          {SEGURANCA_NAV.map(renderNavItem)}
+        </div>
+        <div>
+          <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Configuração
+          </p>
+          {CONFIG_NAV.map(renderNavItem)}
+        </div>
+      </nav>
+
+      <div className="border-t border-border p-3">
+        <Link
+          to="/backoffice"
+          onClick={() => setMobileMenuOpen(false)}
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+        >
+          <LifeBuoy className="h-4 w-4" /> Ajuda & Suporte
+        </Link>
+        <div className="mt-2 flex items-center gap-3 rounded-lg bg-accent/40 px-3 py-2.5">
+          {backofficeUser.avatar ? (
+            <img
+              src={backofficeUser.avatar}
+              alt={backofficeUser.name}
+              className="h-8 w-8 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[image:var(--gradient-primary)] text-xs font-bold text-primary-foreground">
+              {initials || "?"}
+            </div>
+          )}
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="truncate text-sm font-semibold">{backofficeUser.name}</div>
+            <div className="truncate text-[11px] text-muted-foreground">{backofficeUser.email}</div>
+          </div>
+          <button
+            onClick={() => signOut()}
+            className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
+      {/* Sidebar Desktop */}
       <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-card lg:flex">
-        <div className="flex h-16 items-center border-b border-border px-5">
-          <WalletLogo size="sm" withTagline />
-        </div>
-
-        <nav className="flex-1 space-y-6 p-3">
-          <div>
-            <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Operação
-            </p>
-            {OPERACAO_NAV.map(renderNavItem)}
-          </div>
-          <div>
-            <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Segurança
-            </p>
-            {SEGURANCA_NAV.map(renderNavItem)}
-          </div>
-          <div>
-            <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Configuração
-            </p>
-            {CONFIG_NAV.map(renderNavItem)}
-          </div>
-        </nav>
-
-        <div className="border-t border-border p-3">
-          <Link
-            to="/backoffice"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-          >
-            <LifeBuoy className="h-4 w-4" /> Ajuda & Suporte
-          </Link>
-          <div className="mt-2 flex items-center gap-3 rounded-lg bg-accent/40 px-3 py-2.5">
-            {backofficeUser.avatar ? (
-              <img
-                src={backofficeUser.avatar}
-                alt={backofficeUser.name}
-                className="h-8 w-8 rounded-full object-cover"
-              />
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[image:var(--gradient-primary)] text-xs font-bold text-primary-foreground">
-                {initials || "?"}
-              </div>
-            )}
-            <div className="min-w-0 flex-1 leading-tight">
-              <div className="truncate text-sm font-semibold">{backofficeUser.name}</div>
-              <div className="truncate text-[11px] text-muted-foreground">{backofficeUser.email}</div>
-            </div>
-            <button
-              onClick={() => signOut()}
-              className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+        {sidebarContent}
       </aside>
 
+      {/* Sidebar Mobile (Sheet / Gaveta) */}
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetContent side="left" className="p-0 w-64">
+          {sidebarContent}
+        </SheetContent>
+      </Sheet>
+
+      {/* Área Principal */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card/80 px-4 backdrop-blur sm:px-6">
-          <div className="flex flex-1 items-center gap-2">
-            <div className="relative w-full max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Buscar propostas, clientes, veículos..." className="h-10 rounded-lg pl-9" />
-            </div>
-          </div>
-          <Button variant="ghost" size="icon" className="rounded-lg">
-            <Bell className="h-4 w-4" />
+        {/* Cabeçalho exclusivo para Mobile com a Logo à esquerda e o Hambúrguer à direita */}
+        <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 lg:hidden">
+          <WalletLogo size="sm" withTagline />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-lg"
+            onClick={() => setMobileMenuOpen(true)}
+          >
+            <Menu className="h-5 w-5" />
           </Button>
-          <div className="hidden items-center gap-2 rounded-lg border border-border px-3 py-1.5 sm:flex">
-            <CircleUser className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">{backofficeUser?.name?.split(" ")[0] || "Usuário"}</span>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </div>
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">

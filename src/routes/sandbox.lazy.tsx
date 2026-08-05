@@ -475,6 +475,11 @@ function SandboxPage() {
     setUserData(null);
     setApiOfferData(null);
     setVitrineOffers({});
+
+    // Limpa o token do contexto global para sumir do cabeçalho
+    if (logout) {
+      logout({ purgeEnv: true } as any);
+    }
   };
 
   const validateSessionBeforeAction = () => {
@@ -583,22 +588,30 @@ function SandboxPage() {
     }
   }, [ambienteAtivo]);
 
-  const [accessTokenSBX, setAccessTokenSBX] = useState<string>("");
+  const [accessTokenSBX, setAccessTokenSBX] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("access_token_sbx") || "";
+    }
+    return "";
+  });
 
   /**
    * [HIDRATAÇÃO LOCAL DE SESSÃO E PERFIL]
-   * Lê o token bruto e o perfil unificado direto do sessionStorage ao montar.
-   * Zero chamadas para a rota legada `sbx-user`.
+   * Lê o token bruto e o perfil unificado direto do sessionStorage ao montar,
+   * fazendo fallback automático caso a sessão global esteja ativa.
    */
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedToken = sessionStorage.getItem("access_token_sbx");
-      if (storedToken) {
+      if (storedToken && !accessTokenSBX) {
         setAccessTokenSBX(storedToken);
+      } else if (!storedToken && sessionToken) {
+        sessionStorage.setItem("access_token_sbx", sessionToken);
+        setAccessTokenSBX(sessionToken);
       }
 
       const storedProfile = sessionStorage.getItem("user_profile");
-      if (storedProfile) {
+      if (storedProfile && !userData) {
         try {
           setUserData(JSON.parse(storedProfile));
         } catch (e) {
@@ -606,7 +619,7 @@ function SandboxPage() {
         }
       }
     }
-  }, []);
+  }, [sessionToken]);
 
   const [tipoPessoa, setTipoPessoa] = useState<"F" | "J">("F");
   const [loginCred, setLoginCred] = useState("");
@@ -623,7 +636,7 @@ function SandboxPage() {
       label: "Cartão em até 18x",
       title: "Parcelamento com Cartão",
       product_id: "8",
-      offerId: ambienteAtivo === "production" ? "4846218" : "3064406",
+      offerId: ambienteAtivo === "production" ? "4859144" : "3064406",
       flowKey: "Cartão",
       disabled: false,
       variant: "bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs",

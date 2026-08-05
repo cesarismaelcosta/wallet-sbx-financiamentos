@@ -271,6 +271,7 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
 // ============================================================================
 
 const STATUS_STYLES: Record<string, string> = {
+  visita: "bg-purple-500/10 text-purple-600",
   simulacao: "bg-primary/10 text-primary",
   consulta: "bg-blue-500/10 text-blue-600",
   "site parceiro": "bg-amber-500/10 text-amber-600",
@@ -304,7 +305,7 @@ function ConsultsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
 
-  const [selectedStatus, setSelectedStatus] = useState<string>("Todos");
+  const [selectedStatus, setSelectedStatus] = useState<string>("Qualificadas");
   const [dateRange, setDateRange] = useState<"30" | "90" | "all" | "custom">("30");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [selectedPartners, setSelectedPartners] = useState<string[]>([]);
@@ -399,10 +400,11 @@ function ConsultsPage() {
     if (act.includes("SIMULATE") || act.includes("SIMULATION")) return "SIMULAÇÃO";
     if (act.includes("CONSULT")) return "CONSULTA";
     if (act.includes("REDIRECT")) return "SITE PARCEIRO";
-    return r.action || "CONSULTA";
+    if (act.includes("VISIT")) return "VISITA";
+    return r.action || "VISITA";
   }
 
-  const statusOptions = ["SIMULAÇÃO", "CONSULTA", "SITE PARCEIRO"];
+  const statusOptions = ["Qualificadas", "VISITA", "SIMULAÇÃO", "CONSULTA", "SITE PARCEIRO"];
 
   const totals = useMemo(() => {
     const t = { total: rows.length, simulacao: 0, consulta: 0, siteParceiro: 0 };
@@ -418,7 +420,13 @@ function ConsultsPage() {
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       const statusName = getVisitStatus(r);
-      const matchStatus = selectedStatus === "Todos" || statusName === selectedStatus;
+      // Lógica atualizada para o filtro de Situação
+      let matchStatus = true;
+      if (selectedStatus === "Qualificadas") {
+        matchStatus = statusName !== "VISITA";
+      } else if (selectedStatus !== "Todos") {
+        matchStatus = statusName === selectedStatus;
+      }
 
       const entity = Array.isArray(r.visit_entities) ? r.visit_entities[0] : r.visit_entities || {};
       const clientName = entity?.name ?? "";
@@ -607,319 +615,159 @@ function ConsultsPage() {
       </div>
 
       {/* BARRA DE FERRAMENTAS E TABELA DE DADOS */}
-      <div className="rounded-2xl border border-border bg-card overflow-x-auto">
-        <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar cliente ou CPF/CNPJ..."
-              className="h-10 rounded-xl pl-9"
-            />
+      <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
+        
+        {/* HEADER RESPONSIVO: Estilo "App" com Busca Pílula e Filtros Agrupados no Mobile */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4 border-b border-border p-4">
+          
+          {/* BOTÃO DE FILTROS (Apenas Mobile) - Agrupa as opções */}
+          <div className="flex items-center lg:hidden">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="h-9 rounded-full border-slate-300 text-slate-700 px-4 font-medium hover:bg-slate-50">
+                  <Filter className="h-4 w-4 mr-2 text-slate-500" /> Filtros
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[calc(100vw-2rem)] p-4 ml-4 rounded-2xl border-slate-200 shadow-xl" align="start">
+                <div className="flex flex-col gap-3">
+                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Filtrar Resultados</h4>
+                  
+                  {/* --- INÍCIO DOS FILTROS (VERSÃO MOBILE) --- */}
+                  <Popover>
+                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-slate-50 border-slate-200 transition-colors"><span className="flex items-center gap-2 truncate text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
+                    <PopoverContent className="w-[calc(100vw-4rem)] p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>{partnersList.map((p) => { const isSelected = selectedPartners.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
+                  </Popover>
+
+                  <Popover>
+                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-slate-50 border-slate-200 transition-colors"><span className="flex items-center gap-2 truncate text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
+                    <PopoverContent className="w-[calc(100vw-4rem)] p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedProducts.length === 0 && "✓"}</div>Todos Produtos</CommandItem>{productsList.map((p) => { const isSelected = selectedProducts.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter(id => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
+                  </Popover>
+
+                  <Popover>
+                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"><span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 shrink-0" /> Situação: {selectedStatus === "Qualificadas" ? "Qualificadas" : selectedStatus}</span><ChevronDown className="h-3 w-3 shrink-0" /></Button></PopoverTrigger>
+                    <PopoverContent className="p-0 w-[calc(100vw-4rem)] bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start"><Command><CommandInput placeholder="Filtrar..." className="text-[#d946ef]" /><CommandList><CommandEmpty>Nenhum status encontrado.</CommandEmpty><CommandGroup><CommandItem onSelect={() => setSelectedStatus("Qualificadas")} className="text-[#d946ef] cursor-pointer">Qualificadas (Sem Visitas)</CommandItem><CommandItem onSelect={() => setSelectedStatus("Todos")} className="text-[#d946ef] cursor-pointer">Todos</CommandItem>{statusOptions.filter(s => s !== "Qualificadas").map((s) => (<CommandItem key={s} onSelect={() => setSelectedStatus(s)} className="text-[#d946ef] cursor-pointer">{s}</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent>
+                  </Popover>
+                  
+                  <Popover>
+                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600"><span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
+                    <PopoverContent className="p-0 w-auto" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem><CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem><CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem></CommandGroup><div className="p-2 border-t"><p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command></PopoverContent>
+                  </Popover>
+                  {/* --- FIM DOS FILTROS MOBILE --- */}
+
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-10 rounded-xl gap-2 bg-white hover:bg-muted/50 border border-border transition-colors"
-              >
-                <Filter className="h-3.5 w-3.5 opacity-70" />
-                Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} selecionado(s)`}
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-56 p-0" align="start">
-              <Command>
-                <CommandList>
-                  <CommandGroup>
-                    <CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer">
-                      <div
-                        className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}
-                      >
-                        {selectedPartners.length === 0 && "✓"}
-                      </div>
-                      Todos Parceiros
-                    </CommandItem>
-                    {partnersList.map((p) => {
-                      const isSelected = selectedPartners.includes(String(p.id));
-                      return (
-                        <CommandItem
-                          key={p.id}
-                          onSelect={() => {
-                            if (isSelected) {
-                              setSelectedPartners(selectedPartners.filter((id) => id !== String(p.id)));
-                            } else {
-                              setSelectedPartners([...selectedPartners, String(p.id)]);
-                            }
-                          }}
-                          className="cursor-pointer"
-                        >
-                          <div
-                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}
-                          >
-                            {isSelected && "✓"}
-                          </div>
-                          {p.name}
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+          {/* BARRA DE BUSCA: Estilo Pílula (App) adaptada para Consults */}
+          <div className="relative w-full lg:flex-1 lg:max-w-md order-last lg:order-none mt-1 lg:mt-0">
+            <Input 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)} 
+              placeholder="Buscar cliente ou CPF/CNPJ..." 
+              className="h-11 w-full rounded-full bg-slate-100/70 border-transparent pl-5 pr-12 text-[13px] text-slate-700 placeholder:text-slate-500 focus-visible:ring-primary/20 focus-visible:bg-white focus-visible:border-primary/30 transition-all shadow-none" 
+            />
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-[#B300FF]" />
+          </div>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-10 rounded-xl gap-2 bg-white hover:bg-muted/50 border border-border transition-colors"
-              >
-                <Filter className="h-3.5 w-3.5 opacity-70" />
-                Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} selecionado(s)`}
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-56 p-0" align="start">
-              <Command>
-                <CommandList>
-                  <CommandGroup>
-                    <CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer">
-                      <div
-                        className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}
-                      >
-                        {selectedProducts.length === 0 && "✓"}
-                      </div>
-                      Todos Produtos
-                    </CommandItem>
-                    {productsList.map((p) => {
-                      const isSelected = selectedProducts.includes(String(p.id));
-                      return (
-                        <CommandItem
-                          key={p.id}
-                          onSelect={() => {
-                            if (isSelected) {
-                              setSelectedProducts(selectedProducts.filter((id) => id !== String(p.id)));
-                            } else {
-                              setSelectedProducts([...selectedProducts, String(p.id)]);
-                            }
-                          }}
-                          className="cursor-pointer"
-                        >
-                          <div
-                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}
-                          >
-                            {isSelected && "✓"}
-                          </div>
-                          {p.name}
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+          {/* FILTROS DESKTOP: Lado a Lado (Escondidos no Mobile) */}
+          <div className="hidden lg:flex lg:items-center lg:gap-2 lg:ml-auto">
+            {/* --- INÍCIO DOS FILTROS (VERSÃO DESKTOP) --- */}
+            <Popover>
+              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
+              <PopoverContent className="w-56 p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>{partnersList.map((p) => { const isSelected = selectedPartners.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
+            </Popover>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-10 rounded-xl bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"
-              >
-                <Filter className="mr-2 h-3.5 w-3.5" /> Situação: {selectedStatus}{" "}
-                <ChevronDown className="ml-2 h-3 w-3" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="p-0 w-56 bg-[#fdf2f8] border-[#fbcfe8]" align="start">
-              <Command>
-                <CommandInput placeholder="Filtrar..." className="text-[#d946ef]" />
-                <CommandList>
-                  <CommandEmpty>Nenhum status encontrado.</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem onSelect={() => setSelectedStatus("Todos")} className="text-[#d946ef] cursor-pointer">
-                      Todos
-                    </CommandItem>
-                    {statusOptions.map((s) => (
-                      <CommandItem
-                        key={s}
-                        onSelect={() => setSelectedStatus(s)}
-                        className="text-[#d946ef] cursor-pointer"
-                      >
-                        {s}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+            <Popover>
+              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
+              <PopoverContent className="w-56 p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedProducts.length === 0 && "✓"}</div>Todos Produtos</CommandItem>{productsList.map((p) => { const isSelected = selectedProducts.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter(id => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
+            </Popover>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-10 rounded-xl hover:bg-[#fce7f3] transition-colors">
-                <Filter className="mr-2 h-3.5 w-3.5" />
-                Período:{" "}
-                {dateRange === "custom"
-                  ? "Personalizado"
-                  : dateRange === "30"
-                    ? "30 dias"
-                    : dateRange === "90"
-                      ? "90 dias"
-                      : "Tudo"}
-                <ChevronDown className="ml-2 h-3 w-3" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="p-0 w-auto" align="start">
-              <Command>
-                <CommandList>
-                  <CommandGroup>
-                    <CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem>
-                    <CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem>
-                    <CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem>
-                  </CommandGroup>
-                  <div className="p-2 border-t">
-                    <p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p>
-                    <Calendar
-                      mode="range"
-                      selected={customRange}
-                      onSelect={(range) => {
-                        setCustomRange(range);
-                        setDateRange("custom");
-                      }}
-                      numberOfMonths={1}
-                    />
-                  </div>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+            <Popover>
+              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"><Filter className="h-3.5 w-3.5 shrink-0" /><span className="truncate">Situação: {selectedStatus === "Qualificadas" ? "Qualificadas" : selectedStatus}</span><ChevronDown className="h-3 w-3 shrink-0" /></Button></PopoverTrigger>
+              <PopoverContent className="p-0 w-56 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start"><Command><CommandInput placeholder="Filtrar..." className="text-[#d946ef]" /><CommandList><CommandEmpty>Nenhum status encontrado.</CommandEmpty><CommandGroup><CommandItem onSelect={() => setSelectedStatus("Qualificadas")} className="text-[#d946ef] cursor-pointer">Qualificadas (Sem Visitas)</CommandItem><CommandItem onSelect={() => setSelectedStatus("Todos")} className="text-[#d946ef] cursor-pointer">Todos</CommandItem>{statusOptions.filter(s => s !== "Qualificadas").map((s) => (<CommandItem key={s} onSelect={() => setSelectedStatus(s)} className="text-[#d946ef] cursor-pointer">{s}</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent>
+            </Popover>
+            
+            <Popover>
+              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
+              <PopoverContent className="p-0 w-auto" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem><CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem><CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem></CommandGroup><div className="p-2 border-t"><p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command></PopoverContent>
+            </Popover>
+            {/* --- FIM DOS FILTROS DESKTOP --- */}
+          </div>
         </div>
 
-        {/* TABELA DE DADOS */}
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <th className="px-3 py-3 w-[80px]">Data</th>
-              <th className="px-3 py-3 w-[180px]">Cliente</th>
-              <th className="px-3 py-3 w-[150px]">Produto</th>
-              <th className="px-3 py-3 w-[220px]">Oferta</th>
-              <th className="px-3 py-3 w-[160px]">Situação</th>
-              <th className="px-3 py-3 w-[140px]">Parceiro</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r) => {
-              const created = formatDate(r.created_at);
-              const entity = r.visit_entities || {};
-              const offer = r.visit_offers || {};
-              const productName = r.product_types?.name ?? "—";
-              const statusName = getVisitStatus(r);
+        {/* TABELA DE DADOS: Compacta, Fluida e Alinhada com Simulações */}
+        <div className="overflow-x-auto w-full pb-2">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border bg-muted/40 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                <th className="px-3 py-2.5 w-[75px]">Data</th>
+                <th className="px-3 py-2.5 w-[140px]">Cliente</th>
+                <th className="px-3 py-2.5 w-[140px]">Produto</th>
+                <th className="px-3 py-2.5 w-[190px]">Oferta</th>
+                <th className="px-3 py-2.5 w-[150px]">Situação</th>
+                <th className="px-3 py-2.5 w-[130px]">Parceiro</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r) => {
+                const created = formatDate(r.created_at);
+                const entity = r.visit_entities || {};
+                const offer = r.visit_offers || {};
+                const productName = r.product_types?.name ?? "—";
+                const statusName = getVisitStatus(r);
 
-              const rawDoc = entity?.document?.replace(/\D/g, "") || "";
-              const doc =
-                rawDoc.length === 14
-                  ? rawDoc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
-                  : rawDoc.length === 11
-                    ? rawDoc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")
-                    : entity?.document || "—";
+                const rawDoc = entity?.document?.replace(/\D/g, "") || "";
+                const doc = rawDoc.length === 14 ? rawDoc.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : rawDoc.length === 11 ? rawDoc.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4") : entity?.document || "—";
+                const phone = entity?.phone?.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3") ?? "";
+                const endEvent = offer?.event_end_date ? new Date(offer.event_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
 
-              const phone = entity?.phone?.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3") ?? "";
-              const endEvent = offer?.event_end_date
-                ? new Date(offer.event_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
-                : "";
-
-              return (
-                <tr
-                  key={r.id}
-                  onClick={() => setActiveConsult(r)}
-                  className="border-b border-border/60 hover:bg-accent/40 cursor-pointer transition-colors"
-                  title="Clique para ver os detalhes completos da visita"
-                >
-                  <td className="px-3 py-3 w-[80px]">
-                    <div className="font-semibold">{created.d}</div>
-                    <div className="text-xs text-muted-foreground">{created.h}</div>
-                  </td>
-
-                  <td className="px-3 py-3 w-[180px]">
-                    <div className="font-semibold text-[#d946ef] truncate" title={entity?.name}>
-                      {entity?.name || "—"}
-                    </div>
-                    <div className="text-sm text-muted-foreground">{doc}</div>
-                    <div className="text-sm text-muted-foreground">{phone || "—"}</div>
-                  </td>
-
-                  <td className="px-3 py-3 w-[150px]">
-                    <div className="font-semibold">{productName}</div>
-                    <div className="text-[10px] text-muted-foreground font-medium uppercase mt-0.5">
-                      ORIGEM: {r.utm_source ? r.utm_source : "—"}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground font-medium uppercase mt-0.5">
-                      {r.state ? r.state : "—"}
-                    </div>
-                    {r.has_contact && (
-                      <div className="text-[10px] text-emerald-600 font-semibold uppercase mt-0.5">
-                        CONTATO C/ PARCEIRO
+                return (
+                  <tr key={r.id} onClick={() => setActiveConsult(r)} className="border-b border-border/60 hover:bg-accent/40 cursor-pointer transition-colors" title="Clique para ver os detalhes completos da visita">
+                    <td className="px-3 py-2.5 w-[75px]">
+                      <div className="font-semibold text-foreground">{created.d}</div>
+                      <div className="text-[11px] text-muted-foreground">{created.h}</div>
+                    </td>
+                    <td className="px-3 py-2.5 w-[140px]">
+                      <div className="font-semibold text-[#d946ef] truncate" title={entity?.name}>{entity?.name || "—"}</div>
+                      <div className="text-[11px] text-muted-foreground">{doc}</div>
+                      <div className="text-[11px] text-muted-foreground">{phone || "—"}</div>
+                    </td>
+                    <td className="px-3 py-2.5 w-[140px]">
+                      <div className="font-semibold text-foreground">{productName}</div>
+                      <div className="text-[10px] text-muted-foreground font-medium uppercase mt-0.5">ORIGEM: {r.utm_source ? r.utm_source : "—"}</div>
+                      <div className="text-[10px] text-muted-foreground font-medium uppercase mt-0.5">{r.state ? r.state : "—"}</div>
+                      {r.has_contact && (<div className="text-[10px] text-emerald-600 font-semibold uppercase mt-0.5">CONTATO C/ PARCEIRO</div>)}
+                    </td>
+                    <td className="px-3 py-2.5 max-w-[190px] sm:max-w-[220px]">
+                      <div className="font-semibold text-foreground truncate" title={offer?.offer_description}>{offer?.offer_description || "—"}</div>
+                      <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={offer?.event_description}>{offer?.event_id ? `${offer.event_id} - ` : ""} {offer?.event_description || "—"}</div>
+                      <div className="text-[10px] text-muted-foreground font-medium mt-0.5">{BRL(offer?.offer_value)} {endEvent ? `(Fim: ${endEvent})` : ""}</div>
+                    </td>
+                    <td className="px-3 py-2.5 w-[150px]">
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(statusName)}`}>{statusName}</span>
+                        <span className="text-[10px] text-muted-foreground">{created.d} {created.h}</span>
                       </div>
-                    )}
-                  </td>
-
-                  <td className="px-3 py-3 max-w-[220px]">
-                    <div className="font-semibold truncate" title={offer?.offer_description}>
-                      {offer?.offer_description || "—"}
-                    </div>
-                    <div className="text-xs text-muted-foreground truncate mt-0.5" title={offer?.event_description}>
-                      {offer?.event_id ? `${offer.event_id} - ` : ""} {offer?.event_description || "—"}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground font-medium mt-0.5">
-                      {BRL(offer?.offer_value)} {endEvent ? `(Fim: ${endEvent})` : ""}
-                    </div>
-                  </td>
-
-                  <td className="px-3 py-3 w-[160px]">
-                    <div className="flex flex-col items-start gap-1">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${statusClass(statusName)}`}
-                        >
-                          {statusName}
-                        </span>
+                    </td>
+                    <td className="px-3 py-2.5 w-[130px]">
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-transparent overflow-hidden shrink-0" title={r.partners?.name}>
+                          {r.partners?.logo_url ? (
+                            <img src={r.partners.logo_url} className="h-full w-full object-cover" alt={r.partners.name} />
+                          ) : (
+                            <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase">{r.partners?.name?.slice(0, 3) || "—"}</span>
+                          )}
+                        </div>
+                        <span className="text-xs font-medium text-foreground truncate" title={r.partners?.name}>{r.partners?.name || "—"}</span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">
-                        {created.d} {created.h}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="px-3 py-3 w-[140px]">
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className="flex h-10 w-10 items-center justify-center rounded-lg bg-transparent overflow-hidden"
-                        title={r.partners?.name}
-                      >
-                        {r.partners?.logo_url ? (
-                          <img src={r.partners.logo_url} className="h-full w-full object-cover" alt={r.partners.name} />
-                        ) : (
-                          <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase">
-                            {r.partners?.name?.slice(0, 3) || "—"}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs font-medium text-foreground truncate" title={r.partners?.name}>
-                        {r.partners?.name || "—"}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div> 
       </div>
 
       {/* ===================================================================== */}

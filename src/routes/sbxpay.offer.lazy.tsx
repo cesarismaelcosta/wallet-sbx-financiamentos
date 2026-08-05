@@ -83,7 +83,7 @@ const FLOW_MAP: Record<string, {
     name: "Parcelamento com Cartão", 
     category: "Informática", 
     product_id: "8", 
-    offer_id: { staging: "3064406", production: "4846218" }, 
+    offer_id: { staging: "3064406", production: "4859144" }, 
     info: "Entity, Event, Manager, Offer", 
     link: "Box Parcelamento" 
   },
@@ -513,11 +513,11 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MA
                     <div className="w-6 h-6 rounded-full border border-gray-800 flex items-center justify-center">
                       <CreditCard size={14} className="text-gray-800" />
                     </div>
-                    <h5 className="m-0 text-base font-bold">Parcele suas compras em até 18x</h5>
+                    <h5 className="m-0 text-base font-bold">Parcele em até 18x</h5>
                   </div>
                   <p className="text-sm text-gray-600 leading-relaxed mb-4">
-                    Para pagamentos de lotes até R$ 120.000,00 neste evento você pode utilizar seu cartão de crédito
-                    para pagar com toda a segurança da <strong>sbXPay</strong>.
+                    Para pagamentos neste evento de lotes até R$ 120.000,00 você pode utilizar seu cartão de crédito
+                    para pagar com toda a segurança da <strong>sbXPAY</strong>.
                   </p>
                   <a
                     onClick={(e) => {
