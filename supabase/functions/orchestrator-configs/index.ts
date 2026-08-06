@@ -40,7 +40,7 @@ import { debugLog } from "../_shared/logger.ts";
  * @param {any} [sellerId] - Identificador do Seller.
  * @param {any} [categoryId] - Identificador da Categoria.
  * @param {any} [productId] - Identificador do Produto.
- * @param {string} [entityType] - Tipo explícito da entidade ("F" ou "J").
+ * @param {string} [entityType] - Tipo explícito da entidade ("F", "J", "PF", "PJ").
  * @returns {Promise<any|null>} O registro de configuração correspondente ou nulo.
  */
 async function resolveOrchestratorConfigs(
@@ -49,10 +49,11 @@ async function resolveOrchestratorConfigs(
   sellerId?: any,
   categoryId?: any,
   productId?: any,
-  entityType?: "F" | "J" | string, // 👈 Aceita "F", "J" ou qualquer string genérica / undefined
+  entityType?: "F" | "J" | "PF" | "PJ" | string, 
 ) {
-  // 1. Determinação do Perfil Ativo (PF vs PJ)
-  const currentProfile = entityType === "J" ? "PJ" : "PF";
+  // 1. Determinação do Perfil Ativo Blindada (PF vs PJ)
+  // Corrige o bug caso o input já venha explicitamente como "PJ" ou "PF"
+  const currentProfile = (entityType === "J" || entityType === "PJ") ? "PJ" : "PF";
 
   // 2. Ordem de prioridade oficial da arquitetura sbX cobrindo todos os contextos de cards
   const priorities = [
@@ -70,13 +71,17 @@ async function resolveOrchestratorConfigs(
       const { data, error } = await supabase
         .from("orchestrator_configs")
         .select("*")
-        .eq("lookup_id", Number(priority.id))
+        .eq("lookup_id", String(priority.id)) // 👈 Cópia como String garante compatibilidade no DB caso a coluna seja texto/varchar
         .eq("config_type", priority.type)
         .eq("is_active", true)
         .in("entity_type", [currentProfile, "PF+PJ"])
         .maybeSingle();
 
-      if (error) continue;
+      if (error) {
+        debugLog(`[resolveOrchestratorConfigs] Erro na query: ${error.message}`);
+        continue;
+      }
+      
       if (data) {
         debugLog(`[resolveOrchestratorConfigs] Match cravado via tipo: ${priority.type}`);
         return data;
@@ -207,6 +212,7 @@ serve(withSecurity('orchestrator-configs', async (req: Request) => {
 
     // =========================================================================
     // 7. SANITIZAÇÃO E PARSEAMENTO DE CAMPOS JSON/JSONB
+    // (Garante nomes perfeitamente casados com a sua tabela)
     // =========================================================================
     const parseJson = (val: any, fallback: any) => {
       if (!val) return fallback;

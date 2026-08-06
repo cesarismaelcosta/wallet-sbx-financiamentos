@@ -12,6 +12,7 @@ import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 import { DynamicConsents } from "@/features/financial-hub/components/layout/DynamicConsents";
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function Step1PartnersPanel() {
   const insurers = [
@@ -102,45 +103,41 @@ export function Step1PartnersPanel() {
         ))}
       </div>
 
-    <div className="flex flex-col gap-y-2"> 
-  
+      <div className="flex flex-col gap-y-2">
         {/* Container do Consentimento - Protegido durante loading */}
-        <div className={`mb-1 transition-opacity duration-200 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}>
-          <DynamicConsents 
-            configs={consent_configs} 
-            value={acceptedConsents} 
-            onChange={setacceptedConsents} 
-          />
+        <div
+          className={`mb-1 transition-opacity duration-200 ${loading || navLoading ? "pointer-events-none opacity-50" : "opacity-100"}`}
+        >
+          <DynamicConsents configs={consent_configs} value={acceptedConsents} onChange={setacceptedConsents} />
         </div>
-        
-        {/* Botão Principal com Feedback de Carregamento Padronizado */}
-        <button 
-          disabled={loading || !areConsentsValid || navLoading}
+
+        {/* Botão Principal com Componente Oficial do Design System e Tratamento de Redirecionamento */}
+        <Button
+          type="button"
+          disabled={loading || navLoading || !areConsentsValid}
           onClick={handleProceed}
-          className="w-full bg-[#B300FF] hover:bg-[#9900D9] text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-[#B300FF]/20 disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none flex items-center justify-center gap-2"
+          className="w-full h-14 bg-[#B300FF] hover:bg-[#9900D9] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#B300FF]/20 disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none disabled:!cursor-wait flex items-center justify-center gap-2"
         >
           {loading || navLoading ? (
-            <>
+            <span className="flex items-center justify-center gap-2 animate-pulse">
               <Loader2 className="h-5 w-5 animate-spin text-white" />
               Processando...
-            </>
+            </span>
           ) : (
             "Continuar cotação"
           )}
-        </button>
+        </Button>
 
         {/* Botão de contato só aparece se houver whatsappContact definido em integration_details */}
-        <ButtonWhatsApp 
-            productName="Seguros Auto"
-            variant="card"
-            config={state.data?.integration_details} 
-            data={state.data} 
-            consents={consents}
-            areConsentsValid={areConsentsValid}
+        <ButtonWhatsApp
+          productName="Seguros Auto"
+          variant="card"
+          config={state.data?.integration_details}
+          data={state.data}
+          consents={consents}
+          areConsentsValid={areConsentsValid}
         />
-
       </div>
-
     </div>
   );
 }

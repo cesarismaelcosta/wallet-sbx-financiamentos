@@ -61,6 +61,12 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { callOrchestratorConfigs } from "@/features/financial-hub/core/services/gateway";
 import { ICON_MAP } from "@/features/financial-hub/components/shared/icons-map";
 
+// Novos Componentes Compartilhados (Fábrica de Painéis)
+import { PanelProduct } from "@/features/financial-hub/components/shared/renderes/PanelProduct"; 
+import { PanelConsents } from "@/features/financial-hub/components/shared/renderes/PanelConsents";
+import { PanelFAQ } from "@/features/financial-hub/components/shared/renderes/PanelFAQ";
+import { PanelFooter } from "@/features/financial-hub/components/shared/renderes/PanelFooter";
+
 /**
  * [CONTRATO DE PERFIL DO BFF]
  */
@@ -116,245 +122,6 @@ const ENV_URLS = {
   production: "https://api.s4bdigital.net",
   staging: "https://stgapi.s4bdigital.net",
 };
-
-/**
- * =========================================================================
- * [SUB-COMPONENTES DA ROTA]
- * =========================================================================
- */
-function FAQSection({ items }: { items?: any[] }) {
-  if (!items || items.length === 0) return null;
-  const sortedItems = [...items].sort((a, b) => (a.position || 0) - (b.position || 0));
-  const half = Math.ceil(sortedItems.length / 2);
-
-  return (
-    <section className="py-4 overflow-hidden bg-white">
-      <div className="max-w-full">
-        <h3 className="text-sm font-bold mb-4 text-foreground/90 border-b pb-2">Dúvidas Frequentes da Rota</h3>
-        <div className="grid md:grid-cols-2 gap-x-4 gap-y-3">
-          <div className="space-y-3">
-            <Accordion type="single" collapsible className="w-full">
-              {sortedItems.slice(0, half).map((item, i) => (
-                <AccordionItem
-                  key={i}
-                  value={`item-col1-${i}`}
-                  className="border border-border rounded-xl px-3 bg-white/60 shadow-sm transition-all focus-within:border-[var(--brand-primary)] mb-2"
-                >
-                  <AccordionTrigger className="text-left font-semibold text-xs text-foreground/90 hover:text-[var(--brand-primary)] transition-colors py-2.5">
-                    {item.question}
-                  </AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground text-[11px] leading-relaxed pb-2">
-                    <div className="mb-2">{item.answer}</div>
-                    {item.bullets && item.bullets.length > 0 && (
-                      <div className="space-y-1 mt-1">
-                        {item.bullets.map((bullet: string, idx: number) => (
-                          <div key={idx} className="flex gap-1.5">
-                            <span>•</span>
-                            <span>{bullet}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </div>
-          <div className="space-y-3">
-            <Accordion type="single" collapsible className="w-full">
-              {sortedItems.slice(half).map((item, i) => (
-                <AccordionItem
-                  key={i}
-                  value={`item-col2-${i}`}
-                  className="border border-border rounded-xl px-3 bg-white/60 shadow-sm transition-all focus-within:border-[var(--brand-primary)] mb-2"
-                >
-                  <AccordionTrigger className="text-left font-semibold text-xs text-foreground/90 hover:text-[var(--brand-primary)] transition-colors py-2.5">
-                    {item.question}
-                  </AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground text-[11px] leading-relaxed pb-2">
-                    <div className="mb-2">{item.answer}</div>
-                    {item.bullets && item.bullets.length > 0 && (
-                      <div className="space-y-1 mt-1">
-                        {item.bullets.map((bullet: string, idx: number) => (
-                          <div key={idx} className="flex gap-1.5">
-                            <span>•</span>
-                            <span>{bullet}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function FooterRender({ config }: { config?: any }) {
-  if (!config?.template_text) return null;
-  const { template_text, links = [] } = config;
-
-  const renderText = () => {
-    const parts = template_text.split(/\{([^}]+)\}/g);
-    return parts.map((part: string, index: number) => {
-      const linkMatch = links.find((l: any) => l.text === part);
-      if (linkMatch) {
-        return (
-          <a
-            key={index}
-            href={linkMatch.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline font-medium text-slate-500 hover:text-slate-800 transition-colors"
-          >
-            {part}
-          </a>
-        );
-      }
-      return <span key={index}>{part}</span>;
-    });
-  };
-
-  return (
-    <div className="space-y-2">
-      <h4 className="text-[11px] font-bold uppercase text-purple-600 flex items-center gap-1.5">
-        <FileText size={14} /> Rodapé Legal (Footer)
-      </h4>
-      <footer className="py-4 px-3 text-center text-[10px] text-muted-foreground bg-slate-50 border rounded-xl">
-        <p className="leading-relaxed text-justify sm:text-center text-slate-400">{renderText()}</p>
-      </footer>
-    </div>
-  );
-}
-
-function OfferPanelRender({ config }: { config: any }) {
-  if (!config?.offer_panel?.headline?.parts || !config?.offer_panel?.description?.parts) return null;
-  const { offer_panel, theme } = config;
-  const brandColor = theme?.primary_color || "var(--brand-primary)";
-
-  const getTextStyle = (type: string) => {
-    switch (type) {
-      case "highlight":
-        return "text-[var(--brand-primary)]";
-      case "bold":
-        return "font-bold text-foreground";
-      default:
-        return "text-foreground";
-    }
-  };
-
-  return (
-    <div className="space-y-3" style={{ "--brand-primary": brandColor } as React.CSSProperties}>
-      <div className="space-y-1.5">
-        <h2 className="text-lg font-semibold leading-tight text-foreground sm:text-xl">
-          {offer_panel.headline.parts.map((part: any, i: number) => (
-            <span key={i} className={getTextStyle(part.type)}>
-              {part.text}
-            </span>
-          ))}
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          {offer_panel.description.parts.map((part: any, i: number) => (
-            <span key={i} className={getTextStyle(part.type)}>
-              {part.text}
-            </span>
-          ))}
-        </p>
-      </div>
-
-      {offer_panel.benefits && Array.isArray(offer_panel.benefits) && (
-        <ul className="grid grid-cols-1 gap-2">
-          {offer_panel.benefits.map((b: any, i: number) => {
-            const IconComponent = ICON_MAP[b.icon] || ICON_MAP[b.icon?.toLowerCase()] || CheckCircle2;
-
-            return (
-              <li key={i} className="flex items-start gap-2 text-xs">
-                <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]">
-                  <IconComponent className="h-3.5 w-3.5" />
-                </span>
-                <div>
-                  <p className="font-medium text-foreground text-xs">{b.title}</p>
-                  <p className="text-[10px] text-muted-foreground">{b.description}</p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {offer_panel.partner?.name && (
-        <div className="rounded-xl border border-border bg-muted/40 p-2.5 text-[11px] text-muted-foreground">
-          {offer_panel.partner.label} <strong className="text-foreground">{offer_panel.partner.name}</strong>.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DynamicConsentsStatic({ configs }: { configs: any[] }) {
-  if (!configs || configs.length === 0) return null;
-
-  return (
-    <TooltipProvider delayDuration={200}>
-      <div className="flex flex-col rounded-lg border border-border bg-muted/10 p-3 space-y-2.5">
-        <h4 className="text-[11px] font-bold text-slate-700 uppercase">Termos e Consentimentos da Rota:</h4>
-        {[...configs]
-          .sort((a, b) => a.position - b.position)
-          .map((opt) => (
-            <div key={opt.id} className="flex gap-2 items-start py-0.5 text-xs">
-              <div className="flex items-center mt-0.5">
-                <Checkbox disabled checked={false} className="h-4 w-4 shrink-0 rounded-[4px] border-slate-400" />
-              </div>
-              <label className="text-[11px] text-muted-foreground leading-snug flex-1">
-                {opt.template_text
-                  ? opt.template_text.split(/(\{.*?\})/g).map((part: string, i: number) => {
-                      if (part.startsWith("{") && part.endsWith("}")) {
-                        const cleanText = part.replace(/[{}]/g, "");
-                        const linkConfig = opt.links?.find((l: any) => l.text === cleanText);
-                        if (!linkConfig)
-                          return (
-                            <span key={i} className="font-bold text-foreground">
-                              {cleanText}
-                            </span>
-                          );
-
-                        if (linkConfig.type === "web") {
-                          return (
-                            <a
-                              key={i}
-                              href={linkConfig.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="underline font-bold inline mx-0.5"
-                              style={{ color: "var(--brand-primary)" }}
-                            >
-                              {cleanText}
-                            </a>
-                          );
-                        }
-
-                        if (linkConfig.type === "tooltip") {
-                          return (
-                            <span key={i} className="underline font-bold inline mx-0.5 text-[var(--brand-primary)]">
-                              {cleanText}
-                            </span>
-                          );
-                        }
-                      }
-                      return <span key={i}>{part}</span>;
-                    })
-                  : null}
-              </label>
-            </div>
-          ))}
-      </div>
-    </TooltipProvider>
-  );
-}
 
 /**
  * =========================================================================
@@ -2359,16 +2126,19 @@ function SandboxPage() {
                     </p>
                   </div>
 
-                  {routeConfigData.page_configs?.offer_panel && (
-                    <div className="bg-white p-4 rounded-xl border shadow-sm">
-                      <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-3 flex items-center gap-1.5">
-                        <Layers size={14} /> Offer Panel (Painel de Proposta)
-                      </h4>
-                      <OfferPanelRender config={routeConfigData.page_configs} />
-                    </div>
+                  {/* ========================================== */}
+                  {/* COMPONENTES DA FÁBRICA (PADRÃO SIMULATIONS)  */}
+                  {/* ========================================== */}
+
+                  {/* 1. Panel Product */}
+                  {routeConfigData.page_configs && (
+                    <PanelProduct 
+                      config={typeof routeConfigData.page_configs === 'string' ? JSON.parse(routeConfigData.page_configs) : routeConfigData.page_configs} 
+                    />
                   )}
 
-                  <div className="flex flex-col gap-4">
+                  {/* Detalhes de Integração e Regras (Mantidos nativos do Sandbox) */}
+                  <div className="flex flex-col gap-4 my-4">
                     {routeConfigData.integration_details &&
                       Object.keys(routeConfigData.integration_details).length > 0 && (
                         <div className="bg-slate-50 p-4 rounded-xl border text-xs overflow-hidden">
@@ -2392,27 +2162,20 @@ function SandboxPage() {
                     )}
                   </div>
 
+                  {/* 2. Panel Consents */}
                   {routeConfigData.consent_configs && routeConfigData.consent_configs.length > 0 && (
-                    <div className="bg-white p-4 rounded-xl border shadow-sm">
-                      <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-3 flex items-center gap-1.5">
-                        <FileText size={14} /> Consentimentos da Rota (LGPD)
-                      </h4>
-                      <DynamicConsentsStatic configs={routeConfigData.consent_configs} />
-                    </div>
+                    <PanelConsents configs={routeConfigData.consent_configs} />
                   )}
 
+                  {/* 3. Panel FAQs */}
                   {routeConfigData.page_faqs && routeConfigData.page_faqs.length > 0 && (
-                    <div className="bg-white p-4 rounded-xl border shadow-sm">
-                      <h4 className="text-[11px] font-bold uppercase text-purple-600 mb-1 flex items-center gap-1.5">
-                        <HelpCircle size={14} /> FAQ & Perguntas Frequentes
-                      </h4>
-                      <FAQSection items={routeConfigData.page_faqs} />
-                    </div>
+                    <PanelFAQ faqs={routeConfigData.page_faqs} isPrint={false} />
                   )}
 
+                  {/* 4. Panel Footer */}
                   {routeConfigData.page_configs?.footer && (
-                    <div className="pt-2">
-                      <FooterRender config={routeConfigData.page_configs.footer} />
+                    <div className="pt-2 break-inside-avoid">
+                      <PanelFooter footer={routeConfigData.page_configs.footer} />
                     </div>
                   )}
                 </div>

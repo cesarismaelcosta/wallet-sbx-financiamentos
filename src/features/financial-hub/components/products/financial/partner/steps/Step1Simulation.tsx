@@ -12,6 +12,7 @@ import { DynamicConsents } from "@/features/financial-hub/components/layout/Dyna
 import { SliderCustomizado } from "@/features/financial-hub/components/shared/SliderCustomizado";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { callOrchestrator, callSimulation } from "@/features/financial-hub/core/services/gateway";
@@ -140,23 +141,32 @@ export function Step1Simulation() {
           <div className="space-y-1">
             <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Valor do lance</Label>
             <Input 
+              disabled={loading}
               value={BRL(localValorOferta)} 
               onChange={(e) => {
-                  const rawValue = Number(e.target.value.replace(/\D/g, "")) / 100;
-                  setlocalValorOferta(rawValue);
-                  updateData({ valorOferta: rawValue });
+                if (loading) return;
+                const rawValue = Number(e.target.value.replace(/\D/g, "")) / 100;
+                setlocalValorOferta(rawValue);
+                updateData({ valorOferta: rawValue });
               }}
-              className="h-10 rounded-xl bg-white border-slate-200 font-semibold" 
+              className={`h-10 rounded-xl bg-white border-slate-200 font-semibold disabled:bg-slate-100 disabled:text-slate-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`} 
             />
             <div className="pt-1 px-1">
               <SliderCustomizado 
-                  value={localValorOferta}
-                  onValueChange={(v: number) => setlocalValorOferta(v)}
-                  onValueCommit={(v: number) => updateData({ valorOferta: v })}
-                  min={offer?.offer_value} 
-                  max={tetoMaximo} 
-                  step={100}
-                  isCurrency={true}
+                value={localValorOferta}
+                onValueChange={(v: number) => {
+                  if (loading) return;
+                  setlocalValorOferta(v);
+                }}
+                onValueCommit={(v: number) => {
+                  if (loading) return;
+                  updateData({ valorOferta: v });
+                }}
+                min={offer?.offer_value} 
+                max={tetoMaximo} 
+                step={100}
+                isCurrency={true}
+                disabled={loading}
               />
             </div>
           </div>
@@ -165,23 +175,32 @@ export function Step1Simulation() {
           <div className="space-y-1">
             <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Entrada</Label>
             <Input 
+              disabled={loading}
               value={BRL((localValorOferta * localPercentualEntrada) / 100)} 
               onChange={(e) => {
-                  const rawValue = Number(e.target.value.replace(/\D/g, "")) / 100;
-                  const newPerc = localValorOferta > 0 ? (rawValue / localValorOferta) * 100 : 0;
-                  setLocalPercentualEntrada(newPerc);
-                  updateData({ valorEntrada: rawValue });
+                if (loading) return;
+                const rawValue = Number(e.target.value.replace(/\D/g, "")) / 100;
+                const newPerc = localValorOferta > 0 ? (rawValue / localValorOferta) * 100 : 0;
+                setLocalPercentualEntrada(newPerc);
+                updateData({ valorEntrada: rawValue });
               }}
-              className="h-10 rounded-xl bg-white border-slate-200 font-semibold" 
+              className={`h-10 rounded-xl bg-white border-slate-200 font-semibold disabled:bg-slate-100 disabled:text-slate-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`} 
             />
             <div className="pt-1 px-1">
               <SliderCustomizado 
-                  value={localPercentualEntrada}
-                  onValueChange={(perc: number) => setLocalPercentualEntrada(perc)}
-                  onValueCommit={(perc: number) => updateData({ valorEntrada: (localValorOferta * perc) / 100 })}
-                  min={rules?.min_down_payment_percentage} 
-                  max={rules?.max_down_payment_percentage} 
-                  step={1}
+                value={localPercentualEntrada}
+                onValueChange={(perc: number) => {
+                  if (loading) return;
+                  setLocalPercentualEntrada(perc);
+                }}
+                onValueCommit={(perc: number) => {
+                  if (loading) return;
+                  updateData({ valorEntrada: (localValorOferta * perc) / 100 });
+                }}
+                min={rules?.min_down_payment_percentage} 
+                max={rules?.max_down_payment_percentage} 
+                step={1}
+                disabled={loading}
               />
             </div>
           </div>
@@ -194,6 +213,7 @@ export function Step1Simulation() {
             disabled={loading}
             value={localParcelas ? String(localParcelas) : ""}
             onValueChange={(v) => { 
+              if (loading) return;
               const val = Number(v);
               setLocalParcelas(val);
             }}
@@ -219,7 +239,7 @@ export function Step1Simulation() {
         />
       </div>
 
-      <button 
+      <Button 
         type="button"
         onClick={handleSimular} 
         disabled={!areConsentsValid || !localParcelas || loading}
@@ -232,7 +252,7 @@ export function Step1Simulation() {
         ) : (
           "Simular financiamento"
         )}
-      </button>
+      </Button>
     </div>
   );
 }
