@@ -233,10 +233,13 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
                       const linkConfig = opt.links?.find((l: any) => l.text === cleanText);
 
                       if (!linkConfig) {
-                        return <span key={i} className="font-bold text-foreground">{cleanText}</span>;
+                        return (
+                          <span key={i} className="underline font-bold inline mx-0.5 text-[#B300FF]">
+                            {cleanText}
+                          </span>
+                        );
                       }
 
-                      // Se o tipo for WEB, gera a tag <a> clicável
                       if (linkConfig.type === "web" || linkConfig.url) {
                         return (
                           <a
@@ -253,28 +256,29 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
                         );
                       }
 
-                      // Se o tipo for TOOLTIP, gera o balão de ajuda interativo
+                      // MODIFICADO AQUI: Substituído por Popover para aceitar toque (click) perfeitamente no mobile
                       if (linkConfig.type === "tooltip" || linkConfig.tooltip_text) {
                         return (
-                          <Tooltip key={i}>
-                            <TooltipTrigger asChild>
+                          <Popover key={i}>
+                            <PopoverTrigger asChild>
                               <span
-                                className="underline font-bold cursor-help border-b border-dashed inline mx-0.5 hover:opacity-80"
+                                className="underline font-bold cursor-pointer border-b border-dashed inline mx-0.5 hover:opacity-80"
                                 style={{ color: "var(--brand-primary)", borderColor: "var(--brand-primary)" }}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {cleanText}
                               </span>
-                            </TooltipTrigger>
-                            <TooltipContent
+                            </PopoverTrigger>
+                            <PopoverContent
                               side="bottom"
                               align="start"
                               sideOffset={6}
-                              className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-lg leading-relaxed z-[100]"
+                              className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-xl leading-relaxed z-[100]"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <p className="font-normal">{linkConfig.tooltip_text}</p>
-                            </TooltipContent>
-                          </Tooltip>
+                            </PopoverContent>
+                          </Popover>
                         );
                       }
                     }

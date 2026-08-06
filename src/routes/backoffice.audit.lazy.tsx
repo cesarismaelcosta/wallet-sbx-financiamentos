@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createLazyFileRoute("/backoffice/auditoria")({ component: AuditoriaPage });
+export const Route = createLazyFileRoute("/backoffice/audit")({ component: AuditoriaPage });
 
 type LoginRow = {
   id: string;
@@ -110,17 +110,25 @@ function AuditoriaPage() {
   }, [filtered]);
 
   return (
-    <div className="space-y-6">
+    <div className="font-sans space-y-6">
+      
+      {/* HEADER DA TELA */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Auditoria</h1>
+          <p className="text-sm text-muted-foreground">
+            Monitore o histórico de acessos, eventos de autenticação e segurança do sistema.
+          </p>
         </div>
-        <Button onClick={load} className="rounded-lg" disabled={loading}>
-          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-          Atualizar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={load} disabled={loading} className="rounded-xl">
+            <RefreshCw className={`mr-2 h-4 w-4 shrink-0 ${loading ? "animate-spin" : ""}`} /> 
+            Atualizar
+          </Button>
+        </div>
       </div>
 
+      {/* BLOCO DE KPIS */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Eventos" value={totals.total} />
         <StatCard label="Sucessos" value={totals.success} tone="success" />
@@ -131,41 +139,86 @@ function AuditoriaPage() {
 
       {error && <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"><strong>Erro:</strong> {error}</div>}
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
-        <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="h-10 max-w-sm rounded-lg" />
+      {/* MÓDULO DE FILTROS & GRID DE AUDITORIA */}
+      <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
+        
+        {/* HEADER RESPONSIVO: Estilo Pílula idêntico a Consults */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4 border-b border-border p-4">
+          
+          {/* BARRA DE BUSCA: Estilo Pílula moderno com lupa à direita */}
+          <div className="relative w-full lg:flex-1 lg:max-w-md">
+            <Input 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)} 
+              placeholder="Buscar por e-mail, IP, cidade..." 
+              className="h-11 w-full rounded-full bg-slate-100/70 border-transparent pl-5 pr-12 text-[13px] text-slate-700 placeholder:text-slate-500 focus-visible:ring-primary/20 focus-visible:bg-white focus-visible:border-primary/30 transition-all shadow-none" 
+            />
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-[#B300FF]" />
+          </div>
+
         </div>
-        <div className="w-full overflow-x-auto">
-          <table className="w-full table-fixed text-sm">
+
+        {/* TABELA DE AUDITORIA COM O MESMO COMPORTAMENTO DE CONSULTAS */}
+        <div className="overflow-x-auto w-full pb-2">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase text-muted-foreground">
-                <th className="w-[120px] px-3 py-3">Quando</th>
-                <th className="w-[200px] px-3 py-3">E-mail</th>
-                <th className="w-[140px] px-3 py-3">Evento</th>
-                <th className="w-[120px] px-3 py-3">Resultado</th>
-                <th className="w-[180px] px-3 py-3">Origem</th>
-                <th className="w-[180px] px-3 py-3">Contexto</th>
-                <th className="px-3 py-3">Dispositivo</th>
+              <tr className="border-b border-border bg-muted/40 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                <th className="px-3 py-2.5 w-[120px]">Quando</th>
+                <th className="px-3 py-2.5 w-[200px]">E-mail</th>
+                <th className="px-3 py-2.5 w-[140px]">Evento</th>
+                <th className="px-3 py-2.5 w-[120px]">Resultado</th>
+                <th className="px-3 py-2.5 w-[180px]">Origem</th>
+                <th className="px-3 py-2.5 w-[180px]">Contexto</th>
+                <th className="px-3 py-2.5">Dispositivo</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => {
-                const dt = formatDateTime(getEventDateTime(r));
-                const origem = [r.city, r.state, r.country].filter(Boolean).join(" · ");
-                return (
-                  <tr key={r.id} className="border-b border-border/60 hover:bg-accent/40">
-                    <td className="px-3 py-3 text-muted-foreground"><div className="font-semibold text-foreground">{dt.date}</div>{dt.time}</td>
-                    <td className="truncate px-3 py-3 font-medium">{r.email}</td>
-                    <td className="px-3 py-3 text-muted-foreground">{EVENT_LABEL[r.event]}</td>
-                    <td className="px-3 py-3">
-                      {r.success ? <span className="text-success font-semibold">Sucesso</span> : <span className="text-destructive font-semibold">Falha</span>}
-                    </td>
-                    <td className="px-3 py-3 text-xs text-muted-foreground"><div className="text-foreground">{r.ip_address}</div>{origem}</td>
-                    <td className="px-3 py-3 text-xs"><div className="font-bold">{r.origin_page}</div>{r.origin_function}</td>
-                    <td className="px-3 py-3 text-xs">{r.device_type} · {r.operating_system}</td>
-                  </tr>
-                );
-              })}
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="p-10 text-center text-muted-foreground">
+                    Carregando registros de auditoria...
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-10 text-center text-muted-foreground">
+                    Nenhum registro encontrado.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((r) => {
+                  const dt = formatDateTime(getEventDateTime(r));
+                  const origem = [r.city, r.state, r.country].filter(Boolean).join(" · ");
+                  return (
+                    <tr key={r.id} className="border-b border-border/60 hover:bg-accent/40 transition-colors">
+                      <td className="px-3 py-2.5 w-[120px] text-muted-foreground">
+                        <div className="font-semibold text-foreground">{dt.date}</div>
+                        <div>{dt.time}</div>
+                      </td>
+                      <td className="px-3 py-2.5 w-[200px] truncate font-medium text-foreground" title={r.email}>{r.email}</td>
+                      <td className="px-3 py-2.5 w-[140px] text-muted-foreground">{EVENT_LABEL[r.event] || r.event}</td>
+                      <td className="px-3 py-2.5 w-[120px]">
+                        {r.success ? (
+                          <span className="text-emerald-600 font-semibold">Sucesso</span>
+                        ) : (
+                          <span className="text-destructive font-semibold">Falha</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 w-[180px] text-muted-foreground">
+                        <div className="text-foreground">{r.ip_address || "—"}</div>
+                        <div>{origem || "—"}</div>
+                      </td>
+                      <td className="px-3 py-2.5 w-[180px]">
+                        <div className="font-bold text-foreground">{r.origin_page || "—"}</div>
+                        <div className="text-muted-foreground">{r.origin_function || "—"}</div>
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground">
+                        {r.device_type || "—"} · {r.operating_system || "—"}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

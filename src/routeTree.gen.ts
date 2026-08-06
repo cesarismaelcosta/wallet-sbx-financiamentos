@@ -24,28 +24,24 @@ const SegurosLazyRouteImport = createFileRoute('/seguros')()
 const AccountsSigninLazyRouteImport = createFileRoute('/accounts/signin')()
 const BackofficeIndexLazyRouteImport = createFileRoute('/backoffice/')()
 const BackofficeAlertsLazyRouteImport = createFileRoute('/backoffice/alerts')()
-const BackofficeAuditoriaLazyRouteImport = createFileRoute(
-  '/backoffice/auditoria',
-)()
-const BackofficeConfiguracoesLazyRouteImport = createFileRoute(
-  '/backoffice/configuracoes',
+const BackofficeAuditLazyRouteImport = createFileRoute('/backoffice/audit')()
+const BackofficeConfigsLazyRouteImport = createFileRoute(
+  '/backoffice/configs',
 )()
 const BackofficeConsultsLazyRouteImport = createFileRoute(
   '/backoffice/consults',
 )()
-const BackofficeDominiosLazyRouteImport = createFileRoute(
-  '/backoffice/dominios',
+const BackofficeDomainsLazyRouteImport = createFileRoute(
+  '/backoffice/domains',
 )()
-const BackofficeRelatoriosLazyRouteImport = createFileRoute(
-  '/backoffice/relatorios',
+const BackofficeReportsLazyRouteImport = createFileRoute(
+  '/backoffice/reports',
 )()
 const BackofficeRoutesLazyRouteImport = createFileRoute('/backoffice/routes')()
 const BackofficeSimulationsLazyRouteImport = createFileRoute(
   '/backoffice/simulations',
 )()
-const BackofficeUsuariosLazyRouteImport = createFileRoute(
-  '/backoffice/usuarios',
-)()
+const BackofficeUsersLazyRouteImport = createFileRoute('/backoffice/users')()
 const BackofficeLoginLazyRouteImport = createFileRoute('/backoffice_/login')()
 const FinanciamentosAutoEquityLazyRouteImport = createFileRoute(
   '/financiamentos/auto-equity',
@@ -132,21 +128,20 @@ const BackofficeAlertsLazyRoute = BackofficeAlertsLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/backoffice.alerts.lazy').then((d) => d.Route),
 )
-const BackofficeAuditoriaLazyRoute = BackofficeAuditoriaLazyRouteImport.update({
-  id: '/auditoria',
-  path: '/auditoria',
+const BackofficeAuditLazyRoute = BackofficeAuditLazyRouteImport.update({
+  id: '/audit',
+  path: '/audit',
   getParentRoute: () => BackofficeLazyRoute,
 } as any).lazy(() =>
-  import('./routes/backoffice.auditoria.lazy').then((d) => d.Route),
+  import('./routes/backoffice.audit.lazy').then((d) => d.Route),
 )
-const BackofficeConfiguracoesLazyRoute =
-  BackofficeConfiguracoesLazyRouteImport.update({
-    id: '/configuracoes',
-    path: '/configuracoes',
-    getParentRoute: () => BackofficeLazyRoute,
-  } as any).lazy(() =>
-    import('./routes/backoffice.configuracoes.lazy').then((d) => d.Route),
-  )
+const BackofficeConfigsLazyRoute = BackofficeConfigsLazyRouteImport.update({
+  id: '/configs',
+  path: '/configs',
+  getParentRoute: () => BackofficeLazyRoute,
+} as any).lazy(() =>
+  import('./routes/backoffice.configs.lazy').then((d) => d.Route),
+)
 const BackofficeConsultsLazyRoute = BackofficeConsultsLazyRouteImport.update({
   id: '/consults',
   path: '/consults',
@@ -154,21 +149,20 @@ const BackofficeConsultsLazyRoute = BackofficeConsultsLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/backoffice.consults.lazy').then((d) => d.Route),
 )
-const BackofficeDominiosLazyRoute = BackofficeDominiosLazyRouteImport.update({
-  id: '/dominios',
-  path: '/dominios',
+const BackofficeDomainsLazyRoute = BackofficeDomainsLazyRouteImport.update({
+  id: '/domains',
+  path: '/domains',
   getParentRoute: () => BackofficeLazyRoute,
 } as any).lazy(() =>
-  import('./routes/backoffice.dominios.lazy').then((d) => d.Route),
+  import('./routes/backoffice.domains.lazy').then((d) => d.Route),
 )
-const BackofficeRelatoriosLazyRoute =
-  BackofficeRelatoriosLazyRouteImport.update({
-    id: '/relatorios',
-    path: '/relatorios',
-    getParentRoute: () => BackofficeLazyRoute,
-  } as any).lazy(() =>
-    import('./routes/backoffice.relatorios.lazy').then((d) => d.Route),
-  )
+const BackofficeReportsLazyRoute = BackofficeReportsLazyRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => BackofficeLazyRoute,
+} as any).lazy(() =>
+  import('./routes/backoffice.reports.lazy').then((d) => d.Route),
+)
 const BackofficeRoutesLazyRoute = BackofficeRoutesLazyRouteImport.update({
   id: '/routes',
   path: '/routes',
@@ -184,12 +178,12 @@ const BackofficeSimulationsLazyRoute =
   } as any).lazy(() =>
     import('./routes/backoffice.simulations.lazy').then((d) => d.Route),
   )
-const BackofficeUsuariosLazyRoute = BackofficeUsuariosLazyRouteImport.update({
-  id: '/usuarios',
-  path: '/usuarios',
+const BackofficeUsersLazyRoute = BackofficeUsersLazyRouteImport.update({
+  id: '/users',
+  path: '/users',
   getParentRoute: () => BackofficeLazyRoute,
 } as any).lazy(() =>
-  import('./routes/backoffice.usuarios.lazy').then((d) => d.Route),
+  import('./routes/backoffice.users.lazy').then((d) => d.Route),
 )
 const BackofficeLoginLazyRoute = BackofficeLoginLazyRouteImport.update({
   id: '/backoffice_/login',
@@ -263,14 +257,14 @@ export interface FileRoutesByFullPath {
   '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
-  '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
-  '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
+  '/backoffice/audit': typeof BackofficeAuditLazyRoute
+  '/backoffice/configs': typeof BackofficeConfigsLazyRoute
   '/backoffice/consults': typeof BackofficeConsultsLazyRoute
-  '/backoffice/dominios': typeof BackofficeDominiosLazyRoute
-  '/backoffice/relatorios': typeof BackofficeRelatoriosLazyRoute
+  '/backoffice/domains': typeof BackofficeDomainsLazyRoute
+  '/backoffice/reports': typeof BackofficeReportsLazyRoute
   '/backoffice/routes': typeof BackofficeRoutesLazyRoute
   '/backoffice/simulations': typeof BackofficeSimulationsLazyRoute
-  '/backoffice/usuarios': typeof BackofficeUsuariosLazyRoute
+  '/backoffice/users': typeof BackofficeUsersLazyRoute
   '/backoffice/login': typeof BackofficeLoginLazyRoute
   '/financiamentos/auto-equity': typeof FinanciamentosAutoEquityLazyRoute
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
@@ -292,14 +286,14 @@ export interface FileRoutesByTo {
   '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
-  '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
-  '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
+  '/backoffice/audit': typeof BackofficeAuditLazyRoute
+  '/backoffice/configs': typeof BackofficeConfigsLazyRoute
   '/backoffice/consults': typeof BackofficeConsultsLazyRoute
-  '/backoffice/dominios': typeof BackofficeDominiosLazyRoute
-  '/backoffice/relatorios': typeof BackofficeRelatoriosLazyRoute
+  '/backoffice/domains': typeof BackofficeDomainsLazyRoute
+  '/backoffice/reports': typeof BackofficeReportsLazyRoute
   '/backoffice/routes': typeof BackofficeRoutesLazyRoute
   '/backoffice/simulations': typeof BackofficeSimulationsLazyRoute
-  '/backoffice/usuarios': typeof BackofficeUsuariosLazyRoute
+  '/backoffice/users': typeof BackofficeUsersLazyRoute
   '/backoffice/login': typeof BackofficeLoginLazyRoute
   '/financiamentos/auto-equity': typeof FinanciamentosAutoEquityLazyRoute
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
@@ -324,14 +318,14 @@ export interface FileRoutesById {
   '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
-  '/backoffice/auditoria': typeof BackofficeAuditoriaLazyRoute
-  '/backoffice/configuracoes': typeof BackofficeConfiguracoesLazyRoute
+  '/backoffice/audit': typeof BackofficeAuditLazyRoute
+  '/backoffice/configs': typeof BackofficeConfigsLazyRoute
   '/backoffice/consults': typeof BackofficeConsultsLazyRoute
-  '/backoffice/dominios': typeof BackofficeDominiosLazyRoute
-  '/backoffice/relatorios': typeof BackofficeRelatoriosLazyRoute
+  '/backoffice/domains': typeof BackofficeDomainsLazyRoute
+  '/backoffice/reports': typeof BackofficeReportsLazyRoute
   '/backoffice/routes': typeof BackofficeRoutesLazyRoute
   '/backoffice/simulations': typeof BackofficeSimulationsLazyRoute
-  '/backoffice/usuarios': typeof BackofficeUsuariosLazyRoute
+  '/backoffice/users': typeof BackofficeUsersLazyRoute
   '/backoffice_/login': typeof BackofficeLoginLazyRoute
   '/financiamentos/auto-equity': typeof FinanciamentosAutoEquityLazyRoute
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
@@ -357,14 +351,14 @@ export interface FileRouteTypes {
     | '/api/loginhistory'
     | '/accounts/signin'
     | '/backoffice/alerts'
-    | '/backoffice/auditoria'
-    | '/backoffice/configuracoes'
+    | '/backoffice/audit'
+    | '/backoffice/configs'
     | '/backoffice/consults'
-    | '/backoffice/dominios'
-    | '/backoffice/relatorios'
+    | '/backoffice/domains'
+    | '/backoffice/reports'
     | '/backoffice/routes'
     | '/backoffice/simulations'
-    | '/backoffice/usuarios'
+    | '/backoffice/users'
     | '/backoffice/login'
     | '/financiamentos/auto-equity'
     | '/financiamentos/cartao'
@@ -386,14 +380,14 @@ export interface FileRouteTypes {
     | '/api/loginhistory'
     | '/accounts/signin'
     | '/backoffice/alerts'
-    | '/backoffice/auditoria'
-    | '/backoffice/configuracoes'
+    | '/backoffice/audit'
+    | '/backoffice/configs'
     | '/backoffice/consults'
-    | '/backoffice/dominios'
-    | '/backoffice/relatorios'
+    | '/backoffice/domains'
+    | '/backoffice/reports'
     | '/backoffice/routes'
     | '/backoffice/simulations'
-    | '/backoffice/usuarios'
+    | '/backoffice/users'
     | '/backoffice/login'
     | '/financiamentos/auto-equity'
     | '/financiamentos/cartao'
@@ -417,14 +411,14 @@ export interface FileRouteTypes {
     | '/api/loginhistory'
     | '/accounts/signin'
     | '/backoffice/alerts'
-    | '/backoffice/auditoria'
-    | '/backoffice/configuracoes'
+    | '/backoffice/audit'
+    | '/backoffice/configs'
     | '/backoffice/consults'
-    | '/backoffice/dominios'
-    | '/backoffice/relatorios'
+    | '/backoffice/domains'
+    | '/backoffice/reports'
     | '/backoffice/routes'
     | '/backoffice/simulations'
-    | '/backoffice/usuarios'
+    | '/backoffice/users'
     | '/backoffice_/login'
     | '/financiamentos/auto-equity'
     | '/financiamentos/cartao'
@@ -538,18 +532,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackofficeAlertsLazyRouteImport
       parentRoute: typeof BackofficeLazyRoute
     }
-    '/backoffice/auditoria': {
-      id: '/backoffice/auditoria'
-      path: '/auditoria'
-      fullPath: '/backoffice/auditoria'
-      preLoaderRoute: typeof BackofficeAuditoriaLazyRouteImport
+    '/backoffice/audit': {
+      id: '/backoffice/audit'
+      path: '/audit'
+      fullPath: '/backoffice/audit'
+      preLoaderRoute: typeof BackofficeAuditLazyRouteImport
       parentRoute: typeof BackofficeLazyRoute
     }
-    '/backoffice/configuracoes': {
-      id: '/backoffice/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/backoffice/configuracoes'
-      preLoaderRoute: typeof BackofficeConfiguracoesLazyRouteImport
+    '/backoffice/configs': {
+      id: '/backoffice/configs'
+      path: '/configs'
+      fullPath: '/backoffice/configs'
+      preLoaderRoute: typeof BackofficeConfigsLazyRouteImport
       parentRoute: typeof BackofficeLazyRoute
     }
     '/backoffice/consults': {
@@ -559,18 +553,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackofficeConsultsLazyRouteImport
       parentRoute: typeof BackofficeLazyRoute
     }
-    '/backoffice/dominios': {
-      id: '/backoffice/dominios'
-      path: '/dominios'
-      fullPath: '/backoffice/dominios'
-      preLoaderRoute: typeof BackofficeDominiosLazyRouteImport
+    '/backoffice/domains': {
+      id: '/backoffice/domains'
+      path: '/domains'
+      fullPath: '/backoffice/domains'
+      preLoaderRoute: typeof BackofficeDomainsLazyRouteImport
       parentRoute: typeof BackofficeLazyRoute
     }
-    '/backoffice/relatorios': {
-      id: '/backoffice/relatorios'
-      path: '/relatorios'
-      fullPath: '/backoffice/relatorios'
-      preLoaderRoute: typeof BackofficeRelatoriosLazyRouteImport
+    '/backoffice/reports': {
+      id: '/backoffice/reports'
+      path: '/reports'
+      fullPath: '/backoffice/reports'
+      preLoaderRoute: typeof BackofficeReportsLazyRouteImport
       parentRoute: typeof BackofficeLazyRoute
     }
     '/backoffice/routes': {
@@ -587,11 +581,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackofficeSimulationsLazyRouteImport
       parentRoute: typeof BackofficeLazyRoute
     }
-    '/backoffice/usuarios': {
-      id: '/backoffice/usuarios'
-      path: '/usuarios'
-      fullPath: '/backoffice/usuarios'
-      preLoaderRoute: typeof BackofficeUsuariosLazyRouteImport
+    '/backoffice/users': {
+      id: '/backoffice/users'
+      path: '/users'
+      fullPath: '/backoffice/users'
+      preLoaderRoute: typeof BackofficeUsersLazyRouteImport
       parentRoute: typeof BackofficeLazyRoute
     }
     '/backoffice_/login': {
@@ -662,27 +656,27 @@ declare module '@tanstack/react-router' {
 
 interface BackofficeLazyRouteChildren {
   BackofficeAlertsLazyRoute: typeof BackofficeAlertsLazyRoute
-  BackofficeAuditoriaLazyRoute: typeof BackofficeAuditoriaLazyRoute
-  BackofficeConfiguracoesLazyRoute: typeof BackofficeConfiguracoesLazyRoute
+  BackofficeAuditLazyRoute: typeof BackofficeAuditLazyRoute
+  BackofficeConfigsLazyRoute: typeof BackofficeConfigsLazyRoute
   BackofficeConsultsLazyRoute: typeof BackofficeConsultsLazyRoute
-  BackofficeDominiosLazyRoute: typeof BackofficeDominiosLazyRoute
-  BackofficeRelatoriosLazyRoute: typeof BackofficeRelatoriosLazyRoute
+  BackofficeDomainsLazyRoute: typeof BackofficeDomainsLazyRoute
+  BackofficeReportsLazyRoute: typeof BackofficeReportsLazyRoute
   BackofficeRoutesLazyRoute: typeof BackofficeRoutesLazyRoute
   BackofficeSimulationsLazyRoute: typeof BackofficeSimulationsLazyRoute
-  BackofficeUsuariosLazyRoute: typeof BackofficeUsuariosLazyRoute
+  BackofficeUsersLazyRoute: typeof BackofficeUsersLazyRoute
   BackofficeIndexLazyRoute: typeof BackofficeIndexLazyRoute
 }
 
 const BackofficeLazyRouteChildren: BackofficeLazyRouteChildren = {
   BackofficeAlertsLazyRoute: BackofficeAlertsLazyRoute,
-  BackofficeAuditoriaLazyRoute: BackofficeAuditoriaLazyRoute,
-  BackofficeConfiguracoesLazyRoute: BackofficeConfiguracoesLazyRoute,
+  BackofficeAuditLazyRoute: BackofficeAuditLazyRoute,
+  BackofficeConfigsLazyRoute: BackofficeConfigsLazyRoute,
   BackofficeConsultsLazyRoute: BackofficeConsultsLazyRoute,
-  BackofficeDominiosLazyRoute: BackofficeDominiosLazyRoute,
-  BackofficeRelatoriosLazyRoute: BackofficeRelatoriosLazyRoute,
+  BackofficeDomainsLazyRoute: BackofficeDomainsLazyRoute,
+  BackofficeReportsLazyRoute: BackofficeReportsLazyRoute,
   BackofficeRoutesLazyRoute: BackofficeRoutesLazyRoute,
   BackofficeSimulationsLazyRoute: BackofficeSimulationsLazyRoute,
-  BackofficeUsuariosLazyRoute: BackofficeUsuariosLazyRoute,
+  BackofficeUsersLazyRoute: BackofficeUsersLazyRoute,
   BackofficeIndexLazyRoute: BackofficeIndexLazyRoute,
 }
 

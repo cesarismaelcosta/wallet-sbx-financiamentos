@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/integrations/auth/AuthContext";
 
-export const Route = createLazyFileRoute("/backoffice/dominios")({
+export const Route = createLazyFileRoute("/backoffice/domains")({
   component: DominiosPage,
 });
 

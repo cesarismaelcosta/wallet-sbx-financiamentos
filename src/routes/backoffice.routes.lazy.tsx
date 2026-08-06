@@ -281,7 +281,7 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
     <TooltipProvider delayDuration={200}>
       <div className="flex flex-col rounded-lg border border-border bg-muted/10 p-3 space-y-2.5">
         {[...configs]
-          .sort((a, b) => a.position - b.position)
+          .sort((a, b) => (a.position || 0) - (b.position || 0))
           .map((opt) => (
             <div key={opt.id} className="flex gap-2 items-start py-0.5 text-xs">
               <div className="flex items-center mt-0.5">
@@ -294,10 +294,15 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
                       const cleanText = part.replace(/[{}]/g, "");
                       const linkConfig = opt.links?.find((l: any) => l.text === cleanText);
 
-                      if (!linkConfig) return <span key={i} className="font-bold text-foreground">{cleanText}</span>;
+                      if (!linkConfig) {
+                        return (
+                          <span key={i} className="underline font-bold inline mx-0.5 text-[#B300FF]">
+                            {cleanText}
+                          </span>
+                        );
+                      }
 
-                      // Tipo: WEB (Link externo clicável)
-                      if (linkConfig.type === "web") {
+                      if (linkConfig.type === "web" || linkConfig.url) {
                         return (
                           <a
                             key={i}
@@ -313,28 +318,29 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
                         );
                       }
 
-                      // Tipo: TOOLTIP (Balão de ajuda interativo)
-                      if (linkConfig.type === "tooltip") {
+                      // POPOVER PARA SUPORTAR CLIQUE NO MOBILE E HOVER NO DESKTOP
+                      if (linkConfig.type === "tooltip" || linkConfig.tooltip_text) {
                         return (
-                          <Tooltip key={i}>
-                            <TooltipTrigger asChild>
+                          <Popover key={i}>
+                            <PopoverTrigger asChild>
                               <span
-                                className="underline font-bold cursor-help border-b border-dashed inline mx-0.5 hover:opacity-80"
+                                className="underline font-bold cursor-pointer border-b border-dashed inline mx-0.5 hover:opacity-80"
                                 style={{ color: "var(--brand-primary)", borderColor: "var(--brand-primary)" }}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {cleanText}
                               </span>
-                            </TooltipTrigger>
-                            <TooltipContent
+                            </PopoverTrigger>
+                            <PopoverContent
                               side="bottom"
                               align="start"
                               sideOffset={6}
-                              className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-lg leading-relaxed z-[100]"
+                              className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-xl leading-relaxed z-[100]"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <p className="font-normal">{linkConfig.tooltip_text}</p>
-                            </TooltipContent>
-                          </Tooltip>
+                            </PopoverContent>
+                          </Popover>
                         );
                       }
                     }

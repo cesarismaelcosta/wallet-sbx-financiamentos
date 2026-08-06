@@ -2,7 +2,7 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { Download, FileBarChart2, FileSpreadsheet, FileText, PieChart, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export const Route = createLazyFileRoute("/backoffice/relatorios")({
+export const Route = createLazyFileRoute("/backoffice/reports")({
   component: RelatoriosPage,
 });
 

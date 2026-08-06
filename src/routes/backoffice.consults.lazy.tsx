@@ -281,27 +281,29 @@ function DynamicConsentsStatic({ configs }: { configs: any[] }) {
                         );
                       }
 
+                      // MODIFICADO AQUI: Substituído por Popover para aceitar toque (click) perfeitamente no mobile
                       if (linkConfig.type === "tooltip" || linkConfig.tooltip_text) {
                         return (
-                          <Tooltip key={i}>
-                            <TooltipTrigger asChild>
+                          <Popover key={i}>
+                            <PopoverTrigger asChild>
                               <span
-                                className="underline font-bold cursor-help border-b border-dashed inline mx-0.5 hover:opacity-80"
+                                className="underline font-bold cursor-pointer border-b border-dashed inline mx-0.5 hover:opacity-80"
                                 style={{ color: "var(--brand-primary)", borderColor: "var(--brand-primary)" }}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {cleanText}
                               </span>
-                            </TooltipTrigger>
-                            <TooltipContent
+                            </PopoverTrigger>
+                            <PopoverContent
                               side="bottom"
                               align="start"
                               sideOffset={6}
-                              className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-lg leading-relaxed z-[100]"
+                              className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-xl leading-relaxed z-[100]"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <p className="font-normal">{linkConfig.tooltip_text}</p>
-                            </TooltipContent>
-                          </Tooltip>
+                            </PopoverContent>
+                          </Popover>
                         );
                       }
                     }
@@ -324,7 +326,7 @@ const STATUS_STYLES: Record<string, string> = {
   visita: "bg-purple-500/10 text-purple-600",
   simulacao: "bg-primary/10 text-primary",
   consulta: "bg-blue-500/10 text-blue-600",
-  "site parceiro": "bg-amber-500/10 text-amber-600",
+  parceiro: "bg-amber-500/10 text-amber-600",
   default: "bg-muted text-muted-foreground",
 };
 
@@ -450,12 +452,12 @@ function ConsultsPage() {
     const act = (r.action ?? "").toUpperCase();
     if (act.includes("SIMULATE") || act.includes("SIMULATION")) return "SIMULAÇÃO";
     if (act.includes("CONSULT")) return "CONSULTA";
-    if (act.includes("REDIRECT")) return "SITE PARCEIRO";
+    if (act.includes("REDIRECT")) return "PARCEIRO";
     if (act.includes("VISIT")) return "VISITA";
     return r.action || "VISITA";
   }
 
-  const statusOptions = ["Qualificadas", "VISITA", "SIMULAÇÃO", "CONSULTA", "SITE PARCEIRO"];
+  const statusOptions = ["Qualificadas", "VISITA", "SIMULAÇÃO", "CONSULTA", "PARCEIRO"];
 
   const totals = useMemo(() => {
     const t = { total: rows.length, simulacao: 0, consulta: 0, siteParceiro: 0 };
@@ -463,7 +465,7 @@ function ConsultsPage() {
       const s = getVisitStatus(r);
       if (s === "SIMULAÇÃO") t.simulacao++;
       else if (s === "CONSULTA") t.consulta++;
-      else if (s === "SITE PARCEIRO") t.siteParceiro++;
+      else if (s === "PARCEIRO") t.siteParceiro++;
     });
     return t;
   }, [rows]);

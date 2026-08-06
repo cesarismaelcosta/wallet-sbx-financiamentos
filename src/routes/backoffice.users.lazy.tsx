@@ -22,7 +22,7 @@ import { useAuth } from "@/integrations/auth/AuthContext";
  * Rota: /backoffice/usuarios
  * Responsabilidade: Gerenciamento administrativo de usuários do backoffice (RBAC).
  */
-export const Route = createLazyFileRoute("/backoffice/usuarios")({ component: UsuariosPage });
+export const Route = createLazyFileRoute("/backoffice/users")({ component: UsuariosPage });
 
 type Role = "admin" | "manager" | "viewer";
 type BackofficeUserRow = {

@@ -3,7 +3,7 @@ import { Bell, Building2, KeyRound, Percent, Users, Webhook } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
-export const Route = createLazyFileRoute("/backoffice/configuracoes")({
+export const Route = createLazyFileRoute("/backoffice/configs")({
   component: ConfiguracoesPage,
 });
 

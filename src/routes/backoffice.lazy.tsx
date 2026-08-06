@@ -29,17 +29,17 @@ const OPERACAO_NAV = [
   { to: "/backoffice", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/backoffice/simulations", label: "Simulações", icon: ListChecks },
   { to: "/backoffice/consults", label: "Consultas", icon: Search },
-  { to: "/backoffice/relatorios", label: "Relatórios", icon: FileBarChart2 },
+  { to: "/backoffice/reports", label: "Relatórios", icon: FileBarChart2 },
 ];
 
 const SEGURANCA_NAV = [
-  { to: "/backoffice/auditoria", label: "Auditoria", icon: ShieldCheck },
-  { to: "/backoffice/usuarios", label: "Usuários", icon: Users },
+  { to: "/backoffice/audit", label: "Auditoria", icon: ShieldCheck },
+  { to: "/backoffice/users", label: "Usuários", icon: Users },
 ];
 
 const CONFIG_NAV = [
   { to: "/backoffice/alerts", label: "Alertas", icon: TriangleAlert },
-  { to: "/backoffice/dominios", label: "Domínios", icon: Globe },
+  { to: "/backoffice/domains", label: "Domínios", icon: Globe },
   { to: "/backoffice/routes", label: "Rotas", icon: Layers },
 ];
 
@@ -207,8 +207,7 @@ function BackofficeLayout() {
 
         <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
-        </main>
-      </div>
+        </main></div>
     </div>
   );
 }
