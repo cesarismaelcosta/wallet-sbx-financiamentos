@@ -108,7 +108,7 @@ function SimulationsPage() {
    * Carregamento único e leve: busca os dados essenciais e as ofertas de uma vez,
    * permitindo que os filtros funcionem instantaneamente em memória (zero lag de rede).
    */
-async function load() {
+  async function load() {
     setLoading(true);
     try {
       const [{ data: simData, error: simError }, { data: statusData }] = await Promise.all([
@@ -135,7 +135,7 @@ async function load() {
             stage_types(id, name),
             status_types(id, name),
             financial_institutions(id, name, logo_url),
-            simulation_offers(*)
+            simulation_offers(offer_description, offer_value, event_id, event_description, event_end_date)
           `)
           .order('created_at', { ascending: false }),
         supabase.from("status_types").select("name")
@@ -244,7 +244,14 @@ async function load() {
     const dataToExport = filtered.map((sim) => {
       const bank = sim.financial_institutions;
       const created = formatDate(sim.created_at);
-      const offerRow = sim.simulation_offers || {};
+      const rawOffer = sim.simulation_offers;
+      const baseOffer = Array.isArray(rawOffer) ? rawOffer[0] || {} : (rawOffer || {});
+      const offerRow = {
+        ...baseOffer,
+        category_types: Array.isArray(baseOffer.category_types) 
+          ? baseOffer.category_types[0] || null 
+          : baseOffer.category_types
+      };
       const eventoFull = offerRow?.event_description ? `[${offerRow?.event_id || "—"}] ${offerRow?.event_description}` : "—";
 
       return {
@@ -514,7 +521,14 @@ async function load() {
         <SheetContent className="w-full sm:max-w-xl flex flex-col h-full p-0 overflow-hidden bg-white">
           {activeSimulation && (() => {
             const sim = activeSimulation;
-            const offerRow = sim.simulation_offers || {};
+            const rawOffer = sim.simulation_offers;
+            const baseOffer = Array.isArray(rawOffer) ? rawOffer[0] || {} : (rawOffer || {});
+            const offerRow = {
+              ...baseOffer,
+              category_types: Array.isArray(baseOffer.category_types) 
+                ? baseOffer.category_types[0] || null 
+                : baseOffer.category_types
+            };
             const bank = sim.financial_institutions || {};
             const ed = sim.entity_details || {};
             const firstUpdate = sim.simulation_updates || {};
@@ -598,7 +612,14 @@ async function load() {
         <div ref={printRef} className="w-full text-slate-900 bg-white p-8 space-y-6">
           {activeSimulation && (() => {
             const sim = activeSimulation;
-            const offerRow = sim.simulation_offers || {};
+            const rawOffer = sim.simulation_offers;
+            const baseOffer = Array.isArray(rawOffer) ? rawOffer[0] || {} : (rawOffer || {});
+            const offerRow = {
+              ...baseOffer,
+              category_types: Array.isArray(baseOffer.category_types) 
+                ? baseOffer.category_types[0] || null 
+                : baseOffer.category_types
+            };
             const ed = sim.entity_details || {};
             const bank = sim.financial_institutions;
             const firstUpdate = sim.simulation_updates || {};

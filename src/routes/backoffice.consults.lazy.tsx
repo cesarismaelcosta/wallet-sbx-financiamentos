@@ -9,9 +9,6 @@
  * na listagem principal, filtros de data no servidor, importação dinâmica do Excel 
  * e carregamento sob demanda no Sheet de auditoria.
  * ============================================================================
- * 
- * @author César Ismael Pereira da Costa
- * @author Gemini Pro
  */
 
 import { createLazyFileRoute } from "@tanstack/react-router";
@@ -23,7 +20,6 @@ import {
   Download,
   ChevronDown,
   Printer,
-  Camera,
   Loader2,
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
@@ -113,34 +109,24 @@ function ConsultsPage() {
   const [loading, setLoading] = useState(false);
 
   /**
-   * Query Otimizada: Traz apenas dados essenciais na listagem com filtro de data no banco e limite de 500.
+   * Query Otimizada: Traz campos específicos e aplica filtro de data direto no servidor.
    */
   async function load() {
     setLoading(true);
     try {
       let dateLimit = new Date();
-      if (dateRange === "30") {
-        dateLimit.setDate(dateLimit.getDate() - 30);
-      } else if (dateRange === "90") {
-        dateLimit.setDate(dateLimit.getDate() - 90);
-      } else if (dateRange === "all") {
-        dateLimit = new Date("2020-01-01");
-      }
+      if (dateRange === "30") dateLimit.setDate(dateLimit.getDate() - 30);
+      else if (dateRange === "90") dateLimit.setDate(dateLimit.getDate() - 90);
+      else if (dateRange === "all") dateLimit = new Date("2020-01-01");
 
       let query = supabase
         .from("visits")
         .select(`
-          id,
-          created_at,
-          action,
-          utm_source,
-          state,
-          partner_id,
-          product_id,
+          id, created_at, action, utm_source, state, partner_id, product_id,
           product_types(name),
           partners(name, logo_url),
           visit_entities(name, document, phone, email),
-          visit_offers(offer_description, offer_value, event_id, event_description)
+          visit_offers(offer_description, offer_value, event_id, event_description, event_end_date, category_types(name))
         `)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -148,36 +134,22 @@ function ConsultsPage() {
       if (dateRange !== "all" && dateRange !== "custom") {
         query = query.gte('created_at', dateLimit.toISOString());
       } else if (dateRange === "custom" && customRange?.from && customRange?.to) {
-        query = query
-          .gte('created_at', customRange.from.toISOString())
-          .lte('created_at', customRange.to.toISOString());
+        query = query.gte('created_at', customRange.from.toISOString()).lte('created_at', customRange.to.toISOString());
       }
 
       const { data: visitsData, error: visitError } = await query;
 
-      if (visitError) {
-        throw new Error(visitError.message);
-      }
-
-      if (!visitsData || visitsData.length === 0) {
-        setRows([]);
-        return;
-      }
+      if (visitError) throw new Error(visitError.message);
+      if (!visitsData || visitsData.length === 0) { setRows([]); setLoading(false); return; }
 
       const visitIds = visitsData.map((v) => v.id);
-
-      const { data: updatesData, error: updateError } = await supabase
+      const { data: updatesData } = await supabase
         .from("visit_updates")
-        .select("visit_id, action, created_at")
+        .select("visit_id, action")
         .in("visit_id", visitIds);
 
-      if (updateError) console.error("Erro ao carregar visit_updates:", updateError.message);
-
       const contactSet = new Set(
-        updatesData
-          ?.filter((u) => (u.action || "").toUpperCase().includes("CONTACT"))
-          ?.map((u) => u.visit_id)
-          ?.filter(Boolean) || [],
+        updatesData?.filter((u) => (u.action || "").toUpperCase().includes("CONTACT")).map((u) => u.visit_id) || []
       );
 
       const normalized = visitsData.map((v) => ({
@@ -189,8 +161,8 @@ function ConsultsPage() {
 
       setRows(normalized);
     } catch (err: any) {
-      console.error("Erro crítico ao carregar dados:", err);
-      toast.error(err?.message ?? "Falha ao carregar listagem de visitas.");
+      console.error("Erro ao carregar:", err);
+      toast.error(err?.message ?? "Falha ao carregar listagem.");
       setRows([]);
     } finally {
       setLoading(false);
@@ -202,7 +174,7 @@ function ConsultsPage() {
   }, [dateRange, customRange]);
 
   /**
-   * Carrega os dados completos sob demanda ao abrir o detalhe da visita no Sheet.
+   * Carrega os dados completos (consents, etc.) sob demanda ao abrir o Sheet.
    */
   async function handleSelectConsult(row: any) {
     setDetailLoading(true);
@@ -216,14 +188,18 @@ function ConsultsPage() {
           product_types(name),
           partners(name, logo_url),
           visit_entities(*),
-          visit_offers(*),
+          visit_offers(
+            id, visit_id, manager_name, seller_id, legal_name, trade_name, 
+            event_id, event_description, event_end_date, offer_id, 
+            offer_description, offer_value, category_id,
+            category_types(name)
+          ),
           visit_consents(*)
         `)
         .eq("id", row.id)
         .single();
 
       if (!error && fullData) {
-        // Preserva o has_contact já calculado
         setActiveConsult({
           ...fullData,
           has_contact: row.has_contact,
@@ -288,7 +264,7 @@ function ConsultsPage() {
   }, [rows, search, selectedStatus, selectedPartners, selectedProducts]);
 
   /**
-   * Exportação para Excel utilizando importação dinâmica sob demanda.
+   * Exportação Excel com importação dinâmica sob demanda.
    */
   const handleExportExcel = async () => {
     if (!filtered || filtered.length === 0) {
