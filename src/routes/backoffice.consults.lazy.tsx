@@ -1,19 +1,21 @@
 /**
  * ============================================================================
- * @fileoverview Monitor de Consultas e Visitas (Backoffice)
+ * @fileoverview Monitor de Consultas e Visitas (Backoffice Otimizado)
  * @module Backoffice/Consults
  * @route /backoffice/consults
  *
  * @description
- * Torre de controle da esteira de topo de funil. Consolida e exibe em tempo real 
- * as interações dos leads (visitas, consultas, contatos e conversões) com suporte 
- * a exportação em Excel e auditoria avançada, utilizando a Fábrica Compartilhada de Painéis.
+ * Torre de controle de topo de funil de alta performance. Utiliza payload enxuto 
+ * na listagem principal, filtros de data no servidor, importação dinâmica do Excel 
+ * e carregamento sob demanda no Sheet de auditoria.
  * ============================================================================
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useRef } from "react";
-import * as XLSX from "xlsx";
 import {
   RefreshCw,
   Search,
@@ -22,16 +24,17 @@ import {
   ChevronDown,
   Printer,
   Camera,
+  Loader2,
 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
-// Componentes da Interface (Design System Shadcn/UI)
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { toast } from "sonner";
 
 // Fábrica de Painéis Compartilhados
 import { PanelProduct } from "@/features/financial-hub/components/shared/renderes/PanelProduct";
@@ -44,19 +47,11 @@ import { PanelFAQ } from "@/features/financial-hub/components/shared/renderes/Pa
 import { PanelFooter } from "@/features/financial-hub/components/shared/renderes/PanelFooter";
 import { PanelVisit } from "@/features/financial-hub/components/shared/renderes/PanelVisit";
 
-// Camada de Persistência (BaaS)
 import { supabase } from "@/integrations/supabase/client";
 
-// ============================================================================
-// [REGISTRO DA ROTA TANSTACK ROUTER]
-// ============================================================================
 export const Route = createLazyFileRoute("/backoffice/consults")({
   component: ConsultsPage,
 });
-
-// ============================================================================
-// HELPERS E UTILITÁRIOS DE APRESENTAÇÃO
-// ============================================================================
 
 const STATUS_STYLES: Record<string, string> = {
   visita: "bg-purple-500/10 text-purple-600",
@@ -86,9 +81,6 @@ function formatDate(iso: string | null) {
   };
 }
 
-// ============================================================================
-// COMPONENTE PRINCIPAL
-// ============================================================================
 function ConsultsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
@@ -103,6 +95,7 @@ function ConsultsPage() {
   const [productsList, setProductsList] = useState<any[]>([]);
 
   const [activeConsult, setActiveConsult] = useState<any | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -119,27 +112,51 @@ function ConsultsPage() {
 
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Query Otimizada: Traz apenas dados essenciais na listagem com filtro de data no banco e limite de 500.
+   */
   async function load() {
     setLoading(true);
     try {
-      const { data: visitsData, error: visitError } = await supabase
+      let dateLimit = new Date();
+      if (dateRange === "30") {
+        dateLimit.setDate(dateLimit.getDate() - 30);
+      } else if (dateRange === "90") {
+        dateLimit.setDate(dateLimit.getDate() - 90);
+      } else if (dateRange === "all") {
+        dateLimit = new Date("2020-01-01");
+      }
+
+      let query = supabase
         .from("visits")
-        .select(
-          `
-          *,
+        .select(`
+          id,
+          created_at,
+          action,
+          utm_source,
+          state,
+          partner_id,
+          product_id,
           product_types(name),
           partners(name, logo_url),
-          visit_entities(*),
-          visit_offers(*),
-          visit_consents(*)
-        `,
-        )
-        .order("created_at", { ascending: false });
+          visit_entities(name, document, phone, email),
+          visit_offers(offer_description, offer_value, event_id, event_description)
+        `)
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      if (dateRange !== "all" && dateRange !== "custom") {
+        query = query.gte('created_at', dateLimit.toISOString());
+      } else if (dateRange === "custom" && customRange?.from && customRange?.to) {
+        query = query
+          .gte('created_at', customRange.from.toISOString())
+          .lte('created_at', customRange.to.toISOString());
+      }
+
+      const { data: visitsData, error: visitError } = await query;
 
       if (visitError) {
-        console.error("Erro ao carregar visits:", visitError.message);
-        setRows([]);
-        return;
+        throw new Error(visitError.message);
       }
 
       if (!visitsData || visitsData.length === 0) {
@@ -168,12 +185,12 @@ function ConsultsPage() {
         has_contact: contactSet.has(v.id),
         visit_entities: Array.isArray(v.visit_entities) ? v.visit_entities[0] || null : v.visit_entities,
         visit_offers: Array.isArray(v.visit_offers) ? v.visit_offers[0] || null : v.visit_offers,
-        visit_consents: v.visit_consents || [],
       }));
 
       setRows(normalized);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro crítico ao carregar dados:", err);
+      toast.error(err?.message ?? "Falha ao carregar listagem de visitas.");
       setRows([]);
     } finally {
       setLoading(false);
@@ -182,7 +199,45 @@ function ConsultsPage() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [dateRange, customRange]);
+
+  /**
+   * Carrega os dados completos sob demanda ao abrir o detalhe da visita no Sheet.
+   */
+  async function handleSelectConsult(row: any) {
+    setDetailLoading(true);
+    setActiveConsult(row);
+
+    try {
+      const { data: fullData, error } = await supabase
+        .from("visits")
+        .select(`
+          *,
+          product_types(name),
+          partners(name, logo_url),
+          visit_entities(*),
+          visit_offers(*),
+          visit_consents(*)
+        `)
+        .eq("id", row.id)
+        .single();
+
+      if (!error && fullData) {
+        // Preserva o has_contact já calculado
+        setActiveConsult({
+          ...fullData,
+          has_contact: row.has_contact,
+          visit_entities: Array.isArray(fullData.visit_entities) ? fullData.visit_entities[0] || null : fullData.visit_entities,
+          visit_offers: Array.isArray(fullData.visit_offers) ? fullData.visit_offers[0] || null : fullData.visit_offers,
+          visit_consents: fullData.visit_consents || [],
+        });
+      }
+    } catch (e) {
+      console.error("Erro ao carregar detalhes completos da visita:", e);
+    } finally {
+      setDetailLoading(false);
+    }
+  }
 
   function getVisitStatus(r: any): string {
     const act = (r.action ?? "").toUpperCase();
@@ -228,23 +283,21 @@ function ConsultsPage() {
       const matchPartner = selectedPartners.length === 0 || selectedPartners.includes(String(r.partner_id));
       const matchProduct = selectedProducts.length === 0 || selectedProducts.includes(String(r.product_id));
 
-      let matchDate = true;
-      const rowDate = new Date(r.created_at);
-
-      if (dateRange === "custom" && customRange?.from && customRange?.to) {
-        matchDate = rowDate >= customRange.from && rowDate <= customRange.to;
-      } else if (dateRange !== "all") {
-        const days = parseInt(dateRange);
-        const limitDate = new Date();
-        limitDate.setDate(limitDate.getDate() - days);
-        matchDate = rowDate >= limitDate;
-      }
-
-      return matchSearch && matchStatus && matchDate && matchPartner && matchProduct;
+      return matchSearch && matchStatus && matchPartner && matchProduct;
     });
-  }, [rows, search, selectedStatus, dateRange, customRange, selectedPartners, selectedProducts]);
+  }, [rows, search, selectedStatus, selectedPartners, selectedProducts]);
 
-  const handleExportExcel = () => {
+  /**
+   * Exportação para Excel utilizando importação dinâmica sob demanda.
+   */
+  const handleExportExcel = async () => {
+    if (!filtered || filtered.length === 0) {
+      toast.error("Não há dados na tela para exportar.");
+      return;
+    }
+
+    const XLSX = await import("xlsx");
+
     const dataToExport = filtered.map((r) => {
       const created = formatDate(r.created_at);
       const entity = r.visit_entities || {};
@@ -394,77 +447,6 @@ function ConsultsPage() {
 
       <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center gap-4 border-b border-border p-4">
-          <div className="flex items-center lg:hidden">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="h-9 rounded-full border-slate-300 text-slate-700 px-4 font-medium hover:bg-slate-50">
-                  <Filter className="h-4 w-4 mr-2 text-slate-500" /> Filtros
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[calc(100vw-2rem)] p-4 ml-4 rounded-2xl border-slate-200 shadow-xl" align="start">
-                <div className="flex flex-col gap-3">
-                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Filtrar Resultados</h4>
-                  
-                  <Popover>
-                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-slate-50 border-slate-200 transition-colors"><span className="flex items-center gap-2 truncate text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                    <PopoverContent className="w-[calc(100vw-4rem)] p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>{partnersList.map((p) => { const isSelected = selectedPartners.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
-                  </Popover>
-
-                  <Popover>
-                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-slate-50 border-slate-200 transition-colors"><span className="flex items-center gap-2 truncate text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                    <PopoverContent className="w-[calc(100vw-4rem)] p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedProducts.length === 0 && "✓"}</div>Todos Produtos</CommandItem>{productsList.map((p) => { const isSelected = selectedProducts.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter(id => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
-                  </Popover>
-
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
-                        <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 shrink-0" /> Situação: {selectedStatus.length === 0 ? "Todos" : selectedStatus.length === 1 && selectedStatus[0] === "Qualificadas" ? "Qualificadas" : `${selectedStatus.length} sel.`}</span>
-                        <ChevronDown className="h-3 w-3 shrink-0" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="p-0 w-[calc(100vw-4rem)] bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
-                      <Command className="bg-transparent">
-                        <CommandList>
-                          <CommandGroup>
-                            <CommandItem onSelect={() => setSelectedStatus([])} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
-                                {selectedStatus.length === 0 && "✓"}
-                              </div>
-                              Todos
-                            </CommandItem>
-                            <CommandItem onSelect={() => { const isSel = selectedStatus.includes("Qualificadas"); setSelectedStatus(isSel ? selectedStatus.filter((s: string) => s !== "Qualificadas") : [...selectedStatus, "Qualificadas"]); }} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.includes("Qualificadas") ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
-                                {selectedStatus.includes("Qualificadas") && "✓"}
-                              </div>
-                              Qualificadas (Sem Visitas)
-                            </CommandItem>
-                            {statusOptions.filter(s => s !== "Qualificadas").map((s) => {
-                              const isSelected = selectedStatus.includes(s);
-                              return (
-                                <CommandItem key={s} onSelect={() => { if (isSelected) setSelectedStatus(selectedStatus.filter((item: string) => item !== s)); else setSelectedStatus([...selectedStatus, s]); }} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
-                                  <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
-                                    {isSelected && "✓"}
-                                  </div>
-                                  {s}
-                                </CommandItem>
-                              );
-                            })}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  
-                  <Popover>
-                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600"><span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                    <PopoverContent className="p-0 w-auto" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem><CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem><CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem></CommandGroup><div className="p-2 border-t"><p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command></PopoverContent>
-                  </Popover>
-
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-
           <div className="relative w-full lg:flex-1 lg:max-w-md order-last lg:order-none mt-1 lg:mt-0">
             <Input 
               value={search} 
@@ -560,7 +542,7 @@ function ConsultsPage() {
                 const endEvent = offer?.event_end_date ? new Date(offer.event_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
 
                 return (
-                  <tr key={r.id} onClick={() => setActiveConsult(r)} className="border-b border-border/60 hover:bg-accent/40 cursor-pointer transition-colors" title="Clique para ver os detalhes completos da visita">
+                  <tr key={r.id} onClick={() => handleSelectConsult(r)} className="border-b border-border/60 hover:bg-accent/40 cursor-pointer transition-colors" title="Clique para ver os detalhes completos da visita">
                     <td className="px-3 py-2.5 w-[75px]">
                       <div className="font-semibold text-foreground">{created.d}</div>
                       <div className="text-[11px] text-muted-foreground">{created.h}</div>
@@ -607,9 +589,7 @@ function ConsultsPage() {
         </div> 
       </div>
 
-      {/* ===================================================================== */}
-      {/* PAINEL LATERAL DE DETALHES (SHEET / DRAWER) COM DADOS COMPLETOS       */}
-      {/* ===================================================================== */}
+      {/* PAINEL LATERAL DE DETALHES (SHEET) */}
       <Sheet open={!!activeConsult} onOpenChange={(open) => !open && setActiveConsult(null)}>
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col h-full bg-white">
           {activeConsult &&
@@ -646,6 +626,11 @@ function ConsultsPage() {
                             {sim.partners?.name || "Parceiro N/A"}
                           </span>
                         </div>
+                        {detailLoading && (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+                            <Loader2 className="h-3 w-3 animate-spin text-primary" /> Carregando detalhes...
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-1 pr-8">
@@ -722,9 +707,7 @@ function ConsultsPage() {
         </SheetContent>
       </Sheet>
 
-      {/* ===================================================================== */}
-      {/* BLOCO DE REFERÊNCIA PARA O IFRAME DE IMPRESSÃO - EMPILHADO            */}
-      {/* ===================================================================== */}
+      {/* BLOCO DE REFERÊNCIA PARA IMPRESSÃO */}
       <div style={{ display: "none" }}>
         <div ref={printRef} className="w-full text-slate-900 bg-white p-8">
           {activeConsult &&

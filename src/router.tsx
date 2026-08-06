@@ -1,8 +1,39 @@
-import { createRouter, useRouter } from "@tanstack/react-router";
+/**
+ * @fileoverview Configuração do Roteador Principal (TanStack Router)
+ * @path src/router.tsx
+ * 
+ * ============================================================================
+ * [ARQUITETURA & ERROR BOUNDARY]
+ * ============================================================================
+ * Configura o motor de rotas e o componente global de tratamento de exceções.
+ * Inclui blindagem defensiva contra erros nulos/indefinidos (undefined), evitando
+ * o loop do CatchBoundary do React.
+ * ============================================================================
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
+ */
+
+import { createRouter, useRouter, ErrorComponentProps } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 
-function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+/**
+ * Componente padrão global de captura de erros de rota
+ */
+function DefaultErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
+
+  // Blindagem defensiva rigorosa caso o erro seja undefined, string ou objeto customizado
+  const errorMessage = 
+    error instanceof Error 
+      ? error.message 
+      : typeof error === "object" && error !== null && "message" in error 
+        ? String((error as any).message) 
+        : typeof error === "string" 
+          ? error 
+          : error 
+            ? JSON.stringify(error) 
+            : "An unexpected error occurred.";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -27,11 +58,14 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
         <p className="mt-2 text-sm text-muted-foreground">
           An unexpected error occurred. Please try again.
         </p>
-        {import.meta.env.DEV && error.message && (
+
+        {/* Exibição segura da mensagem higienizada em ambiente de desenvolvimento */}
+        {import.meta.env.DEV && (
           <pre className="mt-4 max-h-40 overflow-auto rounded-md bg-muted p-3 text-left font-mono text-xs text-destructive">
-            {error.message}
+            {errorMessage}
           </pre>
         )}
+
         <div className="mt-6 flex items-center justify-center gap-3">
           <button
             onClick={() => {

@@ -1,7 +1,7 @@
 import { Calendar as CalendarIcon, MapPin, Smartphone, Globe } from "lucide-react";
 import { formatDate } from "./formatters";
 
-export function PanelVisit({ visitData }: { visitData: any }) {
+export function PanelVisit({ visitData, updateData }: { visitData: any; updateData?: any }) {
   if (!visitData) return null;
 
   // Como o join da simulação traz a visita vinculada em 'visits', 

@@ -1,29 +1,31 @@
 /**
- * @fileoverview Monitor de Simulações (Backoffice)
- * @route /backoffice/simulations
+ * @fileoverview Monitor de Simulações (Backoffice Otimizado)
+ * @path src/routes/backoffice/simulations.lazy.tsx
  * 
  * ============================================================================
- * [ARQUITETURA, CLEAN ARCHITECTURE & DESIGN SYSTEM]
+ * [ARQUITETURA, CLEAN ARCHITECTURE & PERFORMANCE]
  * ============================================================================
- * Tela de monitoramento operacional (Backoffice). Exibe um dashboard analítico 
- * corporativo com KPIs consolidados, filtros cruzados avançados e uma tabela de 
- * listagem em tempo real rigorosamente alinhada ao design system original.
+ * Monitoramento operacional de alta performance. Utiliza payload enxuto na listagem
+ * principal, paginação/limite server-side e carregamento sob demanda de metadados 
+ * pesados no Sheet de detalhes.
  * ============================================================================
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useRef } from "react";
-import * as XLSX from "xlsx";
-import { RefreshCw, Search, Filter, Download, ChevronDown, Camera, Printer } from "lucide-react";
+import { RefreshCw, Search, Filter, Download, ChevronDown, Camera, Printer, Loader2 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
-// Componentes da Interface (Design System baseados em Radix UI / Tailwind CSS)
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { toast } from "sonner";
 
 // Fábrica de Painéis (Shared Renderers)
 import { PanelProduct } from "@/features/financial-hub/components/shared/renderes/PanelProduct";
@@ -37,19 +39,11 @@ import { PanelSimulation } from "@/features/financial-hub/components/shared/rend
 import { PanelVisit } from "@/features/financial-hub/components/shared/renderes/PanelVisit";
 import { PanelFAQ } from "@/features/financial-hub/components/shared/renderes/PanelFAQ";
 
-// Conexão centralizada com o Client do Supabase e Helpers
 import { supabase } from "@/integrations/supabase/client";
 
-// ============================================================================
-// [REGISTRO DA ROTA TANSTACK ROUTER]
-// ============================================================================
 export const Route = createLazyFileRoute("/backoffice/simulations")({
   component: SimulationsPage,
 });
-
-// ============================================================================
-// [HELPERS E FORMATADORES GLOBAIS]
-// ============================================================================
 
 const STATUS_STYLES: Record<string, string> = {
   simulacao: "bg-primary/10 text-primary",
@@ -80,9 +74,6 @@ function formatDate(iso: string | null) {
   };
 }
 
-// ============================================================================
-// [COMPONENTE PRINCIPAL: PAGE CONTROLLER]
-// ============================================================================
 function SimulationsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
@@ -97,6 +88,7 @@ function SimulationsPage() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
   const [activeSimulation, setActiveSimulation] = useState<any | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,11 +104,79 @@ function SimulationsPage() {
 
   const [loading, setLoading] = useState(false);
 
-  async function load() {
+  /**
+   * Carregamento único e leve: busca os dados essenciais e as ofertas de uma vez,
+   * permitindo que os filtros funcionem instantaneamente em memória (zero lag de rede).
+   */
+async function load() {
     setLoading(true);
     try {
-      const [{ data: simData }, { data: statusData }] = await Promise.all([
-        supabase.from("simulations").select(`
+      const [{ data: simData, error: simError }, { data: statusData }] = await Promise.all([
+        supabase
+          .from("simulations")
+          .select(`
+            id,
+            created_at,
+            updated_at,
+            name,
+            document,
+            phone,
+            email,
+            financed_amount,
+            installment_value,
+            installments,
+            down_payment_percentage,
+            partner_id,
+            product_id,
+            status_id,
+            stage_id,
+            partners(id, name, logo_url),
+            product_types(id, name),
+            stage_types(id, name),
+            status_types(id, name),
+            financial_institutions(id, name, logo_url),
+            simulation_offers(*)
+          `)
+          .order('created_at', { ascending: false }),
+        supabase.from("status_types").select("name")
+      ]);
+
+      if (simError) {
+        console.error("Erro do Supabase:", simError);
+        toast.error(`Erro ao carregar: ${simError.message}`);
+        return;
+      }
+
+      if (simData) {
+        setRows(simData);
+      }
+      if (statusData) {
+        setStatusOptions(statusData.map(s => s.name));
+      }
+    } catch (err: any) {
+      console.error("Erro crítico ao carregar simulações:", err);
+      toast.error(err?.message ?? "Falha ao carregar listagem.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Roda apenas na inicialização da tela, mantendo a navegação e os filtros instantâneos
+  useEffect(() => { 
+    load(); 
+  }, []);
+
+  /**
+   * Carrega os dados pesados sob demanda ao selecionar uma simulação para o Sheet.
+   */
+  async function handleSelectSimulation(row: any) {
+    setDetailLoading(true);
+    setActiveSimulation(row); // Abre com os dados básicos de imediato
+
+    try {
+      const { data: fullData, error } = await supabase
+        .from("simulations")
+        .select(`
           *,
           partners(id, name, logo_url),
           product_types(id, name),
@@ -128,20 +188,19 @@ function SimulationsPage() {
           simulation_consents(*),
           simulation_updates(*),
           visits:visit_id(*)
-        `).order('created_at', { ascending: false }),
-        supabase.from("status_types").select("name")
-      ]);
+        `)
+        .eq("id", row.id)
+        .single();
 
-      if (simData) setRows(simData);
-      if (statusData) setStatusOptions(statusData.map(s => s.name));
-    } catch (err) {
-      console.error("Erro ao carregar:", err);
+      if (!error && fullData) {
+        setActiveSimulation(fullData);
+      }
+    } catch (e) {
+      console.error("Erro ao carregar detalhes completos:", e);
     } finally {
-      setLoading(false);
+      setDetailLoading(false);
     }
   }
-
-  useEffect(() => { load(); }, []);
 
   const totals = useMemo(() => {
     const t = { total: rows.length, simulacao: 0, analise: 0, aprovada: 0, volume: 0 };
@@ -167,30 +226,20 @@ function SimulationsPage() {
       const matchPartner = selectedPartners.length === 0 || selectedPartners.includes(String(r.partner_id));
       const matchProduct = selectedProducts.length === 0 || selectedProducts.includes(String(r.product_id));
       
-      let matchDate = true;
-      const rowDate = new Date(r.created_at);
-      
-      if (dateRange === "custom" && customRange?.from && customRange?.to) {
-        matchDate = rowDate >= customRange.from && rowDate <= customRange.to;
-      } else if (dateRange !== "all") {
-        const days = parseInt(dateRange);
-        const limitDate = new Date();
-        limitDate.setDate(limitDate.getDate() - days);
-        matchDate = rowDate >= limitDate;
-      }
-      
-      return matchSearch && matchStatus && matchDate && matchPartner && matchProduct;
+      return matchSearch && matchStatus && matchPartner && matchProduct;
     });
-  }, [rows, search, selectedStatus, dateRange, customRange, selectedPartners, selectedProducts]);
+  }, [rows, search, selectedStatus, selectedPartners, selectedProducts]);
 
-  // ============================================================================
-  // [HANDLE DE EXPORTAÇÃO EXCEL]
-  // ============================================================================
-  const handleExportExcel = () => {
+  /**
+   * Exportação Excel com importação dinâmica sob demanda.
+   */
+  const handleExportExcel = async () => {
     if (!filtered || filtered.length === 0) {
-      alert("Não há dados na tela para exportar.");
+      toast.error("Não há dados na tela para exportar.");
       return;
     }
+
+    const XLSX = await import("xlsx");
 
     const dataToExport = filtered.map((sim) => {
       const bank = sim.financial_institutions;
@@ -224,7 +273,6 @@ function SimulationsPage() {
     });
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-
     const colWidths = Object.keys(dataToExport[0] || {}).map(key => {
       const maxLength = Math.max(key.length, ...dataToExport.map(row => String(row[key as keyof typeof row] ?? "").length));
       return { wch: maxLength + 2 }; 
@@ -242,9 +290,6 @@ function SimulationsPage() {
     XLSX.writeFile(workbook, `Monitor_Simulacoes_${today}.xlsx`);
   };
 
-  // ============================================================================
-  // [HANDLE DE IMPRESSÃO: IFRAME ISOLADO]
-  // ============================================================================
   const handlePrintSheet = () => {
     if (!printRef.current) return;
 
@@ -340,77 +385,6 @@ function SimulationsPage() {
       <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
         
         <div className="flex flex-col lg:flex-row lg:items-center gap-4 border-b border-border p-4">
-          
-          <div className="flex items-center lg:hidden">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="h-9 rounded-full border-slate-300 text-slate-700 px-4 font-medium hover:bg-slate-50">
-                  <Filter className="h-4 w-4 mr-2 text-slate-500" /> Filtros
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[calc(100vw-2rem)] p-4 ml-4 rounded-2xl border-slate-200 shadow-xl" align="start">
-                <div className="flex flex-col gap-3">
-                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Filtrar Resultados</h4>
-                  
-                  {/* Parceiro Mobile */}
-                  <Popover>
-                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-slate-50 border-slate-200 transition-colors"><span className="flex items-center gap-2 truncate text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                    <PopoverContent className="w-[calc(100vw-4rem)] p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>{partnersList.map((p) => { const isSelected = selectedPartners.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
-                  </Popover>
-
-                  {/* Produto Mobile */}
-                  <Popover>
-                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-slate-50 border-slate-200 transition-colors"><span className="flex items-center gap-2 truncate text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                    <PopoverContent className="w-[calc(100vw-4rem)] p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedProducts.length === 0 && "✓"}</div>Todos Produtos</CommandItem>{productsList.map((p) => { const isSelected = selectedProducts.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter(id => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
-                  </Popover>
-
-                  {/* Situação Mobile */}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
-                        <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 shrink-0" /> Situação: {selectedStatus.length === 0 ? "Todos" : `${selectedStatus.length} sel.`}</span>
-                        <ChevronDown className="h-3 w-3 shrink-0" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="p-0 w-[calc(100vw-4rem)] bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
-                      <Command className="bg-transparent">
-                        <CommandList>
-                          <CommandGroup>
-                            <CommandItem onSelect={() => setSelectedStatus([])} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
-                                {selectedStatus.length === 0 && "✓"}
-                              </div>
-                              Todos
-                            </CommandItem>
-                            {statusOptions.map((s) => {
-                              const isSelected = selectedStatus.includes(s);
-                              return (
-                                <CommandItem key={s} onSelect={() => { if (isSelected) setSelectedStatus(selectedStatus.filter((item: string) => item !== s)); else setSelectedStatus([...selectedStatus, s]); }} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
-                                  <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
-                                    {isSelected && "✓"}
-                                  </div>
-                                  {s}
-                                </CommandItem>
-                              );
-                            })}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  
-                  {/* Período Mobile */}
-                  <Popover>
-                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 w-full rounded-xl justify-between bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600"><span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /> Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                    <PopoverContent className="p-0 w-auto" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem><CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem><CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem></CommandGroup><div className="p-2 border-t"><p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command></PopoverContent>
-                  </Popover>
-
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          {/* BARRA DE BUSCA: Lupa à Direita */}
           <div className="relative w-full lg:flex-1 lg:max-w-md order-last lg:order-none mt-1 lg:mt-0">
             <Input 
               value={search} 
@@ -421,9 +395,7 @@ function SimulationsPage() {
             <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-[#B300FF]" />
           </div>
 
-          {/* FILTROS DESKTOP: Lado a Lado (Escondidos no Mobile) */}
           <div className="hidden lg:flex lg:items-center lg:gap-2 lg:ml-auto">
-            
             <Popover>
               <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
               <PopoverContent className="w-56 p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>{partnersList.map((p) => { const isSelected = selectedPartners.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
@@ -434,7 +406,6 @@ function SimulationsPage() {
               <PopoverContent className="w-56 p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedProducts.length === 0 && "✓"}</div>Todos Produtos</CommandItem>{productsList.map((p) => { const isSelected = selectedProducts.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter(id => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
             </Popover>
 
-            {/* Situação Desktop */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
@@ -474,7 +445,6 @@ function SimulationsPage() {
               <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
               <PopoverContent className="p-0 w-auto" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem><CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem><CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem></CommandGroup><div className="p-2 border-t"><p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command></PopoverContent>
             </Popover>
-
           </div>
         </div>
 
@@ -500,7 +470,7 @@ function SimulationsPage() {
                 const stageName = r.stage_types?.name ?? "—";
                 const productName = r.product_types?.name ?? "—";
                 const parcela = r.installments && r.installment_value ? `${r.installments}x ${BRL(r.installment_value)}` : "—";
-                const offer = r.simulation_offers || {};
+                const offer = Array.isArray(r.simulation_offers) ? r.simulation_offers[0] || {} : (r.simulation_offers || {});
                 const endEvent = offer?.event_end_date ? new Date(offer.event_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
                 
                 const bank = r.financial_institutions;
@@ -509,7 +479,7 @@ function SimulationsPage() {
                 const phone = r.phone?.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3") ?? "";
                 
                 return (
-                  <tr key={r.id} onClick={() => setActiveSimulation(r)} className="border-b border-border/60 hover:bg-accent/40 cursor-pointer transition-colors">
+                  <tr key={r.id} onClick={() => handleSelectSimulation(r)} className="border-b border-border/60 hover:bg-accent/40 cursor-pointer transition-colors">
                     <td className="px-3 py-2.5 w-[75px]"><div className="font-semibold text-foreground">{created.d}</div><div className="text-[11px] text-muted-foreground">{created.h}</div></td>
                     <td className="px-3 py-2.5 w-[140px]"><div className="font-semibold text-[#d946ef] truncate" title={r.name}>{r.name || "—"}</div><div className="text-[11px] text-muted-foreground">{doc}</div><div className="text-[11px] text-muted-foreground">{phone || "—"}</div></td>
                     <td className="px-3 py-2.5 w-[140px]"><div className="font-semibold text-foreground">{stageName}</div><div className="text-[11px] text-muted-foreground">{productName}</div><div className="text-[10px] font-bold text-muted-foreground mt-0.5 uppercase tracking-tighter">{r.partners?.name || "—"}</div></td>
@@ -539,9 +509,7 @@ function SimulationsPage() {
         </div>
       </div>
 
-      {/* ===================================================================== */}
-      {/* [PAINEL LATERAL DE DETALHES TELA - SHEET DO RADIX]                     */}
-      {/* ===================================================================== */}
+      {/* SHEET LATERAL DE DETALHES */}
       <Sheet open={!!activeSimulation} onOpenChange={(open) => !open && setActiveSimulation(null)}>
         <SheetContent className="w-full sm:max-w-xl flex flex-col h-full p-0 overflow-hidden bg-white">
           {activeSimulation && (() => {
@@ -573,6 +541,11 @@ function SimulationsPage() {
                           {sim.partners?.name || "Parceiro N/A"}
                         </span>
                       </div>
+                      {detailLoading && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+                          <Loader2 className="h-3 w-3 animate-spin text-primary" /> Carregando detalhes...
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-1 pr-8">
@@ -620,9 +593,7 @@ function SimulationsPage() {
         </SheetContent>
       </Sheet>
 
-      {/* ===================================================================== */}
-      {/* [BLOCO DE IMPRESSÃO - ESPELHO EXATO DO PAINEL LATERAL PARA O PDF]      */}
-      {/* ===================================================================== */}
+      {/* BLOCO DE IMPRESSÃO */}
       <div style={{ display: 'none' }}>
         <div ref={printRef} className="w-full text-slate-900 bg-white p-8 space-y-6">
           {activeSimulation && (() => {

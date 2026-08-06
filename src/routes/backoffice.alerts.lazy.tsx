@@ -1,6 +1,6 @@
 /**
  * @fileoverview Monitor de Destinatários de Alertas (Backoffice)
- * @route /backoffice/alerts
+ * @path src/routes/backoffice/alerts.lazy.tsx
  * 
  * ============================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
@@ -13,6 +13,9 @@
  * - Access Control: Apenas usuários com role 'admin' conseguem inserir/alterar.
  * - State Management: Gerenciamento local reativo para otimizar UX (Loading/Saving).
  * ============================================================================
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import { createLazyFileRoute } from "@tanstack/react-router";
@@ -36,16 +39,18 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/integrations/auth/AuthContext";
 
-// ============================================================================
-// [REGISTRO DA ROTA TANSTACK ROUTER]
-// ============================================================================
+/**
+ * [REGISTRO DA ROTA TANSTACK ROUTER]
+ */
 export const Route = createLazyFileRoute("/backoffice/alerts")({ 
   component: AlertsPage 
 });
 
-// ============================================================================
-// [TIPAGENS]
-// ============================================================================
+/**
+ * ============================================================================
+ * [TIPAGENS]
+ * ============================================================================
+ */
 type AlertRecipientRow = {
   id: string;
   name: string;
@@ -55,9 +60,11 @@ type AlertRecipientRow = {
   created_at: string;
 };
 
-// ============================================================================
-// [COMPONENTE PRINCIPAL]
-// ============================================================================
+/**
+ * ============================================================================
+ * [COMPONENTE PRINCIPAL]
+ * ============================================================================
+ */
 function AlertsPage() {
   const { backofficeUser } = useAuth();
   
@@ -252,7 +259,7 @@ function AlertsPage() {
         </div>
       </div>
 
-{/* TABELA DE DADOS */}
+      {/* TABELA DE DADOS */}
       <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
         <div className="overflow-x-auto w-full pb-2">
           <table className="w-full text-sm">
@@ -276,20 +283,17 @@ function AlertsPage() {
               {recipients.map((r) => {
                 return (
                   <tr key={r.id} className="border-b border-border/60 hover:bg-accent/40">
-                    {/* 👇 Adicionado whitespace-nowrap aqui 👇 */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="font-semibold text-slate-800">{r.name}</div>
                       <div className="text-xs text-muted-foreground">{r.email}</div>
                     </td>
                     
-                    {/* 👇 Adicionado whitespace-nowrap aqui 👇 */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="inline-flex items-center rounded-md bg-purple-500/10 px-2 py-1 text-[11px] font-semibold text-purple-600">
                         Todos os Erros
                       </span>
                     </td>
                     
-                    {/* 👇 Adicionado whitespace-nowrap aqui 👇 */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
@@ -301,7 +305,6 @@ function AlertsPage() {
                       </span>
                     </td>
                     
-                    {/* 👇 Adicionado whitespace-nowrap aqui 👇 */}
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {isAdmin && (
                         <div className="flex justify-end gap-2">

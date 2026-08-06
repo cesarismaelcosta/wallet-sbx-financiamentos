@@ -1,3 +1,23 @@
+/**
+ * @fileoverview Layout Raiz do Backoffice (Orquestração, Navegação e Auth Guard)
+ * @path src/routes/backoffice.lazy.tsx
+ * @description Layout principal de controle de acesso, estruturação visual e 
+ * roteamento aninhado para o painel administrativo do ecossistema sbX.
+ * 
+ * ============================================================================
+ * [DIRETRIZES DE ARQUITETURA E SEGURANÇA]:
+ * 1. Auth Guard Integrado: Intercepta o ciclo de vida para validar tokens e 
+ *    permissões administrativas estritas antes de renderizar sub-rotas (`Outlet`).
+ * 2. Blindagem contra Loops: Previne redirecionamentos cíclicos caso a rota 
+ *    ativa seja a página de autenticação (`/backoffice/login`).
+ * 3. Layout Adaptativo: Suporta barra de navegação lateral persistente em desktop 
+ *    e gaveta lateral deslizante (*Sheet*) para dispositivos móveis.
+ * ============================================================================
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
+ */
+
 import { createLazyFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
@@ -21,10 +41,18 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuth } from "@/integrations/auth/AuthContext";
 import { logLoginHistoryEvent } from "@/lib/login-history";
 
+/**
+ * [REGISTRO DA ROTA TANSTACK ROUTER]
+ */
 export const Route = createLazyFileRoute("/backoffice")({
   component: BackofficeLayout,
 });
 
+/**
+ * ============================================================================
+ * [MAPEAMENTO DE NAVEGAÇÃO DO BACKOFFICE]
+ * ============================================================================
+ */
 const OPERACAO_NAV = [
   { to: "/backoffice", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/backoffice/simulations", label: "Simulações", icon: ListChecks },
@@ -43,12 +71,20 @@ const CONFIG_NAV = [
   { to: "/backoffice/routes", label: "Rotas", icon: Layers },
 ];
 
+/**
+ * ============================================================================
+ * [COMPONENTE PRINCIPAL: BackofficeLayout]
+ * ============================================================================
+ */
 function BackofficeLayout() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, signOut, session } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  /**
+   * Efeito para aplicar classe de escopo global no body do Backoffice
+   */
   useEffect(() => {
     document.body.classList.add("backoffice-shell");
     return () => {
@@ -56,14 +92,19 @@ function BackofficeLayout() {
     };
   }, []);
 
+  /**
+   * [GUARD DE SESSÃO E PERMISSÃO]
+   * Valida se o usuário possui privilégios administrativos ativos. Caso contrário,
+   * registra tentativa bloqueada e redireciona para o login.
+   */
   useEffect(() => {
+    // Intercepta para evitar checagens desnecessárias na rota de login
+    if (pathname.includes("/backoffice/login")) return;
+
     if (authLoading || authorizationLoading) return;
-    if (!backofficeUser) {
-      navigate({ to: "/backoffice/login" });
-      return;
-    }
-    if (!isBackofficeAllowed) {
-      if (session?.access_token) {
+
+    if (!backofficeUser || !isBackofficeAllowed) {
+      if (session?.access_token && backofficeUser) {
         void logLoginHistoryEvent(
           {
             email: backofficeUser?.email ?? "",
@@ -76,8 +117,14 @@ function BackofficeLayout() {
       }
       navigate({ to: "/backoffice/login" });
     }
-  }, [authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, navigate, session?.access_token]);
+  }, [authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, navigate, session?.access_token, pathname]);
 
+  // Bypass para a página de login para evitar travamento no loader de verificação
+  if (pathname.includes("/backoffice/login")) {
+    return <Outlet />;
+  }
+
+  // Estado de carregamento global da esteira de segurança
   if (authLoading || authorizationLoading || !backofficeUser || !isBackofficeAllowed) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[oklch(0.985_0.008_320)]">
@@ -88,6 +135,7 @@ function BackofficeLayout() {
     );
   }
 
+  // Tratamento seguro para iniciais do avatar do usuário logado
   const initials = (backofficeUser?.name || "??")
     .split(" ")
     .map((p: string) => p[0])
@@ -96,6 +144,9 @@ function BackofficeLayout() {
     .join("")
     .toUpperCase();
 
+  /**
+   * Helper de renderização de links da barra lateral
+   */
   const renderNavItem = (item: { to: string; label: string; icon: any }) => {
     const active = pathname === item.to;
     const Icon = item.icon;
@@ -114,6 +165,9 @@ function BackofficeLayout() {
     );
   };
 
+  /**
+   * Template unificado do conteúdo da barra lateral (Sidebar / Drawer Mobile)
+   */
   const sidebarContent = (
     <div className="flex h-full flex-col bg-card">
       <div className="flex h-16 items-center border-b border-border px-5">
@@ -141,6 +195,7 @@ function BackofficeLayout() {
         </div>
       </nav>
 
+      {/* Perfil e Rodapé da Sidebar */}
       <div className="border-t border-border p-3">
         <Link
           to="/backoffice"
@@ -168,6 +223,7 @@ function BackofficeLayout() {
           <button
             onClick={() => signOut()}
             className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+            title="Encerrar sessão"
           >
             <LogOut className="h-4 w-4" />
           </button>
@@ -183,16 +239,16 @@ function BackofficeLayout() {
         {sidebarContent}
       </aside>
 
-      {/* Sidebar Mobile (Sheet / Gaveta) */}
+      {/* Sidebar Mobile (Gaveta Radix Sheet) */}
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" className="p-0 w-64">
           {sidebarContent}
         </SheetContent>
       </Sheet>
 
-      {/* Área Principal */}
+      {/* Área Principal de Conteúdo */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Cabeçalho exclusivo para Mobile com a Logo à esquerda e o Hambúrguer à direita */}
+        {/* Cabeçalho Mobile */}
         <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 lg:hidden">
           <WalletLogo size="sm" withTagline />
           <Button
@@ -205,9 +261,11 @@ function BackofficeLayout() {
           </Button>
         </header>
 
+        {/* Viewport dinâmico para sub-rotas */}
         <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
-        </main></div>
+        </main>
+      </div>
     </div>
   );
 }

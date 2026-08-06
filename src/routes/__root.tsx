@@ -33,7 +33,7 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Wallet sbX — Financiamentos e Seguros" },
       { name: "description", content: "Simule 100% online, sem compromisso, financiamentos, linhas de crédito com garantia e seguros. Condições exclusivas para clientes da Superbid." },
-      { property: "og:title", content: "SWallet sbX — Financiamentos e Seguros" },
+      { property: "og:title", content: "Wallet sbX — Financiamentos e Seguros" },
       { property: "og:description", content: "Simule sem compromisso e negocie as melhores condições com um especialista." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -49,31 +49,24 @@ export const Route = createRootRoute({
       },
     ],
   }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
 });
 
-function RootShell({ children }: { children: React.ReactNode }) {
+function RootComponent() {
   return (
     <html lang="en">
       <head>
         <HeadContent />
       </head>
       <body>
-        {children}
+        <AuthProvider>
+          <FinancialAuthProvider>
+            <Outlet />
+          </FinancialAuthProvider>
+        </AuthProvider>
         <Scripts />
       </body>
     </html>
-  );
-}
-
-function RootComponent() {
-  return (
-    <AuthProvider>
-      <FinancialAuthProvider>
-        <Outlet />
-      </FinancialAuthProvider>
-    </AuthProvider>
   );
 }
