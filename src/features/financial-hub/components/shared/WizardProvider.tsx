@@ -2,15 +2,9 @@
  * @fileoverview Componente: WizardProvider
  * @path src/features/financial-hub/components/shared/WizardProvider.tsx
  * * @description Provedor de contexto global com a API completa de motor de jornada (Engine).
- * * @responsibilities
- * - Centraliza o estado da navegação (step atual, meta-estados).
- * - Centraliza os dados injetados (manifesto, page_configs, formData).
- * - Provê funções de controle de fluxo (next, back, goTo, updateData).
- * * @dependencies
- * - react
  */
 
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 // 1. Tipagens do Estado
 export interface WizardState<T = any> {
@@ -46,6 +40,24 @@ export function WizardProvider({ children, initialData = {} }: { children: React
     data: { page_configs: {}, ...initialData },
   });
 
+  /**
+   * CORREÇÃO DE CICLO DE VIDA (Async Hydration):
+   * Garante que se o 'initialData' mudar (por exemplo, quando o Gateway termina de 
+   * buscar o simData da API), o estado do Wizard seja atualizado em tempo de execução.
+   */
+  useEffect(() => {
+    if (initialData && Object.keys(initialData).length > 0) {
+      setState((s) => ({
+        ...s,
+        isReady: true,
+        data: {
+          ...s.data,
+          ...initialData,
+        },
+      }));
+    }
+  }, [initialData]);
+
   // Atualiza partes mescladas do estado completo
   const update: WizardContextValue["update"] = (patch) => {
     setState((s) => ({
@@ -56,7 +68,6 @@ export function WizardProvider({ children, initialData = {} }: { children: React
     }));
   };
 
-  // Restauração da função exata que o Injetor (e seus forms) esperam usar
   const updateData: WizardContextValue["updateData"] = (dataPatch) => {
     setState((s) => ({ ...s, data: { ...s.data, ...dataPatch } }));
   };
@@ -71,7 +82,7 @@ export function WizardProvider({ children, initialData = {} }: { children: React
     setState((s) => ({ ...s, meta: { ...s.meta, step: Math.max(1, s.meta.step - 1) } }));
 
   const reset: WizardContextValue["reset"] = (initial = {}) =>
-    setState({ isReady: false, meta: { step: 1 }, data: { page_configs: {}, ...initial } });
+    setState({ isReady: true, meta: { step: 1 }, data: { page_configs: {}, ...initial } });
 
   return (
     <WizardContext.Provider value={{ state, update, updateData, goTo, next, back, reset }}>

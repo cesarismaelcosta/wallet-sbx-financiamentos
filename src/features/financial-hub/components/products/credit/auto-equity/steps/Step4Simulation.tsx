@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BRL } from "../schemas";
+import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider"; // Motor Genérico
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";

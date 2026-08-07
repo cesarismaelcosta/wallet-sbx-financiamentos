@@ -10,6 +10,7 @@
 import React, { useEffect, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { useOrchestratorHydration } from "@/features/financial-hub/core/hooks/useOrchestrator";
+import { GatewayErrorResponse } from "@/features/financial-hub/core/services/gateway";
 
 interface OrchestratorWrapperProps {
   visitId: string;
@@ -44,7 +45,7 @@ export function OrchestratorWrapper({ visitId, visitUpdateId, children }: Orches
     // Se houver erro, extraímos os dados conforme a estrutura do Gateway
     if (error) {
       // O 'error' aqui é o objeto que você deu throw no gateway.ts
-      const errData = error || {};
+      const errData = error as Partial<GatewayErrorResponse>;
       
       return {
         success: false,

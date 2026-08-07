@@ -1,5 +1,5 @@
 import { Calendar as CalendarIcon, MapPin, Smartphone, Globe } from "lucide-react";
-import { formatDate } from "./formatters";
+import { formatDate } from "@/features/financial-hub/components/shared/formatters";
 
 export function PanelVisit({ visitData, updateData }: { visitData: any; updateData?: any }) {
   if (!visitData) return null;

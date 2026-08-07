@@ -1,5 +1,5 @@
 import { CheckCircle2, FileText, MapPin, Smartphone } from "lucide-react";
-import { formatDate } from "./formatters";
+import { formatDate } from "@/features/financial-hub/components/shared/formatters";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export function PanelAcceptedConsents({ consents }: { consents: any[] }) {

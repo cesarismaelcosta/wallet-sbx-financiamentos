@@ -29,7 +29,8 @@ import {
 } from "@/components/ui/select";
 
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider"; // Motor Genérico
-import { personalIncomeSchema, type PersonalIncomeData, BRL } from "../schemas";
+import { personalIncomeSchema, type PersonalIncomeData } from "../schemas";
+import { BRL } from "@/features/financial-hub/components/shared/formatters";
 
 // Classe padronizada para unificar tamanho e fonte
 const commonInputClass = "h-10 text-sm transition-all duration-300 focus-visible:ring-2 focus-visible:ring-offset-0";

@@ -11,8 +11,7 @@
  */
 
 import { authHeaders, fetchOptions } from "@/services/session";
-import type { OrchestratorPayload } from "@/features/financial-hub/types/shared/types"; 
-// 💡 Nota: Ajuste o caminho do import de OrchestratorPayload conforme a estrutura real do seu projeto se necessário.
+import { OrchestratorPayload } from "@/features/financial-hub/components/shared/types";
 
 /**
  * Interface padronizada para erros lançados pelo Gateway.
@@ -37,17 +36,26 @@ export interface GatewayErrorResponse {
  */
 function sanitizePayloadForLogs(data: unknown): unknown {
   if (!data || typeof data !== "object") return data;
-  
-  const clone = Array.isArray(data) ? [...data] : { ...(data as Record<string, unknown>) };
+
   const sensitiveKeys = ["cpf", "name", "email", "phone", "document", "password", "token"];
 
-  for (const key of Object.keys(clone)) {
+  // Se for array, mapeia cada item de forma tipada
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizePayloadForLogs(item));
+  }
+
+  // Se for objeto, trata como Record de forma segura
+  const record = data as Record<string, unknown>;
+  const clone: Record<string, unknown> = {};
+
+  for (const key of Object.keys(record)) {
     if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
       clone[key] = "[MASKED]";
-    } else if (typeof clone[key] === "object" && clone[key] !== null) {
-      clone[key] = sanitizePayloadForLogs(clone[key]);
+    } else {
+      clone[key] = sanitizePayloadForLogs(record[key]);
     }
   }
+
   return clone;
 }
 

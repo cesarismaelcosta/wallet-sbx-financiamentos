@@ -63,15 +63,21 @@ export function useNavigation() {
         window.open(externalUrl, intent.target);
       }
     } catch (error: any) {
-      // Lê direto da raiz do erro
-      const redirectUrl = error.fallback_url;
+      // =========================================================================
+      // INTERCEPTADOR DE SESSÃO
+      // A fonte da verdade é o Backend (Gateway). Se ele envia um fallback_url,
+      // nós obedecemos e redirecionamos. Não calculamos rotas no frontend.
+      // =========================================================================
+      
+      // AJUSTE: Lendo direto da raiz do erro
+      const redirectUrl = error?.fallback_url;
 
       if ((error?.code === 'SESSION_EXPIRED' || error?.code === 'UNAUTHORIZED') && redirectUrl) {
         window.location.href = redirectUrl;
         return new Promise(() => {}); 
       }
 
-      // Atualiza o log para a nova estrutura (usando 'details' no lugar de 'response')
+      // 4. LOG ESTRUTURADO
       console.error("[useNavigation.ts | handleRedirect] Falha na orquestração:", {
         message: error?.message,
         code: error?.code,
@@ -79,8 +85,8 @@ export function useNavigation() {
         details: error?.details
       });
 
+      // 5. PROPAGAÇÃO DO ERRO
       throw error;
-    }
       
     } finally {
       // Gerencia o loading: se abriu em nova aba, libera o botão imediatamente.

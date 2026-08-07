@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { BRL } from "@/features/financial-hub/components/shared/formatters";
 
 // Step 0: Elegibilidade
 export const eligibilitySchema = z.object({
@@ -63,8 +64,6 @@ export const vehicleSchema = z.object({
 export type EligibilityData = z.infer<typeof eligibilitySchema>;
 export type PersonalIncomeData = z.infer<typeof personalIncomeSchema>;
 export type VehicleData = z.infer<typeof vehicleSchema>;
-
-export const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 // Dicionário de motivos para usar na interface (opcional, mas ajuda a manter organizado)
 export const PURPOSE_LABELS: Record<string, string> = {

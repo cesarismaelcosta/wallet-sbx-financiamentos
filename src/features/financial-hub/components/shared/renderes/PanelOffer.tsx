@@ -1,6 +1,5 @@
 import { CreditCard } from "lucide-react";
-import { formatDate } from "./formatters";
-import { BRL } from "./formatters";
+import { BRL } from "@/features/financial-hub/components/shared/formatters";
 
 export function PanelOffer({ offer, offerDetails, eventDetails }: any) {
   if (!offer?.offer_description && !offer?.offer_id) return null;

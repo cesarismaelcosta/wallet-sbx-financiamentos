@@ -24,7 +24,6 @@
 
 import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
 import { FinancialHubLayout } from "@/features/financial-hub/components/layout/FinancialHubLayout";
-import { useProductConsult } from "@/features/financial-hub/core/contexts/FinancialHubContext";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
 import { jwtDecode } from "jwt-decode"; 
@@ -39,7 +38,6 @@ const FinanciamentosGuard = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const productConsult = useProductConsult();
 
   useEffect(() => {
     // 0. Ignora enquanto hidrata o estado inicial de auth

@@ -14,6 +14,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FinancialGatewayEntryRouteImport } from './routes/financialGatewayEntry'
 import { Route as FinancialGatewayGateRouteImport } from './routes/financialGatewayGate'
+import { Route as AccountsSigninRouteImport } from './routes/accounts.signin'
 import { Route as ApiLoginhistoryRouteImport } from './routes/api.loginhistory'
 
 const BackofficeLazyRouteImport = createFileRoute('/backoffice')()
@@ -21,7 +22,6 @@ const FinanciamentosLazyRouteImport = createFileRoute('/financiamentos')()
 const SandboxLazyRouteImport = createFileRoute('/sandbox')()
 const SbxpayLazyRouteImport = createFileRoute('/sbxpay')()
 const SegurosLazyRouteImport = createFileRoute('/seguros')()
-const AccountsSigninLazyRouteImport = createFileRoute('/accounts/signin')()
 const BackofficeIndexLazyRouteImport = createFileRoute('/backoffice/')()
 const BackofficeAlertsLazyRouteImport = createFileRoute('/backoffice/alerts')()
 const BackofficeAuditLazyRouteImport = createFileRoute('/backoffice/audit')()
@@ -102,7 +102,7 @@ const SegurosLazyRoute = SegurosLazyRouteImport.update({
   path: '/seguros',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/seguros.lazy').then((d) => d.Route))
-const AccountsSigninLazyRoute = AccountsSigninLazyRouteImport.update({
+const AccountsSigninRoute = AccountsSigninRouteImport.update({
   id: '/accounts/signin',
   path: '/accounts/signin',
   getParentRoute: () => rootRouteImport,
@@ -254,8 +254,8 @@ export interface FileRoutesByFullPath {
   '/sandbox': typeof SandboxLazyRoute
   '/sbxpay': typeof SbxpayLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
+  '/accounts/signin': typeof AccountsSigninRoute
   '/api/loginhistory': typeof ApiLoginhistoryRoute
-  '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/audit': typeof BackofficeAuditLazyRoute
   '/backoffice/configs': typeof BackofficeConfigsLazyRoute
@@ -283,8 +283,8 @@ export interface FileRoutesByTo {
   '/financiamentos': typeof FinanciamentosLazyRouteWithChildren
   '/sandbox': typeof SandboxLazyRoute
   '/seguros': typeof SegurosLazyRouteWithChildren
+  '/accounts/signin': typeof AccountsSigninRoute
   '/api/loginhistory': typeof ApiLoginhistoryRoute
-  '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/audit': typeof BackofficeAuditLazyRoute
   '/backoffice/configs': typeof BackofficeConfigsLazyRoute
@@ -315,8 +315,8 @@ export interface FileRoutesById {
   '/sandbox': typeof SandboxLazyRoute
   '/sbxpay': typeof SbxpayLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
+  '/accounts/signin': typeof AccountsSigninRoute
   '/api/loginhistory': typeof ApiLoginhistoryRoute
-  '/accounts/signin': typeof AccountsSigninLazyRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/audit': typeof BackofficeAuditLazyRoute
   '/backoffice/configs': typeof BackofficeConfigsLazyRoute
@@ -348,8 +348,8 @@ export interface FileRouteTypes {
     | '/sandbox'
     | '/sbxpay'
     | '/seguros'
-    | '/api/loginhistory'
     | '/accounts/signin'
+    | '/api/loginhistory'
     | '/backoffice/alerts'
     | '/backoffice/audit'
     | '/backoffice/configs'
@@ -377,8 +377,8 @@ export interface FileRouteTypes {
     | '/financiamentos'
     | '/sandbox'
     | '/seguros'
-    | '/api/loginhistory'
     | '/accounts/signin'
+    | '/api/loginhistory'
     | '/backoffice/alerts'
     | '/backoffice/audit'
     | '/backoffice/configs'
@@ -408,8 +408,8 @@ export interface FileRouteTypes {
     | '/sandbox'
     | '/sbxpay'
     | '/seguros'
-    | '/api/loginhistory'
     | '/accounts/signin'
+    | '/api/loginhistory'
     | '/backoffice/alerts'
     | '/backoffice/audit'
     | '/backoffice/configs'
@@ -440,8 +440,8 @@ export interface RootRouteChildren {
   SandboxLazyRoute: typeof SandboxLazyRoute
   SbxpayLazyRoute: typeof SbxpayLazyRouteWithChildren
   SegurosLazyRoute: typeof SegurosLazyRouteWithChildren
+  AccountsSigninRoute: typeof AccountsSigninRoute
   ApiLoginhistoryRoute: typeof ApiLoginhistoryRoute
-  AccountsSigninLazyRoute: typeof AccountsSigninLazyRoute
   BackofficeLoginLazyRoute: typeof BackofficeLoginLazyRoute
   SandboxHelpLazyRoute: typeof SandboxHelpLazyRoute
 }
@@ -508,7 +508,7 @@ declare module '@tanstack/react-router' {
       id: '/accounts/signin'
       path: '/accounts/signin'
       fullPath: '/accounts/signin'
-      preLoaderRoute: typeof AccountsSigninLazyRouteImport
+      preLoaderRoute: typeof AccountsSigninRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/loginhistory': {
@@ -736,8 +736,8 @@ const rootRouteChildren: RootRouteChildren = {
   SandboxLazyRoute: SandboxLazyRoute,
   SbxpayLazyRoute: SbxpayLazyRouteWithChildren,
   SegurosLazyRoute: SegurosLazyRouteWithChildren,
+  AccountsSigninRoute: AccountsSigninRoute,
   ApiLoginhistoryRoute: ApiLoginhistoryRoute,
-  AccountsSigninLazyRoute: AccountsSigninLazyRoute,
   BackofficeLoginLazyRoute: BackofficeLoginLazyRoute,
   SandboxHelpLazyRoute: SandboxHelpLazyRoute,
 }
