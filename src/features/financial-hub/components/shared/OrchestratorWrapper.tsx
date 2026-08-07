@@ -44,13 +44,12 @@ export function OrchestratorWrapper({ visitId, visitUpdateId, children }: Orches
     // Se houver erro, extraímos os dados conforme a estrutura do Gateway
     if (error) {
       // O 'error' aqui é o objeto que você deu throw no gateway.ts
-      // O 'response' já é o próprio errorData.
-      const errData = error.response || {}; 
+      const errData = error || {};
       
       return {
         success: false,
-        code: errData.code,                         // Pega o código exato enviado pelo backend
-        message: errData.message,                   // Pega a mensagem exata enviada pelo backend
+        code: errData.code || "UNKNOWN_ERROR",
+        message: errData.message || "Ocorreu um erro inesperado.",
         fallback_url: errData.fallback_url || "/"
       };
     }

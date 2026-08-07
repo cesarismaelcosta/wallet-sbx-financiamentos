@@ -63,32 +63,24 @@ export function useNavigation() {
         window.open(externalUrl, intent.target);
       }
     } catch (error: any) {
-      // =========================================================================
-      // INTERCEPTADOR DE SESSÃO
-      // A fonte da verdade é o Backend (Gateway). Se ele envia um fallback_url,
-      // nós obedecemos e redirecionamos. Não calculamos rotas no frontend.
-      // =========================================================================
-      const redirectUrl = error.response?.fallback_url;
+      // Lê direto da raiz do erro
+      const redirectUrl = error.fallback_url;
 
       if ((error?.code === 'SESSION_EXPIRED' || error?.code === 'UNAUTHORIZED') && redirectUrl) {
         window.location.href = redirectUrl;
         return new Promise(() => {}); 
       }
 
-      // 4. LOG ESTRUTURADO
-      // O erro é um objeto contendo {message, code, status, response}.
+      // Atualiza o log para a nova estrutura (usando 'details' no lugar de 'response')
       console.error("[useNavigation.ts | handleRedirect] Falha na orquestração:", {
         message: error?.message,
         code: error?.code,
         status: error?.status,
-        response: error?.response
+        details: error?.details
       });
 
-      // 5. PROPAGAÇÃO DO ERRO
-      // "Quem trata isso está acima". Repassamos o erro para o componente
-      // de tela (Step1PartnersPanel ou outro) para que ele decida se exibe
-      // Toast, altera estado de erro ou faz outra tratativa de UI.
       throw error;
+    }
       
     } finally {
       // Gerencia o loading: se abriu em nova aba, libera o botão imediatamente.
