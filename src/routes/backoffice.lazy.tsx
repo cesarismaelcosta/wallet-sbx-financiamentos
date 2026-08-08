@@ -75,6 +75,7 @@ const CONFIG_NAV = [
  * ============================================================================
  */
 function BackofficeLayout() {
+  // 1. TODOS OS HOOKS DEVEM FICAR NO TOPO, SEM NENHUM RETORNO ANTES DELES
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, signOut, session } = useAuth();
@@ -82,7 +83,6 @@ function BackofficeLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
-  // 1. TODOS OS HOOKS DEVEM FICAR NO TOPO, SEM NENHUM RETORNO ANTES DELES
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -120,14 +120,14 @@ function BackofficeLayout() {
     }
   }, [backofficeUser, isBackofficeAllowed]);
 
-  // 2. VARIÁVEIS DERIVADAS E LOGICAS APÓS OS HOOKS
+  // 2. VARIÁVEIS DERIVADAS APÓS TODOS OS HOOKS
   const isAdmin = backofficeUser?.role?.toLowerCase() === "admin";
   const hasInitialized = typeof window !== "undefined" && sessionStorage.getItem("sb_backoffice_initialized") === "true";
 
-  // 3. RETORNOS ANTECIPADOS (AGORA SEGUROS POIS JÁ PASSOU POR TODOS OS HOOKS)
+  // 3. AGORA SIM, PODEMOS DAR OS RETORNOS CONDICIONAIS (POIS TODOS OS HOOKS JÁ RODARAM)
   
-  // [COMPLIANCE]: Fail-safe de segurança durante carregamento utilizando o seu spinner exato
-  if (!isMounted || authLoading || authorizationLoading) {
+  // Loader de carregamento com Spinner Roxo
+  if (!isMounted || authLoading || authorizationLoading || (!hasInitialized && !backofficeUser && !pathname.includes("/backoffice/login"))) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
@@ -141,18 +141,6 @@ function BackofficeLayout() {
   // Bypass para a página de login
   if (pathname.includes("/backoffice/login")) {
     return <Outlet />;
-  }
-
-  // Se já foi inicializado mas ainda valida
-  if (!hasInitialized && !backofficeUser) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-        <p className="text-slate-500 font-medium text-sm">
-          Carregando informações...
-        </p>
-      </div> 
-    );
   }
 
   // Se a checagem terminou e o usuário não tem permissão

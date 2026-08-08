@@ -2219,7 +2219,10 @@ function OrchestratorConfigsBackofficePage() {
                 {loading ? (
                   <tr>
                     <td colSpan={5} className="p-10 text-center text-muted-foreground">
-                      Carregando rotas...
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        Carregando informações...
+                      </div>
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
