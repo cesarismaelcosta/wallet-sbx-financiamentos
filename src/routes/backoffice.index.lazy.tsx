@@ -43,6 +43,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useAuth } from "@/integrations/auth/AuthContext";
 
 // Conexão com Banco de Dados
 import { supabase } from "@/integrations/supabase/client";
@@ -123,7 +124,6 @@ async function getUniqueContactCount(start: Date, end: Date) {
     .lte("created_at", end.toISOString());
 
   if (error) {
-    console.error("Erro ao contar contatos:", error);
     return 0;
   }
   return count || 0;
@@ -147,6 +147,8 @@ function ChartsSkeleton() {
 // COMPONENTE PRINCIPAL
 // ===========================================================================
 function DashboardPage() {
+  const { backofficeUser } = useAuth(); // 👈 Adicionado aqui
+  
   const [simKpis, setSimKpis] = useState<SimKpis | null>(null);
   const [visitKpis, setVisitKpis] = useState<VisitKpis | null>(null);
 
@@ -164,26 +166,61 @@ function DashboardPage() {
 
   useEffect(() => {
     async function loadDropdowns() {
-      const { data: pData } = await supabase.from("partners").select("id, name").eq("is_active", true).order("name");
-      if (pData) setPartnersList(pData);
+      if (!backofficeUser) return;
 
+      // 1. Carregar Parceiros filtrados pelo escopo do usuário
+      const { data: pData } = await supabase.from("partners").select("id, name").eq("is_active", true).order("name");
+      if (pData) {
+        if (backofficeUser.role === 'viewer') {
+          const allowedPartners = backofficeUser.allowed_partners || [];
+          if (allowedPartners.includes("*")) {
+            setPartnersList(pData);
+          } else {
+            const filteredPartners = pData.filter(p => allowedPartners.includes(String(p.id)));
+            setPartnersList(filteredPartners);
+          }
+        } else {
+          setPartnersList(pData);
+        }
+      }
+
+      // 2. Carregar Produtos filtrados pelo escopo do usuário
       const { data: prData } = await supabase.from("product_types").select("id, name").order("name");
-      if (prData) setProductsList(prData);
+      if (prData) {
+        if (backofficeUser.role === 'viewer') {
+          const allowedProducts = backofficeUser.allowed_products || [];
+          if (allowedProducts.includes("*")) {
+            setProductsList(prData);
+          } else {
+            const filteredProducts = prData.filter(pr => allowedProducts.includes(String(pr.id)));
+            setProductsList(filteredProducts);
+          }
+        } else {
+          setProductsList(prData);
+        }
+      }
     }
     loadDropdowns();
-  }, []);
+  }, [backofficeUser]);
 
   useEffect(() => {
+    if (!backofficeUser) return; // Só dispara se o usuário estiver carregado
+    
     const timeoutId = setTimeout(() => {
       load();
     }, 400);
 
     return () => clearTimeout(timeoutId);
-  }, [dateRange, customRange, selectedPartners, selectedProducts]);
+  }, [dateRange, customRange, selectedPartners, selectedProducts, backofficeUser]);
 
   async function load() {
     setLoading(true);
     setError(null);
+
+    if (!backofficeUser) {
+      setLoading(false);
+      return;
+    }
 
     let currentProducts = productsList;
     if (currentProducts.length === 0) {
@@ -208,7 +245,7 @@ function DashboardPage() {
       end.setHours(23, 59, 59, 999);
     }
 
-    // 2) Disparo das Queries
+    // 2) Disparo das Queries Base
     let querySim = supabase
       .from("simulations")
       .select(
@@ -236,6 +273,42 @@ function DashboardPage() {
       .lte("created_at", end.toISOString())
       .limit(10000);
 
+    // ============================================================================
+    // RESTRIÇÕES DE ESCOPO POR USUÁRIO (RBAC - Viewer)
+    // ============================================================================
+    if (backofficeUser.role === 'viewer') {
+      const allowedPartners = backofficeUser.allowed_partners || [];
+      const allowedProducts = backofficeUser.allowed_products || [];
+
+      // 1. Validação de Parceiros Permitidos
+      if (!allowedPartners.includes("*")) {
+        if (allowedPartners.length === 0) {
+          setSimKpis({ today: 0, week: 0, month: 0, monthVolume: 0, ticket: 0, uniqueClients: 0, byStatus: [], byProduct: [], byPartner: [], byDay: [] });
+          setVisitKpis({ total: 0, unique: 0, redirects: 0, simulates: 0, contacts: 0, conversionRate: 0, bySource: [], byAction: [], byProduct: [], byDay: [] });
+          setLoading(false);
+          return;
+        }
+        const partnerQueryIds = allowedPartners.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
+        querySim = querySim.in("partner_id", partnerQueryIds);
+        queryVis = queryVis.in("partner_id", partnerQueryIds);
+      }
+
+      // 2. Validação de Produtos Permitidos
+      if (!allowedProducts.includes("*")) {
+        if (allowedProducts.length === 0) {
+          setSimKpis({ today: 0, week: 0, month: 0, monthVolume: 0, ticket: 0, uniqueClients: 0, byStatus: [], byProduct: [], byPartner: [], byDay: [] });
+          setVisitKpis({ total: 0, unique: 0, redirects: 0, simulates: 0, contacts: 0, conversionRate: 0, bySource: [], byAction: [], byProduct: [], byDay: [] });
+          setLoading(false);
+          return;
+        }
+        const productQueryIds = allowedProducts.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
+        querySim = querySim.in("product_id", productQueryIds);
+        queryVis = queryVis.in("product_id", productQueryIds);
+      }
+    }
+    // ============================================================================
+
+    // Filtros de seleção manual do usuário na tela
     if (selectedPartners.length > 0) {
       querySim = querySim.in("partner_id", selectedPartners);
       queryVis = queryVis.in("partner_id", selectedPartners);
@@ -261,9 +334,7 @@ function DashboardPage() {
     const todayStart = startOfDay(now).toISOString();
     const weekStart = startOfDay(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000)).toISOString();
 
-    // ========================================================================
-    // PROCESSAMENTO DE SIMULAÇÕES
-    // ========================================================================
+    // Restante do processamento de KPIs...
     const simToday = simRows.filter((r) => (r.created_at ?? "") >= todayStart).length;
     const simWeek = simRows.filter((r) => (r.created_at ?? "") >= weekStart).length;
     const simMonth = simRows.length;
@@ -305,9 +376,6 @@ function DashboardPage() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
-    // ========================================================================
-    // PROCESSAMENTO DA LINHA DO TEMPO (SIMULAÇÕES E VISITAS JUNTAS)
-    // ========================================================================
     const simDayMap = new Map<string, number>();
     const visDayMap = new Map<string, number>();
 
@@ -343,9 +411,6 @@ function DashboardPage() {
       byDay: simByDay,
     });
 
-    // ========================================================================
-    // PROCESSAMENTO DE VISITAS E CONTATOS
-    // ========================================================================
     const totalVisits = visRows.length;
     const uniqueDocs = new Set(
       visRows
@@ -393,18 +458,18 @@ function DashboardPage() {
       .slice(0, 20);
     const visByDay = Array.from(visDayMap.entries()).map(([day, count]) => ({ day, count }));
 
-    setVisitKpis({
-      total: totalVisits,
-      unique: uniqueDocs.size > 0 ? uniqueDocs.size : totalVisits,
-      redirects: actionMap.get("REDIRECT") || 0,
-      simulates: actionMap.get("SIMULATE") || 0,
-      contacts: contactsCount,
-      conversionRate: totalVisits > 0 ? ((actionMap.get("SIMULATE") || 0) / totalVisits) * 100 : 0,
-      bySource,
-      byAction,
-      byProduct: visByProduct,
-      byDay: visByDay,
-    });
+      setVisitKpis({
+        total: totalVisits,
+        unique: uniqueDocs.size > 0 ? uniqueDocs.size : totalVisits,
+        redirects: actionMap.get("REDIRECT") || 0,
+        simulates: actionMap.get("SIMULATE") || 0,
+        contacts: contactsCount,
+        conversionRate: totalVisits > 0 ? ((actionMap.get("SIMULATE") || 0) / totalVisits) * 100 : 0,
+        bySource,
+        byAction,
+        byProduct: visByProduct,
+        byDay: visByDay,
+      });
 
     setLoading(false);
   }

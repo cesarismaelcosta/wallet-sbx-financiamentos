@@ -7,11 +7,11 @@
  * ============================================================================
  * [DIRETRIZES DE ARQUITETURA E SEGURANÇA]:
  * 1. Auth Guard Integrado: Intercepta o ciclo de vida para validar tokens e 
- *    permissões administrativas estritas antes de renderizar sub-rotas (`Outlet`).
+ *     permissões administrativas estritas antes de renderizar sub-rotas (`Outlet`).
  * 2. Blindagem contra Loops: Previne redirecionamentos cíclicos caso a rota 
- *    ativa seja a página de autenticação (`/backoffice/login`).
+ *     ativa seja a página de autenticação (`/backoffice/login`).
  * 3. Layout Adaptativo: Suporta barra de navegação lateral persistente em desktop 
- *    e gaveta lateral deslizante (*Sheet*) para dispositivos móveis.
+ *     e gaveta lateral deslizante (*Sheet*) para dispositivos móveis.
  * ============================================================================
  * 
  * @author César Ismael Pereira da Costa
@@ -81,6 +81,9 @@ function BackofficeLayout() {
   const navigate = useNavigate();
   const { authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, signOut, session } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Valida se o usuário logado é Administrador
+  const isAdmin = backofficeUser?.role?.toLowerCase() === "admin";
 
   /**
    * Efeito para aplicar classe de escopo global no body do Backoffice
@@ -181,29 +184,30 @@ function BackofficeLayout() {
           </p>
           {OPERACAO_NAV.map(renderNavItem)}
         </div>
-        <div>
-          <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Segurança
-          </p>
-          {SEGURANCA_NAV.map(renderNavItem)}
-        </div>
-        <div>
-          <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Configuração
-          </p>
-          {CONFIG_NAV.map(renderNavItem)}
-        </div>
+
+        {/* Exibe Segurança apenas se for Administrador */}
+        {isAdmin && (
+          <div>
+            <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Segurança
+            </p>
+            {SEGURANCA_NAV.map(renderNavItem)}
+          </div>
+        )}
+
+        {/* Exibe Configuração apenas se for Administrador */}
+        {isAdmin && (
+          <div>
+            <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Configuração
+            </p>
+            {CONFIG_NAV.map(renderNavItem)}
+          </div>
+        )}
       </nav>
 
       {/* Perfil e Rodapé da Sidebar */}
       <div className="border-t border-border p-3">
-        <Link
-          to="/backoffice"
-          onClick={() => setMobileMenuOpen(false)}
-          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-        >
-          <LifeBuoy className="h-4 w-4" /> Ajuda & Suporte
-        </Link>
         <div className="mt-2 flex items-center gap-3 rounded-lg bg-accent/40 px-3 py-2.5">
           {backofficeUser.avatar ? (
             <img

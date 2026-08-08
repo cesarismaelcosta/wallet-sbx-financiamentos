@@ -108,14 +108,42 @@ function SimulationsPage() {
 
   useEffect(() => {
     async function loadDropdowns() {
-      const { data: pData } = await supabase.from('partners').select('id, name').eq('is_active', true).order('name');
-      if (pData) setPartnersList(pData);
+      if (!backofficeUser) return;
 
+      // 1. Carrega Parceiros e aplica o escopo RBAC se for viewer
+      const { data: pData } = await supabase.from('partners').select('id, name').eq('is_active', true).order('name');
+      if (pData) {
+        if (backofficeUser.role === 'viewer') {
+          const allowedPartners = backofficeUser.allowed_partners || [];
+          if (allowedPartners.includes("*")) {
+            setPartnersList(pData);
+          } else {
+            const filteredPartners = pData.filter(p => allowedPartners.includes(String(p.id)));
+            setPartnersList(filteredPartners);
+          }
+        } else {
+          setPartnersList(pData);
+        }
+      }
+
+      // 2. Carrega Produtos e aplica o escopo RBAC se for viewer
       const { data: prData } = await supabase.from('product_types').select('id, name').order('name');
-      if (prData) setProductsList(prData);
+      if (prData) {
+        if (backofficeUser.role === 'viewer') {
+          const allowedProducts = backofficeUser.allowed_products || [];
+          if (allowedProducts.includes("*")) {
+            setProductsList(prData);
+          } else {
+            const filteredProducts = prData.filter(pr => allowedProducts.includes(String(pr.id)));
+            setProductsList(filteredProducts);
+          }
+        } else {
+          setProductsList(prData);
+        }
+      }
     }
     loadDropdowns();
-  }, []);
+  }, [backofficeUser]);
 
   // 1. Estados da Paginação Real
   const [page, setPage] = useState(0);
@@ -209,8 +237,6 @@ function SimulationsPage() {
       if (simError) {
         throw simError;
       }
-
-      console.log("✅ [DEBUG] Dados carregados com sucesso:", simData?.length);
 
       if (simData) {
         setRows(simData);

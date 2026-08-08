@@ -90,16 +90,33 @@ function ConsultsPage() {
 
   const printRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+useEffect(() => {
     async function loadDropdowns() {
-      const { data: pData } = await supabase.from("partners").select("id, name").eq("is_active", true).order("name");
-      if (pData) setPartnersList(pData);
+      if (!backofficeUser) return;
 
-      const { data: prData } = await supabase.from("product_types").select("id, name").order("name");
-      if (prData) setProductsList(prData);
+      const { data: pData } = await supabase.from('partners').select('id, name').eq('is_active', true).order('name');
+      const { data: prData } = await supabase.from('product_types').select('id, name').order('name');
+
+      if (pData) {
+        if (backofficeUser.role === 'viewer' && !backofficeUser.allowed_partners?.includes("*")) {
+          const allowed = backofficeUser.allowed_partners || [];
+          setPartnersList(pData.filter(p => allowed.includes(String(p.id))));
+        } else {
+          setPartnersList(pData);
+        }
+      }
+
+      if (prData) {
+        if (backofficeUser.role === 'viewer' && !backofficeUser.allowed_products?.includes("*")) {
+          const allowed = backofficeUser.allowed_products || [];
+          setProductsList(prData.filter(pr => allowed.includes(String(pr.id))));
+        } else {
+          setProductsList(prData);
+        }
+      }
     }
     loadDropdowns();
-  }, []);
+  }, [backofficeUser]);
 
   // 1. Estados da Paginação Real
   const [page, setPage] = useState(0);
@@ -149,28 +166,24 @@ function ConsultsPage() {
         const allowedPartners = backofficeUser.allowed_partners || [];
         const allowedProducts = backofficeUser.allowed_products || [];
 
-        // 1. Validação de Parceiros Permitidos
+        // 1. Validação de Parceiros
         if (!allowedPartners.includes("*")) {
           if (allowedPartners.length === 0) {
-            setRows([]);
-            setTotalPages(0);
-            setLoading(false);
-            return;
+            query = query.eq("partner_id", -1); // Bloqueia tudo
+          } else {
+            const partnerQueryIds = allowedPartners.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
+            query = query.in("partner_id", partnerQueryIds);
           }
-          const partnerQueryIds = allowedPartners.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
-          query = query.in("partner_id", partnerQueryIds);
         }
 
-        // 2. Validação de Produtos Permitidos
+        // 2. Validação de Produtos
         if (!allowedProducts.includes("*")) {
           if (allowedProducts.length === 0) {
-            setRows([]);
-            setTotalPages(0);
-            setLoading(false);
-            return;
+            query = query.eq("product_id", -1); // Bloqueia tudo
+          } else {
+            const productQueryIds = allowedProducts.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
+            query = query.in("product_id", productQueryIds);
           }
-          const productQueryIds = allowedProducts.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
-          query = query.in("product_id", productQueryIds);
         }
       }
       // ============================================================================
@@ -235,7 +248,6 @@ function ConsultsPage() {
         setRows(normalized);
       }
     } catch (err: any) {
-      console.error("Erro ao carregar:", err);
       toast.error(err?.message ?? "Falha ao carregar listagem.");
       setRows([]);
     } finally {
@@ -299,7 +311,6 @@ function ConsultsPage() {
         });
       }
     } catch (e) {
-      console.error("Erro ao carregar detalhes completos da visita:", e);
     } finally {
       setDetailLoading(false);
     }
