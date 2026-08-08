@@ -78,7 +78,8 @@ export function Step1PartnersPanel() {
             />
           </div>
           <div>
-            <h2 className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-slate-400 leading-tight">
+            {/* Oculto no mobile (hidden), visível de sm para cima (sm:block) */}
+            <h2 className="hidden sm:block text-xs font-bold uppercase tracking-widest text-slate-400 leading-tight">
               Seguradoras
             </h2>
           </div>

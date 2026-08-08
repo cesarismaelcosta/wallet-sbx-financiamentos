@@ -348,7 +348,13 @@ export function sbXPAYHome() {
               </button>
             ) : (
               <button
-                onClick={() => navigate({ to: "/accounts/signin" })}
+                onClick={() => navigate({ 
+                  to: "/accounts/signin", 
+                  search: { 
+                    redirect_uri: window.location.pathname + window.location.search,
+                    env: undefined 
+                  } as any 
+                })}
                 className={`flex items-center gap-2 ${ghostBtn}`}
               >
                 Entrar <LogIn className="w-3 h-3" />
@@ -1004,7 +1010,13 @@ export function sbXPAYHome() {
           </button>
         ) : (
           <button
-            onClick={() => navigate({ to: "/accounts/signin" })}
+            onClick={() => navigate({ 
+              to: "/accounts/signin", 
+              search: { 
+                redirect_uri: window.location.pathname + window.location.search,
+                env: undefined 
+              } as any 
+            })}
             className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[60px] gap-1"
           >
             <LogIn className="w-5 h-5" strokeWidth={1.5} />

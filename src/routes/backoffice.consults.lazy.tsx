@@ -319,25 +319,16 @@ function ConsultsPage() {
     setActiveConsult(row);
 
     try {
-      const { data: fullData, error } = await supabase
-        .from("visits")
-        .select(
-          [
-            // Campos explícitos da tabela visits
-            "id, created_at, action, utm_source, utm_campaign, country, state, city, ip_address, operating_system, device_type, origin_url, target_url, raw_payload, partner_id, product_id",
-            "product_types(name)",
-            "partners(name, logo_url)",
-            
-            /* Payload para PanelEntity (Removido 'address' pois faz parte de entity_details) */
-            "visit_entities(id, name, document, phone, email, birth_date, gender, entity_type, entity_details)",
-            
-            /* Payload para PanelOffer e PanelSeller */
-            "visit_offers(id, visit_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, offer_id, offer_description, offer_value, category_id, category_types(name))",
-            
-            /* Payload para PanelAcceptedConsents (Explícito) */
-            "visit_consents(id, consent_id, accepted, accepted_at, created_at, ip_address, country, state, city, operating_system, device_type, origin_details, page_snapshot)"
-          ].join(",")
-        )
+      const { data: fullData, error } = await (supabase
+        .from("visits") as any)
+        .select(`
+          id, created_at, action, utm_source, utm_campaign, country, state, city, ip_address, operating_system, device_type, origin_url, target_url, raw_payload, partner_id, product_id,
+          product_types(name),
+          partners(name, logo_url),
+          visit_entities(id, name, document, phone, email, birth_date, gender, entity_type, entity_details),
+          visit_offers(id, visit_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, offer_id, offer_description, offer_value, category_id, category_types(name)),
+          visit_consents(id, consent_id, accepted, accepted_at, created_at, ip_address, country, state, city, operating_system, device_type, origin_details, page_snapshot)
+        `)
         .eq("id", row.id)
         .single();
 
@@ -376,32 +367,40 @@ function ConsultsPage() {
 
   const statusOptions = ["Qualificadas", "VISITA", "SIMULAÇÃO", "CONSULTA", "PARCEIRO"];
 
-  const totals = useMemo(() => {
-    const t = { total: rows.length, simulacao: 0, consulta: 0, siteParceiro: 0 };
-    rows.forEach((r) => {
-      const s = getVisitStatus(r);
-      if (s === "SIMULAÇÃO") t.simulacao++;
-      else if (s === "CONSULTA") t.consulta++;
-      else if (s === "PARCEIRO") t.siteParceiro++;
+  const handleSelectStatus = (status: string) => {
+    if (status === "Todas") {
+      setSelectedStatus([]);
+      return;
+    }
+    setSelectedStatus((prev) => {
+      const current = Array.isArray(prev) ? prev : [];
+      if (status === "Qualificadas") {
+        return current.includes("Qualificadas") ? [] : ["Qualificadas"];
+      }
+      const filteredPrev = current.filter((s) => s !== "Qualificadas");
+      return filteredPrev.includes(status) ? filteredPrev.filter((s) => s !== status) : [...filteredPrev, status];
     });
-    return t;
-  }, [rows]);
+  };
 
-  // filtro local lida agora apenas com a "Situação" (Status)
-  const filtered = useMemo(() => {
-    return rows.filter((r) => {
+  const { filtered, totals } = useMemo(() => {
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const safeStatus = Array.isArray(selectedStatus) ? selectedStatus : [];
+
+    const t = { total: safeRows.length, simulacao: 0, consulta: 0, siteParceiro: 0 };
+
+    const resultFiltered = safeRows.filter((r) => {
       const statusName = getVisitStatus(r);
 
-      let matchStatus = true;
-      if (selectedStatus.length > 0) {
-        if (selectedStatus.includes("Qualificadas")) {
-          matchStatus = statusName !== "VISITA";
-        } else {
-          matchStatus = selectedStatus.includes(statusName);
-        }
-      }
-      return matchStatus;
+      if (statusName === "SIMULAÇÃO") t.simulacao++;
+      else if (statusName === "CONSULTA") t.consulta++;
+      else if (statusName === "PARCEIRO") t.siteParceiro++;
+
+      if (safeStatus.length === 0) return true;
+      if (safeStatus.includes("Qualificadas")) return statusName !== "VISITA";
+      return safeStatus.includes(statusName);
     });
+
+    return { filtered: resultFiltered, totals: t };
   }, [rows, selectedStatus]);
 
   const handleExportExcel = async () => {

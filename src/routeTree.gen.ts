@@ -12,7 +12,6 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as FinancialGatewayEntryRouteImport } from './routes/financialGatewayEntry'
 import { Route as FinancialGatewayGateRouteImport } from './routes/financialGatewayGate'
 import { Route as AccountsSigninRouteImport } from './routes/accounts.signin'
 import { Route as ApiLoginhistoryRouteImport } from './routes/api.loginhistory'
@@ -70,11 +69,6 @@ const BackofficeLazyRoute = BackofficeLazyRouteImport.update({
   path: '/backoffice',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/backoffice.lazy').then((d) => d.Route))
-const FinancialGatewayEntryRoute = FinancialGatewayEntryRouteImport.update({
-  id: '/financialGatewayEntry',
-  path: '/financialGatewayEntry',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const FinancialGatewayGateRoute = FinancialGatewayGateRouteImport.update({
   id: '/financialGatewayGate',
   path: '/financialGatewayGate',
@@ -247,7 +241,6 @@ const SegurosAutoLazyRoute = SegurosAutoLazyRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/financialGatewayEntry': typeof FinancialGatewayEntryRoute
   '/financialGatewayGate': typeof FinancialGatewayGateRoute
   '/backoffice': typeof BackofficeLazyRouteWithChildren
   '/financiamentos': typeof FinanciamentosLazyRouteWithChildren
@@ -278,7 +271,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/financialGatewayEntry': typeof FinancialGatewayEntryRoute
   '/financialGatewayGate': typeof FinancialGatewayGateRoute
   '/financiamentos': typeof FinanciamentosLazyRouteWithChildren
   '/sandbox': typeof SandboxLazyRoute
@@ -308,7 +300,6 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/financialGatewayEntry': typeof FinancialGatewayEntryRoute
   '/financialGatewayGate': typeof FinancialGatewayGateRoute
   '/backoffice': typeof BackofficeLazyRouteWithChildren
   '/financiamentos': typeof FinanciamentosLazyRouteWithChildren
@@ -341,7 +332,6 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/financialGatewayEntry'
     | '/financialGatewayGate'
     | '/backoffice'
     | '/financiamentos'
@@ -372,7 +362,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/financialGatewayEntry'
     | '/financialGatewayGate'
     | '/financiamentos'
     | '/sandbox'
@@ -401,7 +390,6 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/financialGatewayEntry'
     | '/financialGatewayGate'
     | '/backoffice'
     | '/financiamentos'
@@ -433,7 +421,6 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  FinancialGatewayEntryRoute: typeof FinancialGatewayEntryRoute
   FinancialGatewayGateRoute: typeof FinancialGatewayGateRoute
   BackofficeLazyRoute: typeof BackofficeLazyRouteWithChildren
   FinanciamentosLazyRoute: typeof FinanciamentosLazyRouteWithChildren
@@ -460,13 +447,6 @@ declare module '@tanstack/react-router' {
       path: '/backoffice'
       fullPath: '/backoffice'
       preLoaderRoute: typeof BackofficeLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/financialGatewayEntry': {
-      id: '/financialGatewayEntry'
-      path: '/financialGatewayEntry'
-      fullPath: '/financialGatewayEntry'
-      preLoaderRoute: typeof FinancialGatewayEntryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/financialGatewayGate': {
@@ -729,7 +709,6 @@ const SegurosLazyRouteWithChildren = SegurosLazyRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  FinancialGatewayEntryRoute: FinancialGatewayEntryRoute,
   FinancialGatewayGateRoute: FinancialGatewayGateRoute,
   BackofficeLazyRoute: BackofficeLazyRouteWithChildren,
   FinanciamentosLazyRoute: FinanciamentosLazyRouteWithChildren,
