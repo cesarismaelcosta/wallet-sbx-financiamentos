@@ -392,6 +392,8 @@ export function sbXPAYHome() {
                     <img
                       src="/assets/home/conta.webp"
                       alt="Segurança sbX Wallet"
+                      fetchpriority="high"
+                      decoding="async"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
                   </div>
@@ -475,6 +477,8 @@ export function sbXPAYHome() {
                 <img
                   src="/assets/home/conta.webp"
                   alt="Segurança sbX Wallet"
+                  fetchpriority="high"
+                  decoding="async"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
               </div>
@@ -496,6 +500,8 @@ export function sbXPAYHome() {
                     <img
                       src="/assets/home/cartao.webp"
                       alt="Cartão"
+                      fetchpriority="high"
+                      decoding="async"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
                   </div>
@@ -559,6 +565,8 @@ export function sbXPAYHome() {
                 <img
                   src="/assets/home/cartao.webp"
                   alt="Cartão"
+                  fetchpriority="high"
+                  decoding="async"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
               </div>
@@ -580,6 +588,8 @@ export function sbXPAYHome() {
                     <img
                       src="/assets/home/financiamentoveiculos.webp"
                       alt="Veículos"
+                      loading="lazy"
+                      decoding="async"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
                   </div>
@@ -643,11 +653,13 @@ export function sbXPAYHome() {
                     />
                   </svg>
                 </div>
-                <img
-                  src="/assets/home/financiamentoveiculos.webp"
-                  alt="Veículos"
-                  className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
-                />
+<img
+  src="/assets/home/financiamentoveiculos.webp"
+  alt="Veículos"
+  loading="lazy"
+  decoding="async"
+  className="mix-blend-multiply w-full h-auto object-contain relative"
+/>
               </div>
             </div>
           </div>
@@ -707,6 +719,8 @@ export function sbXPAYHome() {
                 <img
                   src="/assets/home/financiamentoimoveis.webp"
                   alt="Imóveis"
+                  loading="lazy"
+                  decoding="async"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
               </div>
@@ -771,6 +785,8 @@ export function sbXPAYHome() {
                 <img
                   src="/assets/home/carhomeequity.webp"
                   alt="Rentabilize Ativos"
+                  loading="lazy"
+                  decoding="async"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
               </div>
@@ -794,6 +810,7 @@ export function sbXPAYHome() {
                       alt="Floor Plan"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
+                    
                   </div>
                 </div>
 
@@ -832,6 +849,8 @@ export function sbXPAYHome() {
                 <img
                   src="/assets/home/floorplan.webp"
                   alt="Floor Plan"
+                  loading="lazy"
+                  decoding="async"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
               </div>
@@ -853,6 +872,8 @@ export function sbXPAYHome() {
                     <img
                       src="/assets/home/seguros.webp"
                       alt="Proteção sbX"
+                      loading="lazy"
+                      decoding="async"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
                   </div>
@@ -905,6 +926,8 @@ export function sbXPAYHome() {
                 <img
                   src="/assets/home/seguros.webp"
                   alt="Proteção sbX"
+                  loading="lazy"
+                  decoding="async"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
               </div>
@@ -920,6 +943,8 @@ export function sbXPAYHome() {
             <img
               src="/assets/home/sbxpay_p_sem_borda.png"
               alt="sbXPAY"
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover scale-100"
             />
           </div>
