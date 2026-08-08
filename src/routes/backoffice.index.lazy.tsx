@@ -2,27 +2,22 @@
  * ============================================================================
  * @fileoverview Wallet sbX Financiamentos — Dashboard do Backoffice
  * @route /backoffice
- * * @description
+ *
+ * @description
  * Esta página atua como o centro nervoso operacional do Backoffice. Ela carrega,
  * processa e renderiza dados consolidados sobre as operações de crédito e
  * interações de topo de funil (visitas) geradas pelo Financial Hub.
- * * @architecture
- * - A busca de dados (fetch) ocorre diretamente via cliente Supabase (RLS protegido).
- * - Utilizamos processamento e agregação client-side (no navegador) baseados em `Map`
- * e `reduce` para calcular os KPIs. Isso é performático para janelas de até 10.000
- * linhas (ex: últimos 30 dias).
- * - A renderização gráfica é feita usando a biblioteca Recharts envelopada pelos
- * componentes padronizados do shadcn/ui.
- * * @dependencies
- * - @tanstack/react-router (Roteamento)
- * - recharts (Visualização de dados)
- * - lucide-react (Iconografia)
- * - @supabase/supabase-js (Banco de dados/BaaS)
+ * 
+ * Arquitetura otimizada:
+ * - Filtros avançados com seleção múltipla (parceiros e produtos).
+ * - Scroll robusto em popovers (evita conflito com o scroll da página).
+ * - Responsividade mobile total via Sheet com seletor de período e calendário.
+ * - Lazy Loading dos gráficos via Recharts (retirado do bundle inicial).
  * ============================================================================
  */
 
-import { createLazyFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createLazyFileRoute } from "@tanstack/react-router";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { DateRange } from "react-day-picker";
 
 // Ícones UI
@@ -42,19 +37,21 @@ import {
   Briefcase,
 } from "lucide-react";
 
-// Motor Gráfico
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, LabelList } from "recharts";
-
 // Componentes da Interface (Design System)
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 // Conexão com Banco de Dados
 import { supabase } from "@/integrations/supabase/client";
+
+// ============================================================================
+// LAZY LOADING DOS GRÁFICOS (FORA DO BUNDLE INICIAL)
+// ============================================================================
+const ChartsSimulationModule = lazy(() => import("@/features/financial-hub/components/shared/renderes/ChartsSimulation"));
+const ChartsTrafficModule = lazy(() => import("@/features/financial-hub/components/shared/renderes/ChartsTraffic"));
 
 export const Route = createLazyFileRoute("/backoffice/")({
   component: DashboardPage,
@@ -63,23 +60,6 @@ export const Route = createLazyFileRoute("/backoffice/")({
 // ============================================================================
 // HELPERS E UTILITÁRIOS
 // ============================================================================
-
-/**
- * Paleta de cores distribuída em array para as barras dos gráficos horizontais.
- * Os gráficos rodam este array usando módulo matemático (`i % barColors.length`)
- * para garantir que as cores ciclem infinitamente caso existam muitas categorias.
- */
-const barColors = [
-  "#600082",
-  "#BE00FF",
-  "#E299FF", // Tons primários da marca
-  "#730070",
-  "#E300DD",
-  "#FF9EFF", // Tons secundários
-  "#475569",
-  "#94a3b8",
-  "#cbd5e1", // Tons neutros/cinzas
-];
 
 /**
  * Formata valores numéricos brutos para o padrão monetário brasileiro (Real).
@@ -133,10 +113,6 @@ type VisitKpis = {
   byDay: Array<{ day: string; count: number }>;
 };
 
-const defaultChartConfig = {
-  count: { label: "Quantidade", color: "var(--primary)" },
-} satisfies ChartConfig;
-
 // Função para buscar apenas o count de contatos
 async function getUniqueContactCount(start: Date, end: Date) {
   const { count, error } = await supabase
@@ -151,6 +127,20 @@ async function getUniqueContactCount(start: Date, end: Date) {
     return 0;
   }
   return count || 0;
+}
+
+// Skeleton para exibição enquanto os gráficos carregam via Lazy Load
+function ChartsSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      <div className="rounded-2xl border bg-card p-5 h-[240px] bg-slate-100/50" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="rounded-2xl border bg-card p-5 h-[240px] bg-slate-100/50" />
+        <div className="rounded-2xl border bg-card p-5 h-[240px] bg-slate-100/50" />
+        <div className="rounded-2xl border bg-card p-5 h-[240px] bg-slate-100/50" />
+      </div>
+    </div>
+  );
 }
 
 // ===========================================================================
@@ -195,7 +185,6 @@ function DashboardPage() {
     setLoading(true);
     setError(null);
 
-    // Garante que temos a lista de produtos carregada para fazer o mapeamento manual do gráfico
     let currentProducts = productsList;
     if (currentProducts.length === 0) {
       const { data } = await supabase.from("product_types").select("id, name");
@@ -471,7 +460,6 @@ function DashboardPage() {
 
   const visitCards = visitKpis
     ? [
-        // Alterado o formato de exibição do primeiro Card (Total / Únicos)
         {
           label: "Total de Acessos",
           subLabel: periodLabel,
@@ -544,6 +532,8 @@ function DashboardPage() {
 
           {/* Filtros em linha para Desktop */}
           <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:gap-2">
+            
+            {/* Filtro de Período */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
@@ -555,8 +545,8 @@ function DashboardPage() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[calc(100vw-2rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
-                <Command>
-                  <CommandList>
+                <Command className="bg-transparent">
+                  <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
                     <CommandGroup>
                       <CommandItem onSelect={() => setDateRange("7")} className="text-[#d946ef] cursor-pointer">Últimos 7 dias</CommandItem>
                       <CommandItem onSelect={() => setDateRange("15")} className="text-[#d946ef] cursor-pointer">Últimos 15 dias</CommandItem>
@@ -588,24 +578,20 @@ function DashboardPage() {
               </PopoverContent>
             </Popover>
 
+            {/* Filtro de Parceiro (Múltipla Escolha) */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"
-                >
+                <Button variant="outline" className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
                   <span className="truncate">{selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}</span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
-                <Command>
-                  <CommandList>
+                <Command className="bg-transparent">
+                  <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
                     <CommandGroup>
                       <CommandItem onSelect={() => setSelectedPartners([])} className="text-[#d946ef] cursor-pointer">
-                        <div
-                          className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
-                        >
+                        <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
                           {selectedPartners.length === 0 && "✓"}
                         </div>
                         Todos Parceiros
@@ -624,9 +610,7 @@ function DashboardPage() {
                             }}
                             className="text-[#d946ef] cursor-pointer"
                           >
-                            <div
-                              className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
-                            >
+                            <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
                               {isSelected && "✓"}
                             </div>
                             {p.name}
@@ -639,24 +623,20 @@ function DashboardPage() {
               </PopoverContent>
             </Popover>
 
+            {/* Filtro de Produto (Múltipla Escolha) */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"
-                >
+                <Button variant="outline" className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
                   <span className="truncate">{selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}</span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
-                <Command>
-                  <CommandList>
+                <Command className="bg-transparent">
+                  <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
                     <CommandGroup>
                       <CommandItem onSelect={() => setSelectedProducts([])} className="text-[#d946ef] cursor-pointer">
-                        <div
-                          className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
-                        >
+                        <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
                           {selectedProducts.length === 0 && "✓"}
                         </div>
                         Todos Produtos
@@ -675,9 +655,7 @@ function DashboardPage() {
                             }}
                             className="text-[#d946ef] cursor-pointer"
                           >
-                            <div
-                              className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
-                            >
+                            <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
                               {isSelected && "✓"}
                             </div>
                             {p.name}
@@ -689,6 +667,7 @@ function DashboardPage() {
                 </Command>
               </PopoverContent>
             </Popover>
+
           </div>
         </div>
 
@@ -740,137 +719,15 @@ function DashboardPage() {
               ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-4">
-          <div className="rounded-2xl border bg-card p-5">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-medium">Evolução de Simulações Diárias</h3>
-                <p className="text-xs text-muted-foreground">{periodLabel}</p>
-              </div>
-            </div>
-            {loading || !simKpis ? (
-              <div className="h-[240px] flex items-center justify-center text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Carregando...
-              </div>
-            ) : (
-              <ChartContainer config={defaultChartConfig} className="h-[240px] w-full">
-                <BarChart data={simDailyData} margin={{ top: 24, right: 0, left: -24, bottom: 0 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis
-                    dataKey="day"
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis hide />
-                  <ChartTooltip cursor={{ fill: "var(--muted)", opacity: 0.4 }} content={<ChartTooltipContent />} />
-                  <Bar dataKey="count" fill="var(--primary)" radius={[4, 4, 0, 0]}>
-                    <LabelList
-                      dataKey="count"
-                      position="top"
-                      offset={6}
-                      className="fill-foreground"
-                      fontSize={11}
-                      fontWeight={600}
-                      formatter={(v: any) => (v > 0 ? v : "")}
-                    />
-                  </Bar>
-                </BarChart>
-              </ChartContainer>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {[
-            { title: "Status da Proposta", data: simKpis?.byStatus },
-            { title: "Por Produto", data: simKpis?.byProduct },
-            { title: "Por Parceiro", data: simKpis?.byPartner },
-          ].map((chart, idx) => (
-            <div key={chart.title} className="rounded-2xl border bg-card p-5">
-              <div className="mb-4">
-                <h3 className="text-sm font-medium">{chart.title}</h3>
-                <p className="text-xs text-muted-foreground">{periodLabel}</p>
-              </div>
-              {loading || !chart.data ? (
-                <div className="h-[240px] flex items-center justify-center text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Carregando...
-                </div>
-              ) : chart.data.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum dado no período.</p>
-              ) : (
-                <ChartContainer config={defaultChartConfig} className="h-[240px] w-full">
-                  <BarChart data={chart.data} layout="vertical" margin={{ top: 0, right: 60, left: 0, bottom: 0 }}>
-                    <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis type="number" hide />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                      width={110}
-                    />
-                    <ChartTooltip
-                      cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-                      content={
-                        <ChartTooltipContent
-                          formatter={(value, _name, item) => (
-                            <div className="flex flex-col">
-                              <span>{value} simulações</span>
-                              <span className="text-xs text-muted-foreground">{BRL(item.payload.volume)}</span>
-                            </div>
-                          )}
-                        />
-                      }
-                    />
-                    <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={28}>
-                      {chart.data.map((_, i) => (
-                        <Cell key={i} fill={barColors[(i + idx * 3) % barColors.length]} />
-                      ))}
-                      <LabelList
-                        dataKey="count"
-                        position="right"
-                        content={(props: any) => {
-                          const item = chart.data![props.index];
-                          if (!item) return null;
-                          const cx = Number(props.x) + Number(props.width) + 8;
-                          const cy = Number(props.y) + Number(props.height) / 2;
-                          return (
-                            <g>
-                              <text
-                                x={cx}
-                                y={cy - 6}
-                                fill="var(--foreground)"
-                                fontSize={11}
-                                fontWeight={600}
-                                dominantBaseline="middle"
-                              >
-                                {props.value}
-                              </text>
-                              <text
-                                x={cx}
-                                y={cy + 8}
-                                fill="var(--muted-foreground)"
-                                fontSize={10}
-                                dominantBaseline="middle"
-                              >
-                                {BRL(item.volume)}
-                              </text>
-                            </g>
-                          );
-                        }}
-                      />
-                    </Bar>
-                  </BarChart>
-                </ChartContainer>
-              )}
-            </div>
-          ))}
-        </div>
+        {/* GRÁFICOS DO BLOCO 1 (LAZY LOADED) */}
+        <Suspense fallback={<ChartsSkeleton />}>
+          <ChartsSimulationModule
+            loading={loading}
+            simKpis={simKpis}
+            simDailyData={simDailyData}
+            periodLabel={periodLabel}
+          />
+        </Suspense>
       </div>
 
       {/* ===================================================================
@@ -887,43 +744,12 @@ function DashboardPage() {
           </p>
         </div>
 
-        {/* KPIs Visitas vs Visitantes */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {loading || !visitKpis
             ? Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="h-32 rounded-2xl border bg-card animate-pulse" />
               ))
-            : [
-                {
-                  label: "Total de Acessos",
-                  subLabel: periodLabel,
-                  // Aqui garantimos que o valor use visitKpis.total (visitas) e visitKpis.unique (visitantes únicos via documento)
-                  value: `${visitKpis.total.toLocaleString("pt-BR")} / ${visitKpis.unique.toLocaleString("pt-BR")}`,
-                  hint: "visitas registradas / visitantes únicos",
-                  icon: MousePointerClick,
-                },
-                {
-                  label: "Taxa de Início",
-                  subLabel: periodLabel,
-                  value: PERCENT(visitKpis.conversionRate),
-                  hint: "visitas que viraram simulação",
-                  icon: Activity,
-                },
-                {
-                  label: "Redirecionamentos",
-                  subLabel: periodLabel,
-                  value: visitKpis.redirects.toLocaleString("pt-BR"),
-                  hint: "saídas para parceiros",
-                  icon: ArrowUpRight,
-                },
-                {
-                  label: "Simulações Iniciadas",
-                  subLabel: periodLabel,
-                  value: visitKpis.simulates.toLocaleString("pt-BR"),
-                  hint: "cliques no simulador",
-                  icon: Filter,
-                },
-              ].map((k) => (
+            : visitCards.map((k) => (
                 <div
                   key={k.label}
                   className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 hover:-translate-y-0.5 transition-all"
@@ -945,108 +771,26 @@ function DashboardPage() {
               ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-4">
-          <div className="rounded-2xl border bg-card p-5">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-medium">Evolução de Acessos Diários</h3>
-                <p className="text-xs text-muted-foreground">{periodLabel}</p>
-              </div>
-            </div>
-            {loading || !visitKpis ? (
-              <div className="h-[240px] flex items-center justify-center text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Carregando...
-              </div>
-            ) : (
-              <ChartContainer config={defaultChartConfig} className="h-[240px] w-full">
-                <BarChart data={visDailyData} margin={{ top: 24, right: 0, left: -24, bottom: 0 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis
-                    dataKey="day"
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis hide />
-                  <ChartTooltip cursor={{ fill: "var(--muted)", opacity: 0.4 }} content={<ChartTooltipContent />} />
-                  <Bar dataKey="count" fill="#94a3b8" radius={[4, 4, 0, 0]}>
-                    <LabelList
-                      dataKey="count"
-                      position="top"
-                      offset={6}
-                      className="fill-foreground"
-                      fontSize={11}
-                      fontWeight={600}
-                      formatter={(v: any) => (v > 0 ? v : "")}
-                    />
-                  </Bar>
-                </BarChart>
-              </ChartContainer>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {[
-            { title: "Origem do Acesso (UTM Source)", data: visitKpis?.bySource, colorOffset: 6 },
-            { title: "Intenção do Usuário (Ação)", data: visitKpis?.byAction, colorOffset: 7 },
-            { title: "Produto Visitado", data: visitKpis?.byProduct, colorOffset: 8 },
-          ].map((chart) => (
-            <div key={chart.title} className="rounded-2xl border bg-card p-5">
-              <div className="mb-4">
-                <h3 className="text-sm font-medium">{chart.title}</h3>
-                <p className="text-xs text-muted-foreground">{periodLabel}</p>
-              </div>
-              {loading || !chart.data ? (
-                <div className="h-[240px] flex items-center justify-center text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Carregando...
-                </div>
-              ) : chart.data.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum dado no período.</p>
-              ) : (
-                <ChartContainer config={defaultChartConfig} className="h-[240px] w-full">
-                  <BarChart data={chart.data} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
-                    <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis type="number" hide />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                      width={120}
-                    />
-                    <ChartTooltip cursor={{ fill: "var(--muted)", opacity: 0.4 }} content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={28}>
-                      {chart.data.map((_, i) => (
-                        <Cell key={i} fill={barColors[(i + chart.colorOffset) % barColors.length]} />
-                      ))}
-                      <LabelList
-                        dataKey="count"
-                        position="right"
-                        fill="var(--foreground)"
-                        fontSize={11}
-                        fontWeight={600}
-                      />
-                    </Bar>
-                  </BarChart>
-                </ChartContainer>
-              )}
-            </div>
-          ))}
-        </div>
+        {/* GRÁFICOS DO BLOCO 2 (LAZY LOADED) */}
+        <Suspense fallback={<ChartsSkeleton />}>
+          <ChartsTrafficModule
+            loading={loading}
+            visitKpis={visitKpis}
+            visDailyData={visDailyData}
+            periodLabel={periodLabel}
+          />
+        </Suspense>
       </div>
 
-      {/* SHEET DE FILTROS MOBILE */}
+      {/* SHEET DE FILTROS MOBILE (CORRIGIDO COM CALENDÁRIO E OPÇÕES) */}
       <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white">
+        <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white z-50">
           <SheetHeader className="mb-4 text-left">
             <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-4 w-full">
+            
+            {/* Período Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
               <Popover>
@@ -1059,9 +803,9 @@ function DashboardPage() {
                     <ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
-                  <Command>
-                    <CommandList>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                  <Command className="bg-transparent">
+                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
                         <CommandItem onSelect={() => setDateRange("7")} className="text-[#d946ef] cursor-pointer">Últimos 7 dias</CommandItem>
                         <CommandItem onSelect={() => setDateRange("15")} className="text-[#d946ef] cursor-pointer">Últimos 15 dias</CommandItem>
@@ -1094,6 +838,7 @@ function DashboardPage() {
               </Popover>
             </div>
 
+            {/* Parceiro Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Parceiro</span>
               <Popover>
@@ -1103,9 +848,9 @@ function DashboardPage() {
                     <ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
-                  <Command>
-                    <CommandList>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                  <Command className="bg-transparent">
+                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedPartners([])} className="text-[#d946ef] cursor-pointer">
                           <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
@@ -1141,6 +886,7 @@ function DashboardPage() {
               </Popover>
             </div>
 
+            {/* Produto Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Produto</span>
               <Popover>
@@ -1150,9 +896,9 @@ function DashboardPage() {
                     <ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
-                  <Command>
-                    <CommandList>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                  <Command className="bg-transparent">
+                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedProducts([])} className="text-[#d946ef] cursor-pointer">
                           <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>

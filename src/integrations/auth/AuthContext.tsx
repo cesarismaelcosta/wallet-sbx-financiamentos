@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 const { data: userData, error: userError } = await supabase
       .from('backoffice_users')
-      .select('is_active, role, name, email')
+      .select('is_active, role, name, email, allowed_partners, allowed_products')
       .ilike('email', email!)
       .maybeSingle();
 

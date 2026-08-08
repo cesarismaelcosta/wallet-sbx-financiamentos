@@ -18,6 +18,7 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { RefreshCw, Search, Filter, Download, ChevronDown, Camera, Printer, Loader2 } from "lucide-react";
 import { DateRange } from "react-day-picker";
+import { useAuth } from "@/integrations/auth/AuthContext";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +87,7 @@ export function useIsMobile() {
 }
 
 function SimulationsPage() {
+  const { backofficeUser } = useAuth();
   const isMobile = useIsMobile();
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
@@ -123,6 +125,9 @@ function SimulationsPage() {
 
   // 2. Quando o usuário digita na busca ou muda um filtro, voltamos para a página 0
   useEffect(() => { 
+    // Só dispara a busca se o usuário já estiver carregado no contexto!
+    if (!backofficeUser) return;
+    
     const timeoutId = setTimeout(() => {
       setPage(0);
       load(0); 
@@ -134,10 +139,10 @@ function SimulationsPage() {
   async function load(targetPage: number) {
     setLoading(true);
     try {
+
       const from = targetPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // Usamos { count: 'exact' } para o Supabase nos dizer o total real de registros
       let query = supabase
         .from("simulations")
         .select(`
@@ -152,6 +157,39 @@ function SimulationsPage() {
           simulation_offers(offer_description, offer_value, event_id, event_description, event_end_date)
         `, { count: 'exact' }); 
 
+      // ============================================================================
+      // RESTRIÇÕES DE ESCOPO POR USUÁRIO (RBAC - Viewer)
+      // ============================================================================
+      if (backofficeUser && backofficeUser.role === 'viewer') {
+        const allowedPartners = backofficeUser.allowed_partners || [];
+        const allowedProducts = backofficeUser.allowed_products || [];
+
+        // 1. Validação de Parceiros Permitidos
+        if (!allowedPartners.includes("*")) {
+          if (allowedPartners.length === 0) {
+            setRows([]);
+            setTotalPages(0);
+            setLoading(false);
+            return;
+          }
+          const partnerQueryIds = allowedPartners.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
+          query = query.in("partner_id", partnerQueryIds);
+        }
+
+        // 2. Validação de Produtos Permitidos
+        if (!allowedProducts.includes("*")) {
+          if (allowedProducts.length === 0) {
+            setRows([]);
+            setTotalPages(0);
+            setLoading(false);
+            return;
+          }
+          const productQueryIds = allowedProducts.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
+          query = query.in("product_id", productQueryIds);
+        }
+      }
+      // ============================================================================
+
       // Filtros do Servidor
       if (search.trim()) {
         const docSearch = search.replace(/\D/g, "");
@@ -161,7 +199,6 @@ function SimulationsPage() {
       if (selectedPartners.length > 0) query = query.in("partner_id", selectedPartners);
       if (selectedProducts.length > 0) query = query.in("product_id", selectedProducts);
 
-      // Aplica o Limit/Offset (Range) da página atual
       query = query.order('created_at', { ascending: false }).range(from, to);
 
       const [{ data: simData, count, error: simError }, { data: statusData }] = await Promise.all([
@@ -169,21 +206,23 @@ function SimulationsPage() {
         supabase.from("status_types").select("name")
       ]);
 
-      if (simError) throw simError;
+      if (simError) {
+        throw simError;
+      }
+
+      console.log("✅ [DEBUG] Dados carregados com sucesso:", simData?.length);
 
       if (simData) {
-        // PAGINAÇÃO REAL: SUBSTITUI OS DADOS (Não acumula!)
         setRows(simData);
       }
       
-      // Calcula o total de páginas com base no count do banco
       if (count !== null) {
         setTotalPages(Math.ceil(count / PAGE_SIZE));
       }
 
       if (statusData) setStatusOptions(statusData.map(s => s.name));
     } catch (err: any) {
-      toast.error("Erro ao carregar simulações");
+      toast.error(`Erro ao carregar simulações: ${err.message || "Erro desconhecido"}`);
     } finally {
       setLoading(false);
     }

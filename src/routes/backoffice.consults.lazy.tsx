@@ -15,6 +15,7 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { RefreshCw, Search, Filter, Download, ChevronDown, Printer, Loader2 } from "lucide-react";
 import { DateRange } from "react-day-picker";
+import { useAuth } from "@/integrations/auth/AuthContext";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,7 @@ function formatDate(iso: string | null) {
 }
 
 function ConsultsPage() {
+  const { backofficeUser } = useAuth();
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
 
@@ -107,6 +109,9 @@ function ConsultsPage() {
 
   // 2. Dispara a busca quando filtros mudam
   useEffect(() => {
+    // Só dispara a busca se o usuário já estiver carregado no contexto!
+    if (!backofficeUser) return;
+
     const timeoutId = setTimeout(() => {
       setPage(0);
       load(0);
@@ -114,7 +119,7 @@ function ConsultsPage() {
     return () => clearTimeout(timeoutId);
   }, [search, selectedPartners, selectedProducts, dateRange, customRange]);
 
-  // 3. Função inteligente com paginação e count exato no banco
+  // 3. Função inteligente com paginação, count exato no banco e restrições de RBAC
   async function load(targetPage: number) {
     setLoading(true);
     try {
@@ -137,6 +142,39 @@ function ConsultsPage() {
         { count: "exact" },
       );
 
+      // ============================================================================
+      // RESTRIÇÕES DE ESCOPO POR USUÁRIO (RBAC - Viewer)
+      // ============================================================================
+      if (backofficeUser && backofficeUser.role === 'viewer') {
+        const allowedPartners = backofficeUser.allowed_partners || [];
+        const allowedProducts = backofficeUser.allowed_products || [];
+
+        // 1. Validação de Parceiros Permitidos
+        if (!allowedPartners.includes("*")) {
+          if (allowedPartners.length === 0) {
+            setRows([]);
+            setTotalPages(0);
+            setLoading(false);
+            return;
+          }
+          const partnerQueryIds = allowedPartners.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
+          query = query.in("partner_id", partnerQueryIds);
+        }
+
+        // 2. Validação de Produtos Permitidos
+        if (!allowedProducts.includes("*")) {
+          if (allowedProducts.length === 0) {
+            setRows([]);
+            setTotalPages(0);
+            setLoading(false);
+            return;
+          }
+          const productQueryIds = allowedProducts.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
+          query = query.in("product_id", productQueryIds);
+        }
+      }
+      // ============================================================================
+
       // Filtros de Data
       if (dateRange !== "all" && dateRange !== "custom") {
         query = query.gte("created_at", dateLimit.toISOString());
@@ -144,7 +182,7 @@ function ConsultsPage() {
         query = query.gte("created_at", customRange.from.toISOString()).lte("created_at", customRange.to.toISOString());
       }
 
-      // Filtros em Memória Passados para o Banco (Para a paginação funcionar direito)
+      // Filtros em Memória Passados para o Banco
       if (selectedPartners.length > 0) query = query.in("partner_id", selectedPartners);
       if (selectedProducts.length > 0) query = query.in("product_id", selectedProducts);
 
@@ -164,7 +202,7 @@ function ConsultsPage() {
       // Calcula Total de Páginas
       if (count !== null) setTotalPages(Math.ceil(count / PAGE_SIZE));
 
-      // Busca os contatos só do array paginado (ultrarrápido)
+      // Busca os contatos só do array paginado
       const visitIds = visitsData.map((v) => v.id);
       const { data: updatesData } = await supabase
         .from("visit_updates")
@@ -183,9 +221,7 @@ function ConsultsPage() {
         visit_offers: Array.isArray(v.visit_offers) ? v.visit_offers[0] || null : v.visit_offers,
       }));
 
-      // A busca por texto aprofundada (nome/documento do cliente) ainda precisa ser feita em memória
-      // porque o Supabase não permite filtrar `.ilike()` facilmente numa tabela relacionada ('visit_entities').
-      // No entanto, se houver busca digitada, filtramos o lote de 50 retornado.
+      // Filtro de busca textual em memória
       if (search.trim() !== "") {
         const rawSearch = search.toLowerCase().trim();
         const rawDocSearch = search.replace(/\D/g, "");
