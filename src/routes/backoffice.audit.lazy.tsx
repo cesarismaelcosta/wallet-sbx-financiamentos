@@ -116,6 +116,10 @@ function AuditoriaPage() {
   const [totalPages, setTotalPages] = useState(0);
   const PAGE_SIZE = 50;
 
+  // Extrai as strings primitivas do intervalo para evitar loops de renderização
+  const rangeFrom = customRange?.from?.toISOString();
+  const rangeTo = customRange?.to?.toISOString();
+
   // Quando filtros ou busca mudam, volta para a página 0 e carrega
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -123,7 +127,7 @@ function AuditoriaPage() {
       load(0);
     }, 400);
     return () => clearTimeout(timeoutId);
-  }, [search, period, customRange, statusFilter, eventFilter]);
+  }, [search, period, rangeFrom, rangeTo, statusFilter, eventFilter]);
 
   async function load(targetPage: number) {
     setLoading(true);
@@ -137,7 +141,7 @@ function AuditoriaPage() {
         .from("login_history")
         .select(
           "id,email,event,success,failure_reason,ip_address,country,state,city,user_agent,device_type,operating_system,origin_details,created_at,origin_page,origin_function",
-          { count: "exact" }
+          { count: "estimated" }
         );
 
       // Filtros de Período / Data
