@@ -86,6 +86,19 @@ export function useIsMobile() {
   return isMobile;
 }
 
+function getPeriodDates(range: string, custom?: DateRange) {
+  if (range === "custom" && custom?.from && custom?.to) {
+    return { p_from: custom.from.toISOString(), p_to: custom.to.toISOString() };
+  }
+  if (range !== "all") {
+    const days = Number(range);
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    return { p_from: date.toISOString(), p_to: new Date().toISOString() };
+  }
+  return { p_from: null, p_to: null };
+}
+
 function SimulationsPage() {
   const { backofficeUser } = useAuth();
   const isMobile = useIsMobile();
@@ -105,6 +118,14 @@ function SimulationsPage() {
   const [activeSimulation, setActiveSimulation] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+
+  const [stats, setStats] = useState({
+    total: 0,
+    em_simulacao: 0,
+    em_analise: 0,
+    aprovadas: 0,
+    volume_aprovado: 0
+  });
 
   useEffect(() => {
     async function loadDropdowns() {
@@ -159,6 +180,7 @@ function SimulationsPage() {
     const timeoutId = setTimeout(() => {
       setPage(0);
       load(0); 
+      loadStats();
     }, 400);
     return () => clearTimeout(timeoutId);
   }, [search, selectedPartners, selectedProducts, dateRange, customRange]);
@@ -169,7 +191,8 @@ function SimulationsPage() {
     try {
 
       const from = targetPage * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
+      // Buscamos PAGE_SIZE + 1 para validar se há próxima página sem COUNT(*)
+      const to = from + PAGE_SIZE;
 
       let query = supabase
         .from("simulations")
@@ -183,7 +206,7 @@ function SimulationsPage() {
           status_types(id, name),
           financial_institutions(id, name, logo_url),
           simulation_offers(offer_description, offer_value, event_id, event_description, event_end_date)
-        `, { count: 'exact' }); 
+        `); 
 
       // ============================================================================
       // RESTRIÇÕES DE ESCOPO POR USUÁRIO (RBAC - Viewer)
@@ -229,7 +252,7 @@ function SimulationsPage() {
 
       query = query.order('created_at', { ascending: false }).range(from, to);
 
-      const [{ data: simData, count, error: simError }, { data: statusData }] = await Promise.all([
+      const [{ data: simData, error: simError }, { data: statusData }] = await Promise.all([
         query,
         supabase.from("status_types").select("name")
       ]);
@@ -238,13 +261,18 @@ function SimulationsPage() {
         throw simError;
       }
 
-      if (simData) {
-        setRows(simData);
+      if (!simData || simData.length === 0) {
+        setRows([]);
+        setTotalPages(targetPage + 1);
+        return;
       }
+
+      // Validação de existência de próxima página de forma puramente lógica
+      const hasMore = simData.length > PAGE_SIZE;
+      const slicedData = hasMore ? simData.slice(0, PAGE_SIZE) : simData;
       
-      if (count !== null) {
-        setTotalPages(Math.ceil(count / PAGE_SIZE));
-      }
+      setRows(slicedData);
+      setTotalPages(hasMore ? targetPage + 2 : targetPage + 1);
 
       if (statusData) setStatusOptions(statusData.map(s => s.name));
     } catch (err: any) {
@@ -252,6 +280,28 @@ function SimulationsPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadStats() {
+    const { p_from, p_to } = getPeriodDates(dateRange, customRange);
+
+    const { data, error } = await supabase.rpc("simulation_stats", {
+      p_from,
+      p_to,
+      p_partner_ids: selectedPartners.length > 0 ? selectedPartners.map(Number) : null,
+      p_product_ids: selectedProducts.length > 0 ? selectedProducts.map(Number) : null,
+      p_search: search.trim() || null,
+      p_status: selectedStatus.length > 0 ? selectedStatus : null
+    });
+
+    if (error) {
+      console.error("Erro ao carregar estatísticas de simulações:", error);
+      return;
+    }
+
+    const s = data?.[0] ?? { total: 0, em_simulacao: 0, em_analise: 0, aprovadas: 0, volume_aprovado: 0 };
+    setStats(s);
+    setTotalPages(Math.ceil(Number(s.total) / PAGE_SIZE));
   }
 
   // 4. O filtro de Situação local continua o mesmo
@@ -267,32 +317,54 @@ function SimulationsPage() {
    */
   async function handleSelectSimulation(row: any) {
     setDetailLoading(true);
+    // Abre imediatamente com os dados rasos da grid
     setActiveSimulation(row);
 
     try {
       const { data: fullData, error } = await supabase
         .from("simulations")
-        .select(`
-          id, created_at, updated_at, name, document, phone, email, financed_amount, 
-          installment_value, installments, down_payment_percentage, raw_payload, entity_details,
-          partners(id, name, logo_url),
-          product_types(id, name),
-          stage_types(id, name),
-          status_types(id, name),
-          financial_institutions(id, name, logo_url),
-          result_partner_types(id, name),
-          simulation_offers(id, offer_description, offer_value, manager_name, seller_id, legal_name, category_types(id, name)),
-          simulation_consents(id, consent_text, is_accepted, created_at),
-          simulation_updates(id, action, created_at),
-          simulation_consults(id, consult_type, result, created_at),
-          visits:visit_id(id, utm_source, state)
-        `)
+        .select([
+          "id", "created_at", "updated_at", "name", "document", "phone", "email", 
+          "financed_amount", "installment_value", "installments", "down_payment_percentage", 
+          "raw_payload", "entity_details", "birth_date", "gender", "entity_type", "requested_value", 
+          "cet_rate", "simulation_details",
+          
+          "partners(id, name, logo_url)",
+          "product_types(id, name)",
+          "stage_types(id, name)",
+          "status_types(id, name)",
+          "financial_institutions(id, name, logo_url)",
+          "result_partner_types(id, description)",
+          
+          /* Payload estruturado para Organizador, Vendedor e Oferta (PanelOffer / PanelSeller) */
+          "simulation_offers(id, simulation_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, event_start_date, offer_id, offer_description, offer_value, category_id, offer_details, event_details, manager_details, category_types(id, name))",
+          
+          /* Payload para Termos e Auditoria LGPD (PanelAcceptedConsents) */
+          "simulation_consents(id, consent_id, accepted, accepted_at, created_at, ip_address, country, state, city, operating_system, device_type, origin_details, page_snapshot)",
+          
+          /* Payload para Histórico de Ações da Simulação */
+          "simulation_updates(id, operation, created_at, ip_address, country, state, city, user_agent, device_type, operating_system, origin_details)",
+          
+          /* Payload para Múltiplas Opções de Parcelamento e Taxas (PanelSimulation) */
+          "simulation_consults(id, installments, installment_value, cet_rate, created_at, financial_institution_id)",
+          
+          /* Payload para Rastreamento de Origem, UTMs e Localização (PanelVisit) */
+          "visits(id, created_at, utm_source, utm_campaign, country, state, city, ip_address, operating_system, device_type, origin_url, target_url)"
+        ].join(","))
         .eq("id", row.id)
         .single();
 
-      if (!error && fullData) {
+      if (error) {
+        console.error("ERRO FATAL DO SUPABASE:", error.message, error.details, error.hint);
+        toast.error(`Erro do Banco: ${error.message}`);
+        return;
+      }
+
+      if (fullData) {
         setActiveSimulation(fullData);
       }
+    } catch (err) {
+      console.error("Erro inesperado:", err);
     } finally {
       setDetailLoading(false);
     }
@@ -451,11 +523,11 @@ function SimulationsPage() {
       {/* BLOCO DE KPIS */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         {[
-            { label: "Propostas", value: totals.total, highlight: false },
-            { label: "Em simulação", value: totals.simulacao, highlight: false },
-            { label: "Em análise", value: totals.analise, highlight: false },
-            { label: "Aprovadas", value: totals.aprovada, highlight: false },
-            { label: "Volume aprovado", value: BRL(totals.volume), highlight: true }
+            { label: "Propostas (filtro)", value: Number(stats.total).toLocaleString("pt-BR"), highlight: false },
+            { label: "Em simulação", value: Number(stats.em_simulacao).toLocaleString("pt-BR"), highlight: false },
+            { label: "Em análise", value: Number(stats.em_analise).toLocaleString("pt-BR"), highlight: false },
+            { label: "Aprovadas", value: Number(stats.aprovadas).toLocaleString("pt-BR"), highlight: false },
+            { label: "Volume aprovado", value: BRL(Number(stats.volume_aprovado)), highlight: true }
         ].map((t, index) => (
             <div 
               key={t.label} 
@@ -508,10 +580,11 @@ function SimulationsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-56 p-0" align="start">
                   <Command>
-                      <CommandList 
-                              className="max-h-56 overflow-y-auto overscroll-contain" 
-                              onWheelCapture={(e) => e.stopPropagation()}
-                            >
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer">
                           <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
@@ -549,7 +622,8 @@ function SimulationsPage() {
                 <PopoverContent className="w-56 p-0" align="start">
                   <Command>
                     <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain" 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
@@ -588,10 +662,11 @@ function SimulationsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-56 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                      <CommandList 
-                              className="max-h-56 overflow-y-auto overscroll-contain" 
-                              onWheelCapture={(e) => e.stopPropagation()}
-                            >
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedStatus([])} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
                           <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
@@ -629,7 +704,8 @@ function SimulationsPage() {
                 <PopoverContent className="p-0 w-auto" align="start">
                   <Command>
                     <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain" 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
@@ -860,7 +936,11 @@ function SimulationsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-0" align="start">
                   <Command>
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer">
                           <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
@@ -898,7 +978,11 @@ function SimulationsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-0" align="start">
                   <Command>
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer">
                           <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
@@ -936,7 +1020,11 @@ function SimulationsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-72 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedStatus([])} className="cursor-pointer text-[#d946ef]">
                           <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
@@ -974,7 +1062,11 @@ function SimulationsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-auto" align="start">
                   <Command>
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => dateRange !== "30" && setDateRange("30")}>Últimos 30 dias</CommandItem>
                         <CommandItem onSelect={() => dateRange !== "90" && setDateRange("90")}>Últimos 90 dias</CommandItem>

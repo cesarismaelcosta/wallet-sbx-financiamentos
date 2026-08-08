@@ -2238,13 +2238,13 @@ function SandboxPage() {
                       Envia um ID inexistente para a API upstream da Superbid. A borda deve interceptar o erro e
                       disparar <code className="bg-slate-100 px-1 py-0.5 rounded">OFFER_NOT_FOUND</code>.
                     </p>
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
                       <Button
                         onClick={() => executeErrorSimulation("fetch", "offer")}
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5 flex items-center"
+                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5 flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Fetch (JSON)
@@ -2253,7 +2253,7 @@ function SandboxPage() {
                         onClick={() => executeErrorSimulation("form", "offer")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white flex items-center"
+                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Form (Redirecionar)
@@ -2270,13 +2270,13 @@ function SandboxPage() {
                       Substitui o token ativo por uma credencial corrompida. A borda disparará o erro de sessão expirada
                       ou não autorizada (<code className="bg-slate-100 px-1 py-0.5 rounded">SESSION_EXPIRED</code>).
                     </p>
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
                       <Button
                         onClick={() => executeErrorSimulation("fetch", "token")}
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5"
+                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5 flex items-center justify-center"
                       >
                         {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch
                         (JSON)
@@ -2285,8 +2285,9 @@ function SandboxPage() {
                         onClick={() => executeErrorSimulation("form", "token")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white"
+                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white flex items-center justify-center"
                       >
+                        {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Form (Redirecionar)
                       </Button>
                     </div>
@@ -2303,13 +2304,13 @@ function SandboxPage() {
                       Envia um ID de produto sem correspondência no orquestrador de rotas para testar a validação de
                       destino.
                     </p>
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
                       <Button
                         onClick={() => executeErrorSimulation("fetch", "product")}
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5 flex items-center"
+                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5 flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Fetch (JSON)
@@ -2318,7 +2319,7 @@ function SandboxPage() {
                         onClick={() => executeErrorSimulation("form", "product")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white flex items-center"
+                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Form (Redirecionar)
@@ -2334,13 +2335,13 @@ function SandboxPage() {
                       Valida o comportamento de segurança da borda ao receber requisições estruturais sem autenticação
                       válida.
                     </p>
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
                       <Button
                         onClick={() => executeErrorSimulation("fetch", "token")}
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5"
+                        className="rounded-xl text-xs border-[#B300FF]/30 text-[#B300FF] hover:bg-[#B300FF]/5 flex items-center justify-center"
                       >
                         {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch
                         (JSON)
@@ -2349,8 +2350,9 @@ function SandboxPage() {
                         onClick={() => executeErrorSimulation("form", "token")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white"
+                        className="rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white flex items-center justify-center"
                       >
+                        {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Form (Redirecionar)
                       </Button>
                     </div>

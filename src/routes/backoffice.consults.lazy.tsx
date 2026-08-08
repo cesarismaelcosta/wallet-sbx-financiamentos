@@ -70,8 +70,20 @@ function formatDate(iso: string | null) {
   };
 }
 
+export function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  return isMobile;
+}
+
 function ConsultsPage() {
   const { backofficeUser } = useAuth();
+  const isMobile = useIsMobile();
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
 
@@ -90,7 +102,14 @@ function ConsultsPage() {
 
   const printRef = useRef<HTMLDivElement>(null);
 
-useEffect(() => {
+  const [stats, setStats] = useState({
+  total: 0,
+  consultas: 0,
+  sites_parceiros: 0,
+  simulacoes: 0
+  });
+
+  useEffect(() => {
     async function loadDropdowns() {
       if (!backofficeUser) return;
 
@@ -132,22 +151,38 @@ useEffect(() => {
     const timeoutId = setTimeout(() => {
       setPage(0);
       load(0);
+      loadStats();
     }, 400);
     return () => clearTimeout(timeoutId);
   }, [search, selectedPartners, selectedProducts, dateRange, customRange]);
+
+  function getPeriodDates(range: string, custom?: DateRange) {
+    if (range === "custom" && custom?.from && custom?.to) {
+      return { p_from: custom.from.toISOString(), p_to: custom.to.toISOString() };
+    }
+    if (range !== "all") {
+      const days = Number(range);
+      const date = new Date();
+      date.setDate(date.getDate() - days);
+      return { p_from: date.toISOString(), p_to: new Date().toISOString() };
+    }
+    return { p_from: null, p_to: null };
+  }
 
   // 3. Função inteligente com paginação, count exato no banco e restrições de RBAC
   async function load(targetPage: number) {
     setLoading(true);
     try {
       const from = targetPage * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
+      // Buscamos PAGE_SIZE + 1 para validar se há próxima página sem COUNT(*)
+      const to = from + PAGE_SIZE;
 
       let dateLimit = new Date();
       if (dateRange === "30") dateLimit.setDate(dateLimit.getDate() - 30);
       else if (dateRange === "90") dateLimit.setDate(dateLimit.getDate() - 90);
       else if (dateRange === "all") dateLimit = new Date("2020-01-01");
 
+      // Query limpa, sem count, pronta para paginação
       let query = supabase.from("visits").select(
         `
           id, created_at, action, utm_source, state, partner_id, product_id,
@@ -155,8 +190,7 @@ useEffect(() => {
           partners(name, logo_url),
           visit_entities(name, document, phone, email),
           visit_offers(offer_description, offer_value, event_id, event_description, event_end_date, category_types(name))
-        `,
-        { count: "exact" },
+        `
       );
 
       // ============================================================================
@@ -199,24 +233,26 @@ useEffect(() => {
       if (selectedPartners.length > 0) query = query.in("partner_id", selectedPartners);
       if (selectedProducts.length > 0) query = query.in("product_id", selectedProducts);
 
-      // Paginação e Ordenação
+      // Paginação e Ordenação (buscando 1 a mais para checar limite)
       query = query.order("created_at", { ascending: false }).range(from, to);
 
-      const { data: visitsData, count, error: visitError } = await query;
+      const { data: visitsData, error: visitError } = await query;
 
       if (visitError) throw new Error(visitError.message);
 
       if (!visitsData || visitsData.length === 0) {
         setRows([]);
-        setTotalPages(0);
+        setTotalPages(targetPage + 1);
         return;
       }
 
-      // Calcula Total de Páginas
-      if (count !== null) setTotalPages(Math.ceil(count / PAGE_SIZE));
+      // Validação de existência de próxima página sem count do banco
+      const hasMore = visitsData.length > PAGE_SIZE;
+      const slicedData = hasMore ? visitsData.slice(0, PAGE_SIZE) : visitsData;
+      setTotalPages(hasMore ? targetPage + 2 : targetPage + 1);
 
       // Busca os contatos só do array paginado
-      const visitIds = visitsData.map((v) => v.id);
+      const visitIds = slicedData.map((v) => v.id);
       const { data: updatesData } = await supabase
         .from("visit_updates")
         .select("visit_id, action")
@@ -227,7 +263,7 @@ useEffect(() => {
       );
 
       // Normaliza
-      const normalized = visitsData.map((v) => ({
+      const normalized = slicedData.map((v) => ({
         ...v,
         has_contact: contactSet.has(v.id),
         visit_entities: Array.isArray(v.visit_entities) ? v.visit_entities[0] || null : v.visit_entities,
@@ -255,51 +291,63 @@ useEffect(() => {
     }
   }
 
-  const handleSelectStatus = (s: string) => {
-    if (s === "Todas") {
-      setSelectedStatus([]);
+  async function loadStats() {
+    const { p_from, p_to } = getPeriodDates(dateRange, customRange); // Reaproveitando o helper de datas local
+
+    const { data, error } = await supabase.rpc("visit_stats", {
+      p_from,
+      p_to,
+      p_partner_ids: selectedPartners.length > 0 ? selectedPartners.map(Number) : null,
+      p_product_ids: selectedProducts.length > 0 ? selectedProducts.map(Number) : null,
+      p_search: search.trim() || null,
+      p_status: selectedStatus.length > 0 ? selectedStatus : null
+    });
+
+    if (error) {
+      console.error("Erro ao carregar estatísticas de visitas:", error);
       return;
     }
-    if (s === "Qualificadas") {
-      // Se já estiver selecionada, limpa; senão, ativa exclusivamente as Qualificadas
-      setSelectedStatus(selectedStatus.includes("Qualificadas") ? [] : ["Qualificadas"]);
-      return;
-    }
-    // Para os status específicos (múltipla escolha), removemos "Qualificadas" se estiver ativa
-    const current = selectedStatus.filter((item) => item !== "Qualificadas");
-    if (current.includes(s)) {
-      setSelectedStatus(current.filter((item) => item !== s));
-    } else {
-      setSelectedStatus([...current, s]);
-    }
-  };
+
+    const s = data?.[0] ?? { total: 0, consultas: 0, sites_parceiros: 0, simulacoes: 0 };
+    setStats(s);
+    setTotalPages(Math.ceil(Number(s.total) / PAGE_SIZE));
+  }
 
   async function handleSelectConsult(row: any) {
     setDetailLoading(true);
+    // Abre imediatamente com os dados rasos da grid
     setActiveConsult(row);
 
     try {
       const { data: fullData, error } = await supabase
         .from("visits")
         .select(
-          `
-          *,
-          product_types(name),
-          partners(name, logo_url),
-          visit_entities(*),
-          visit_offers(
-            id, visit_id, manager_name, seller_id, legal_name, trade_name, 
-            event_id, event_description, event_end_date, offer_id, 
-            offer_description, offer_value, category_id,
-            category_types(name)
-          ),
-          visit_consents(*)
-        `,
+          [
+            // Campos explícitos da tabela visits
+            "id, created_at, action, utm_source, utm_campaign, country, state, city, ip_address, operating_system, device_type, origin_url, target_url, raw_payload, partner_id, product_id",
+            "product_types(name)",
+            "partners(name, logo_url)",
+            
+            /* Payload para PanelEntity (Removido 'address' pois faz parte de entity_details) */
+            "visit_entities(id, name, document, phone, email, birth_date, gender, entity_type, entity_details)",
+            
+            /* Payload para PanelOffer e PanelSeller */
+            "visit_offers(id, visit_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, offer_id, offer_description, offer_value, category_id, category_types(name))",
+            
+            /* Payload para PanelAcceptedConsents (Explícito) */
+            "visit_consents(id, consent_id, accepted, accepted_at, created_at, ip_address, country, state, city, operating_system, device_type, origin_details, page_snapshot)"
+          ].join(",")
         )
         .eq("id", row.id)
         .single();
 
-      if (!error && fullData) {
+      if (error) {
+        console.error("ERRO FATAL DO SUPABASE:", error.message, error.details);
+        toast.error(`Erro ao carregar detalhes: ${error.message}`);
+        return;
+      }
+
+      if (fullData) {
         setActiveConsult({
           ...fullData,
           has_contact: row.has_contact,
@@ -311,6 +359,7 @@ useEffect(() => {
         });
       }
     } catch (e) {
+      console.error("Erro inesperado no handleSelectConsult:", e);
     } finally {
       setDetailLoading(false);
     }
@@ -491,20 +540,13 @@ useEffect(() => {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Total de visitas", value: totals.total, highlight: false },
-          { label: "Consultas", value: totals.consulta, highlight: false },
-          { label: "Sites parceiros", value: totals.siteParceiro, highlight: false },
-          { label: "Simulações geradas", value: totals.simulacao, highlight: true },
+          { label: "Total de visitas (filtro)", value: Number(stats.total).toLocaleString("pt-BR") },
+          { label: "Consultas", value: Number(stats.consultas).toLocaleString("pt-BR") },
+          { label: "Sites parceiros", value: Number(stats.sites_parceiros).toLocaleString("pt-BR") },
+          { label: "Simulações geradas", value: Number(stats.simulacoes).toLocaleString("pt-BR") },
         ].map((t) => (
-          <div
-            key={t.label}
-            className={`rounded-2xl border p-5 ${t.highlight ? "bg-[#fdf2f8] border-[#fbcfe8] text-[#d946ef]" : "border-border bg-card text-card-foreground"}`}
-          >
-            <div
-              className={`text-xs font-semibold uppercase ${t.highlight ? "text-[#d946ef]" : "text-muted-foreground"}`}
-            >
-              {t.label}
-            </div>
+          <div key={t.label} className="rounded-2xl border border-border bg-card p-5 text-card-foreground">
+            <div className="text-xs font-semibold uppercase text-muted-foreground">{t.label}</div>
             <div className="mt-2 text-2xl font-bold">{t.value}</div>
           </div>
         ))}
@@ -539,7 +581,7 @@ useEffect(() => {
             {/* Filtros em linha para Desktop (escondidos no mobile) */}
             <div className="hidden lg:flex lg:items-center lg:gap-2 lg:ml-auto">
               {/* Filtro de Parceiro */}
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -557,7 +599,10 @@ useEffect(() => {
                 </PopoverTrigger>
                 <PopoverContent className="w-56 p-0" align="start">
                   <Command>
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer">
                           <div
@@ -595,7 +640,7 @@ useEffect(() => {
               </Popover>
 
               {/* Filtro de Produto */}
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -613,7 +658,10 @@ useEffect(() => {
                 </PopoverTrigger>
                 <PopoverContent className="w-56 p-0" align="start">
                   <Command>
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer">
                           <div
@@ -651,7 +699,7 @@ useEffect(() => {
               </Popover>
 
               {/* Filtro de Situação */}
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -674,7 +722,11 @@ useEffect(() => {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-56 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         {/* Opção Todas */}
                         <CommandItem
@@ -729,7 +781,7 @@ useEffect(() => {
               </Popover>
 
               {/* Filtro de Período */}
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -754,7 +806,11 @@ useEffect(() => {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-auto" align="start">
                   <Command>
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem>
                         <CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem>
@@ -1072,7 +1128,7 @@ useEffect(() => {
             {/* Parceiro Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Parceiro</span>
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -1087,7 +1143,11 @@ useEffect(() => {
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-0" align="start">
                   <Command>
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer">
                           <div
@@ -1128,7 +1188,7 @@ useEffect(() => {
             {/* Produto Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Produto</span>
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -1143,7 +1203,11 @@ useEffect(() => {
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-0" align="start">
                   <Command>
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer">
                           <div
@@ -1184,7 +1248,7 @@ useEffect(() => {
             {/* Situação Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Situação</span>
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -1204,7 +1268,11 @@ useEffect(() => {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-72 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem
                           onSelect={() => handleSelectStatus("Todas")}
@@ -1259,7 +1327,7 @@ useEffect(() => {
             {/* Período Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -1281,7 +1349,11 @@ useEffect(() => {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-auto" align="start">
                   <Command>
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => dateRange !== "30" && setDateRange("30")}>
                           Últimos 30 dias

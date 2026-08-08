@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createLazyFileRoute("/backoffice/audit")({ component: AuditoriaPage });
@@ -86,6 +86,20 @@ function getEventDateTime(row: LoginRow) {
   return Number.isNaN(parsed.getTime()) ? row.created_at : parsed.toISOString();
 }
 
+// Helper para padronizar os filtros de data em um só lugar
+function getPeriodDates(period: string, customRange?: DateRange) {
+  if (period === "custom" && customRange?.from && customRange?.to) {
+    return { p_from: customRange.from.toISOString(), p_to: customRange.to.toISOString() };
+  }
+  if (period !== "all") {
+    const days = Number(period);
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    return { p_from: date.toISOString(), p_to: new Date().toISOString() };
+  }
+  return { p_from: null, p_to: null };
+}
+
 export function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -103,6 +117,7 @@ function AuditoriaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [stats, setStats] = useState({ total: 0, sucessos: 0, falhas: 0, bloqueios: 0, emails_unicos: 0 });
 
   // Estados de Filtro
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -125,6 +140,7 @@ function AuditoriaPage() {
     const timeoutId = setTimeout(() => {
       setPage(0);
       load(0);
+      loadStats();
     }, 400);
     return () => clearTimeout(timeoutId);
   }, [search, period, rangeFrom, rangeTo, statusFilter, eventFilter]);
@@ -135,13 +151,14 @@ function AuditoriaPage() {
 
     try {
       const from = targetPage * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
+      // Buscamos PAGE_SIZE + 1 para validar se há próxima página sem COUNT no banco
+      const to = from + PAGE_SIZE;
 
+      // Query limpa, sem count: estimated ou exact
       let q = supabase
         .from("login_history")
         .select(
-          "id,email,event,success,failure_reason,ip_address,country,state,city,user_agent,device_type,operating_system,origin_details,created_at,origin_page,origin_function",
-          { count: "estimated" }
+          "id,email,event,success,failure_reason,ip_address,country,state,city,user_agent,device_type,operating_system,origin_details,created_at,origin_page,origin_function"
         );
 
       // Filtros de Período / Data
@@ -168,15 +185,24 @@ function AuditoriaPage() {
       // Ordenação e Paginação Server-Side
       q = q.order("created_at", { ascending: false }).range(from, to);
 
-      const { data, count, error: err } = await q;
+      const { data, error: err } = await q;
 
       if (err) throw err;
 
-      setRows((data ?? []) as LoginRow[]);
-      
-      if (count !== null) {
-        setTotalPages(Math.ceil(count / PAGE_SIZE));
+      const rawData = (data ?? []) as LoginRow[];
+
+      if (rawData.length === 0) {
+        setRows([]);
+        setTotalPages(targetPage + 1);
+        return;
       }
+
+      // Validação de próxima página baseada estritamente no array retornado
+      const hasMore = rawData.length > PAGE_SIZE;
+      const slicedData = hasMore ? rawData.slice(0, PAGE_SIZE) : rawData;
+      
+      setRows(slicedData);
+      setTotalPages(hasMore ? targetPage + 2 : targetPage + 1);
     } catch (err: any) {
       setError(err.message);
       setRows([]);
@@ -185,17 +211,30 @@ function AuditoriaPage() {
     }
   }
 
+  async function loadStats() {
+    const { p_from, p_to } = getPeriodDates(period, customRange);
+    
+    const { data, error } = await supabase.rpc("audit_login_stats", {
+      p_from,
+      p_to,
+      p_status: statusFilter,
+      p_event: eventFilter,
+      p_search: search.trim() || null,
+    });
+
+    if (error) {
+      console.error("Erro ao carregar stats:", error);
+      return;
+    }
+
+    const s = data?.[0] ?? { total: 0, sucessos: 0, falhas: 0, bloqueios: 0, emails_unicos: 0 };
+    setStats(s);
+    setTotalPages(Math.ceil(s.total / PAGE_SIZE));
+  }
+
   const filtered = useMemo(() => {
     return [...rows].sort((a, b) => new Date(getEventDateTime(b)).getTime() - new Date(getEventDateTime(a)).getTime());
   }, [rows]);
-
-  const totals = useMemo(() => {
-    const total = filtered.length;
-    const success = filtered.filter(r => r.success).length;
-    const fails = total - success;
-    const lockedAttempts = filtered.filter(r => r.event === "blocked" || r.failure_reason === "account_locked").length;
-    return { total, success, fails, lockedAttempts, uniqueEmails: new Set(filtered.map(r => r.email.toLowerCase())).size };
-  }, [filtered]);
 
   return (
     <div className="font-sans space-y-6">
@@ -218,11 +257,11 @@ function AuditoriaPage() {
 
       {/* BLOCO DE KPIS */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Eventos na página" value={totals.total} />
-        <StatCard label="Sucessos" value={totals.success} tone="success" />
-        <StatCard label="Falhas" value={totals.fails} tone="danger" />
-        <StatCard label="Bloqueios" value={totals.lockedAttempts} tone="warn" />
-        <StatCard label="E-mails únicos" value={totals.uniqueEmails} highlight />
+        <StatCard label="Total de eventos (filtro)" value={stats.total} />
+        <StatCard label="Sucessos" value={stats.sucessos} tone="success" />
+        <StatCard label="Falhas" value={stats.falhas} tone="danger" />
+        <StatCard label="Bloqueios" value={stats.bloqueios} tone="warn" />
+        <StatCard label="E-mails únicos" value={stats.emails_unicos} highlight />
       </div>
 
       {error && <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"><strong>Erro:</strong> {error}</div>}
@@ -269,7 +308,10 @@ function AuditoriaPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-56 p-0" align="start">
                   <Command>
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y p-1" 
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         {EVENT_OPTIONS.map(opt => (
                           <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id as any)} className="cursor-pointer">
@@ -292,7 +334,10 @@ function AuditoriaPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-48 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y p-1" 
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         {STATUS_OPTIONS.map(opt => (
                           <CommandItem key={opt.id} onSelect={() => setStatusFilter(opt.id)} className="cursor-pointer text-[#d946ef]">
@@ -315,7 +360,11 @@ function AuditoriaPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-auto" align="start">
                   <Command>
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                            className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                            style={{ WebkitOverflowScrolling: 'touch' }}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         {PERIOD_OPTIONS.map(opt => (
                           <CommandItem key={opt.id} onSelect={() => setPeriod(opt.id)}>
@@ -387,7 +436,10 @@ function AuditoriaPage() {
                       </td>
                       <td className="px-3 py-2.5 w-[180px] text-muted-foreground">
                         <div className="text-foreground">{r.ip_address || "—"}</div>
-                        <div>{origem || "—"}</div>
+                        <div className="text-foreground font-medium">{r.city || "—"}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {[r.state, r.country].filter(Boolean).join(" · ") || "—"}
+                        </div>
                       </td>
                       <td className="px-3 py-2.5 w-[180px]">
                         <div className="font-bold text-foreground">{r.origin_page || "—"}</div>
@@ -448,13 +500,16 @@ function AuditoriaPage() {
         <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white">
           <SheetHeader className="mb-4 text-left">
             <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
+            <SheetDescription className="text-xs text-muted-foreground">
+              Filtrar registros.
+            </SheetDescription>
           </SheetHeader>
           <div className="flex flex-col gap-4 w-full">
             
             {/* Evento Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Evento</span>
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-white border-slate-200 text-slate-600 justify-between">
                     <span className="truncate">Evento: {eventFilter === "all" ? "Todos" : EVENT_LABEL[eventFilter as LoginRow["event"]]}</span>
@@ -463,7 +518,11 @@ function AuditoriaPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-0" align="start">
                   <Command>
-                    <CommandList>
+                    <CommandList 
+                            className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                            style={{ WebkitOverflowScrolling: 'touch' }}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         {EVENT_OPTIONS.map(opt => (
                           <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id as any)} className="cursor-pointer">
@@ -480,7 +539,7 @@ function AuditoriaPage() {
             {/* Status Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Status</span>
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] justify-between">
                     <span className="truncate">Status: {statusFilter === "all" ? "Todos" : statusFilter === "success" ? "Sucessos" : "Falhas"}</span>
@@ -489,7 +548,11 @@ function AuditoriaPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-72 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList>
+                    <CommandList 
+                            className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                            style={{ WebkitOverflowScrolling: 'touch' }}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         {STATUS_OPTIONS.map(opt => (
                           <CommandItem key={opt.id} onSelect={() => setStatusFilter(opt.id)} className="cursor-pointer text-[#d946ef]">
@@ -506,7 +569,7 @@ function AuditoriaPage() {
             {/* Período Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-white border-slate-200 text-slate-600 justify-between">
                     <span className="truncate">Período: {period === "custom" ? "Personalizado" : PERIOD_OPTIONS.find(p => p.id === period)?.label}</span>
@@ -515,7 +578,11 @@ function AuditoriaPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-auto" align="start">
                   <Command>
-                    <CommandList>
+                    <CommandList 
+                            className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                            style={{ WebkitOverflowScrolling: 'touch' }}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         {PERIOD_OPTIONS.map(opt => (
                           <CommandItem key={opt.id} onSelect={() => setPeriod(opt.id)}>
@@ -557,10 +624,12 @@ function StatCard({ label, value, tone = "default", highlight = false }: {
     warn: "text-amber-600" 
   }[tone];
   
+  const formattedValue = typeof value === "number" ? value.toLocaleString("pt-BR") : value;
+  
   return (
     <div className={`rounded-3xl border p-5 shadow-sm ${highlight ? "bg-primary text-primary-foreground" : "bg-card"}`}>
       <div className="text-xs font-semibold uppercase">{label}</div>
-      <div className={`mt-2 text-2xl font-bold ${highlight ? "text-primary-foreground" : toneClass}`}>{value}</div>
+      <div className={`mt-2 text-2xl font-bold ${highlight ? "text-primary-foreground" : toneClass}`}>{formattedValue}</div>
     </div>
   );
 }

@@ -177,7 +177,7 @@ serve(
         throw new Error("SESSION_EXPIRED: O token bruto da Superbid fornecido é inválido ou expirou na origem.");
       }
       if (!userCheckRes.ok) {
-        throw new Error(`UPSTREAM_USER_ERROR (${userCheckRes.status}): Falha ao validar token sbx no gateway upstream.`);
+        throw new Error(`UPSTREAM_USER_ERROR (${userCheckRes.status}): Falha ao autenticar usuário na Superbid.`);
       }
 
       const upstreamUserData = await userCheckRes.json();
@@ -185,7 +185,7 @@ serve(
       userId = String(account?.id || "");
 
       if (!userId) {
-        throw new Error("USER_NOT_FOUND: Não foi possível identificar o ID do usuário através do token sbx validado.");
+        throw new Error("USER_NOT_FOUND: Não foi possível identificar o ID do usuário através do login Superbid.");
       }
 
       // Emite o nosso JWT interno stateless e extrai a string JWS de dentro do objeto SessionData retornado por jwt.ts

@@ -35,7 +35,7 @@ export default function TrafficCharts({
               Carregando...
             </div>
           ) : (
-            <ChartContainer config={defaultChartConfig} className="h-[240px] w-full">
+            <ChartContainer config={defaultChartConfig} className="h-[240px] w-full min-w-0">
               <BarChart data={visDailyData} margin={{ top: 24, right: 0, left: -24, bottom: 0 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} interval="preserveStartEnd" />
