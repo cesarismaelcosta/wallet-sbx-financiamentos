@@ -31,7 +31,7 @@ export default function TrafficCharts({
           </div>
           {loading || !visitKpis ? (
             <div className="h-[240px] flex items-center justify-center text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="h-4 w-4 animate-spin mr-2 text-primary" />
               Carregando...
             </div>
           ) : (
@@ -63,7 +63,7 @@ export default function TrafficCharts({
             </div>
             {loading || !chart.data ? (
               <div className="h-[240px] flex items-center justify-center text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <Loader2 className="h-4 w-4 animate-spin mr-2 text-primary" />
                 Carregando...
               </div>
             ) : chart.data.length === 0 ? (
@@ -76,7 +76,7 @@ export default function TrafficCharts({
                   <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={120} />
                   <ChartTooltip cursor={{ fill: "var(--muted)", opacity: 0.4 }} content={<ChartTooltipContent />} />
                   <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={28}>
-                    {chart.data.map((_, i) => (
+                    {chart.data.map((_: unknown, i: number) => (
                       <Cell key={i} fill={barColors[(i + chart.colorOffset) % barColors.length]} />
                     ))}
                     <LabelList dataKey="count" position="right" fill="var(--foreground)" fontSize={11} fontWeight={600} />

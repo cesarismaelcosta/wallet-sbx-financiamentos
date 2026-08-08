@@ -7,11 +7,11 @@
  * ============================================================================
  * [DIRETRIZES DE ARQUITETURA E SEGURANÇA]:
  * 1. Auth Guard Integrado: Intercepta o ciclo de vida para validar tokens e 
- *     permissões administrativas estritas antes de renderizar sub-rotas (`Outlet`).
+ *    permissões administrativas estritas antes de renderizar sub-rotas (`Outlet`).
  * 2. Blindagem contra Loops: Previne redirecionamentos cíclicos caso a rota 
- *     ativa seja a página de autenticação (`/backoffice/login`).
+ *    ativa seja a página de autenticação (`/backoffice/login`).
  * 3. Layout Adaptativo: Suporta barra de navegação lateral persistente em desktop 
- *     e gaveta lateral deslizante (*Sheet*) para dispositivos móveis.
+ *    e gaveta lateral deslizante (*Sheet*) para dispositivos móveis.
  * ============================================================================
  * 
  * @author César Ismael Pereira da Costa
@@ -23,9 +23,7 @@ import { useEffect, useState } from "react";
 import {
   FileBarChart2,
   LayoutDashboard,
-  LifeBuoy,
   ListChecks,
-  Loader2,
   LogOut,
   Search,
   ShieldCheck,
@@ -80,24 +78,15 @@ function BackofficeLayout() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, signOut, session } = useAuth();
+  
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
-  // Valida se o usuário logado é Administrador
-  const isAdmin = backofficeUser?.role?.toLowerCase() === "admin";
-
-  // Verifica no sessionStorage se já foi inicializado nesta sessão do navegador
-  const hasInitialized = typeof window !== "undefined" && sessionStorage.getItem("sb_backoffice_initialized") === "true";
-
-  // Efeito para salvar no sessionStorage assim que o usuário for validado
+  // 1. TODOS OS HOOKS DEVEM FICAR NO TOPO, SEM NENHUM RETORNO ANTES DELES
   useEffect(() => {
-    if (backofficeUser && isBackofficeAllowed) {
-      sessionStorage.setItem("sb_backoffice_initialized", "true");
-    }
-  }, [backofficeUser, isBackofficeAllowed]);
+    setIsMounted(true);
+  }, []);
 
-  /**
-   * Efeito para aplicar classe de escopo global no body do Backoffice
-   */
   useEffect(() => {
     document.body.classList.add("backoffice-shell");
     return () => {
@@ -105,9 +94,6 @@ function BackofficeLayout() {
     };
   }, []);
 
-  /**
-   * [GUARD DE SESSÃO E PERMISSÃO]
-   */
   useEffect(() => {
     if (pathname.includes("/backoffice/login")) return;
     if (authLoading || authorizationLoading) return;
@@ -128,19 +114,44 @@ function BackofficeLayout() {
     }
   }, [authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, navigate, session?.access_token, pathname]);
 
+  useEffect(() => {
+    if (backofficeUser && isBackofficeAllowed) {
+      sessionStorage.setItem("sb_backoffice_initialized", "true");
+    }
+  }, [backofficeUser, isBackofficeAllowed]);
+
+  // 2. VARIÁVEIS DERIVADAS E LOGICAS APÓS OS HOOKS
+  const isAdmin = backofficeUser?.role?.toLowerCase() === "admin";
+  const hasInitialized = typeof window !== "undefined" && sessionStorage.getItem("sb_backoffice_initialized") === "true";
+
+  // 3. RETORNOS ANTECIPADOS (AGORA SEGUROS POIS JÁ PASSOU POR TODOS OS HOOKS)
+  
+  // [COMPLIANCE]: Fail-safe de segurança durante carregamento utilizando o seu spinner exato
+  if (!isMounted || authLoading || authorizationLoading) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+        <p className="text-slate-500 font-medium text-sm">
+          Carregando informações...
+        </p>
+      </div> 
+    );
+  }
+
   // Bypass para a página de login
   if (pathname.includes("/backoffice/login")) {
     return <Outlet />;
   }
 
-  // SE JÁ FOI INICIALIZADO NA SESSÃO, NUNCA MAIS MOSTRA O LOADER DE TELA CHEIA
-  if (!hasInitialized && (authLoading || authorizationLoading || !backofficeUser)) {
+  // Se já foi inicializado mas ainda valida
+  if (!hasInitialized && !backofficeUser) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[oklch(0.985_0.008_320)]">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Verificando acesso…
-        </div>
-      </div>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+        <p className="text-slate-500 font-medium text-sm">
+          Carregando informações...
+        </p>
+      </div> 
     );
   }
 
@@ -219,30 +230,32 @@ function BackofficeLayout() {
 
       {/* Perfil e Rodapé da Sidebar */}
       <div className="border-t border-border p-3">
-        <div className="mt-2 flex items-center gap-3 rounded-lg bg-accent/40 px-3 py-2.5">
-          {backofficeUser.avatar ? (
-            <img
-              src={backofficeUser.avatar}
-              alt={backofficeUser.name}
-              className="h-8 w-8 rounded-full object-cover"
-            />
-          ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[image:var(--gradient-primary)] text-xs font-bold text-primary-foreground">
-              {initials || "?"}
+        {backofficeUser ? (
+          <div className="mt-2 flex items-center gap-3 rounded-lg bg-accent/40 px-3 py-2.5">
+            {backofficeUser?.avatar ? (
+              <img
+                src={backofficeUser.avatar}
+                alt={backofficeUser?.name || "Usuário"}
+                className="h-8 w-8 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[image:var(--gradient-primary)] text-xs font-bold text-primary-foreground">
+                {initials || "?"}
+              </div>
+            )}
+            <div className="min-w-0 flex-1 leading-tight">
+              <div className="truncate text-sm font-semibold">{backofficeUser?.name}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{backofficeUser?.email}</div>
             </div>
-          )}
-          <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-sm font-semibold">{backofficeUser.name}</div>
-            <div className="truncate text-[11px] text-muted-foreground">{backofficeUser.email}</div>
+            <button
+              onClick={() => signOut()}
+              className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+              title="Encerrar sessão"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={() => signOut()}
-            className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-            title="Encerrar sessão"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+        ) : null}
       </div>
     </div>
   );

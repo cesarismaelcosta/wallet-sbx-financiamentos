@@ -32,7 +32,7 @@ export default function SimulationCharts({
           </div>
           {loading || !simKpis ? (
             <div className="h-[240px] flex items-center justify-center text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="h-4 w-4 animate-spin mr-2 text-primary" />
               Carregando...
             </div>
           ) : (
@@ -64,7 +64,7 @@ export default function SimulationCharts({
             </div>
             {loading || !chart.data ? (
               <div className="h-[240px] flex items-center justify-center text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <Loader2 className="h-4 w-4 animate-spin mr-2 text-primary" />
                 Carregando...
               </div>
             ) : chart.data.length === 0 ? (
@@ -89,7 +89,7 @@ export default function SimulationCharts({
                     }
                   />
                   <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={28}>
-                    {chart.data.map((_, i) => (
+                    {chart.data.map((_: unknown, i: number) => (
                       <Cell key={i} fill={barColors[(i + idx * 3) % barColors.length]} />
                     ))}
                     <LabelList

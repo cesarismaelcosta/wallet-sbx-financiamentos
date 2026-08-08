@@ -392,7 +392,7 @@ export function sbXPAYHome() {
                     <img
                       src="/assets/home/conta.webp"
                       alt="Segurança sbX Wallet"
-                      fetchpriority="high"
+                      fetchPriority="high"
                       decoding="async"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
@@ -477,7 +477,7 @@ export function sbXPAYHome() {
                 <img
                   src="/assets/home/conta.webp"
                   alt="Segurança sbX Wallet"
-                  fetchpriority="high"
+                  fetchPriority="high"
                   decoding="async"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
@@ -500,7 +500,7 @@ export function sbXPAYHome() {
                     <img
                       src="/assets/home/cartao.webp"
                       alt="Cartão"
-                      fetchpriority="high"
+                      fetchPriority="high"
                       decoding="async"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
@@ -565,7 +565,7 @@ export function sbXPAYHome() {
                 <img
                   src="/assets/home/cartao.webp"
                   alt="Cartão"
-                  fetchpriority="high"
+                  fetchPriority="high"
                   decoding="async"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
