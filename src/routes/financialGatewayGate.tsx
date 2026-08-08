@@ -1,7 +1,7 @@
 /**
  * @fileoverview Rota: financialGatewayGate (Front-end Error Fallback & Resilient Recovery)
  * @path src/routes/financialGatewayGate.tsx
- * 
+ *
  * =========================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE: FALLBACK DE BORDA]
  * =========================================================================
@@ -10,13 +10,13 @@
  * 2. [HIGIENIZAÇÃO DE CONTEXTO]: Extrai query parameters de falha e metadados
  *    (como offer_id, product_id) de forma estrita e segura.
  * 3. [RETORNO CONTEXTUAL]: Garante que o usuário seja devolvido para a origem
- *    correta (`targetReturnUrl`) de forma atômica, eliminando loops ou saltos 
+ *    correta (`targetReturnUrl`) de forma atômica, eliminando loops ou saltos
  *    para a raiz global (/).
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { ArrowLeft } from "lucide-react";
 import { logSystemError } from "@/services/systemNotification";
 
 interface SearchSchema {
@@ -59,31 +59,30 @@ export const Route = createFileRoute("/financialGatewayGate")({
       if (status === "error") {
         logSystemError({
           context: "Gateway Redirect (financialGatewayGate)",
-          subject: `Erro de Jornada: ${code || 'UNKNOWN'}`,
+          subject: `Erro de Jornada: ${code || "UNKNOWN"}`,
           message: message || "Falha não especificada.",
-          raw_payload: { 
+          raw_payload: {
             error_code: code || null,
             entity_id: entity_id || null,
             offer_id: offer_id || null,
             product_id: product_id || null,
             metadata: {
-              origin_url: targetReturnUrl
-            }
-          }
+              origin_url: targetReturnUrl,
+            },
+          },
         });
       }
     }, [status, code, message, targetReturnUrl, offer_id, product_id, entity_id]);
-
 
     // =====================================================================
     // [CONTROLE DE FLUXO]: Temporizador regressivo para redirecionamento automático
     // =====================================================================
     useEffect(() => {
       if (countdown > 0) {
-        const timer = setTimeout(() => setCountdown(prev => prev - 1), 1000);
+        const timer = setTimeout(() => setCountdown((prev) => prev - 1), 1000);
         return () => clearTimeout(timer);
       }
-      
+
       // Auto-retorno ao zerar o contador usando a URL de destino tratada
       if (countdown === 0) {
         window.location.replace(targetReturnUrl);
@@ -103,8 +102,8 @@ export const Route = createFileRoute("/financialGatewayGate")({
     // [TRATAMENTO DE MENSAGEM]: Higienização textual para exibição amigável
     // =====================================================================
     const rawMessage = message || "Não foi possível carregar a simulação desta oferta.";
-    const cleanMessage = rawMessage.includes(":") 
-      ? rawMessage.substring(rawMessage.indexOf(":") + 1).trim() 
+    const cleanMessage = rawMessage.includes(":")
+      ? rawMessage.substring(rawMessage.indexOf(":") + 1).trim()
       : rawMessage;
 
     // =====================================================================
@@ -112,19 +111,12 @@ export const Route = createFileRoute("/financialGatewayGate")({
     // =====================================================================
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-        
-        <img 
-          src="/assets/error/error.png" 
-          alt="Erro" 
-          className="w-34 h-34 object-contain mb-6" 
-        />
+        <img src="/assets/error/error.webp" alt="Erro" className="w-34 h-34 object-contain mb-6" />
         <p className="text-slate-800 font-bold text-lg mb-2">Ops! Algo deu errado.</p>
-        <p className="text-slate-500 font-medium text-sm text-center max-w-md px-4">
-          {cleanMessage}
-        </p>
+        <p className="text-slate-500 font-medium text-sm text-center max-w-md px-4">{cleanMessage}</p>
         <p className="text-slate-400 font-medium text-xs mt-4 mb-6">Retornando em {countdown}s...</p>
-        
-        <button 
+
+        <button
           onClick={() => window.location.replace(targetReturnUrl)}
           className="flex items-center text-[#B400FF] font-semibold text-sm hover:opacity-80 transition-opacity"
         >
@@ -133,5 +125,5 @@ export const Route = createFileRoute("/financialGatewayGate")({
         </button>
       </div>
     );
-  }
+  },
 });

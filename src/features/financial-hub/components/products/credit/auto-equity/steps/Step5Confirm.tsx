@@ -1,9 +1,9 @@
 /**
  * @fileoverview Passo 5: Confirmação e Resultado (Auto-Equity)
  * @path src/features/financial-hub/components/products/credit/auto-equity/steps/Step5Confirm.tsx
- * * PROPÓSITO: 
+ * * PROPÓSITO:
  * Exibe o feedback final do processamento da proposta (sucesso, negação ou erro).
- * * INTEGRAÇÃO: 
+ * * INTEGRAÇÃO:
  * - Utiliza o contexto `useWizard` para ler o estado da simulação e executar a reinicialização.
  */
 
@@ -15,9 +15,9 @@ import { ButtonWhatsApp } from "@/features/financial-hub/components/layout/Butto
 
 export function Step5Confirm() {
   const { state, update, goTo } = useWizard<any>();
-  
+
   // Estados locais de UI
-  const [status, setStatus] = useState<'loading' | 'success' | 'denied' | 'error'>('loading');
+  const [status, setStatus] = useState<"loading" | "success" | "denied" | "error">("loading");
 
   useEffect(() => {
     const result = state.data?.simulationResult;
@@ -25,17 +25,17 @@ export function Step5Confirm() {
 
     // 1. Primeiro checamos se a API falhou tecnicamente
     if (!result.success) {
-      setStatus('error');
+      setStatus("error");
       return;
     }
 
     // 2. Agora checamos o status de negócio
     if (result.status_id === 1) {
-      setStatus('success'); // Aprovado
+      setStatus("success"); // Aprovado
     } else if (result.status_id === 2) {
-      setStatus('denied'); // Negado
+      setStatus("denied"); // Negado
     } else {
-      setStatus('error'); // Status desconhecido
+      setStatus("error"); // Status desconhecido
     }
   }, [state.data]);
 
@@ -46,19 +46,18 @@ export function Step5Confirm() {
         ...state.data,
         simulationResult: null,
         simulation_id: null,
-      }
+      },
     });
 
     // 2. Usa a função que já existe no seu Provider
-    goTo(1); 
+    goTo(1);
   };
 
   return (
     // Layout Compacto: py-4 reduz o espaço vertical excessivo
     <div className="flex flex-col items-center justify-center py-4 text-center animate-in fade-in zoom-in duration-300 w-full max-w-lg mx-auto">
-      
       {/* 1. ESTADO DE CARREGAMENTO */}
-      {status === 'loading' && (
+      {status === "loading" && (
         <div className="flex flex-col items-center gap-3 py-12">
           <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-primary)]" />
           <h2 className="text-lg font-semibold text-foreground">Analisando proposta...</h2>
@@ -66,26 +65,24 @@ export function Step5Confirm() {
       )}
 
       {/* 2. ESTADO DE RESULTADO */}
-      {status !== 'loading' && (
+      {status !== "loading" && (
         <div className="flex flex-col items-center w-full space-y-6">
-          
           {/* Sucesso / Aprovado */}
-          {status === 'success' && (
+          {status === "success" && (
             <>
               <div className="w-36 h-36 flex items-center justify-center mb-2">
-                <img 
-                  src="/assets/home/carhomeequity.png" 
-                  alt="Proposta enviada" 
+                <img
+                  src="/assets/home/carhomeequity.webp"
+                  alt="Proposta enviada"
                   className="w-full h-full object-contain"
                 />
               </div>
 
               <div className="space-y-2 max-w-sm mx-auto">
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-                  Proposta enviada!
-                </h2>
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight">Proposta enviada!</h2>
                 <p className="text-sm text-slate-500 leading-relaxed">
-                  Recebemos sua proposta. Entraremos em contato pelo e-mail <strong>{state.data?.eligibility?.email}</strong>.
+                  Recebemos sua proposta. Entraremos em contato pelo e-mail{" "}
+                  <strong>{state.data?.eligibility?.email}</strong>.
                 </p>
               </div>
 
@@ -99,12 +96,12 @@ export function Step5Confirm() {
           )}
 
           {/* Negado */}
-          {status === 'denied' && (
+          {status === "denied" && (
             <>
               <div className="w-36 h-36 flex items-center justify-center mb-2">
-                <img 
-                  src="/assets/home/financiamentocreditonegada.png" 
-                  alt="Proposta não aprovada" 
+                <img
+                  src="/assets/home/financiamentocreditonegada.webp"
+                  alt="Proposta não aprovada"
                   className="w-full h-full object-contain"
                 />
               </div>
@@ -119,12 +116,12 @@ export function Step5Confirm() {
           )}
 
           {/* Erro */}
-          {status === 'error' && (
+          {status === "error" && (
             <>
               <div className="w-36 h-36 flex items-center justify-center mb-2">
-                <img 
-                  src="/assets/home/financiamentoveiculosnegada.png" 
-                  alt="Erro na comunicação" 
+                <img
+                  src="/assets/home/financiamentoveiculosnegada.png"
+                  alt="Erro na comunicação"
                   className="w-full h-full object-contain"
                 />
               </div>
@@ -140,27 +137,25 @@ export function Step5Confirm() {
 
           {/* Botões: Layout Horizontal Padronizado (igual a Veículos) */}
           <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 pt-6 w-full border-t border-slate-100">
-            
             {/* Botão Voltar / Recomeçar */}
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               onClick={handleRestart}
               className="w-full sm:w-auto text-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/10 hover:text-[var(--brand-primary)] transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
             >
-              <ArrowLeft className="mr-2 h-4 w-4" /> 
-              {status === 'success' ? "Voltar ao início" : "Tentar novamente"}
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              {status === "success" ? "Voltar ao início" : "Tentar novamente"}
             </Button>
-            
+
             {/* Botão WhatsApp */}
             <div className="w-full sm:w-auto flex-1 flex justify-end">
-              <ButtonWhatsApp 
-                  productName="Auto Equity"
-                  variant="button"
-                  config={state.data?.integration_details} 
-                  data={state.data} 
+              <ButtonWhatsApp
+                productName="Auto Equity"
+                variant="button"
+                config={state.data?.integration_details}
+                data={state.data}
               />
             </div>
-
           </div>
         </div>
       )}

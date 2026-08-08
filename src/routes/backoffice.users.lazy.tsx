@@ -1,6 +1,33 @@
+/**
+ * ============================================================================
+ * @fileoverview Gerenciamento de Usuários (Backoffice)
+ * @module Backoffice/Users
+ * @route /backoffice/users
+ *
+ * @description
+ * Gerencia a interface de administração e RBAC (Role-Based Access Control) dos 
+ * usuários do Backoffice. Controla a criação, ativação/desativação e elevação de privilégios.
+ * 
+ * @rules Regras de Negócio (Controle de Escopo / Filtros):
+ * - Admin e Manager: Possuem acesso global ao sistema. O payload injeta 
+ *   automaticamente o curinga `["*"]` nos campos `allowed_partners` e `allowed_products`.
+ * - Viewer: Possui acesso granular e restrito. A seleção é feita a partir de uma listagem 
+ *   dinâmica. Agora permite explicitamente enviar `["*"]` caso precise dar acesso total.
+ * 
+ * @behavior Promoção de Cargo (changeRole):
+ * - Se um usuário com perfil 'viewer' for promovido para 'admin' ou 'manager' 
+ *   diretamente pelo dropdown da tabela, o sistema intercepta a chamada e anexa 
+ *   `["*"]` ao payload. Isso limpa quaisquer restrições residuais no banco.
+ * ============================================================================
+ */
+
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Loader2, Plus, RefreshCw, ShieldCheck, UserCheck, UserX } from "lucide-react";
+import { 
+  Loader2, Plus, RefreshCw, ShieldCheck, UserCheck, 
+  UserX, Info, Filter, ChevronDown, Settings2 
+} from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,112 +35,191 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/integrations/auth/AuthContext";
 
-/**
- * Rota: /backoffice/usuarios
- * Responsabilidade: Gerenciamento administrativo de usuários do backoffice (RBAC).
- */
 export const Route = createLazyFileRoute("/backoffice/users")({ component: UsuariosPage });
 
 type Role = "admin" | "manager" | "viewer";
+
 type BackofficeUserRow = {
   id: string;
   email: string;
   name: string;
   role: Role;
   is_active: boolean;
+  allowed_partners?: string[];
+  allowed_products?: string[];
   created_at: string;
   updated_at?: string;
 };
 
-// Mapeamento de estilos para badges de cada cargo
+type SelectOption = {
+  id: string;
+  name: string;
+};
+
 const ROLE_BADGE: Record<Role, string> = {
   admin: "bg-primary/10 text-primary",
   manager: "bg-blue-500/10 text-blue-600",
   viewer: "bg-muted text-muted-foreground",
 };
 
-/**
- * Função utilitária para invocar a Edge Function 'manage-backoffice-users'.
- * Usa Service Role para contornar restrições de RLS (Row Level Security).
- */
 async function callManage(payload: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("manage-backoffice-users", { body: payload });
   if (error) throw new Error(error.message);
   return data;
 }
 
+export function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  return isMobile;
+}
+
 function UsuariosPage() {
   const { backofficeUser } = useAuth();
+  const isMobile = useIsMobile();
+  
   const [users, setUsers] = useState<BackofficeUserRow[]>([]);
   const [domains, setDomains] = useState<string[]>([]);
+  
+  const [partnersList, setPartnersList] = useState<SelectOption[]>([]);
+  const [productsList, setProductsList] = useState<SelectOption[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  
   const [registerOpen, setregisterOpen] = useState(false);
-  const [registerData, setregisterData] = useState({ name: "", emailPrefix: "", domain: "", role: "viewer" as Role });
+  const [registerData, setregisterData] = useState({ 
+    name: "", 
+    emailPrefix: "", 
+    domain: "", 
+    role: "viewer" as Role,
+    partners: [] as string[],
+    products: [] as string[]
+  });
 
-  // Define se o usuário autenticado possui privilégio de admin
+  const [editOpen, setEditOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editingUser, setEditingUser] = useState<BackofficeUserRow | null>(null);
+  const [editPartners, setEditPartners] = useState<string[]>([]);
+  const [editProducts, setEditProducts] = useState<string[]>([]);
+
   const isAdmin = backofficeUser?.role === "admin";
 
-  /**
-   * Carrega dados iniciais: Lista de usuários e domínios permitidos.
-   * As queries abaixo são filtradas e protegidas pelo RLS no banco.
-   */
   async function load() {
     setLoading(true);
+    
     const { data: userData } = await supabase
       .from("backoffice_users")
       .select("*")
       .order("created_at", { ascending: false });
+      
     const { data: domainData, error: domainError } = await supabase
       .from("allowed_email_domains")
       .select("domain")
       .eq("is_active", true);
 
+    const { data: partnersData } = await supabase.from("partners").select("id, name");
+    const { data: productsData } = await supabase.from("product_types").select("id, name");
+
     if (userData) setUsers(userData as BackofficeUserRow[]);
-    if (domainError) {
-      console.error("Erro ao carregar domínios:", domainError);
-      toast.error("Não foi possível carregar os domínios permitidos.");
-    }
     if (domainData) setDomains(domainData.map((d) => d.domain));
+    if (partnersData) setPartnersList(partnersData);
+    if (productsData) setProductsList(productsData);
+    if (domainError) toast.error("Não foi possível carregar os domínios permitidos.");
+    
     setLoading(false);
   }
 
-  /**
-   * Executa a operação de cadastro de novo usuário.
-   * Utiliza a Edge Function para criar o usuário e atribuir permissões.
-   */
+  const togglePartner = (id: string) => {
+    setregisterData((prev) => {
+      let current = prev.partners.filter(p => p !== "*");
+      if (current.includes(id)) {
+        current = current.filter(p => p !== id);
+      } else {
+        current.push(id);
+      }
+      return { ...prev, partners: current };
+    });
+  };
+
+  const toggleProduct = (id: string) => {
+    setregisterData((prev) => {
+      let current = prev.products.filter(p => p !== "*");
+      if (current.includes(id)) {
+        current = current.filter(p => p !== id);
+      } else {
+        current.push(id);
+      }
+      return { ...prev, products: current };
+    });
+  };
+
+  const toggleEditPartner = (id: string) => {
+    setEditPartners((prev) => {
+      let current = prev.filter(p => p !== "*");
+      if (current.includes(id)) return current.filter(p => p !== id);
+      return [...current, id];
+    });
+  };
+
+  const toggleEditProduct = (id: string) => {
+    setEditProducts((prev) => {
+      let current = prev.filter(p => p !== "*");
+      if (current.includes(id)) return current.filter(p => p !== id);
+      return [...current, id];
+    });
+  };
+
   async function handleRegister() {
-    // --- MODIFIED: Renomeado de handleregister para refletir semântica
     if (registerData.emailPrefix.includes("@")) {
       toast.error("O prefixo não deve conter o caractere @.");
       return;
     }
     if (!registerData.name || !registerData.emailPrefix || !registerData.domain) {
-      toast.error("Preencha todos os campos.");
+      toast.error("Preencha todos os campos obrigatórios.");
       return;
     }
 
     setIsSaving(true);
     try {
+      const allowed_partners = (registerData.role === "admin" || registerData.role === "manager") ? ["*"] : registerData.partners;
+      const allowed_products = (registerData.role === "admin" || registerData.role === "manager") ? ["*"] : registerData.products;
+
       await callManage({
         action: "register",
         name: registerData.name,
         email: `${registerData.emailPrefix}@${registerData.domain}`,
         role: registerData.role,
+        allowed_partners,
+        allowed_products
       });
+
       toast.success("Usuário cadastrado com sucesso!");
       setregisterOpen(false);
-      setregisterData({ name: "", emailPrefix: "", domain: "", role: "viewer" });
+      setregisterData({ name: "", emailPrefix: "", domain: "", role: "viewer", partners: [], products: [] });
       load();
     } catch (e: any) {
       toast.error(e.message || "Erro ao cadastrar usuário");
@@ -122,49 +228,395 @@ function UsuariosPage() {
     }
   }
 
-  /**
-   * Ativa ou desativa um usuário específico.
-   * Impede a auto-desativação.
-   */
+  function openEditPermissions(user: BackofficeUserRow) {
+    setEditingUser(user);
+    setEditPartners(user.allowed_partners || []);
+    setEditProducts(user.allowed_products || []);
+    setEditOpen(true);
+  }
+
+  async function handleUpdatePermissions() {
+    if (!editingUser) return;
+    setIsUpdating(true);
+    try {
+      await callManage({
+        action: "update_permissions",
+        id: editingUser.id,
+        allowed_partners: editPartners,
+        allowed_products: editProducts
+      });
+
+      toast.success("Permissões atualizadas com sucesso!");
+      setEditOpen(false);
+      setEditingUser(null);
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao atualizar permissões");
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
   async function toggleActive(u: BackofficeUserRow) {
-    console.log("-> Botão Desativar clicado para:", u.email);
-    
     if (backofficeUser?.email?.toLowerCase() === u.email.toLowerCase()) {
       toast.error("Você não pode desativar seu próprio usuário.");
       return;
     }
-
-    const payload = { action: "set_active", id: u.id, is_active: !u.is_active };
-    console.log("-> Payload sendo enviado:", payload);
-
     try {
-      const response = await callManage(payload);
-      console.log("-> Resposta da Edge Function:", response);
-      
+      await callManage({ action: "set_active", id: u.id, is_active: !u.is_active });
       toast.success(`Usuário ${!u.is_active ? 'ativado' : 'desativado'} com sucesso.`);
       load();
-    } catch (e: any) { 
-      console.error("-> Erro na Edge Function:", e);
-      toast.error(e.message || "Erro ao atualizar status"); 
-    }
+    } catch (e: any) { toast.error(e.message || "Erro ao atualizar status"); }
   }
 
-  /**
-   * Atualiza a role de um usuário via Edge Function.
-   */
   async function changeRole(u: BackofficeUserRow, newRole: Role) {
     try {
-      await callManage({ action: "set_role", id: u.id, role: newRole });
+      const payload: any = { action: "set_role", id: u.id, role: newRole };
+      if (newRole === "admin" || newRole === "manager") {
+        payload.allowed_partners = ["*"];
+        payload.allowed_products = ["*"];
+      }
+      await callManage(payload);
       load();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
+    } catch (e: any) { toast.error(e.message); }
   }
 
-  // Carregamento inicial de dados
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
+
+  const renderRegisterContent = () => (
+    <>
+      <div className="space-y-4 py-4">
+        <div className="space-y-2">
+          <Label>Nome</Label>
+          <Input
+            value={registerData.name}
+            onChange={(e) => setregisterData({ ...registerData, name: e.target.value })}
+          />
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>E-mail (Prefixo)</Label>
+            <Input
+              value={registerData.emailPrefix}
+              onChange={(e) => setregisterData({ ...registerData, emailPrefix: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Domínio</Label>
+            <Select
+              value={registerData.domain}
+              onValueChange={(v) => setregisterData({ ...registerData, domain: v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione..." />
+              </SelectTrigger>
+              <SelectContent>
+                {domains.map((d) => (
+                  <SelectItem key={d} value={d}>@{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Cargo</Label>
+          <Select
+            value={registerData.role}
+            onValueChange={(v: Role) => setregisterData({ ...registerData, role: v })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="admin">Administrador</SelectItem>
+              <SelectItem value="manager">Gerente</SelectItem>
+              <SelectItem value="viewer">Visualizador</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {registerData.role === "viewer" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            {/* PARCEIROS */}
+            <div className="space-y-2 flex flex-col">
+              <Label>Parceiros Permitidos</Label>
+              <Popover modal={true}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-full rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600 justify-between font-normal"
+                  >
+                    <span className="flex items-center gap-2 truncate">
+                      <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                      <span className="truncate">
+                        {registerData.partners.includes("*") 
+                          ? "Todos (Acesso Total)" 
+                          : registerData.partners.length === 0 
+                            ? "Nenhum (Bloqueado)" 
+                            : `${registerData.partners.length} selecionado(s)`}
+                      </span>
+                    </span>
+                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    {/* HACK DE SCROLL: onWheelCapture para evitar bloqueio do Dialog no PC */}
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain"
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setregisterData({ ...registerData, partners: ["*"] })} className="cursor-pointer font-medium text-primary">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary ${registerData.partners.includes("*") ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                            {registerData.partners.includes("*") && "✓"}
+                          </div>
+                          Todos (Acesso Total)
+                        </CommandItem>
+                        <CommandItem onSelect={() => setregisterData({ ...registerData, partners: [] })} className="cursor-pointer font-medium text-destructive">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-destructive ${registerData.partners.length === 0 ? "bg-destructive text-destructive-foreground" : "opacity-50"}`}>
+                            {registerData.partners.length === 0 && "✓"}
+                          </div>
+                          Nenhum (Bloqueado)
+                        </CommandItem>
+                        <div className="h-px bg-border my-1" />
+                        {partnersList.map((p) => {
+                          const isSelected = registerData.partners.includes(String(p.id));
+                          return (
+                            <CommandItem key={p.id} onSelect={() => togglePartner(String(p.id))} className={`cursor-pointer ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {p.name}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* PRODUTOS */}
+            <div className="space-y-2 flex flex-col">
+              <Label>Produtos Permitidos</Label>
+              <Popover modal={true}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-full rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600 justify-between font-normal"
+                  >
+                    <span className="flex items-center gap-2 truncate">
+                      <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                      <span className="truncate">
+                        {registerData.products.includes("*") 
+                          ? "Todos (Acesso Total)" 
+                          : registerData.products.length === 0 
+                            ? "Nenhum (Bloqueado)" 
+                            : `${registerData.products.length} selecionado(s)`}
+                      </span>
+                    </span>
+                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    {/* HACK DE SCROLL: onWheelCapture */}
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain"
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setregisterData({ ...registerData, products: ["*"] })} className="cursor-pointer font-medium text-primary">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary ${registerData.products.includes("*") ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                            {registerData.products.includes("*") && "✓"}
+                          </div>
+                          Todos (Acesso Total)
+                        </CommandItem>
+                        <CommandItem onSelect={() => setregisterData({ ...registerData, products: [] })} className="cursor-pointer font-medium text-destructive">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-destructive ${registerData.products.length === 0 ? "bg-destructive text-destructive-foreground" : "opacity-50"}`}>
+                            {registerData.products.length === 0 && "✓"}
+                          </div>
+                          Nenhum (Bloqueado)
+                        </CommandItem>
+                        <div className="h-px bg-border my-1" />
+                        {productsList.map((p) => {
+                          const isSelected = registerData.products.includes(String(p.id));
+                          return (
+                            <CommandItem key={p.id} onSelect={() => toggleProduct(String(p.id))} className={`cursor-pointer ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {p.name}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 rounded-md bg-primary/10 p-3 text-sm text-primary animate-in fade-in duration-300">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>Usuários com perfil de <strong>{registerData.role === "admin" ? "Administrador" : "Gerente"}</strong> possuem acesso irrestrito a todos os parceiros e produtos.</p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
+        <Button variant="outline" onClick={() => setregisterOpen(false)} className="w-full sm:w-auto h-11 rounded-xl">Cancelar</Button>
+        <Button onClick={handleRegister} disabled={isSaving} className="w-full sm:w-auto bg-[#B300FF] hover:bg-[#9f00e6] text-white h-11 rounded-xl">
+          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+          Cadastrar
+        </Button>
+      </div>
+    </>
+  );
+
+  const renderEditContent = () => (
+    <>
+      <div className="space-y-6 py-4">
+        {/* EDIÇÃO PARCEIROS */}
+        <div className="space-y-2 flex flex-col">
+          <Label>Parceiros Permitidos</Label>
+          <Popover modal={true}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-11 w-full rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600 justify-between font-normal"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                  <span className="truncate">
+                    {editPartners.includes("*") 
+                      ? "Todos (Acesso Total)" 
+                      : editPartners.length === 0 
+                        ? "Nenhum (Bloqueado)" 
+                        : `${editPartners.length} selecionado(s)`}
+                  </span>
+                </span>
+                <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+              <Command>
+                {/* HACK DE SCROLL: onWheelCapture */}
+                <CommandList 
+                  className="max-h-56 overflow-y-auto overscroll-contain"
+                  onWheelCapture={(e) => e.stopPropagation()}
+                >
+                  <CommandGroup>
+                    <CommandItem onSelect={() => setEditPartners(["*"])} className="cursor-pointer font-medium text-primary">
+                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary ${editPartners.includes("*") ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                        {editPartners.includes("*") && "✓"}
+                      </div>
+                      Todos (Acesso Total)
+                    </CommandItem>
+                    <CommandItem onSelect={() => setEditPartners([])} className="cursor-pointer font-medium text-destructive">
+                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-destructive ${editPartners.length === 0 ? "bg-destructive text-destructive-foreground" : "opacity-50"}`}>
+                        {editPartners.length === 0 && "✓"}
+                      </div>
+                      Nenhum (Bloqueado)
+                    </CommandItem>
+                    <div className="h-px bg-border my-1" />
+                    {partnersList.map((p) => {
+                      const isSelected = editPartners.includes(String(p.id));
+                      return (
+                        <CommandItem key={p.id} onSelect={() => toggleEditPartner(String(p.id))} className={`cursor-pointer ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                            {isSelected && "✓"}
+                          </div>
+                          {p.name}
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* EDIÇÃO PRODUTOS */}
+        <div className="space-y-2 flex flex-col">
+          <Label>Produtos Permitidos</Label>
+          <Popover modal={true}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-11 w-full rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600 justify-between font-normal"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                  <span className="truncate">
+                    {editProducts.includes("*") 
+                      ? "Todos (Acesso Total)" 
+                      : editProducts.length === 0 
+                        ? "Nenhum (Bloqueado)" 
+                        : `${editProducts.length} selecionado(s)`}
+                  </span>
+                </span>
+                <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+              <Command>
+                {/* HACK DE SCROLL: onWheelCapture */}
+                <CommandList 
+                  className="max-h-56 overflow-y-auto overscroll-contain"
+                  onWheelCapture={(e) => e.stopPropagation()}
+                >
+                  <CommandGroup>
+                    <CommandItem onSelect={() => setEditProducts(["*"])} className="cursor-pointer font-medium text-primary">
+                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary ${editProducts.includes("*") ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                        {editProducts.includes("*") && "✓"}
+                      </div>
+                      Todos (Acesso Total)
+                    </CommandItem>
+                    <CommandItem onSelect={() => setEditProducts([])} className="cursor-pointer font-medium text-destructive">
+                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-destructive ${editProducts.length === 0 ? "bg-destructive text-destructive-foreground" : "opacity-50"}`}>
+                        {editProducts.length === 0 && "✓"}
+                      </div>
+                      Nenhum (Bloqueado)
+                    </CommandItem>
+                    <div className="h-px bg-border my-1" />
+                    {productsList.map((p) => {
+                      const isSelected = editProducts.includes(String(p.id));
+                      return (
+                        <CommandItem key={p.id} onSelect={() => toggleEditProduct(String(p.id))} className={`cursor-pointer ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                            {isSelected && "✓"}
+                          </div>
+                          {p.name}
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-4">
+        <Button variant="outline" onClick={() => setEditOpen(false)} className="w-full sm:w-auto h-11 rounded-xl">Cancelar</Button>
+        <Button onClick={handleUpdatePermissions} disabled={isUpdating} className="w-full sm:w-auto bg-[#B300FF] hover:bg-[#9f00e6] text-white font-semibold h-11 rounded-xl">
+          {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Salvar Permissões
+        </Button>
+      </div>
+    </>
+  );
 
   return (
     <div className="space-y-6">
@@ -174,88 +626,10 @@ function UsuariosPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* --- MODIFIED: Acesso condicional para o novo botão de "Cadastrar" --- */}
           {isAdmin && (
-            <Dialog open={registerOpen} onOpenChange={setregisterOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  {/* --- MODIFIED: Texto alterado de 'Convidar' para 'Cadastrar' --- */}
-                  <Plus className="mr-2 h-4 w-4" /> Cadastrar Usuário
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  {/* --- MODIFIED: Título alterado --- */}
-                  <DialogTitle>Cadastrar novo usuário</DialogTitle>
-                  {/* --- MODIFIED: Descrição alterada --- */}
-                  <DialogDescription>Preencha os dados abaixo para criar o acesso.</DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Nome</Label>
-                    <Input
-                      value={registerData.name}
-                      onChange={(e) => setregisterData({ ...registerData, name: e.target.value })}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>E-mail (Prefixo)</Label>
-                      <Input
-                        value={registerData.emailPrefix}
-                        onChange={(e) => setregisterData({ ...registerData, emailPrefix: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Domínio</Label>
-                      <Select
-                        value={registerData.domain}
-                        onValueChange={(v) => setregisterData({ ...registerData, domain: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {domains.map((d) => (
-                            <SelectItem key={d} value={d}>
-                              @{d}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Cargo</Label>
-                    <Select
-                      value={registerData.role}
-                      onValueChange={(v: Role) => setregisterData({ ...registerData, role: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">Administrador</SelectItem>
-                        <SelectItem value="manager">Gerente</SelectItem>
-                        <SelectItem value="viewer">Visualizador</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setregisterOpen(false)}>
-                    Cancelar
-                  </Button>
-                  {/* --- MODIFIED: Botão principal renomeado para Cadastrar --- */}
-                  <Button onClick={handleRegister} disabled={isSaving}>
-                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                    Cadastrar
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button size="sm" onClick={() => setregisterOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Cadastrar Usuário
+            </Button>
           )}
 
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -264,17 +638,70 @@ function UsuariosPage() {
         </div>
       </div>
 
-{/* TABELA DE DADOS - Agora responsiva com Scroll Horizontal no Mobile */}
+      {isMobile ? (
+        <Sheet open={registerOpen} onOpenChange={setregisterOpen}>
+          <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white">
+            <SheetHeader className="text-left mb-4">
+              <SheetTitle>Cadastrar novo usuário</SheetTitle>
+              <SheetDescription>Preencha os dados abaixo para criar o acesso.</SheetDescription>
+            </SheetHeader>
+            {renderRegisterContent()}
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Dialog open={registerOpen} onOpenChange={setregisterOpen}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Cadastrar novo usuário</DialogTitle>
+              <DialogDescription>Preencha os dados abaixo para criar o acesso.</DialogDescription>
+            </DialogHeader>
+            {renderRegisterContent()}
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {isMobile ? (
+        <Sheet open={editOpen} onOpenChange={setEditOpen}>
+          <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white">
+            <SheetHeader className="text-left mb-4">
+              <SheetTitle>Editar Permissões</SheetTitle>
+              <SheetDescription>
+                Ajuste os acessos de parceiros e produtos para <strong>{editingUser?.name}</strong>.
+              </SheetDescription>
+            </SheetHeader>
+            {renderEditContent()}
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Editar Permissões</DialogTitle>
+              <DialogDescription>
+                Ajuste os acessos de parceiros e produtos para <strong>{editingUser?.name}</strong>.
+              </DialogDescription>
+            </DialogHeader>
+            {renderEditContent()}
+          </DialogContent>
+        </Dialog>
+      )}
+
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        {/* 👇 WRAPPER DE SCROLL ADICIONADO AQUI 👇 */}
         <div className="overflow-x-auto w-full pb-2">
           <table className="w-full text-sm">
+            <thead className="border-b border-border bg-muted/50 text-left text-muted-foreground">
+              <tr>
+                <th className="px-3 py-3 font-medium">Usuário</th>
+                <th className="px-3 py-3 font-medium">Cargo</th>
+                <th className="px-3 py-3 font-medium">Status</th>
+                <th className="px-3 py-3 text-right font-medium">Ações</th>
+              </tr>
+            </thead>
             <tbody>
               {users.map((u) => {
                 const isMe = backofficeUser?.email?.toLowerCase() === u.email.toLowerCase();
                 return (
                   <tr key={u.id} className="border-b border-border/60 hover:bg-accent/40">
-                    {/* 👇 whitespace-nowrap adicionado nas tds 👇 */}
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div className="font-semibold">{u.name}</div>
                       <div className="text-xs text-muted-foreground">{u.email}</div>
@@ -301,17 +728,20 @@ function UsuariosPage() {
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       {isAdmin && (
-                        <Button variant="ghost" size="sm" onClick={() => toggleActive(u)} disabled={isMe}>
-                          {u.is_active ? (
-                            <>
-                              <UserX className="mr-1 h-3 w-3" /> Desativar
-                            </>
-                          ) : (
-                            <>
-                              <UserCheck className="mr-1 h-3 w-3" /> Ativar
-                            </>
+                        <div className="flex items-center justify-end gap-1">
+                          {u.role === "viewer" && (
+                            <Button variant="ghost" size="sm" onClick={() => openEditPermissions(u)}>
+                              <Settings2 className="mr-1 h-3 w-3" /> Permissões
+                            </Button>
                           )}
-                        </Button>
+                          <Button variant="ghost" size="sm" onClick={() => toggleActive(u)} disabled={isMe}>
+                            {u.is_active ? (
+                              <><UserX className="mr-1 h-3 w-3" /> Desativar</>
+                            ) : (
+                              <><UserCheck className="mr-1 h-3 w-3" /> Ativar</>
+                            )}
+                          </Button>
+                        </div>
                       )}
                     </td>
                   </tr>

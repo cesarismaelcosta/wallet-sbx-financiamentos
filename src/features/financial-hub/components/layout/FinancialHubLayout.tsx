@@ -25,73 +25,30 @@ interface FinancialHubLayoutProps {
 /**
  * @component ErrorCountdown
  * @description Componente interno de fallback para erros críticos da jornada (ex: 401, 403, 404).
- * 
- * ============================================================================
- * UNIFICAÇÃO VISUAL (Design System)
- * ============================================================================
- * Este componente foi atualizado para espelhar a exata mesma experiência 
- * da tela de erro da Borda (financialGatewayGate.tsx). 
- * Substituímos o antigo "spinner de loading" por um ícone de erro claro, 
- * e o tempo de fuga foi padronizado para 5 segundos, mantendo a inteligência
- * de exibir títulos semânticos de acordo com a resposta da API.
- * 
- * @param {string} fallbackUrl - URL segura para onde o usuário será ejetado ao fim do timer.
- * @param {string} [message] - Mensagem descritiva do erro (injetada direto do contrato da API).
- * @param {string} [title] - Título semântico mapeado pelo layout (ex: "Sessão Expirada", "Acesso Restrito").
  */
-function ErrorCountdown({ fallbackUrl, message, title }: { fallbackUrl: string, message?: string, title?: string }) {
-  // ESTADO: Cronômetro regressivo padronizado para 5 segundos (igual ao Gateway).
-  // Evita prender o usuário em uma tela morta por muito tempo.
+function ErrorCountdown({ fallbackUrl, message, title }: { fallbackUrl: string; message?: string; title?: string }) {
   const [countdown, setCountdown] = useState(5);
 
-  // CICLO DE VIDA: Gerenciamento do timer e redirecionamento automático
   useEffect(() => {
-    // 1. Condição de Escape: Se o timer zerar, ejeta o usuário via BOM (Browser Object Model).
-    // Usamos window.location.href para forçar uma navegação real, 
-    // limpando a memória/contexto do SPA e garantindo que ele caia na URL de origem de forma limpa.
     if (countdown === 0) {
       window.location.href = fallbackUrl;
       return;
     }
-    
-    // 2. Loop do Timer: Subtrai 1 segundo a cada ciclo de 1000ms.
+
     const timer = setInterval(() => setCountdown((prev) => prev - 1), 1000);
-    
-    // 3. Cleanup: Evita memory leaks (vazamento de memória) se o componente desmontar antes do tempo.
     return () => clearInterval(timer);
   }, [countdown, fallbackUrl]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans'] p-6 text-center">
-      
-      {/* IDENTIDADE VISUAL: Imagem estática de erro.
-          Substitui o antigo "spinner", pois exibir um loader para um processo 
-          que já falhou passa a falsa sensação de que o sistema ainda está carregando. */}
-      <img 
-        src="/assets/error/error.png" 
-        alt="Erro na simulação" 
-        className="w-34 h-34 object-contain mb-6" 
-      />
-
-      {/* TÍTULO CONTEXTUAL: Informa o status da falha de forma direta e semântica */}
-      <h2 className="text-xl font-bold text-slate-800 mb-2">
-        {title || "Ops! Tivemos um problema"}
-      </h2>
-      
-      {/* MENSAGEM DO BACKEND: Renderiza a justificativa real vinda do Gatekeeper (Orquestrador) */}
+      <img src="/assets/error/error.webp" alt="Erro na simulação" className="w-34 h-34 object-contain mb-6" />
+      <h2 className="text-xl font-bold text-slate-800 mb-2">{title || "Ops! Tivemos um problema"}</h2>
       <p className="text-slate-500 font-medium text-sm mb-2 max-w-md px-4">
         {message || "Não foi possível carregar a simulação desta oferta."}
       </p>
-      
-      {/* FEEDBACK DE SISTEMA: Mostra pro usuário que ele não está preso na tela */}
-      <p className="text-slate-400 font-medium text-xs mt-4 mb-6">
-        Retornando em {countdown}s...
-      </p>
-      
-      {/* BOTÃO DE BYPASS: Permite ao usuário forçar a saída sem aguardar o timer.
-          Estilo padronizado com a identidade visual principal do produto (roxo). */}
-      <button 
-        onClick={() => window.location.href = fallbackUrl}
+      <p className="text-slate-400 font-medium text-xs mt-4 mb-6">Retornando em {countdown}s...</p>
+      <button
+        onClick={() => (window.location.href = fallbackUrl)}
         className="flex items-center text-[#B400FF] font-semibold text-sm hover:opacity-80 transition-opacity"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
@@ -102,18 +59,12 @@ function ErrorCountdown({ fallbackUrl, message, title }: { fallbackUrl: string, 
 }
 
 export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
-  // Captura parâmetros da URL (visit_id, visit_update_id) para enviar ao Orchestrator
-  const search = useSearch({ strict: false });
+  const search = useSearch({ strict: false }) as { visit_id?: string; visit_update_id?: string };
 
-  // 1. ESTADO DA CORTINA: Controla se o App está na fase de "preparação" (loading visual)
   const [isOrchestratorHydrating, setIsOrchestratorHydrating] = useState(true);
-
-  // 2. Tratamento de erros de componentes
   const [runtimeError, setRuntimeError] = useState<any>(null);
 
-  // 3. FAILSAFE DE SEGURANÇA: 
-  // Garante que a cortina (tela de loading) seja removida à força após 10 segundos
-  // Previne que o usuário fique preso em um "loading infinito" caso ocorra uma falha silenciosa nas rotas filhas.
+  // 1. FAILSAFE DE SEGURANÇA (10s)
   useEffect(() => {
     if (isOrchestratorHydrating) {
       const timeout = setTimeout(() => {
@@ -126,91 +77,89 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
     }
   }, [isOrchestratorHydrating]);
 
-  // Recebe erros de todos os componentes (step1 por exemplo que chama simulação...)
+  // 2. Listener de erros globais
   useEffect(() => {
-    // Listener global: Qualquer componente pode disparar o erro
     const handleError = (e: any) => {
       setRuntimeError(e.detail);
     };
 
-    window.addEventListener('app-error', handleError);
-    return () => window.removeEventListener('app-error', handleError);
+    window.addEventListener("app-error", handleError);
+    return () => window.removeEventListener("app-error", handleError);
   }, []);
 
   return (
-    <OrchestratorWrapper visitId={(search as any).visit_id} visitUpdateId={(search as any).visit_update_id}>
+    <OrchestratorWrapper visitId={search.visit_id ?? ""} visitUpdateId={search.visit_update_id}>
       {(simData) => {
         // =========================================================================
-        // PRIORIDADE: Se houver erro de runtime, mostra o countdown
+        // TRATAMENTO DE TARGET_URL VIA USEEFFECT (Correção do SSR para evitar quebrar o Node)
         // =========================================================================
-        if (runtimeError) {
-          // Título padrão de fallback
-          let uiTitle = "Ops! Tivemos um problema";
-          
-          // MAP DE CONTEXTO: Enriquecimento semântico baseado no código de erro da API.
-          // Aqui garantimos que o usuário veja um título coerente com a falha ocorrida.
-          if (runtimeError.code === 'SESSION_EXPIRED') uiTitle = "Sessão Expirada";
-          else if (runtimeError.code === 'INVALID_RELATIONSHIP') uiTitle = "Acesso Restrito";
-          else if (runtimeError.code === 'OFFER_NOT_FOUND') uiTitle = "Oferta Indisponível";
+        // O window.location.replace foi movido para cá de forma segura:
+        // Se a API mandar target_url, o efeito roda apenas no browser e redireciona sem crashar o SSR.
+        // =========================================================================
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        useEffect(() => {
+          if (simData?.target_url && typeof window !== "undefined") {
+            const currentPath = window.location.pathname.replace(/\/$/, "");
+            let intendedPath = "";
+            try {
+              intendedPath = new URL(simData.target_url).pathname.replace(/\/$/, "");
+            } catch (e) {
+              intendedPath = simData.target_url.split("?")[0].replace(/\/$/, "");
+            }
 
-          return (
-            <ErrorCountdown 
-              title={uiTitle}
-              message={runtimeError.message} 
-              fallbackUrl={runtimeError.fallback_url || "/"} 
-            />
-          );
-        }
+            if (currentPath !== intendedPath && intendedPath !== "") {
+              window.location.replace(`${simData.target_url}${window.location.search}`);
+            }
+          }
+        }, [simData?.target_url]);
 
-        // =========================================================================
-        // TRATAMENTO DE ERROS (API retornou success: false via OrchestratorWrapper)
-        // =========================================================================
-        if (simData?.success === false) {
-            // Título padrão de fallback
-            let uiTitle = "Ops! Tivemos um problema";
-            
-            // MAP DE CONTEXTO: Enriquecimento semântico baseado no código de erro da API.
-            // Aqui garantimos que o usuário veja um título coerente com a falha ocorrida.
-            if (simData.code === 'SESSION_EXPIRED') uiTitle = "Sessão Expirada";
-            else if (simData.code === 'INVALID_RELATIONSHIP') uiTitle = "Acesso Restrito";
-            else if (simData.code === 'OFFER_NOT_FOUND') uiTitle = "Oferta Indisponível";
-
-            // Renderiza o componente de erro blindado, repassando o título, a mensagem da API e a rota
-            return (
-                <ErrorCountdown 
-                    title={uiTitle}
-                    message={simData.message} 
-                    fallbackUrl={simData.fallback_url || "/"} 
-                />
-            );
-        }
-        
-        // =========================================================================
-        // SUCESSO & ROTEAMENTO (API mandou target_url)
-        // =========================================================================
-        if (simData?.target_url) {
+        // Se estiver redirecionando, retorna nulo momentaneamente para evitar flicker
+        if (simData?.target_url && typeof window !== "undefined") {
           const currentPath = window.location.pathname.replace(/\/$/, "");
-
           let intendedPath = "";
           try {
             intendedPath = new URL(simData.target_url).pathname.replace(/\/$/, "");
           } catch (e) {
             intendedPath = simData.target_url.split("?")[0].replace(/\/$/, "");
           }
-
-          // PROTEÇÃO ANTI-TRAPAÇA: 
-          // Se o usuário tentar acessar uma jornada diferente do que o motor determinou,
-          // forçamos o redirecionamento de volta para o destino correto e evitamos inconsistência de dados.
           if (currentPath !== intendedPath && intendedPath !== "") {
-            window.location.replace(`${simData.target_url}${window.location.search}`);
-            return null; // Retorna nulo para abortar a renderização da árvore de filhos imediatamente
+            return null;
           }
+        }
+
+        // =========================================================================
+        // PRIORIDADE: Se houver erro de runtime, mostra o countdown
+        // =========================================================================
+        if (runtimeError) {
+          let uiTitle = "Ops! Tivemos um problema";
+          if (runtimeError.code === "SESSION_EXPIRED") uiTitle = "Sessão Expirada";
+          else if (runtimeError.code === "INVALID_RELATIONSHIP") uiTitle = "Acesso Restrito";
+          else if (runtimeError.code === "OFFER_NOT_FOUND") uiTitle = "Oferta Indisponível";
+
+          return (
+            <ErrorCountdown
+              title={uiTitle}
+              message={runtimeError.message}
+              fallbackUrl={runtimeError.fallback_url || "/"}
+            />
+          );
+        }
+
+        // =========================================================================
+        // TRATAMENTO DE ERROS (API retornou success: false)
+        // =========================================================================
+        if (simData?.success === false) {
+          let uiTitle = "Ops! Tivemos um problema";
+          if (simData.code === "SESSION_EXPIRED") uiTitle = "Sessão Expirada";
+          else if (simData.code === "INVALID_RELATIONSHIP") uiTitle = "Acesso Restrito";
+          else if (simData.code === "OFFER_NOT_FOUND") uiTitle = "Oferta Indisponível";
+
+          return <ErrorCountdown title={uiTitle} message={simData.message} fallbackUrl={simData.fallback_url || "/"} />;
         }
 
         // =========================================================================
         // INJEÇÃO DE CONTEXTO (Sucesso Absoluto)
         // =========================================================================
-        // Empacota os dados da API + a função de controle da cortina para uso global via Context Provider
         const contextPayload = {
           ...simData,
           setIsOrchestratorHydrating,
@@ -219,28 +168,17 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
         return (
           <FinancialHubContext.Provider value={contextPayload}>
             <div className="min-h-screen bg-white text-foreground transition-colors duration-300 relative flex flex-col">
-              
               <SiteHeader />
 
-              {/* ===========================================================================
-                  1. CORTINA VISUAL (LOADER GLOBAL)
-                  Sobrepõe a tela inteira enquanto a aplicação realiza chamadas vitais e injeta dados.
-                  =========================================================================== */}
+              {/* 1. CORTINA VISUAL (LOADER GLOBAL) */}
               {isOrchestratorHydrating && (
                 <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-                  <p className="text-slate-500 font-medium text-sm">
-                    Preparando sua simulação...
-                  </p>
-                </div>                 
+                  <p className="text-slate-500 font-medium text-sm">Preparando sua simulação...</p>
+                </div>
               )}
 
-              {/* ===========================================================================
-                  2. RENDERIZAÇÃO OCULTA (DOM Anti-Flicker)
-                  O {children} precisa existir no DOM para os hooks de injeção dispararem,
-                  mas só deve aparecer visivelmente quando a hidratação estiver completa.
-                  Usamos tailwind (opacity-0 h-0) para escondê-lo no DOM em vez de abortar a montagem.
-                  =========================================================================== */}
+              {/* 2. RENDERIZAÇÃO OCULTA (DOM Anti-Flicker) */}
               <main
                 className={`flex-1 w-full flex flex-col transition-opacity duration-500 ${
                   isOrchestratorHydrating ? "opacity-0 pointer-events-none h-0 overflow-hidden" : "opacity-100"
@@ -249,10 +187,7 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
                 {children}
               </main>
 
-              {/* ===========================================================================
-                  3. FOOTER E FAQS
-                  Só renderiza o rodapé após a cortina abrir, mantendo o foco visual no Loader inicial.
-                  =========================================================================== */}
+              {/* 3. FOOTER E FAQS */}
               {!isOrchestratorHydrating && (
                 <>
                   <FAQSection items={simData?.page_faqs} />

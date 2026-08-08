@@ -13,7 +13,7 @@ import { useProductConsult } from "@/features/financial-hub/core/contexts/Financ
 
 export function FinancialHubDataInjector({ children }: { children: React.ReactNode }) {
   const { updateData } = useWizard();
-  const search = useSearch({ strict: false });
+  const search = useSearch({ strict: false }) as { visit_id?: string };
 
   // Extrair a função de contexto
   const { setIsOrchestratorHydrating } = useProductConsult();

@@ -1,12 +1,13 @@
 /**
- * @fileoverview Painel de parceiros.
+ * @fileoverview Painel de parceiros (Step 1 - Seguros Auto).
  * Cores: Primary #B300FF | Fonte: Inter (font-sans)
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { ButtonWhatsApp } from "@/features/financial-hub/components/layout/ButtonWhatsApp";
-
-// Importe a config ou de onde venham os seus URLs
 import { useNavigation, NAVIGATION_INTENTS } from "@/features/financial-hub/core/hooks/useNavigation";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 import { DynamicConsents } from "@/features/financial-hub/components/layout/DynamicConsents";
@@ -27,76 +28,77 @@ export function Step1PartnersPanel() {
     { name: "Azul", logo: "/assets/insurers/azul_seguros_logo_700_429.png" },
   ];
 
-  // Acessa a configuração da integração
   const { state } = useWizard<any>();
   const config = state.data?.integration_details;
 
-  // Consentimentos dinâmicos
-  const { rules, consent_configs, offer } = state.data;
+  const { consent_configs } = state.data || {};
   const [acceptedConsents, setacceptedConsents] = useState<Record<string, boolean>>({});
 
   const areConsentsValid = useMemo(() => {
-    const configs = state.data?.consent_configs || [];
+    const configs = consent_configs || [];
     return configs
       .filter((opt: any) => opt.is_required)
       .every((opt: any) => acceptedConsents[opt.id] === true);
-  }, [state.data?.consent_configs, acceptedConsents]);
+  }, [consent_configs, acceptedConsents]);
 
-  const consents = state.data.consent_configs
+  const consents = consent_configs
     ?.filter((c: any) => acceptedConsents[c.id])
     .map((c: any) => ({
       consent_id: c.id,
       acceptedConsents: true,
       acceptedConsents_at: new Date().toISOString(),
       legal_text_snapshot: { template_text: c.template_text, links: c.links }
-    }))
+    }));
 
-  // 2. A CHAMADA DO HOOK ACONTECE AQUI, NO TOPO DA FUNÇÃO
-  // É aqui que a "mágica" é inicializada e conectada ao seu componente
   const { handleRedirect, loading: navLoading } = useNavigation();
-
-  // Inicialize o hook aqui
   const { execute, loading } = useSafeCall();
   
-  // Cria o handler seguro que trata integração com financial-gateway (session, etc)
   const handleProceed = async () => {
     try {
-      // O useSafeCall executa e gerencia o loading para você
       await execute(() => handleRedirect(NAVIGATION_INTENTS.REDIRECT_PARTNER_PAGE, config?.urlRedirect, consents));
     } catch (err: any) {
-      // Se deu erro, o Layout está ouvindo esse evento e vai desenhar o ErrorCountdown
       window.dispatchEvent(new CustomEvent('app-error', { detail: err }));
     }
   };
 
   return (
-    <div className="bg-white border border-slate-100 rounded-3xl p-8 font-sans">
+    // Removi as classes de box aqui: bg-white border border-slate-100 rounded-3xl p-8
+    <div className="font-sans max-w-xl mx-auto lg:mx-0 w-full">
       {/* Cabeçalho do Card de Seguros */}
-      <div className="flex items-center justify-between gap-2 mb-6">
-        
-        {/* Título */}
-        <h2 className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-slate-400 leading-tight w-1/2">
-          Seguradoras
-        </h2>
-        
-        {/* Tag Promocional Blindada */}
-        <div className="bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold whitespace-nowrap shrink-0">
-          Cotação gratuita
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="shrink-0 w-16 h-16 overflow-hidden flex items-center justify-center">
+            <img
+              src="/assets/home/seguros.webp"
+              alt="Segurança"
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                (e.currentTarget as HTMLElement).style.display = 'none';
+              }}
+            />
+          </div>
+          <div>
+            <h2 className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-slate-400 leading-tight">
+              Seguradoras
+            </h2>
+          </div>
         </div>
 
+        <div className="bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">
+          Cotação gratuita
+        </div>
       </div>
       
-      {/* Grid de Seguradoras - Visual Vivo */}
+      {/* Grid de Seguradoras */}
       <div className="grid grid-cols-3 gap-3 mb-8">
         {insurers.map((insurer) => (
           <div 
             key={insurer.name} 
-            className="h-16 w-full border border-slate-100 rounded-xl flex items-center justify-center bg-white p-3 hover:border-[#B300FF] transition-all"
+            className="h-16 w-full border border-slate-100 rounded-xl flex items-center justify-center bg-white p-3 hover:border-[#B300FF] transition-all shadow-sm"
           >
           <img 
               src={insurer.logo} 
               alt={`Logo ${insurer.name}`} 
-              // O grayscale-[50%] acalma o visual, hover:grayscale-0 traz a marca à vida
               className="max-h-[80%] max-w-[90%] object-contain grayscale-[70%] hover:grayscale-0 transition-all duration-300" 
             />
           </div>
@@ -104,14 +106,12 @@ export function Step1PartnersPanel() {
       </div>
 
       <div className="flex flex-col gap-y-2">
-        {/* Container do Consentimento - Protegido durante loading */}
         <div
           className={`mb-1 transition-opacity duration-200 ${loading || navLoading ? "pointer-events-none opacity-50" : "opacity-100"}`}
         >
           <DynamicConsents configs={consent_configs} value={acceptedConsents} onChange={setacceptedConsents} />
         </div>
 
-        {/* Botão Principal com Componente Oficial do Design System e Tratamento de Redirecionamento */}
         <Button
           type="button"
           disabled={loading || navLoading || !areConsentsValid}
@@ -128,7 +128,6 @@ export function Step1PartnersPanel() {
           )}
         </Button>
 
-        {/* Botão de contato só aparece se houver whatsappContact definido em integration_details */}
         <ButtonWhatsApp
           productName="Seguros Auto"
           variant="card"

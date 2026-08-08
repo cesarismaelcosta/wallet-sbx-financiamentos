@@ -184,8 +184,11 @@ function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const timeoutId = setTimeout(() => {
+      load();
+    }, 400);
+
+    return () => clearTimeout(timeoutId);
   }, [dateRange, customRange, selectedPartners, selectedProducts]);
 
   async function load() {

@@ -1,7 +1,7 @@
 /**
  * @fileoverview Rota: /seguros/auto
  * @path src/routes/seguros/auto.tsx
- * 
+ *
  * * ÁRVORE DE DEPENDÊNCIAS (ROTA):
  * --------------------------------------------------------------------------------
  * src/
@@ -14,7 +14,7 @@
  * │   ├── simulacao/FinancialHubDataInjector.tsx        # A "Cortina de Hidratação" (API)
  * │   └── insurance-auto/SeguroAutoLayout.tsx     # O Layout principal da página
  * --------------------------------------------------------------------------------
- * 
+ *
  * * PROPÓSITO:
  * Inicializar a página de Seguros envelopada pelo motor de estado.
  * O FinancialHubDataInjector fará o fetch no Orquestrador usando o `visit_id` da URL,
@@ -26,7 +26,6 @@ import { WizardProvider } from "@/features/financial-hub/components/shared/Wizar
 import { StepLayout } from "@/features/financial-hub/components/shared/StepLayout";
 
 // Importações do Domínio de Seguros
-import { WizardLayout } from "@/features/financial-hub/components/products/insurance/auto/WizardLayout";
 import { FinancialHubDataInjector } from "@/features/financial-hub/components/layout/FinancialHubDataInjector";
 import { HowItWorks } from "@/features/financial-hub/components/products/insurance/auto/HowItWorks";
 import { BaseWizardLayout } from "@/features/financial-hub/components/shared/BaseWizardLayout";
@@ -42,39 +41,29 @@ export const Route = createLazyFileRoute("/seguros/auto")({
 function ProductConsultPage() {
   // Extrai o visit_id da URL
   const search = useSearch({ strict: false });
-  
+
   // 1. RESGATE: Consome os dados já hidratados pelo SimulationLayout (Pai).
   const simData = useProductConsult();
 
-  // Guard Clause de segurança
-  if (!simData?.entity) return null; 
-
   return (
     <>
-      <section className="relative py-4 px-4 min-h-[85vh] flex items-center justify-center overflow-hidden">
-
+      <section className="relative -mt-8 pb-12 px-4 w-full flex justify-center overflow-hidden">
         <main className="relative z-10 w-full max-w-6xl">
           {/* 2. MOTOR: Injeta o estado global (initialData) necessário para o Wizard */}
           <WizardProvider initialData={simData?.entity || {}}>
-            
             {/* 3. INJEÇÃO: Popula o Wizard com dados da API e ID da simulação atual */}
             <FinancialHubDataInjector>
-
               {/* 4. PALCO ESTÁVEL: Container consistente para evitar Layout Shift */}
               <StepLayout>
                 <BaseWizardLayout manifest={SeguroAutoManifest} />
               </StepLayout>
-
             </FinancialHubDataInjector>
-            
           </WizardProvider>
-        </main>    
-
+        </main>
       </section>
 
       {/* Seções complementares (Contexto da Jornada) */}
       <HowItWorks />
-
     </>
   );
 }

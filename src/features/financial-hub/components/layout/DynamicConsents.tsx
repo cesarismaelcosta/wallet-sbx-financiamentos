@@ -119,13 +119,18 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                         return (
                           <Tooltip key={i}>
                             <TooltipTrigger asChild>
-                              <span
-                                className="underline font-bold cursor-help border-b border-dashed inline mx-0.5 hover:opacity-80"
+                              {/* Trocamos span por button para corrigir o mobile e o clique da label */}
+                              <button
+                                type="button"
+                                className="underline font-bold cursor-help border-b border-dashed inline mx-0.5 hover:opacity-80 bg-transparent p-0 text-left outline-none"
                                 style={{ color: "var(--brand-primary)", borderColor: "var(--brand-primary)" }}
-                                onClick={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.preventDefault(); // <-- IMPEDE a label de marcar o checkbox
+                                  e.stopPropagation(); // <-- Impede o evento de subir
+                                }}
                               >
                                 {cleanText}
-                              </span>
+                              </button>
                             </TooltipTrigger>
                             <TooltipPrimitive.Portal>
                               <TooltipContent

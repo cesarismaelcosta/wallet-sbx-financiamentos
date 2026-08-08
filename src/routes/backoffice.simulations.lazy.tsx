@@ -74,7 +74,19 @@ function formatDate(iso: string | null) {
   };
 }
 
+export function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  return isMobile;
+}
+
 function SimulationsPage() {
+  const isMobile = useIsMobile();
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [statusOptions, setStatusOptions] = useState<string[]>([]);
@@ -103,93 +115,112 @@ function SimulationsPage() {
     loadDropdowns();
   }, []);
 
+  // 1. Estados da Paginação Real
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const PAGE_SIZE = 50; 
   const [loading, setLoading] = useState(false);
 
-  /**
-   * Carregamento único e leve: busca os dados essenciais e as ofertas de uma vez,
-   * permitindo que os filtros funcionem instantaneamente em memória (zero lag de rede).
-   */
-  async function load() {
+  // 2. Quando o usuário digita na busca ou muda um filtro, voltamos para a página 0
+  useEffect(() => { 
+    const timeoutId = setTimeout(() => {
+      setPage(0);
+      load(0); 
+    }, 400);
+    return () => clearTimeout(timeoutId);
+  }, [search, selectedPartners, selectedProducts, dateRange, customRange]);
+
+  // 3. Função que faz a Paginação Real
+  async function load(targetPage: number) {
     setLoading(true);
     try {
-      const [{ data: simData, error: simError }, { data: statusData }] = await Promise.all([
-        supabase
-          .from("simulations")
-          .select(`
-            id,
-            created_at,
-            updated_at,
-            name,
-            document,
-            phone,
-            email,
-            financed_amount,
-            installment_value,
-            installments,
-            down_payment_percentage,
-            partner_id,
-            product_id,
-            status_id,
-            stage_id,
-            partners(id, name, logo_url),
-            product_types(id, name),
-            stage_types(id, name),
-            status_types(id, name),
-            financial_institutions(id, name, logo_url),
-            simulation_offers(offer_description, offer_value, event_id, event_description, event_end_date)
-          `)
-          .order('created_at', { ascending: false }),
+      const from = targetPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      // Usamos { count: 'exact' } para o Supabase nos dizer o total real de registros
+      let query = supabase
+        .from("simulations")
+        .select(`
+          id, created_at, updated_at, name, document, phone, email,
+          financed_amount, installment_value, installments, down_payment_percentage,
+          partner_id, product_id, status_id, stage_id,
+          partners(id, name, logo_url),
+          product_types(id, name),
+          stage_types(id, name),
+          status_types(id, name),
+          financial_institutions(id, name, logo_url),
+          simulation_offers(offer_description, offer_value, event_id, event_description, event_end_date)
+        `, { count: 'exact' }); 
+
+      // Filtros do Servidor
+      if (search.trim()) {
+        const docSearch = search.replace(/\D/g, "");
+        if (docSearch) query = query.ilike("document", `%${docSearch}%`);
+        else query = query.ilike("name", `%${search}%`);
+      }
+      if (selectedPartners.length > 0) query = query.in("partner_id", selectedPartners);
+      if (selectedProducts.length > 0) query = query.in("product_id", selectedProducts);
+
+      // Aplica o Limit/Offset (Range) da página atual
+      query = query.order('created_at', { ascending: false }).range(from, to);
+
+      const [{ data: simData, count, error: simError }, { data: statusData }] = await Promise.all([
+        query,
         supabase.from("status_types").select("name")
       ]);
 
-      if (simError) {
-        console.error("Erro do Supabase:", simError);
-        toast.error(`Erro ao carregar: ${simError.message}`);
-        return;
-      }
+      if (simError) throw simError;
 
       if (simData) {
+        // PAGINAÇÃO REAL: SUBSTITUI OS DADOS (Não acumula!)
         setRows(simData);
       }
-      if (statusData) {
-        setStatusOptions(statusData.map(s => s.name));
+      
+      // Calcula o total de páginas com base no count do banco
+      if (count !== null) {
+        setTotalPages(Math.ceil(count / PAGE_SIZE));
       }
+
+      if (statusData) setStatusOptions(statusData.map(s => s.name));
     } catch (err: any) {
-      console.error("Erro crítico ao carregar simulações:", err);
-      toast.error(err?.message ?? "Falha ao carregar listagem.");
+      toast.error("Erro ao carregar simulações");
     } finally {
       setLoading(false);
     }
   }
 
-  // Roda apenas na inicialização da tela, mantendo a navegação e os filtros instantâneos
-  useEffect(() => { 
-    load(); 
-  }, []);
+  // 4. O filtro de Situação local continua o mesmo
+  const filtered = useMemo(() => {
+    return rows.filter((r) => {
+      const statusName = r.status_types?.name ?? "—";
+      return selectedStatus.length === 0 || selectedStatus.includes(statusName);
+    });
+  }, [rows, selectedStatus]);
 
   /**
    * Carrega os dados pesados sob demanda ao selecionar uma simulação para o Sheet.
    */
   async function handleSelectSimulation(row: any) {
     setDetailLoading(true);
-    setActiveSimulation(row); // Abre com os dados básicos de imediato
+    setActiveSimulation(row);
 
     try {
       const { data: fullData, error } = await supabase
         .from("simulations")
         .select(`
-          *,
+          id, created_at, updated_at, name, document, phone, email, financed_amount, 
+          installment_value, installments, down_payment_percentage, raw_payload, entity_details,
           partners(id, name, logo_url),
           product_types(id, name),
           stage_types(id, name),
           status_types(id, name),
           financial_institutions(id, name, logo_url),
-          result_partner_types(*),
-          simulation_offers(*, category_types(id, name)),
-          simulation_consents(*),
-          simulation_updates(*),
-          simulation_consults(*),
-          visits:visit_id(*)
+          result_partner_types(id, name),
+          simulation_offers(id, offer_description, offer_value, manager_name, seller_id, legal_name, category_types(id, name)),
+          simulation_consents(id, consent_text, is_accepted, created_at),
+          simulation_updates(id, action, created_at),
+          simulation_consults(id, consult_type, result, created_at),
+          visits:visit_id(id, utm_source, state)
         `)
         .eq("id", row.id)
         .single();
@@ -197,8 +228,6 @@ function SimulationsPage() {
       if (!error && fullData) {
         setActiveSimulation(fullData);
       }
-    } catch (e) {
-      console.error("Erro ao carregar detalhes completos:", e);
     } finally {
       setDetailLoading(false);
     }
@@ -214,23 +243,6 @@ function SimulationsPage() {
     });
     return t;
   }, [rows]);
-
-  const filtered = useMemo(() => {
-    return rows.filter((r) => {
-      const statusName = r.status_types?.name ?? "—";
-      const matchStatus = selectedStatus.length === 0 || selectedStatus.includes(statusName);
-      
-      const rawSearch = search.toLowerCase().trim();
-      const rawDocSearch = search.replace(/\D/g, "");
-      const rowDoc = r.document?.replace(/\D/g, "") || "";
-      
-      const matchSearch = rawSearch === "" || (r.name ?? "").toLowerCase().includes(rawSearch) || (rawDocSearch !== "" && rowDoc.includes(rawDocSearch));
-      const matchPartner = selectedPartners.length === 0 || selectedPartners.includes(String(r.partner_id));
-      const matchProduct = selectedProducts.length === 0 || selectedProducts.includes(String(r.product_id));
-      
-      return matchSearch && matchStatus && matchPartner && matchProduct;
-    });
-  }, [rows, search, selectedStatus, selectedPartners, selectedProducts]);
 
   /**
    * Exportação Excel com importação dinâmica sob demanda.
@@ -364,7 +376,7 @@ function SimulationsPage() {
             <Button variant="outline" onClick={handleExportExcel} className="rounded-xl hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200 transition-colors">
               <Download className="mr-2 h-4 w-4" /> Exportar Excel
             </Button>
-            <Button onClick={() => load()} disabled={loading} className="rounded-xl">
+            <Button onClick={() => load(0)} disabled={loading} className="rounded-xl">
               <RefreshCw className={`mr-2 h-4 w-4 shrink-0 ${loading ? "animate-spin" : ""}`} /> 
               Atualizar
             </Button>
@@ -419,27 +431,102 @@ function SimulationsPage() {
 
             {/* Filtros originais para Desktop */}
             <div className="hidden lg:flex lg:items-center lg:gap-2 lg:ml-auto">
-              <Popover>
-                <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                <PopoverContent className="w-56 p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>{partnersList.map((p) => { const isSelected = selectedPartners.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
-              </Popover>
-
-              <Popover>
-                <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                <PopoverContent className="w-56 p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{selectedProducts.length === 0 && "✓"}</div>Todos Produtos</CommandItem>{productsList.map((p) => { const isSelected = selectedProducts.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter(id => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className="cursor-pointer"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
-              </Popover>
-
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
-                    <Filter className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">Situação: {selectedStatus.length === 0 ? "Todos" : `${selectedStatus.length} sel.`}</span>
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600 justify-between">
+                    <span className="flex items-center gap-2 truncate">
+                      <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                      <span className="truncate">Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span>
+                    </span>
+                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-0" align="start">
+                  <Command>
+                      <CommandList 
+                              className="max-h-56 overflow-y-auto overscroll-contain" 
+                              onWheelCapture={(e) => e.stopPropagation()}
+                            >
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                            {selectedPartners.length === 0 && "✓"}
+                          </div>
+                          Todos Parceiros
+                        </CommandItem>
+                          {partnersList.map((p) => { 
+                            const isSelected = selectedPartners.includes(String(p.id)); 
+                            return (
+                              <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className={`cursor-pointer ${isSelected ? "bg-primary/10 text-primary font-medium" : ""}`}>
+                                <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                                  {isSelected && "✓"}
+                                </div>
+                                {p.name}
+                              </CommandItem>
+                            ); 
+                          })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600 justify-between">
+                    <span className="flex items-center gap-2 truncate">
+                      <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                      <span className="truncate">Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span>
+                    </span>
+                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-0" align="start">
+                  <Command>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain" 
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                            {selectedProducts.length === 0 && "✓"}
+                          </div>
+                          Todos Produtos
+                        </CommandItem>
+                        {productsList.map((p) => { 
+                          const isSelected = selectedProducts.includes(String(p.id)); 
+                          return (
+                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter(id => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className={`cursor-pointer ${isSelected ? "bg-primary/10 text-primary font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {p.name}
+                            </CommandItem>
+                          ); 
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors justify-between">
+                    <span className="flex items-center gap-2 truncate">
+                      <Filter className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Situação: {selectedStatus.length === 0 ? "Todos" : `${selectedStatus.length} sel.`}</span>
+                    </span>
                     <ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-56 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList>
+                      <CommandList 
+                              className="max-h-56 overflow-y-auto overscroll-contain" 
+                              onWheelCapture={(e) => e.stopPropagation()}
+                            >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedStatus([])} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
                           <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
@@ -450,7 +537,7 @@ function SimulationsPage() {
                         {statusOptions.map((s) => {
                           const isSelected = selectedStatus.includes(s);
                           return (
-                            <CommandItem key={s} onSelect={() => { if (isSelected) setSelectedStatus(selectedStatus.filter((item: string) => item !== s)); else setSelectedStatus([...selectedStatus, s]); }} className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] aria-selected:bg-[#fce7f3]">
+                            <CommandItem key={s} onSelect={() => { if (isSelected) setSelectedStatus(selectedStatus.filter(item => item !== s)); else setSelectedStatus([...selectedStatus, s]); }} className={`cursor-pointer text-[#d946ef] ${isSelected ? "bg-[#d946ef]/10 font-medium" : ""}`}>
                               <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
                                 {isSelected && "✓"}
                               </div>
@@ -464,9 +551,34 @@ function SimulationsPage() {
                 </PopoverContent>
               </Popover>
               
-              <Popover>
-                <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-10 rounded-xl gap-2 bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                <PopoverContent className="p-0 w-auto" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem><CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem><CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem></CommandGroup><div className="p-2 border-t"><p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command></PopoverContent>
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-xl gap-2 bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600 justify-between">
+                    <span className="flex items-center gap-2 truncate">
+                      <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                      <span className="truncate">Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span>
+                    </span>
+                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-auto" align="start">
+                  <Command>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain" 
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem>
+                      </CommandGroup>
+                      <div className="p-2 border-t">
+                        <p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p>
+                        <Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} />
+                      </div>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
               </Popover>
             </div>
           </div>
@@ -530,7 +642,46 @@ function SimulationsPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </div>  
+        {/* === PAGINAÇÃO === */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border/60 bg-muted/20">
+            <div className="text-xs text-muted-foreground font-medium">
+              {rows.length === 0 
+                ? "Nenhum resultado" 
+                : `${(page * PAGE_SIZE) + 1} a ${(page * PAGE_SIZE) + rows.length}`}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const prev = Math.max(0, page - 1);
+                  setPage(prev);
+                  load(prev);
+                }}
+                disabled={page === 0 || loading}
+                className="h-8 text-xs rounded-lg"
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const next = Math.min(totalPages - 1, page + 1);
+                  setPage(next);
+                  load(next);
+                }}
+                disabled={page >= totalPages - 1 || loading}
+                className="h-8 text-xs rounded-lg"
+              >
+                Próxima
+              </Button>
+            </div>
+          </div>
+        )}
+        {/* ============================ */}                
       </div>
 
       {/* SHEET LATERAL DE DETALHES */}
@@ -631,25 +782,87 @@ function SimulationsPage() {
             <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-4 w-full">
+            
+            {/* PARCEIRO MOBILE */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Parceiro</span>
-              <Popover>
-                <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-white border-slate-200 text-slate-600 justify-between"><span className="truncate">Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                <PopoverContent className="w-72 p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer">Todos Parceiros</CommandItem>{partnersList.map((p) => { const isSelected = selectedPartners.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }}>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-white border-slate-200 text-slate-600 justify-between">
+                    <span className="truncate">Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span>
+                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-0" align="start">
+                  <Command>
+                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                            {selectedPartners.length === 0 && "✓"}
+                          </div>
+                          Todos Parceiros
+                        </CommandItem>
+                        {partnersList.map((p) => { 
+                          const isSelected = selectedPartners.includes(String(p.id)); 
+                          return (
+                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter(id => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className={`cursor-pointer ${isSelected ? "bg-primary/10 text-primary font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {p.name}
+                            </CommandItem>
+                          ); 
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
               </Popover>
             </div>
 
+            {/* PRODUTO MOBILE */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Produto</span>
-              <Popover>
-                <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-white border-slate-200 text-slate-600 justify-between"><span className="truncate">Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                <PopoverContent className="w-72 p-0" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer">Todos Produtos</CommandItem>{productsList.map((p) => { const isSelected = selectedProducts.includes(String(p.id)); return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter(id => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }}>{p.name}</CommandItem>); })}</CommandGroup></CommandList></Command></PopoverContent>
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-white border-slate-200 text-slate-600 justify-between">
+                    <span className="truncate">Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span>
+                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-0" align="start">
+                  <Command>
+                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                            {selectedProducts.length === 0 && "✓"}
+                          </div>
+                          Todos Produtos
+                        </CommandItem>
+                        {productsList.map((p) => { 
+                          const isSelected = selectedProducts.includes(String(p.id)); 
+                          return (
+                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter(id => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className={`cursor-pointer ${isSelected ? "bg-primary/10 text-primary font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {p.name}
+                            </CommandItem>
+                          ); 
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
               </Popover>
             </div>
 
+            {/* SITUAÇÃO MOBILE */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Situação</span>
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] justify-between">
                     <span className="truncate">Situação: {selectedStatus.length === 0 ? "Todos" : `${selectedStatus.length} sel.`}</span>
@@ -658,12 +871,25 @@ function SimulationsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-72 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList>
+                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
-                        <CommandItem onSelect={() => setSelectedStatus([])} className="cursor-pointer text-[#d946ef]">Todos</CommandItem>
-                        {statusOptions.map((s) => (
-                          <CommandItem key={s} onSelect={() => { const isSelected = selectedStatus.includes(s); if (isSelected) setSelectedStatus(selectedStatus.filter(item => item !== s)); else setSelectedStatus([...selectedStatus, s]); }} className="cursor-pointer text-[#d946ef]">{s}</CommandItem>
-                        ))}
+                        <CommandItem onSelect={() => setSelectedStatus([])} className="cursor-pointer text-[#d946ef]">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                            {selectedStatus.length === 0 && "✓"}
+                          </div>
+                          Todos
+                        </CommandItem>
+                        {statusOptions.map((s) => {
+                          const isSelected = selectedStatus.includes(s);
+                          return (
+                            <CommandItem key={s} onSelect={() => { if (isSelected) setSelectedStatus(selectedStatus.filter(item => item !== s)); else setSelectedStatus([...selectedStatus, s]); }} className={`cursor-pointer text-[#d946ef] ${isSelected ? "bg-[#d946ef]/10 font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {s}
+                            </CommandItem>
+                          );
+                        })}
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -671,11 +897,31 @@ function SimulationsPage() {
               </Popover>
             </div>
 
+            {/* PERÍODO MOBILE */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
-              <Popover>
-                <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-white border-slate-200 text-slate-600 justify-between"><span className="truncate">Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" /></Button></PopoverTrigger>
-                <PopoverContent className="p-0 w-auto" align="start"><Command><CommandList><CommandGroup><CommandItem onSelect={() => dateRange !== "30" && setDateRange("30")}>Últimos 30 dias</CommandItem><CommandItem onSelect={() => dateRange !== "90" && setDateRange("90")}>Últimos 90 dias</CommandItem><CommandItem onSelect={() => dateRange !== "all" && setDateRange("all")}>Todo o período</CommandItem></CommandGroup><div className="p-2 border-t"><p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command></PopoverContent>
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-white border-slate-200 text-slate-600 justify-between">
+                    <span className="truncate">Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span>
+                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-auto" align="start">
+                  <Command>
+                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                      <CommandGroup>
+                        <CommandItem onSelect={() => dateRange !== "30" && setDateRange("30")}>Últimos 30 dias</CommandItem>
+                        <CommandItem onSelect={() => dateRange !== "90" && setDateRange("90")}>Últimos 90 dias</CommandItem>
+                        <CommandItem onSelect={() => dateRange !== "all" && setDateRange("all")}>Todo o período</CommandItem>
+                      </CommandGroup>
+                      <div className="p-2 border-t">
+                        <p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p>
+                        <Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} />
+                      </div>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
               </Popover>
             </div>
 

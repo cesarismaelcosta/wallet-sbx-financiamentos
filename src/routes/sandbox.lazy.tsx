@@ -2,17 +2,17 @@
  * @fileoverview Sandbox de Simulação de Jornadas (Topo de Funil / sbX - Stateless)
  * @path src/routes/sandbox.tsx
  * @description Painel de controle, debug e testes integrado com a API de Ofertas, Sessão
- * corporativa e Gateways de Borda. 
- * 
+ * corporativa e Gateways de Borda.
+ *
  * [MUDANÇAS CRÍTICAS DA ARQUITETURA STATELESS]:
- * 1. Fim da rota `sbx-user`: O perfil cadastral completo do usuário é obtido 
+ * 1. Fim da rota `sbx-user`: O perfil cadastral completo do usuário é obtido
  *    e hidratado em uma única passada durante o OAuth Exchange (`sbx-auth-exchange`),
  *    sendo entregue de bandeja no payload de login.
- * 2. Hidratação Local Segura: O perfil é armazenado em `sessionStorage` e 
+ * 2. Hidratação Local Segura: O perfil é armazenado em `sessionStorage` e
  *    recuperado instantaneamente na montagem, eliminando roundtrips desnecessários.
- * 3. Zero Banco de Dados: Toda a validação de acesso depende exclusivamente do 
+ * 3. Zero Banco de Dados: Toda a validação de acesso depende exclusivamente do
  *    JWT assinado criptografamente em memória.
- * 4. Idle & Session Integrity Guard: Monitoramento de foco/visibilidade da aba para 
+ * 4. Idle & Session Integrity Guard: Monitoramento de foco/visibilidade da aba para
  *    expurgar tokens expirados após longos períodos de inatividade.
  *
  * @author César Ismael Pereira da Costa
@@ -62,7 +62,7 @@ import { callOrchestratorConfigs } from "@/features/financial-hub/core/services/
 import { ICON_MAP } from "@/features/financial-hub/components/shared/icons-map";
 
 // Novos Componentes Compartilhados (Fábrica de Painéis)
-import { PanelProduct } from "@/features/financial-hub/components/shared/renderes/PanelProduct"; 
+import { PanelProduct } from "@/features/financial-hub/components/shared/renderes/PanelProduct";
 import { PanelConsents } from "@/features/financial-hub/components/shared/renderes/PanelConsents";
 import { PanelFAQ } from "@/features/financial-hub/components/shared/renderes/PanelFAQ";
 import { PanelFooter } from "@/features/financial-hub/components/shared/renderes/PanelFooter";
@@ -168,10 +168,10 @@ const trocarTokenNaEdgeFunction = async (rawTokenPayload: any, environment: "sta
 
   const res = await fetch(`${supabaseUrl}/functions/v1/sbx-auth-exchange`, {
     method: "POST",
-    headers: { 
-      "Content-Type": "application/json", 
-      "Authorization": `Bearer ${supabaseAnonKey}`,
-      "x-access-token": sbxAccessToken // 👈 Token da Superbid limpo no Header de Borda
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${supabaseAnonKey}`,
+      "x-access-token": sbxAccessToken, // 👈 Token da Superbid limpo no Header de Borda
     },
     body: JSON.stringify({
       environment: environment,
@@ -229,7 +229,7 @@ function SandboxPage() {
    * [IDLE & SESSION INTEGRITY GUARD]: Validação de Expiração por Inatividade
    * =========================================================================
    * Intercepta períodos prolongados de inatividade (ex: 10h com a aba aberta)
-   * decodificando o JWT e forçando o redirecionamento imediato para o login 
+   * decodificando o JWT e forçando o redirecionamento imediato para o login
    * caso a sessão tenha perecido.
    */
   const handleExpiredSession = () => {
@@ -281,7 +281,7 @@ function SandboxPage() {
   const checkAndHandleSessionError = (errMessage: string, errorCode?: string) => {
     const msg = (errMessage || "").toLowerCase();
     const code = (errorCode || "").toUpperCase();
-    
+
     if (
       code === "SESSION_EXPIRED" ||
       code === "UNAUTHORIZED" ||
@@ -438,7 +438,8 @@ function SandboxPage() {
   ];
 
   // O Sandbox agora é 100% isolado. Ele só olha para o token bruto guardado no sessionStorage.
-  const activeToken = accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
+  const activeToken =
+    accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
   /**
    * [HIDRATAÇÃO DE PRATELEIRA DE OFERTAS]
@@ -611,7 +612,7 @@ function SandboxPage() {
     const invalidToken =
       errorTarget === "token"
         ? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid_token_payload_test.signature"
-        : (accessTokenSBX || sessionStorage.getItem("access_token_sbx"));
+        : accessTokenSBX || sessionStorage.getItem("access_token_sbx");
     const invalidProductId = errorTarget === "product" ? "999" : errorDrawerConfig.item?.product_id || "8";
 
     const payload = {
@@ -627,13 +628,13 @@ function SandboxPage() {
 
     if (method === "fetch") {
       try {
-        const { auth_token, ...bodyPayload } = payload; 
-        
+        const { auth_token, ...bodyPayload } = payload;
+
         const res = await fetch(gatewayUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Accept": "application/json",
+            Accept: "application/json",
             "x-access-token": String(auth_token),
           },
           body: JSON.stringify(bodyPayload),
@@ -772,12 +773,7 @@ function SandboxPage() {
     }, 50);
   };
 
-  const handleSimulateOfferForm = (
-    flowKey: string,
-    offerId: string,
-    productId: string,
-    isDisabled?: boolean,
-  ) => {
+  const handleSimulateOfferForm = (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
     if (isDisabled) return;
 
     if (!validateSessionBeforeAction()) return;
@@ -834,12 +830,7 @@ function SandboxPage() {
     }
   };
 
-  const handleSimulateOfferAjax = async (
-    flowKey: string,
-    offerId: string,
-    productId: string,
-    isDisabled?: boolean,
-  ) => {
+  const handleSimulateOfferAjax = async (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
     if (isDisabled) return;
 
     if (!validateSessionBeforeAction()) return;
@@ -862,13 +853,13 @@ function SandboxPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
+          Accept: "application/json",
           "x-access-token": tokenToUse,
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          offer_id: String(offerId), 
-          product_id: String(productId || ""), 
+          offer_id: String(offerId),
+          product_id: String(productId || ""),
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
           utm_medium: "referral",
@@ -905,27 +896,28 @@ function SandboxPage() {
     }
   };
 
-/**
+  /**
    * =========================================================================
    * [GATEWAY TRANSPORT]: handleSbxPayGatewayForm
    * =========================================================================
-   * Responsável por disparar o acesso à Landing Wallet (sbX Pay) através de 
+   * Responsável por disparar o acesso à Landing Wallet (sbX Pay) através de
    * uma submissão tradicional de formulário HTML (POST nativo).
-   * 
+   *
    * [FLUXO TÉCNICO]:
-   * 1. Validação de Credencial: Assegura o uso primário do token bruto da 
+   * 1. Validação de Credencial: Assegura o uso primário do token bruto da
    *    Superbid (`accessTokenSBX`) para a validação inicial na borda.
-   * 2. Injeção de Payload: Cria campos ocultos (`inputs hidden`) contendo o token, 
-   *    o ambiente ativo, o alvo de redirecionamento (`target_url: "/sbxpay"`) 
+   * 2. Injeção de Payload: Cria campos ocultos (`inputs hidden`) contendo o token,
+   *    o ambiente ativo, o alvo de redirecionamento (`target_url: "/sbxpay"`)
    *    e metadados de rastreio (UTMs).
-   * 3. Navegação: Submete o formulário, provocando um redirecionamento de 
+   * 3. Navegação: Submete o formulário, provocando um redirecionamento de
    *    página inteira (Full Page Redirection) para a borda.
    */
   const handleSbxPayGatewayForm = () => {
     if (!validateSessionBeforeAction()) return;
 
     // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
-    const tokenToUse: string | null = accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
+    const tokenToUse: string | null =
+      accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
     if (!tokenToUse) {
       alert("Token bruto da Superbid não encontrado. Faça o login primeiro.");
@@ -977,25 +969,26 @@ function SandboxPage() {
     }
   };
 
-/**
+  /**
    * =========================================================================
    * [GATEWAY TRANSPORT]: handleSbxPayGatewayAjax
    * =========================================================================
-   * Responsável por disparar o acesso à Landing Wallet (sbX Pay) de forma 
+   * Responsável por disparar o acesso à Landing Wallet (sbX Pay) de forma
    * assíncrona utilizando requisição AJAX (`fetch`).
-   * 
+   *
    * [FLUXO TÉCNICO]:
    * 1. Validação de Credencial: Coleta o token bruto da Superbid (`accessTokenSBX`).
    * 2. Requisição Fetch: Envia um JSON estruturado para o Edge Gateway de borda.
-   * 3. Tratamento de Resposta: Processa o JSON retornado pela borda, armazena 
-   *    o novo token stateless gerado e abre a URL de redirecionamento em uma 
+   * 3. Tratamento de Resposta: Processa o JSON retornado pela borda, armazena
+   *    o novo token stateless gerado e abre a URL de redirecionamento em uma
    *    nova aba (`window.open`), mantendo o painel do Sandbox intacto.
    */
   const handleSbxPayGatewayAjax = async () => {
     if (!validateSessionBeforeAction()) return;
 
     // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
-    const tokenToUse: string | null = accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
+    const tokenToUse: string | null =
+      accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
     if (!tokenToUse) {
       alert("Token bruto da Superbid não encontrado. Faça o login primeiro.");
@@ -1014,7 +1007,7 @@ function SandboxPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
+          Accept: "application/json",
           "x-access-token": tokenToUse, // Correto para AJAX: token vai no header
         },
         body: JSON.stringify({
@@ -1055,14 +1048,14 @@ function SandboxPage() {
     }
   };
 
-/**
+  /**
    * =========================================================================
    * [GATEWAY TRANSPORT]: handleDirectGatewayForm
    * =========================================================================
-   * Executa a submissão tradicional via formulário HTML (POST) para acessar 
-   * produtos financeiros estruturais específicos (ex: Seguros Auto, Car Equity) 
+   * Executa a submissão tradicional via formulário HTML (POST) para acessar
+   * produtos financeiros estruturais específicos (ex: Seguros Auto, Car Equity)
    * mapeados por ID de produto (`product_id`).
-   * 
+   *
    * [FLUXO TÉCNICO]:
    * 1. Validação de Credencial: Injeta o token bruto da Superbid (`accessTokenSBX`).
    * 2. Parametrização: Serializa o `product_id` junto com os metadados contextuais.
@@ -1072,7 +1065,8 @@ function SandboxPage() {
     if (!validateSessionBeforeAction()) return;
 
     // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
-    const tokenToUse: string | null = accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
+    const tokenToUse: string | null =
+      accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
     if (!tokenToUse) {
       alert("Token bruto da Superbid não encontrado. Faça o login primeiro.");
@@ -1124,24 +1118,25 @@ function SandboxPage() {
     }
   };
 
-/**
+  /**
    * =========================================================================
    * [GATEWAY TRANSPORT]: handleDirectGatewayAjax
    * =========================================================================
-   * Executa uma requisição assíncrona AJAX (`fetch`) para acessar produtos 
+   * Executa uma requisição assíncrona AJAX (`fetch`) para acessar produtos
    * financeiros estruturais específicos com base no `product_id`.
-   * 
+   *
    * [FLUXO TÉCNICO]:
    * 1. Validação de Credencial: Envia o token bruto da Superbid (`accessTokenSBX`).
    * 2. Comunicação Assíncrona: Posta o JSON estruturado para a borda do gateway.
-   * 3. Processamento de Retorno: Trata a resposta JSON, armazena o token de sessão 
+   * 3. Processamento de Retorno: Trata a resposta JSON, armazena o token de sessão
    *    atualizado e abre a URL de destino em uma nova aba via `window.open`.
    */
   const handleDirectGatewayAjax = async (flowKey: string, productId: string) => {
     if (!validateSessionBeforeAction()) return;
 
     // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
-    const tokenToUse: string | null = accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
+    const tokenToUse: string | null =
+      accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
     if (!tokenToUse) {
       alert("Token bruto da Superbid não encontrado. Faça o login primeiro.");
@@ -1160,7 +1155,7 @@ function SandboxPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
+          Accept: "application/json",
           "x-access-token": tokenToUse, // Correto para AJAX: token vai no header
         },
         body: JSON.stringify({
@@ -1629,8 +1624,8 @@ function SandboxPage() {
                             {userData.entity_type === "J"
                               ? "Pessoa Jurídica (PJ)"
                               : userData.entity_type === "F"
-                              ? "Pessoa Física (PF)"
-                              : userData.entity_type || "—"}
+                                ? "Pessoa Física (PF)"
+                                : userData.entity_type || "—"}
                           </span>
                         </div>
                       </div>
@@ -1649,7 +1644,7 @@ function SandboxPage() {
               <Card className="rounded-2xl border-border hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
-                    <img src="/assets/home/conta.png" alt="Conta sbXPAY" className="h-full w-full object-contain" />
+                    <img src="/assets/home/conta.webp" alt="Conta sbXPAY" className="h-full w-full object-contain" />
                   </div>
                   <CardTitle className="text-lg">Landing Wallet sbX</CardTitle>
                   <CardDescription className="text-xs">
@@ -1690,7 +1685,7 @@ function SandboxPage() {
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
                     <img
-                      src="/assets/home/seguros.png"
+                      src="/assets/home/seguros.webp"
                       alt="Seguros de Veículos"
                       className="h-full w-full object-contain"
                     />
@@ -1750,7 +1745,7 @@ function SandboxPage() {
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
                     <img
-                      src="/assets/home/carhomeequity.png"
+                      src="/assets/home/carhomeequity.webp"
                       alt="Car Equity"
                       className="h-full w-full object-contain"
                     />
@@ -1838,8 +1833,8 @@ function SandboxPage() {
                   const offerVal = data?.offer?.offer_value
                     ? `R$ ${data.offer.offer_value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
                     : data
-                    ? "Valor indisponível"
-                    : "Carregando...";
+                      ? "Valor indisponível"
+                      : "Carregando...";
                   const sellerName = data?.seller?.trade_name || (data ? "Superbid" : "Carregando...");
                   const eventDate = data?.event?.event_start_date
                     ? new Date(data.event.event_start_date).toLocaleDateString("pt-BR")
@@ -1956,8 +1951,8 @@ function SandboxPage() {
                           {loadingAction === `${item.flowKey}_ajax`
                             ? "Processando..."
                             : item.disabled
-                            ? "Indisponível (Em breve)"
-                            : `${item.label} (fetch)`}
+                              ? "Indisponível (Em breve)"
+                              : `${item.label} (fetch)`}
                         </Button>
 
                         <div className="flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 text-center pt-3 border-t mt-2">
@@ -2132,8 +2127,12 @@ function SandboxPage() {
 
                   {/* 1. Panel Product */}
                   {routeConfigData.page_configs && (
-                    <PanelProduct 
-                      config={typeof routeConfigData.page_configs === 'string' ? JSON.parse(routeConfigData.page_configs) : routeConfigData.page_configs} 
+                    <PanelProduct
+                      config={
+                        typeof routeConfigData.page_configs === "string"
+                          ? JSON.parse(routeConfigData.page_configs)
+                          : routeConfigData.page_configs
+                      }
                     />
                   )}
 

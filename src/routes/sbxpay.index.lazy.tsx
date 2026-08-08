@@ -390,7 +390,7 @@ export function sbXPAYHome() {
                   <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
                   <div className="relative w-full p-0 flex items-center justify-center z-0">
                     <img
-                      src="/assets/home/conta.png"
+                      src="/assets/home/conta.webp"
                       alt="Segurança sbX Wallet"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
@@ -473,7 +473,7 @@ export function sbXPAYHome() {
                   </svg>
                 </div>
                 <img
-                  src="/assets/home/conta.png"
+                  src="/assets/home/conta.webp"
                   alt="Segurança sbX Wallet"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
@@ -494,7 +494,7 @@ export function sbXPAYHome() {
                   <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
                   <div className="relative w-full p-0 flex items-center justify-center z-0">
                     <img
-                      src="/assets/home/cartao.png"
+                      src="/assets/home/cartao.webp"
                       alt="Cartão"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
@@ -557,7 +557,7 @@ export function sbXPAYHome() {
                   </svg>
                 </div>
                 <img
-                  src="/assets/home/cartao.png"
+                  src="/assets/home/cartao.webp"
                   alt="Cartão"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
@@ -578,7 +578,7 @@ export function sbXPAYHome() {
                   <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
                   <div className="relative w-full p-0 flex items-center justify-center z-0">
                     <img
-                      src="/assets/home/financiamentoveiculos.png"
+                      src="/assets/home/financiamentoveiculos.webp"
                       alt="Veículos"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
@@ -644,7 +644,7 @@ export function sbXPAYHome() {
                   </svg>
                 </div>
                 <img
-                  src="/assets/home/financiamentoveiculos.png"
+                  src="/assets/home/financiamentoveiculos.webp"
                   alt="Veículos"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
@@ -665,7 +665,7 @@ export function sbXPAYHome() {
                   <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
                   <div className="relative w-full p-0 flex items-center justify-center z-0">
                     <img
-                      src="/assets/home/financiamentoimoveis.png"
+                      src="/assets/home/financiamentoimoveis.webp"
                       alt="Imóveis"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
@@ -705,7 +705,7 @@ export function sbXPAYHome() {
                   </svg>
                 </div>
                 <img
-                  src="/assets/home/financiamentoimoveis.png"
+                  src="/assets/home/financiamentoimoveis.webp"
                   alt="Imóveis"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
@@ -726,7 +726,7 @@ export function sbXPAYHome() {
                   <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
                   <div className="relative w-full p-0 flex items-center justify-center z-0">
                     <img
-                      src="/assets/home/carhomeequity.png"
+                      src="/assets/home/carhomeequity.webp"
                       alt="Rentabilize Ativos"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
@@ -769,7 +769,7 @@ export function sbXPAYHome() {
                   </svg>
                 </div>
                 <img
-                  src="/assets/home/carhomeequity.png"
+                  src="/assets/home/carhomeequity.webp"
                   alt="Rentabilize Ativos"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
@@ -790,7 +790,7 @@ export function sbXPAYHome() {
                   <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
                   <div className="relative w-full p-0 flex items-center justify-center z-0">
                     <img
-                      src="/assets/home/floorplan.png"
+                      src="/assets/home/floorplan.webp"
                       alt="Floor Plan"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
@@ -830,7 +830,7 @@ export function sbXPAYHome() {
                   </svg>
                 </div>
                 <img
-                  src="/assets/home/floorplan.png"
+                  src="/assets/home/floorplan.webp"
                   alt="Floor Plan"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />
@@ -851,7 +851,7 @@ export function sbXPAYHome() {
                   <div className="absolute inset-0 bg-slate-100 rounded-full filter blur-xs transform scale-90"></div>
                   <div className="relative w-full p-0 flex items-center justify-center z-0">
                     <img
-                      src="/assets/home/seguros.png"
+                      src="/assets/home/seguros.webp"
                       alt="Proteção sbX"
                       className="mix-blend-multiply w-full h-auto object-contain relative"
                     />
@@ -903,7 +903,7 @@ export function sbXPAYHome() {
                   </svg>
                 </div>
                 <img
-                  src="/assets/home/seguros.png"
+                  src="/assets/home/seguros.webp"
                   alt="Proteção sbX"
                   className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                 />

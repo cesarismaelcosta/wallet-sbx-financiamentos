@@ -10,7 +10,7 @@
  * RESPONSABILIDADES:
  * 1. Auditoria de Identidade: Validação criptográfica do JWT do solicitante.
  * 2. Verificação de Privilégios: Consulta cruzada na tabela `backoffice_users`.
- * 3. Gestão de Ciclo de Vida: Registro, alteração de papéis e desativação 
+ * 3. Gestão de Ciclo de Vida: Registro, alteração de papéis, permissões granulares e desativação 
  *    com encerramento forçado de sessão (Kill Switch).
  */
 
@@ -30,11 +30,37 @@ const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 
 type Role = "admin" | "manager" | "viewer";
 
-interface RegisterPayload { action: "register"; email: string; name: string; role: Role; }
-interface SetActivePayload { action: "set_active"; id: string; is_active: boolean; }
-interface SetRolePayload { action: "set_role"; id: string; role: Role; }
+// ATUALIZADO: Adicionado suporte para as colunas JSONB nas Interfaces
+interface RegisterPayload { 
+  action: "register"; 
+  email: string; 
+  name: string; 
+  role: Role; 
+  allowed_partners?: string[]; 
+  allowed_products?: string[]; 
+}
+interface SetActivePayload { 
+  action: "set_active"; 
+  id: string; 
+  is_active: boolean; 
+}
+interface SetRolePayload { 
+  action: "set_role"; 
+  id: string; 
+  role: Role;
+  allowed_partners?: string[]; 
+  allowed_products?: string[]; 
+}
+// NOVA AÇÃO: Atualizar permissões na tabela
+interface UpdatePermissionsPayload {
+  action: "update_permissions";
+  id: string;
+  allowed_partners: string[];
+  allowed_products: string[];
+}
 interface ListPayload { action: "list"; }
-type Payload = RegisterPayload | SetActivePayload | SetRolePayload | ListPayload;
+
+type Payload = RegisterPayload | SetActivePayload | SetRolePayload | UpdatePermissionsPayload | ListPayload;
 
 /**
  * Valida se o solicitante possui privilégios administrativos ativos.
@@ -119,7 +145,15 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
       
       const { data, error } = await adminClient
         .from("backoffice_users")
-        .insert({ email, name: payload.name, role: payload.role, is_active: true })
+        .insert({ 
+          email, 
+          name: payload.name, 
+          role: payload.role, 
+          is_active: true,
+          // ATUALIZADO: Salva as permissões já na criação
+          allowed_partners: payload.allowed_partners || ["*"],
+          allowed_products: payload.allowed_products || ["*"]
+        })
         .select().single();
         
       if (error) return { status: 500, data: { error: error.message } };
@@ -165,9 +199,31 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
           return { status: 400, data: { error: "invalid_role" } };
       }
       
+      // ATUALIZADO: Prepara o objeto de atualização com a Role
+      const updateData: any = { role: payload.role };
+      
+      // Se houver instruções de limpar JSONB (Admin/Manager), acopla no update
+      if (payload.allowed_partners) updateData.allowed_partners = payload.allowed_partners;
+      if (payload.allowed_products) updateData.allowed_products = payload.allowed_products;
+
       const { data, error } = await adminClient
         .from("backoffice_users")
-        .update({ role: payload.role })
+        .update(updateData)
+        .eq("id", payload.id)
+        .select().single();
+        
+      if (error) return { status: 500, data: { error: error.message } };
+      return { status: 200, data: { user: data } };
+    }
+
+    // NOVA AÇÃO: Atualizar diretamente as permissões JSONB na tabela
+    case "update_permissions": {
+      const { data, error } = await adminClient
+        .from("backoffice_users")
+        .update({ 
+          allowed_partners: payload.allowed_partners,
+          allowed_products: payload.allowed_products
+        })
         .eq("id", payload.id)
         .select().single();
         

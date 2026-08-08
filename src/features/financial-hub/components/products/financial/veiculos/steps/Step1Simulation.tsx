@@ -14,7 +14,7 @@
  * * * * RESPONSABILIDADE:
  * Centralizar a captura de dados e disparar a simulação financeira via Gateway,
  * garantindo paridade total com a estrutura do veiculos-old.
- * 
+ *
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
  */
@@ -53,9 +53,7 @@ export function Step1Simulation() {
 
   const areConsentsValid = useMemo(() => {
     const configs = state.data?.consent_configs || [];
-    return configs
-      .filter((opt: any) => opt.is_required)
-      .every((opt: any) => acceptedConsents[opt.id] === true);
+    return configs.filter((opt: any) => opt.is_required).every((opt: any) => acceptedConsents[opt.id] === true);
   }, [state.data?.consent_configs, acceptedConsents]);
 
   /**
@@ -68,7 +66,7 @@ export function Step1Simulation() {
   const handleSimular = async () => {
     // 1. Prevenção de cliques múltiplos
     if (loading || isSimulating.current) return;
-    
+
     isSimulating.current = true;
     setLoading(true);
 
@@ -89,8 +87,8 @@ export function Step1Simulation() {
             consent_id: c.id,
             acceptedConsents: true,
             acceptedConsents_at: new Date().toISOString(),
-            legal_text_snapshot: { template_text: c.template_text, links: c.links }
-          }))
+            legal_text_snapshot: { template_text: c.template_text, links: c.links },
+          })),
       };
 
       // 3. Chamada via Gateway centralizado e captura do resultado
@@ -99,20 +97,19 @@ export function Step1Simulation() {
       // 4. Atualização de estado e avanço correto para o Step 2
       update({
         meta: { ...state.meta, step: 2 },
-        data: { 
-          ...state.data, 
-          simulationResult: result, 
-          simulation_id: result.simulation_id, 
-          simulation_update_id: result.simulation_update_id 
-        }
+        data: {
+          ...state.data,
+          simulationResult: result,
+          simulation_id: result.simulation_id,
+          simulation_update_id: result.simulation_update_id,
+        },
       });
-      
     } catch (error: any) {
       console.error("[Erro na Simulação Card]:", error);
-      
+
       // DISPARA O EVENTO GLOBAL PARA O LAYOUT OUVIR
       // O Layout vai capturar esse erro e exibir o ErrorCountdown automaticamente.
-      window.dispatchEvent(new CustomEvent('app-error', { detail: error }));
+      window.dispatchEvent(new CustomEvent("app-error", { detail: error }));
     } finally {
       setLoading(false);
       isSimulating.current = false;
@@ -120,31 +117,35 @@ export function Step1Simulation() {
   };
 
   if (!state?.data || Object.keys(state.data).length === 0) {
-    return <div className="flex items-center justify-center h-64"><span className="text-slate-400">Carregando...</span></div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <span className="text-slate-400">Carregando...</span>
+      </div>
+    );
   }
 
   const { rules, consent_configs, offer } = state.data;
-  const tetoMaximo = offer?.vehicle_details?.fipe_value ?? (offer?.offer_value * (1 + (rules?.max_offer_cap_percent ?? 20) / 100));
-  
+  const tetoMaximo =
+    offer?.vehicle_details?.fipe_value ?? offer?.offer_value * (1 + (rules?.max_offer_cap_percent ?? 20) / 100);
+
   // Atributo do lote (índice ou número)
   const loteSubIndex = offer?.lote_index || offer?.lote_numero || "1";
-  
+
   // Descrição limpa do veículo
   const offerDescText = offer?.offer_description ? offer.offer_description.replace(/[.,]+$/, "") : "";
 
   return (
     <div className="space-y-4 max-w-xl mx-auto lg:mx-0">
-      
       {/* HEADER RESPONSIVO COM A ILUSTRAÇÃO DE VEÍCULOS NO PADRÃO EXATO - mb-4 enxuto */}
       <div className="flex items-center gap-4 mb-4">
         <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
-          <img 
-            src="/assets/home/financiamentoveiculossimulacao.png" 
-            alt="Veículos" 
+          <img
+            src="/assets/home/financiamentoveiculossimulacao.webp"
+            alt="Veículos"
             className="w-full h-full object-contain"
           />
         </div>
-        
+
         <div className="space-y-0.5 flex-1 w-0 min-w-0">
           {/* Título Principal (Fonte fluida 14px a 20px) */}
           <h3 className="text-[clamp(14px,4vw,20px)] sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full block">
@@ -165,16 +166,16 @@ export function Step1Simulation() {
 
       {/* Container: p-4 (mobile) / p-7 (desktop) e gap-x-4 (mobile) / gap-x-8 (desktop) */}
       <div className="bg-slate-50 border border-border rounded-lg p-4 sm:p-7 space-y-4">
-
         {/* Grid: gap-x-4 (mobile) / gap-x-8 (desktop) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4">
-          
           {/* Valor do lance */}
           <div className="space-y-1">
-            <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Valor do lance</Label>
-            <Input 
-              disabled={loading} 
-              value={BRL(localValorVeiculo)} 
+            <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">
+              Valor do lance
+            </Label>
+            <Input
+              disabled={loading}
+              value={BRL(localValorVeiculo)}
               onChange={(e) => {
                 if (loading) return; // Trava extra de segurança
                 const rawValue = Number(e.target.value.replace(/\D/g, "")) / 100;
@@ -184,7 +185,7 @@ export function Step1Simulation() {
               className={`h-10 rounded-xl bg-white border-slate-200 font-semibold disabled:bg-slate-100 disabled:text-slate-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
             />
             <div className="pt-1 px-1">
-              <SliderCustomizado 
+              <SliderCustomizado
                 value={localValorVeiculo}
                 onValueChange={(v: number) => {
                   if (loading) return; // Impede o arraste visual durante o loading
@@ -194,8 +195,8 @@ export function Step1Simulation() {
                   if (loading) return;
                   updateData({ valorVeiculo: v });
                 }}
-                min={offer?.offer_value} 
-                max={tetoMaximo} 
+                min={offer?.offer_value}
+                max={tetoMaximo}
                 step={100}
                 isCurrency={true}
                 disabled={loading}
@@ -206,9 +207,9 @@ export function Step1Simulation() {
           {/* Entrada */}
           <div className="space-y-1">
             <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Entrada</Label>
-            <Input 
+            <Input
               disabled={loading}
-              value={BRL((localValorVeiculo * localPercentualEntrada) / 100)} 
+              value={BRL((localValorVeiculo * localPercentualEntrada) / 100)}
               onChange={(e) => {
                 if (loading) return;
                 const rawValue = Number(e.target.value.replace(/\D/g, "")) / 100;
@@ -219,7 +220,7 @@ export function Step1Simulation() {
               className={`h-10 rounded-xl bg-white border-slate-200 font-semibold disabled:bg-slate-100 disabled:text-slate-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
             />
             <div className="pt-1 px-1">
-              <SliderCustomizado 
+              <SliderCustomizado
                 value={localPercentualEntrada}
                 onValueChange={(perc: number) => {
                   if (loading) return;
@@ -229,8 +230,8 @@ export function Step1Simulation() {
                   if (loading) return;
                   updateData({ valorEntrada: (localValorVeiculo * perc) / 100 });
                 }}
-                min={rules?.min_down_payment_percentage} 
-                max={rules?.max_down_payment_percentage} 
+                min={rules?.min_down_payment_percentage}
+                max={rules?.max_down_payment_percentage}
                 step={1}
                 disabled={loading}
               />
@@ -244,7 +245,7 @@ export function Step1Simulation() {
           <RadioGroup
             disabled={loading}
             value={localParcelas ? String(localParcelas) : ""}
-            onValueChange={(v) => { 
+            onValueChange={(v) => {
               const val = Number(v);
               setLocalParcelas(val);
             }}
@@ -253,8 +254,8 @@ export function Step1Simulation() {
             {(state.data?.rules?.installment_options ?? []).map((p: number) => (
               <div key={p} className="flex-1">
                 <RadioGroupItem value={String(p)} id={`p-${p}`} className="peer sr-only" disabled={loading} />
-                <Label 
-                  htmlFor={`p-${p}`} 
+                <Label
+                  htmlFor={`p-${p}`}
                   className={`flex items-center justify-center p-2 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 peer-data-[state=checked]:border-[var(--brand-primary)] peer-data-[state=checked]:bg-white transition-all shadow-sm ${loading ? "!cursor-wait opacity-50" : "cursor-pointer"}`}
                 >
                   <span className="font-bold text-xs text-black">{p}x</span>
@@ -264,19 +265,17 @@ export function Step1Simulation() {
           </RadioGroup>
         </div>
       </div>
-      
+
       {/* Espaçamento interno reduzido via space-y-4 geral e margem controlada */}
-      <div className={`transition-opacity duration-200 pt-1 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}>
-        <DynamicConsents 
-          configs={consent_configs} 
-          value={acceptedConsents} 
-          onChange={setAcceptedConsents} 
-        />
+      <div
+        className={`transition-opacity duration-200 pt-1 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}
+      >
+        <DynamicConsents configs={consent_configs} value={acceptedConsents} onChange={setAcceptedConsents} />
       </div>
 
-      <Button 
+      <Button
         type="button"
-        onClick={handleSimular} 
+        onClick={handleSimular}
         disabled={!areConsentsValid || !localParcelas || loading}
         className="w-full h-12 rounded-xl text-white shadow-sm transition-all active:scale-[0.98] bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 disabled:opacity-50 disabled:!cursor-wait flex items-center justify-center gap-2 mt-1"
       >
