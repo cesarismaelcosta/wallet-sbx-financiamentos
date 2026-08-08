@@ -85,6 +85,16 @@ function BackofficeLayout() {
   // Valida se o usuário logado é Administrador
   const isAdmin = backofficeUser?.role?.toLowerCase() === "admin";
 
+  // Verifica no sessionStorage se já foi inicializado nesta sessão do navegador
+  const hasInitialized = typeof window !== "undefined" && sessionStorage.getItem("sb_backoffice_initialized") === "true";
+
+  // Efeito para salvar no sessionStorage assim que o usuário for validado
+  useEffect(() => {
+    if (backofficeUser && isBackofficeAllowed) {
+      sessionStorage.setItem("sb_backoffice_initialized", "true");
+    }
+  }, [backofficeUser, isBackofficeAllowed]);
+
   /**
    * Efeito para aplicar classe de escopo global no body do Backoffice
    */
@@ -97,13 +107,9 @@ function BackofficeLayout() {
 
   /**
    * [GUARD DE SESSÃO E PERMISSÃO]
-   * Valida se o usuário possui privilégios administrativos ativos. Caso contrário,
-   * registra tentativa bloqueada e redireciona para o login.
    */
   useEffect(() => {
-    // Intercepta para evitar checagens desnecessárias na rota de login
     if (pathname.includes("/backoffice/login")) return;
-
     if (authLoading || authorizationLoading) return;
 
     if (!backofficeUser || !isBackofficeAllowed) {
@@ -122,13 +128,13 @@ function BackofficeLayout() {
     }
   }, [authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, navigate, session?.access_token, pathname]);
 
-  // Bypass para a página de login para evitar travamento no loader de verificação
+  // Bypass para a página de login
   if (pathname.includes("/backoffice/login")) {
     return <Outlet />;
   }
 
-  // Estado de carregamento global da esteira de segurança
-  if (authLoading || authorizationLoading || !backofficeUser || !isBackofficeAllowed) {
+  // SE JÁ FOI INICIALIZADO NA SESSÃO, NUNCA MAIS MOSTRA O LOADER DE TELA CHEIA
+  if (!hasInitialized && (authLoading || authorizationLoading || !backofficeUser)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[oklch(0.985_0.008_320)]">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -136,6 +142,11 @@ function BackofficeLayout() {
         </div>
       </div>
     );
+  }
+
+  // Se a checagem terminou e o usuário não tem permissão
+  if (!authLoading && !authorizationLoading && (!backofficeUser || !isBackofficeAllowed)) {
+    return null; 
   }
 
   // Tratamento seguro para iniciais do avatar do usuário logado
