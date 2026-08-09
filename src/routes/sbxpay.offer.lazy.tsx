@@ -3,144 +3,78 @@
  * @path src/routes/sbxpay/offer.tsx
  *
  * =========================================================================
- * [ARQUITETURA & CLEAN ARCHITECTURE]
+ * [ARQUITETURA & CLEAN ARCHITECTURE - DOCUMENTAÇÃO DE NEGÓCIO]
  * =========================================================================
- * Visualização de detalhes de uma oferta (ativo) na sbxpay.
- * Atua apenas como "vitrine" (Mock da tela da Superbid).
- *
- * [RESPONSABILIDADES DA REFATORAÇÃO (BFF & Edge Gateway)]
- * 1. Interface: Renderização fiel do layout original (tabelas, carrossel, banners).
- * 2. Visualização (BFF): Busca os dados da oferta apenas para exibição local na tela.
- * 3. Delegação Segura: Submete via callOrchestrator para o endpoint central,
- *    delegando a orquestração e autenticação à Borda/Gateway.
+ * Vitrine central de listagem e detalhes de ofertas integrada ao BFF `sbx-offer-query`.
+ * 
+ * DIRETRIZES DE ENGENHARIA DE UI:
+ * 1. Layout Dinâmico: A interface muta seu cabeçalho baseada no fluxo.
+ * 2. Fallback Estático de Categorias: Carrossel/Filtro otimizado para estabilidade.
+ * 3. Delegação de Negócio: O clique no botão primário (Simulação) delega toda a 
+ *    complexidade de estado para o `callOrchestrator`.
  */
 
-import { useState, useMemo, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useRef } from "react";
 import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
-import { CreditCard, DollarSign, ArrowLeft, LogOut } from "lucide-react";
+import { ArrowLeft, ChevronDown, SlidersHorizontal, ArrowUpDown } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { UserDataContext } from "./sbxpay.lazy";
-import { fetchOfferDetails } from "@/services/offer";
+import { fetchOffersQuery } from "@/services/offer";
 import { logSystemError } from "@/services/systemNotification";
 import { getDefaultSbxEnvironment, clearSession } from "@/services/session";
-import { callOrchestrator } from "@/features/financial-hub/core/services/gateway"; // 👈 [GATEWAY]: Importa a função centralizada de orquestração
+import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
+import { CardOfferV } from "@/features/financial-hub/components/shared/renderes/CardOfferV";
 
 // =========================================================================
-// [FORMATTERS & UTILS]: Utilitários de Apresentação e Validação de Segurança
+// [TAXONOMIA VISUAL]: Dicionário Estático de Ícones de Categorias
 // =========================================================================
+const SUPERBID_CATEGORY_FILTERS = [
+  { name: "Todas", filterValue: null, active: true },
+  { name: "Imóveis", filterValue: "imoveis", active: true },
+  { name: "Carros & Motos", filterValue: "carros-motos", active: true },
+  { name: "Caminhões & Ônibus", filterValue: "caminhoes-onibus", active: true },
+  { name: "Máquinas Pesadas & Agrícolas", filterValue: "maquinas-pesadas-agricolas", active: true },
+  { name: "Movimentação & Transporte", filterValue: "movimentacao-transporte", active: true },
+  { name: "Industrial, Máquinas & Equipamentos", filterValue: "industrial-maquinas-equipamentos", active: true },
+  { name: "Animais", filterValue: "animais", active: false },
+  { name: "Tecnologia", filterValue: "tecnologia", active: true },
+  { name: "Móveis e Decoração", filterValue: "moveis-decoracao", active: true },
+  { name: "Bolsas, Canetas, Joias", filterValue: "bolsas-canetas-joias-e-relogios", active: true },
+  { name: "Sucatas & Resíduos", filterValue: "sucatas-residuos", active: true },
+  { name: "Eletrodomésticos", filterValue: "eletrodomesticos", active: true },
+  { name: "Outras Categorias", filterValue: "outras", active: false }
+];
 
-/** Formata uma string de CPF para o padrão brasileiro (000.000.000-00) */
-const formatCPF = (cpf: string) => cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+const FILTER_OPTIONS = [
+  { label: "Todas", value: "" },
+  ...SUPERBID_CATEGORY_FILTERS.filter(c => c.active && c.filterValue).map(c => ({ label: c.name, value: c.filterValue || "" }))
+];
 
-/** Formata e limpa o número de telefone removendo DDI se presente */
-const formatPhone = (phone: string) => {
-  const cleaned = phone.replace(/^55/, "");
-  return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+const SORT_OPTIONS = [
+  { label: "Relevância", value: "relevancia" },
+  { label: "Maior Valor", value: "maior_valor" },
+  { label: "Menor Valor", value: "menor_valor" },
+  { label: "Mais Visitados", value: "mais_visitados" },
+  { label: "Encerramento", value: "encerramento_proximo" }
+];
+
+// =========================================================================
+// [CONFIGURAÇÃO DE FLUXOS]
+// =========================================================================
+const FLOW_MAP: Record<string, { product_id: number }> = {
+  Carros: { product_id: 2 },
+  Caminhões: { product_id: 5 },
+  Imóveis: { product_id: 1 },
+  Cartão: { product_id: 8 },
+  MaquinasAgricolas: { product_id: 3 },
+  MaquinasAmarelas: { product_id: 4 },
 };
 
-/**
- * Validação segura contra Open Redirect.
- * Bloqueia caminhos maliciosos do tipo protocolo-relativo (ex: //evil.com).
- */
-const isInternal = (url: string) =>
-  (url.startsWith("/") && !url.startsWith("//")) || url.startsWith(window.location.origin);
-
-// =========================================================================
-// [CONFIGURAÇÃO DE FLUXOS]: Mapeamento de Ambiente (Staging vs Production)
-// =========================================================================
-const FLOW_MAP: Record<
-  string,
-  {
-    name: string;
-    category: string;
-    product_id?: string;
-    offer_id: { staging: string; production: string };
-    info: string;
-    link: "Box Financiamento" | "Box Parcelamento" | "Banner";
-  }
-> = {
-  Carros: {
-    name: "Financiamento de Carros",
-    category: "Carros & Motos",
-    offer_id: { staging: "2969794", production: "4952846" },
-    info: "Entity, Event, Manager, Offer, Vehicle",
-    link: "Box Financiamento",
-  },
-  Caminhões: {
-    name: "Financiamento de Caminhões",
-    category: "Caminhões & Ônibus",
-    offer_id: { staging: "4680825", production: "4680825" },
-    info: "Entity, Event, Manager, Offer, Vehicle",
-    link: "Box Financiamento",
-  },
-  Imóveis: {
-    name: "Financiamento de Imóveis",
-    category: "Imóveis",
-    offer_id: { staging: "4680825", production: "4680825" },
-    info: "Entity, Event, Manager, Offer, RealEstate",
-    link: "Box Financiamento",
-  },
-  Cartão: {
-    name: "Parcelamento com Cartão",
-    category: "Informática",
-    product_id: "8",
-    offer_id: { staging: "3064406", production: "4859144" },
-    info: "Entity, Event, Manager, Offer",
-    link: "Box Parcelamento",
-  },
-  Vendedor: {
-    name: "Parcelamento do vendedor VRental",
-    category: "Máquinas Amarelas",
-    offer_id: { staging: "4492361", production: "4492361" },
-    info: "Entity, Event, Manager, Offer",
-    link: "Box Financiamento",
-  },
-  AutoEquity: {
-    name: "Auto Equity",
-    category: "Carros & Motos",
-    product_id: "7",
-    offer_id: { staging: "4753216", production: "4753216" },
-    info: "Entity",
-    link: "Banner",
-  },
-  SeguroAuto: {
-    name: "Seguro Auto",
-    category: "Carros & Motos",
-    product_id: "9",
-    offer_id: { staging: "4753216", production: "4753216" },
-    info: "Entity",
-    link: "Banner",
-  },
-};
-
-// Carregamento dinâmico de assets estáticos via glob import do Vite
-const allFiles = import.meta.glob("/src/assets/sbxpay/**/*.{jpg,jpeg,png,gif}", { eager: true });
-const formatarCaminho = (str: string) =>
-  str
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "")
-    .toLowerCase();
-
-// =========================================================================
-// CONFIGURAÇÃO DA ROTA (TanStack Router Wrapper Blindado)
-// =========================================================================
 function OfferDetailsSBXPage() {
-  // Lê diretamente da URL do navegador de forma síncrona e infalível
   const params = new URLSearchParams(window.location.search);
-  const flow = params.get("flow");
-
-  if (!flow) {
-    console.warn("🚨 [ROUTER]: O parâmetro '?flow=' não chegou na URL!");
-    return (
-      <div className="flex min-h-screen items-center justify-center font-bold text-slate-500 font-['Inter']">
-        Aguardando carregamento do fluxo... (Parâmetro ausente)
-      </div>
-    );
-  }
-
+  const flow = params.get("flow") || "Carros";
   return <OfferDetailsSBXPAY flowKey={flow} />;
 }
 
@@ -149,480 +83,371 @@ export const Route = createLazyFileRoute("/sbxpay/offer")({
 });
 
 // =========================================================================
-// [COMPONENTE PRINCIPAL]
+// [COMPONENTE DROPDOWN DESKTOP]
 // =========================================================================
-export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: keyof typeof FLOW_MAP }) {
-  // Contexto de autenticação para extração do ID e rastreio de sessão
+function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = "left" }: any) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const displayLabel = options.find((o: any) => o.value === value)?.label || label;
+
+  return (
+    <div className="relative" ref={ref}>
+      <div 
+        className="flex items-center justify-between gap-2 px-4 py-2.5 border border-[#B300FF] rounded-full cursor-pointer bg-white text-[#B300FF] min-w-[170px] shadow-sm transition-all hover:bg-purple-50/50"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center gap-2">
+          {Icon && <Icon size={14} />}
+          <span className="text-xs font-semibold select-none">{displayLabel}</span>
+        </div>
+        <ChevronDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </div>
+      {isOpen && (
+        <div className={`absolute top-[calc(100%+8px)] ${align === 'right' ? 'right-0' : 'left-0'} min-w-full w-max bg-white border border-slate-200 rounded-lg shadow-xl py-2 z-50 overflow-hidden`}>
+          {options.map((opt: any) => (
+            <div 
+              key={opt.value}
+              className={`px-4 py-2.5 text-sm cursor-pointer transition-colors ${value === opt.value ? 'bg-purple-50 text-[#B300FF] font-bold' : 'text-slate-700 hover:bg-slate-50'}`}
+              onClick={() => { onChange(opt.value); setIsOpen(false); }}
+            >
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =========================================================================
+// [COMPONENTE PRINCIPAL]: OfferDetailsSBXPAY
+// =========================================================================
+export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   const { userId, sessionToken } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = Route.useSearch() as any;
 
-  // Mapeia o fluxo atual ou aplica fallback seguro para evitar crash
-  const requestedFlow = FLOW_MAP[flowKey as any];
-  const currentFlow = requestedFlow || FLOW_MAP["Carros"];
-
-  // Contexto de dados do usuário logado na esteira
+  const currentFlow = FLOW_MAP[flowKey || "Carros"] || FLOW_MAP["Carros"];
+  const isCartao = currentFlow.product_id === 8;
   const context = useContext(UserDataContext);
-  const { userData, performLogout } = context || {};
+  const { userData } = context || {};
 
-  // Estados de controle visual da vitrine
-  const [fotoAtiva, setFotoAtiva] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [activeOffer, setActiveOffer] = useState<any>(null);
-
-  // [AMBIENTE & HIDRATAÇÃO]: Resolução via padrão centralizado do session.ts (Staging vs Production)
-  const [ambiente] = useState<"staging" | "production">(() => {
-    return getDefaultSbxEnvironment();
-  });
-
-  const targetOfferId = ambiente === "production" ? currentFlow.offer_id.production : currentFlow.offer_id.staging;
-  const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
-
-  // Estados para tratamento de falhas e fallback de UX
+  const [offersList, setOffersList] = useState<any[]>([]);
+  const [totalElements, setTotalElements] = useState<number>(0);
   const [fetchError, setFetchError] = useState<"TECHNICAL_INSTABILITY" | null>(null);
   const [countdown, setCountdown] = useState(5);
 
-  // =========================================================================
-  // [FETCH VISUAL]: Busca de detalhes do ativo com AbortController nativo
-  // =========================================================================
-  useEffect(() => {
-    if (!targetOfferId || !sessionToken) return;
+  const [pageNumber, setPageNumber] = useState<number>(1);
+  const pageSize = 24;
 
+  const [currentSort, setCurrentSort] = useState<string>("relevancia");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [ambiente] = useState<"staging" | "production">(() => getDefaultSbxEnvironment());
+
+  // Mobile Menu States
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
+
+  // Fecha menus caso o usuário clique fora no mobile
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setFilterMenuOpen(false);
+        setSortMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Resetador de paginação em caso de mudança de filtros
+  useEffect(() => {
+    setPageNumber(1);
+  }, [currentFlow.product_id, currentSort, selectedCategory]);
+
+  // Busca os dados da listagem (BFF Integration)
+  useEffect(() => {
+    if (!sessionToken) return;
     const controller = new AbortController();
 
-    const loadOffer = async () => {
+    const loadOffers = async () => {
       setLoading(true);
       setFetchError(null);
 
       try {
-        const data = await fetchOfferDetails(targetOfferId, { signal: controller.signal });
+        const data = await fetchOffersQuery(
+          {
+            productId: currentFlow.product_id,
+            sort: currentSort,
+            pageNumber,
+            pageSize,
+            categoryFilter: selectedCategory || null
+          },
+          { signal: controller.signal }
+        );
+
         if (!controller.signal.aborted) {
-          setActiveOffer(data);
+          setOffersList(data?.offers || []);
+          setTotalElements(data?.total || 0);
+          window.scrollTo({ top: 0, behavior: "smooth" });
         }
       } catch (error: any) {
-        // Ignora erros gerados pelo abortamento intencional do effect
-        if (error.name === "AbortError" || controller.signal.aborted) {
-          return;
-        }
-
-        console.error("[OFFER_FETCH_ERROR]:", error);
-
-        // [TELEMETRIA DE ERRO]: Disparo de email de log
+        if (error.name === "AbortError" || controller.signal.aborted) return;
         logSystemError({
-          context: "sbxpay/offer.lazy.tsx",
-          subject: `Erro na Busca de Oferta (${flowKey || "Geral"})`,
-          message: error?.message || "Erro na busca de oferta",
-          details: { name: error?.name, message: error?.message, stack: error?.stack },
-          payload: {
-            user_id: userId || "UNAUTHENTICATED",
-            offer_id: targetOfferId,
-            flow_key: flowKey,
-            environment: ambiente,
-            // [METADADOS ENRIQUECIDOS]: Página, Produto e Parceiro rastreados
-            metadata: {
-              page: window.location.pathname, // Caminho da página atual (ex: /sbxpay/offer)
-              product: currentFlow?.name || flowKey || "Desconhecido", // Nome oficial do produto
-              partner: activeOffer?.seller?.trade_name || "N/A", // Nome do parceiro/vendedor (se carregado)
-              visit_id: null,
-              simulation_id: null,
-            },
-          },
-          visit_id: null,
-          simulation_id: null,
+          context: "sbxpay/offer.tsx",
+          subject: `Erro na Busca de Ofertas (${flowKey})`,
+          message: error?.message || "Erro desconhecido",
+          payload: { user_id: userId || "UNAUTHENTICATED", flow_key: flowKey },
         });
-
         setFetchError("TECHNICAL_INSTABILITY");
       } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
 
-    loadOffer();
+    loadOffers();
+    return () => controller.abort();
+  }, [currentFlow.product_id, currentSort, pageNumber, sessionToken, ambiente, flowKey, selectedCategory]);
 
-    // Cleanup: Aborta a requisição HTTP pendente caso o componente seja desmontado
-    return () => {
-      controller.abort();
-    };
-  }, [targetOfferId, sessionToken, ambiente]);
-
-  // [UX FALLBACK]: Temporizador regressivo dinâmico para redirecionamento em caso de erro
+  // Fallback e Auto-Redirect em caso de erro crítico
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
-
     if (fetchError) {
       if (countdown > 0) {
         timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
       } else {
-        if (isInternal(dynamicReturnUri)) {
-          window.location.href = dynamicReturnUri;
-        } else {
-          navigate({ to: "/sbxpay" as any, replace: true });
-        }
+        navigate({ to: dynamicReturnUri as any });
       }
     }
-
     return () => clearTimeout(timer);
-  }, [fetchError, countdown, navigate, dynamicReturnUri]);
+  }, [fetchError, countdown, dynamicReturnUri, navigate]);
 
-  // Processamento e ordenação das fotos da oferta (destaque primeiro)
-  const imagens = useMemo(() => {
-    if (!activeOffer?.offer?.photos) return [];
-    return [...activeOffer.offer.photos]
-      .sort((a, b) => (a.highlight === b.highlight ? 0 : a.highlight ? -1 : 1))
-      .map((p: any) => p.link);
-  }, [activeOffer]);
-
-  // Validação final de rota caso o fluxo solicitado não exista
-  useEffect(() => {
-    if (!requestedFlow) {
-      navigate({ to: "/", replace: true });
-    }
-  }, [requestedFlow, navigate]);
-
-  if (!requestedFlow) return null;
-
-  // =========================================================================
-  // [HANDLERS]: Ação de Delegação Unificada via callOrchestrator (CONSULT)
-  // =========================================================================
-  const handleSimulacao = async () => {
-    if (!activeOffer) return;
+  // Delegação de Negócio via Gateway
+  const handleSimulacao = async (offerItem: any) => {
     setLoading(true);
-    setFetchError(null);
-
     try {
       const currentHref = window.location.href;
-
-      // Montagem do payload idêntico ao padrão validador da Home para a ação CONSULT
+      
       const payload = {
         action: "CONSULT",
         environment: ambiente,
-        product_id: currentFlow.product_id ? String(currentFlow.product_id) : null,
-        offer: activeOffer?.offer || {},
-        seller: activeOffer?.seller || {},
-        event: activeOffer?.event || {},
-        manager: activeOffer?.manager || {},
+        ...(currentFlow.product_id && { product_id: String(currentFlow.product_id) }),
+        offer: offerItem?.offer || offerItem,
+        seller: offerItem?.seller || {},
+        event: offerItem?.event || {},
+        manager: offerItem?.manager || {},
         origin_url: currentHref,
-        ...(userData && { entity: userData }), // Perfil injetado diretamente do Contexto global
+        ...(userData && { entity: userData }),
         interaction_context: {
           origin_url: currentHref,
-          utm_source: currentFlow.link === "Banner" ? "banner" : "offer",
+          utm_source: "offer_list",
           utm_medium: "referral",
           utm_campaign: `flow_${flowKey?.toLowerCase()}`,
         },
       };
 
-      // Disparo centralizado via gateway orquestrador
       const response = await callOrchestrator(payload, "POST");
-
-      // Se bem-sucedido, redireciona para a url retornada pela esteira
+      
       if (response?.url) {
-        window.location.href = response.url;
-        return;
+        if (response.url.startsWith("http")) {
+          window.location.href = response.url;
+        } else {
+          navigate({ to: response.url as any });
+        }
       } else {
-        throw new Error("URL de redirecionamento ausente na resposta do orquestrador.");
+        throw new Error("URL de redirecionamento ausente.");
       }
     } catch (error: any) {
-      console.error("🚨 [OFFER_SIMULATION_ERROR]:", error);
-
-      // Tratamento para sessão expirada na borda/orquestrador (401)
       if (error?.code === "SESSION_EXPIRED" || error?.status === 401) {
-        clearSession(); // Limpeza inteligente mantendo o sbx_env_pref
+        clearSession();
         navigate({ to: "/sbxpay" as any, replace: true });
         return;
       }
-
-      setFetchError("TECHNICAL_INSTABILITY");
       setLoading(false);
     }
   };
 
   // =========================================================================
-  // [VIEWS]: Tratamento de Erros, Loading e Renderização de Sucesso
+  // RENDERIZAÇÃO: Estado Crítico (Catastrófico)
   // =========================================================================
-
-  // VIEW 1: Estado de Erro Crítico
   if (fetchError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center font-['Plus_Jakarta_Sans']">
-        <img src="/assets/error/error.webp" alt="Erro" className="w-34 h-34 object-contain mb-6" />
-        <p className="text-slate-800 font-bold text-lg mb-2">Ops! Algo deu errado.</p>
-        <p className="text-slate-500 font-medium text-sm text-center max-w-md px-4">
-          Esta oferta não foi encontrada ou não está disponível.
-        </p>
-        <p className="text-slate-400 font-medium text-xs mt-4 mb-6">Redirecionando em {countdown}s...</p>
-
-        <button
-          onClick={() => {
-            if (isInternal(dynamicReturnUri)) {
-              window.location.href = dynamicReturnUri;
-            } else {
-              navigate({ to: "/sbxpay" as any, replace: true });
-            }
-          }}
-          className="flex items-center text-[#B400FF] font-semibold text-sm hover:opacity-80 transition-opacity cursor-pointer border-none bg-transparent"
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center font-['Inter']">
+        <p className="text-slate-800 font-bold text-lg mb-2">Ops! Falha ao carregar ofertas.</p>
+        <p className="text-slate-500 font-medium text-sm mb-4">Redirecionando em {countdown}s...</p>
+        <button 
+          onClick={() => navigate({ to: dynamicReturnUri as any })} 
+          className="flex items-center text-[#B400FF] font-semibold text-sm cursor-pointer bg-transparent border-none"
         >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Retornar agora
+          <ArrowLeft className="mr-2 h-4 w-4" /> Retornar agora
         </button>
       </div>
     );
   }
 
-  // VIEW 2: Estado de Carregamento Inicial
-  if (loading || (!activeOffer && !fetchError)) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-        <p className="text-slate-500 font-medium text-sm">Carregando detalhes da oferta...</p>
-      </div>
-    );
-  }
+  const totalPages = Math.ceil(totalElements / pageSize) || 1;
+  const formattedTotal = totalElements.toLocaleString("pt-BR");
 
-  // VIEW 3: Layout de Vitrine de Sucesso Completo
   return (
-    <div className="min-h-screen bg-white">
-      <style>{`:root { --brand-primary: #B300FF; }`}</style>
-
-      {/* HEADER PRINCIPAL */}
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-white shadow-sm">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                if (dynamicReturnUri.startsWith("http")) {
-                  window.location.href = dynamicReturnUri;
-                } else {
-                  navigate({ to: dynamicReturnUri as any });
-                }
-              }}
-              className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-[var(--brand-primary)]"
-            >
-              <ArrowLeft size={16} /> Voltar
-            </button>
-            <div className="h-6 w-px bg-slate-200 hidden sm:block" />
-            <div className="hidden sm:block">
-              <WalletLogo size="md" withTagline />
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">
-              sbxpay: Simulação de Oferta Superbid
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-[9px] font-mono text-slate-500">ID: {userId || "---"}</p>
-                <p className="text-[9px] font-mono text-slate-500 uppercase">AMB: {ambiente.toUpperCase()}</p>
-              </div>
-              <button
-                onClick={() => performLogout?.()}
-                className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-bold"
-              >
-                <LogOut className="w-3 h-3" /> SAIR
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* BANNER PROMOCIONAL (Exibido condicionalmente para fluxos do tipo Banner) */}
-      {currentFlow.link === "Banner" && (
-        <div style={{ maxWidth: "1160px", margin: "20px auto", padding: "0 20px" }}>
-          <button
-            onClick={handleSimulacao}
-            disabled={loading}
-            className="w-full text-left border-none bg-transparent p-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] transition-transform"
-          >
-            <img
-              src={(() => {
-                const flowBusca = formatarCaminho(String(flowKey));
-                const chave = Object.keys(allFiles).find((p) =>
-                  formatarCaminho(p).includes(`/banner/${flowBusca}/banner`),
-                );
-                return chave ? (allFiles[chave] as any)?.default || "" : "";
-              })()}
-              alt="Banner"
-              className="w-full rounded-xl"
-            />
-          </button>
+    <div className="min-h-screen bg-slate-50 font-['Inter'] pb-20 relative">
+      {/* OVERLAY DE LOADING PADRONIZADO */}
+      {loading && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm font-['Plus_Jakarta_Sans']">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+          <p className="text-slate-500 font-medium text-sm">Carregando ofertas...</p>
         </div>
       )}
 
-      {/* CONTEÚDO PRINCIPAL DA VITRINE */}
-      <div style={{ maxWidth: "1160px", margin: "0 auto", padding: "40px 20px", fontFamily: "'Inter', sans-serif" }}>
-        {/* TÍTULO E LOGOTIPO DO EVENTO NO TOPO */}
-        <div style={{ marginBottom: "24px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-            {activeOffer.event.event_image_url && (
-              <img
-                src={activeOffer.event.event_image_url}
-                alt="Logo do Evento"
-                style={{ width: "32px", height: "32px", borderRadius: "50%", objectFit: "cover" }}
+      {/* 1. HEADER FIXO */}
+      <header className="fixed top-0 left-0 w-full h-[60px] z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center px-6 shadow-xs">
+        <div className="max-w-7xl mx-auto w-full">
+          <a href="/sbxpay/" className="flex items-center outline-none border-none focus:outline-none focus:ring-0">
+            <WalletLogo size="md" withTagline />
+          </a>
+        </div>
+      </header>
+
+      {/* 2. BARRA FLUTUANTE MOBILE FIXA (Sempre visível) */}
+      <div className="md:hidden fixed top-[60px] left-0 w-full h-[48px] bg-white border-b border-slate-200 shadow-sm z-40" ref={mobileMenuRef}>
+        <div className="flex items-center w-full h-full divide-x divide-slate-200">
+          
+          {/* 2A. Filtrar (ESQUERDA - APENAS PARA CARTÃO) */}
+          {isCartao && (
+            <div 
+              className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-[#B300FF]"
+              onClick={() => { setFilterMenuOpen(!filterMenuOpen); setSortMenuOpen(false); }}
+            >
+              <SlidersHorizontal size={16} />
+              <span className="text-sm font-semibold select-none">Filtrar</span>
+            </div>
+          )}
+
+          {/* 2B. Ordenar (DIREITA - VISÍVEL PARA TODOS) */}
+          <div 
+            className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-[#B300FF]"
+            onClick={() => { setSortMenuOpen(!sortMenuOpen); setFilterMenuOpen(false); }}
+          >
+            <ArrowUpDown size={16} />
+            <span className="text-sm font-semibold select-none">Ordenar</span>
+          </div>
+
+        </div>
+
+        {/* Menus Dropdown (Mobile) */}
+        {isCartao && filterMenuOpen && (
+          <div className="absolute top-[48px] left-0 w-full bg-white shadow-xl border-b border-slate-200 max-h-[75vh] overflow-y-auto z-40">
+            {FILTER_OPTIONS.map((opt, idx) => (
+              <div 
+                key={idx} 
+                className={`px-6 py-3.5 text-sm border-b border-slate-50 last:border-0 cursor-pointer ${selectedCategory === opt.value ? 'text-[#B300FF] bg-purple-50/50 font-bold' : 'text-slate-700 active:bg-slate-100'}`}
+                onClick={() => { setSelectedCategory(opt.value); setFilterMenuOpen(false); }}
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {sortMenuOpen && (
+          <div className="absolute top-[48px] left-0 w-full bg-white shadow-xl border-b border-slate-200 max-h-[60vh] overflow-y-auto z-40">
+            {SORT_OPTIONS.map((opt, idx) => (
+              <div 
+                key={idx} 
+                className={`px-6 py-4 text-sm border-b border-slate-50 last:border-0 cursor-pointer ${currentSort === opt.value ? 'text-[#B300FF] bg-purple-50/50 font-bold' : 'text-slate-700 active:bg-slate-100'}`}
+                onClick={() => { setCurrentSort(opt.value); setSortMenuOpen(false); }}
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ÁREA ÚTIL DE CONTEÚDO */}
+      <main className={`max-w-7xl mx-auto px-4 ${isCartao ? 'pt-[128px]' : 'pt-[84px]'} md:pt-[84px] pb-8 font-['Inter']`}>
+        
+        {/* DESKTOP BARRA DE FILTRO E ORDENAÇÃO (Sempre visível) */}
+        <div className="hidden md:flex w-full items-center justify-between gap-4 pt-2 pb-6">
+          <div className="flex items-center">
+            <p className="text-sm font-normal text-slate-800 m-0">
+              {formattedTotal} anúncios
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            {/* FILTRAR APENAS SE FOR CARTÃO */}
+            {isCartao && (
+              <DesktopDropdown 
+                icon={SlidersHorizontal} 
+                label="Filtrar" 
+                value={selectedCategory} 
+                options={FILTER_OPTIONS} 
+                onChange={setSelectedCategory} 
+                align="left" 
               />
             )}
-            <span style={{ fontSize: "14px", fontWeight: "700", color: "#333" }}>
-              {activeOffer.event.event_description}
-            </span>
+            
+            {/* ORDENAR VISÍVEL PARA TODOS */}
+            <DesktopDropdown 
+              icon={ArrowUpDown} 
+              label="Ordenar" 
+              value={currentSort} 
+              options={SORT_OPTIONS} 
+              onChange={setCurrentSort} 
+              align="right" 
+            />
           </div>
-          <h1 style={{ fontSize: "18px", fontWeight: "900", textTransform: "uppercase", color: "#1A202C" }}>
-            {activeOffer.offer.offer_description}
-          </h1>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
-          <div className="w-full lg:w-2/3 flex flex-col gap-8">
-            {/* CARROSSEL DE FOTOS DO ATIVO */}
-            <div className="relative w-full aspect-[825/502] bg-black rounded-md overflow-hidden">
-              {currentFlow.link.trim() !== "Banner" && (
-                <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-2 bg-white rounded shadow-md z-10">
-                  {currentFlow.link.trim() === "Box Parcelamento" ? (
-                    <>
-                      <CreditCard size={18} className="text-black" />
-                      <p className="m-0 text-sm font-medium text-black">Use seu cartão em até 18x</p>
-                    </>
-                  ) : (
-                    <>
-                      <DollarSign size={18} className="text-black" />
-                      <p className="m-0 text-sm font-medium text-black">Simule nosso financiamento</p>
-                    </>
-                  )}
-                </div>
-              )}
-              {imagens.length > 0 && (
-                <img src={imagens[fotoAtiva]} className="w-full h-full object-contain" alt="Ativo" />
-              )}
-              <button
-                onClick={() => setFotoAtiva((p) => (p - 1 + imagens.length) % imagens.length)}
-                className="absolute left-2 top-1/2 bg-black/50 text-white p-2"
-              >
-                &lt;
-              </button>
-              <button
-                onClick={() => setFotoAtiva((p) => (p + 1) % imagens.length)}
-                className="absolute right-2 top-1/2 bg-black/50 text-white p-2"
-              >
-                &gt;
-              </button>
-            </div>
-
-            {/* BOX DE AÇÃO PARA SIMULAÇÃO (Financiamento ou Parcelamento) */}
-            <div className="w-full">
-              {currentFlow.link === "Box Financiamento" && (
-                <div className="p-5 border border-gray-200 bg-white rounded-md shadow-sm">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="w-6 h-6 rounded-full border border-gray-800 flex items-center justify-center text-sm font-bold text-gray-800">
-                      $
-                    </span>
-                    <h5 className="m-0 text-base font-bold">Esta oferta pode ser financiada</h5>
-                  </div>
-                  <p className="text-sm text-gray-600 leading-relaxed mb-4">
-                    Faça uma simulação sem compromisso para conhecer nossas condições especiais de parcelamento e
-                    negocie com nossos especialistas uma proposta personalizada. Sujeito à análise de crédito.
-                  </p>
-                  <a
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (!loading) handleSimulacao();
-                    }}
-                    className="text-[var(--brand-primary)] font-bold text-base cursor-pointer hover:underline"
-                  >
-                    {loading ? "Processando..." : "Simular financiamento"}
-                  </a>
-                </div>
-              )}
-              {currentFlow.link.includes("Parcelamento") && (
-                <div className="p-5 border border-gray-200 bg-white rounded-md shadow-sm">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-6 h-6 rounded-full border border-gray-800 flex items-center justify-center">
-                      <CreditCard size={14} className="text-gray-800" />
-                    </div>
-                    <h5 className="m-0 text-base font-bold">Parcele em até 18x</h5>
-                  </div>
-                  <p className="text-sm text-gray-600 leading-relaxed mb-4">
-                    Para pagamentos neste evento de lotes até R$ 120.000,00 você pode utilizar seu cartão de crédito
-                    para pagar com toda a segurança da <strong>sbXPAY</strong>.
-                  </p>
-                  <a
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (!loading) handleSimulacao();
-                    }}
-                    className="text-[var(--brand-primary)] font-bold text-base cursor-pointer hover:underline"
-                  >
-                    {loading ? "Processando..." : "Simular parcelamento"}
-                  </a>
-                </div>
-              )}
-            </div>
-
-            {/* TABELA DE DADOS DETALHADA DO LOTE */}
-            <div className="w-full mt-4">
-              <h2 className="text-lg font-bold uppercase border-b border-black pb-2">Informações do lote</h2>
-              <table className="w-full mt-4 border-collapse text-sm">
-                <tbody>
-                  {[
-                    { label: "Descrição do Lote", value: activeOffer.offer.offer_description },
-                    { label: "Categoria", value: activeOffer.offer.category },
-                    { label: "Vendedor (Seller)", value: activeOffer.seller.trade_name },
-                    { label: "Gestor (Manager)", value: activeOffer.manager?.manager_name || "N/A" },
-                    { label: "Valor do Lote", value: `R$ ${activeOffer.offer.offer_value.toLocaleString("pt-BR")}` },
-                    { label: "Evento", value: activeOffer.event.event_description },
-                    { label: "Número do Evento", value: activeOffer.event.event_id },
-                    {
-                      label: "Início do Evento",
-                      value: new Date(activeOffer.event.event_start_date).toLocaleDateString("pt-BR"),
-                    },
-                    {
-                      label: "Fim do Evento",
-                      value: new Date(activeOffer.event.event_end_date).toLocaleDateString("pt-BR"),
-                    },
-                  ].map((row, i) => (
-                    <tr key={i} className="border-b border-gray-200">
-                      <td className="py-3 font-bold w-1/3 align-top">{row.label}:</td>
-                      <td className="py-3 align-top">{row.value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* ASIDE LATERAL: RESUMO DO LANCE E PERFIL DO USUÁRIO */}
-          <aside className="w-full lg:w-1/3">
-            <div className="border border-slate-200 rounded-lg bg-white shadow-sm overflow-hidden sticky top-24">
-              <div className="p-5 border-b border-slate-100">
-                <h2 className="text-[11px] font-bold uppercase text-gray-500 tracking-wider mb-2">ÚLTIMO LANCE</h2>
-                <div className="text-3xl font-black text-gray-900 mb-4">
-                  R$ {activeOffer.offer.offer_value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </div>
-                <div className="text-xs text-gray-600 space-y-1">
-                  <p className="font-bold text-gray-900 mb-2">{userData?.name || "Carregando perfil..."}</p>
-                  <p>
-                    <span className="font-semibold text-gray-500">CPF:</span>{" "}
-                    {userData ? formatCPF(userData.document) : "---"}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-gray-500">E-mail:</span> {userData?.email || "---"}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-gray-500">Celular:</span>{" "}
-                    {userData ? formatPhone(userData.phone) : "---"}
-                  </p>
-                </div>
-              </div>
-              <div className="p-5 bg-slate-50 text-[11px] text-gray-600 leading-relaxed">
-                <p className="m-0 mb-1">
-                  <strong>Abertura:</strong> {new Date(activeOffer.event.event_start_date).toLocaleDateString("pt-BR")}
-                </p>
-                <p className="m-0">
-                  <strong>Vendedor:</strong> {activeOffer.seller.trade_name}
-                </p>
-              </div>
-            </div>
-          </aside>
+        {/* MOBILE: QUANTIDADE DE ANÚNCIOS (Esconde no desktop pois já está na barra acima) */}
+        <div className="md:hidden mb-4">
+          <p className="text-sm font-normal text-slate-800 m-0">
+            {formattedTotal} anúncios
+          </p>
         </div>
-      </div>
+
+        {/* ENGINE DE CARDS UTILIZANDO O NOVO COMPONENTE CardOfferV */}
+        {offersList.length === 0 && !loading ? (
+          <div className="bg-white rounded-lg p-12 text-center border border-slate-200 shadow-xs my-12">
+            <p className="text-slate-600 font-medium text-sm">Nenhuma oferta encontrada para esta categoria no momento.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {offersList.map((item, idx) => (
+              <CardOfferV 
+                key={idx} 
+                item={item} 
+                isCartao={isCartao} 
+                loading={loading} 
+                onSimulate={handleSimulacao} 
+              />
+            ))}
+          </div>
+        )}
+
+        {/* PAGINAÇÃO */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 py-8 mt-6">
+            <button onClick={() => setPageNumber(prev => Math.max(prev - 1, 1))} disabled={pageNumber === 1} className="px-4 py-2 text-xs font-semibold border border-slate-300 rounded-md bg-white text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer">Anterior</button>
+            <span className="text-xs text-slate-600 px-3 font-medium">Página {pageNumber} de {totalPages}</span>
+            <button onClick={() => setPageNumber(prev => Math.min(prev + 1, totalPages))} disabled={pageNumber >= totalPages} className="px-4 py-2 text-xs font-semibold border border-slate-300 rounded-md bg-white text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer">Próxima</button>
+          </div>
+        )}
+
+      </main>
     </div>
   );
 }

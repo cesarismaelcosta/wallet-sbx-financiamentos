@@ -107,7 +107,6 @@ async function validatePayload(
     if (!payload.seller?.seller_id) errors.push("seller.seller_id é obrigatório.");
     if (!payload.seller?.legal_name) errors.push("seller.legal_name é obrigatório.");
     if (!payload.seller?.trade_name) errors.push("seller.trade_name é obrigatório.");
-    if (!payload.seller?.economic_group) errors.push("seller.economic_group é obrigatório.");
     if (!payload.event?.event_id) errors.push("event.event_id é obrigatório.");
     if (!payload.event?.event_description) errors.push("event.event_description é obrigatório.");
     if (!payload.event?.event_start_date) errors.push("event.event_start_date é obrigatório.");

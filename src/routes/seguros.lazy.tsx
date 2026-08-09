@@ -41,7 +41,10 @@ const SegurosGuard = () => {
     if (!USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
       navigate({ 
         to: '/accounts/signin',
-        search: { redirect_uri: location.pathname + location.search}
+        search: { 
+          redirect_uri: location.pathname + location.search,
+          env: undefined 
+        }
       });
       return;
     }

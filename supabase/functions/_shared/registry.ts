@@ -71,7 +71,11 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
     methods: ['GET'], 
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
   },
-
+  'sbx-offer-query': { 
+    methods: ['POST'], 
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
+  },
+  
   // ==========================================
   // 5. ADMINISTRAÇÃO E LOGS
   // ==========================================

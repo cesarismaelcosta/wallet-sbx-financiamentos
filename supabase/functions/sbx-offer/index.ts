@@ -158,6 +158,9 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
           offer_status: rawOffer.offerStatus || "",
           sale_status: rawOffer.saleStatus || "",
           end_date: rawOffer.endDate || "",
+          is_shopping: rawOffer.isShopping || false, 
+          acceptProposal: rawOffer.groupOffer?.acceptProposal ?? false,
+          currentBidIncrement: rawOffer.currentBidIncrement?.currentBidIncrement?? null,
           location: {
             neighborhood: rawOffer.product?.location?.neighborhood || "Não informado",
             city: rawOffer.product?.location?.city || "Não informado",
@@ -184,6 +187,7 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
           event_start_date: rawOffer.auction?.beginDate || "",
           event_end_date: rawOffer.auction?.endDate || "",
           modality_id: eventData.modalityId ?? null,
+          modality_desc: rawOffer.auction?.modalityDesc || "",
           status_id: eventData.statusId ?? null,
           event_short_description: rawOffer.auction?.desc || "",
           event_full_description: eventData.fullDescription || "",

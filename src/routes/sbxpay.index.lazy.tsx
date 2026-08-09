@@ -136,8 +136,6 @@ export function sbXPAYHome() {
     setLoading(true);
     setActiveKey(configKey);
 
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
     const config = flowsConfig[configKey];
 
     if (!config) {
@@ -214,7 +212,12 @@ export function sbXPAYHome() {
         targetUrlObj.searchParams.set("flow", config.flowKey);
         targetUrlObj.searchParams.set("return_uri", window.location.pathname);
 
-        window.location.href = targetUrlObj.toString();
+        // Usamos o navigate do TanStack Router para transição interna:
+        navigate({ 
+            to: targetUrlObj.pathname, 
+            search: Object.fromEntries(targetUrlObj.searchParams) as any 
+          })
+
         return;
       } else {
         throw new Error("URL de visita ausente na resposta do orquestrador.");
