@@ -6,18 +6,21 @@
  * [ARQUITETURA & CLEAN ARCHITECTURE - DOCUMENTAÇÃO DE NEGÓCIO]
  * =========================================================================
  * Vitrine central de listagem e detalhes de ofertas integrada ao BFF `sbx-offer-query`.
- * 
+ *
  * DIRETRIZES DE ENGENHARIA DE UI:
  * 1. Layout Dinâmico: A interface muta seu cabeçalho baseada no fluxo.
  * 2. Fallback Estático de Categorias: Carrossel/Filtro otimizado para estabilidade.
- * 3. Delegação de Negócio: O clique no botão primário (Simulação) delega toda a 
+ * 3. Delegação de Negócio: O clique no botão primário (Simulação) delega toda a
  *    complexidade de estado para o `callOrchestrator`.
  */
 
 import { useState, useEffect, useContext, useRef } from "react";
 import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
 import { ArrowLeft, ChevronDown, SlidersHorizontal, ArrowUpDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { WalletLogo } from "@/components/brand/WalletLogo";
+
 
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { UserDataContext } from "./sbxpay.lazy";
@@ -44,12 +47,15 @@ const SUPERBID_CATEGORY_FILTERS = [
   { name: "Bolsas, Canetas, Joias", filterValue: "bolsas-canetas-joias-e-relogios", active: true },
   { name: "Sucatas & Resíduos", filterValue: "sucatas-residuos", active: true },
   { name: "Eletrodomésticos", filterValue: "eletrodomesticos", active: true },
-  { name: "Outras Categorias", filterValue: "outras", active: false }
+  { name: "Outras Categorias", filterValue: "outras", active: false },
 ];
 
 const FILTER_OPTIONS = [
   { label: "Todas", value: "" },
-  ...SUPERBID_CATEGORY_FILTERS.filter(c => c.active && c.filterValue).map(c => ({ label: c.name, value: c.filterValue || "" }))
+  ...SUPERBID_CATEGORY_FILTERS.filter((c) => c.active && c.filterValue).map((c) => ({
+    label: c.name,
+    value: c.filterValue || "",
+  })),
 ];
 
 const SORT_OPTIONS = [
@@ -57,7 +63,7 @@ const SORT_OPTIONS = [
   { label: "Maior Valor", value: "maior_valor" },
   { label: "Menor Valor", value: "menor_valor" },
   { label: "Mais Visitados", value: "mais_visitados" },
-  { label: "Encerramento", value: "encerramento_proximo" }
+  { label: "Encerramento", value: "encerramento_proximo" },
 ];
 
 // =========================================================================
@@ -101,7 +107,7 @@ function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = 
 
   return (
     <div className="relative" ref={ref}>
-      <div 
+      <div
         className="flex items-center justify-between gap-2 px-4 py-2.5 border border-[#B300FF] rounded-full cursor-pointer bg-white text-[#B300FF] min-w-[170px] shadow-sm transition-all hover:bg-purple-50/50"
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -112,12 +118,17 @@ function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = 
         <ChevronDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </div>
       {isOpen && (
-        <div className={`absolute top-[calc(100%+8px)] ${align === 'right' ? 'right-0' : 'left-0'} min-w-full w-max bg-white border border-slate-200 rounded-lg shadow-xl py-2 z-50 overflow-hidden`}>
+        <div
+          className={`absolute top-[calc(100%+8px)] ${align === "right" ? "right-0" : "left-0"} min-w-full w-max bg-white border border-slate-200 rounded-lg shadow-xl py-2 z-50 overflow-hidden`}
+        >
           {options.map((opt: any) => (
-            <div 
+            <div
               key={opt.value}
-              className={`px-4 py-2.5 text-sm cursor-pointer transition-colors ${value === opt.value ? 'bg-purple-50 text-[#B300FF] font-bold' : 'text-slate-700 hover:bg-slate-50'}`}
-              onClick={() => { onChange(opt.value); setIsOpen(false); }}
+              className={`px-4 py-2.5 text-sm cursor-pointer transition-colors ${value === opt.value ? "bg-purple-50 text-[#B300FF] font-bold" : "text-slate-700 hover:bg-slate-50"}`}
+              onClick={() => {
+                onChange(opt.value);
+                setIsOpen(false);
+              }}
             >
               {opt.label}
             </div>
@@ -141,7 +152,10 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   const context = useContext(UserDataContext);
   const { userData } = context || {};
 
+  const isMobile = useIsMobile();
+
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [offersList, setOffersList] = useState<any[]>([]);
   const [totalElements, setTotalElements] = useState<number>(0);
   const [fetchError, setFetchError] = useState<"TECHNICAL_INSTABILITY" | null>(null);
@@ -161,6 +175,20 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
   const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
 
+  const totalPages = Math.max(Math.ceil(totalElements / pageSize), 1);
+
+  // Troca de ordenação/categoria: reseta lista e página no próprio handler
+  const handleSortChange = (value: string) => {
+    setCurrentSort(value);
+    setOffersList([]);
+    setPageNumber(1);
+  };
+  const handleCategoryChange = (value: string) => {
+    setSelectedCategory(value);
+    setOffersList([]);
+    setPageNumber(1);
+  };
+
   // Fecha menus caso o usuário clique fora no mobile
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -173,10 +201,25 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Resetador de paginação em caso de mudança de filtros
+  // Garante que a página nunca inicie travada no loading de submissão ao montar ou voltar pelo histórico
   useEffect(() => {
-    setPageNumber(1);
-  }, [currentFlow.product_id, currentSort, selectedCategory]);
+    setSubmitting(false);
+    
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        setSubmitting(false);
+        setLoading(false);
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, []);
+
+
+
 
   // Busca os dados da listagem (BFF Integration)
   useEffect(() => {
@@ -194,16 +237,18 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
             sort: currentSort,
             pageNumber,
             pageSize,
-            categoryFilter: selectedCategory || null
+            categoryFilter: selectedCategory || null,
           },
-          { signal: controller.signal }
+          { signal: controller.signal },
         );
 
         if (!controller.signal.aborted) {
-          setOffersList(data?.offers || []);
+          const newOffers = data?.offers || [];
+          setOffersList((prev) => (pageNumber === 1 ? newOffers : [...prev, ...newOffers]));
           setTotalElements(data?.total || 0);
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          if (pageNumber === 1) window.scrollTo({ top: 0, behavior: "smooth" });
         }
+
       } catch (error: any) {
         if (error.name === "AbortError" || controller.signal.aborted) return;
         logSystemError({
@@ -235,12 +280,27 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     return () => clearTimeout(timer);
   }, [fetchError, countdown, dynamicReturnUri, navigate]);
 
+  // Scroll infinito: APENAS mobile (no desktop usamos paginação clássica)
+  useEffect(() => {
+    if (!isMobile) return;
+    const handleScroll = () => {
+      if (loading || pageNumber >= totalPages) return;
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 400) {
+        setPageNumber((prev) => prev + 1);
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [isMobile, loading, pageNumber, totalPages]);
+
+
+
   // Delegação de Negócio via Gateway
   const handleSimulacao = async (offerItem: any) => {
-    setLoading(true);
+    setSubmitting(true);
     try {
       const currentHref = window.location.href;
-      
+
       const payload = {
         action: "CONSULT",
         environment: ambiente,
@@ -260,7 +320,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       };
 
       const response = await callOrchestrator(payload, "POST");
-      
+
       if (response?.url) {
         if (response.url.startsWith("http")) {
           window.location.href = response.url;
@@ -276,7 +336,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         navigate({ to: "/sbxpay" as any, replace: true });
         return;
       }
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -288,8 +348,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center font-['Inter']">
         <p className="text-slate-800 font-bold text-lg mb-2">Ops! Falha ao carregar ofertas.</p>
         <p className="text-slate-500 font-medium text-sm mb-4">Redirecionando em {countdown}s...</p>
-        <button 
-          onClick={() => navigate({ to: dynamicReturnUri as any })} 
+        <button
+          onClick={() => navigate({ to: dynamicReturnUri as any })}
           className="flex items-center text-[#B400FF] font-semibold text-sm cursor-pointer bg-transparent border-none"
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> Retornar agora
@@ -298,16 +358,18 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     );
   }
 
-  const totalPages = Math.ceil(totalElements / pageSize) || 1;
   const formattedTotal = totalElements.toLocaleString("pt-BR");
+
 
   return (
     <div className="min-h-screen bg-slate-50 font-['Inter'] pb-20 relative">
-      {/* OVERLAY DE LOADING PADRONIZADO */}
-      {loading && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm font-['Plus_Jakarta_Sans']">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-          <p className="text-slate-500 font-medium text-sm">Carregando ofertas...</p>
+      {/* OVERLAY DE LOADING (padrão Spinner do hub) */}
+      {((loading && pageNumber === 1) || submitting) && (
+        <div className="fixed inset-0 z-[100] flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-4"></div>
+          <p className="text-slate-500 font-medium text-sm">
+            {submitting ? "Carregando informações..." : "Carregando ofertas..."}
+          </p>
         </div>
       )}
 
@@ -321,14 +383,19 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       </header>
 
       {/* 2. BARRA FLUTUANTE MOBILE FIXA (Sempre visível) */}
-      <div className="md:hidden fixed top-[60px] left-0 w-full h-[48px] bg-white border-b border-slate-200 shadow-sm z-40" ref={mobileMenuRef}>
+      <div
+        className="md:hidden fixed top-[60px] left-0 w-full h-[48px] bg-white border-b border-slate-200 shadow-sm z-40"
+        ref={mobileMenuRef}
+      >
         <div className="flex items-center w-full h-full divide-x divide-slate-200">
-          
           {/* 2A. Filtrar (ESQUERDA - APENAS PARA CARTÃO) */}
           {isCartao && (
-            <div 
+            <div
               className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-[#B300FF]"
-              onClick={() => { setFilterMenuOpen(!filterMenuOpen); setSortMenuOpen(false); }}
+              onClick={() => {
+                setFilterMenuOpen(!filterMenuOpen);
+                setSortMenuOpen(false);
+              }}
             >
               <SlidersHorizontal size={16} />
               <span className="text-sm font-semibold select-none">Filtrar</span>
@@ -336,24 +403,30 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
           )}
 
           {/* 2B. Ordenar (DIREITA - VISÍVEL PARA TODOS) */}
-          <div 
+          <div
             className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-[#B300FF]"
-            onClick={() => { setSortMenuOpen(!sortMenuOpen); setFilterMenuOpen(false); }}
+            onClick={() => {
+              setSortMenuOpen(!sortMenuOpen);
+              setFilterMenuOpen(false);
+            }}
           >
             <ArrowUpDown size={16} />
             <span className="text-sm font-semibold select-none">Ordenar</span>
           </div>
-
         </div>
 
         {/* Menus Dropdown (Mobile) */}
         {isCartao && filterMenuOpen && (
           <div className="absolute top-[48px] left-0 w-full bg-white shadow-xl border-b border-slate-200 max-h-[75vh] overflow-y-auto z-40">
             {FILTER_OPTIONS.map((opt, idx) => (
-              <div 
-                key={idx} 
-                className={`px-6 py-3.5 text-sm border-b border-slate-50 last:border-0 cursor-pointer ${selectedCategory === opt.value ? 'text-[#B300FF] bg-purple-50/50 font-bold' : 'text-slate-700 active:bg-slate-100'}`}
-                onClick={() => { setSelectedCategory(opt.value); setFilterMenuOpen(false); }}
+              <div
+                key={idx}
+                className={`px-6 py-3.5 text-sm border-b border-slate-50 last:border-0 cursor-pointer ${selectedCategory === opt.value ? "text-[#B300FF] bg-purple-50/50 font-bold" : "text-slate-700 active:bg-slate-100"}`}
+                onClick={() => {
+                  handleCategoryChange(opt.value);
+                  setFilterMenuOpen(false);
+                }}
+
               >
                 {opt.label}
               </div>
@@ -364,10 +437,14 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         {sortMenuOpen && (
           <div className="absolute top-[48px] left-0 w-full bg-white shadow-xl border-b border-slate-200 max-h-[60vh] overflow-y-auto z-40">
             {SORT_OPTIONS.map((opt, idx) => (
-              <div 
-                key={idx} 
-                className={`px-6 py-4 text-sm border-b border-slate-50 last:border-0 cursor-pointer ${currentSort === opt.value ? 'text-[#B300FF] bg-purple-50/50 font-bold' : 'text-slate-700 active:bg-slate-100'}`}
-                onClick={() => { setCurrentSort(opt.value); setSortMenuOpen(false); }}
+              <div
+                key={idx}
+                className={`px-6 py-4 text-sm border-b border-slate-50 last:border-0 cursor-pointer ${currentSort === opt.value ? "text-[#B300FF] bg-purple-50/50 font-bold" : "text-slate-700 active:bg-slate-100"}`}
+                onClick={() => {
+                  handleSortChange(opt.value);
+                  setSortMenuOpen(false);
+                }}
+
               >
                 {opt.label}
               </div>
@@ -377,74 +454,96 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       </div>
 
       {/* ÁREA ÚTIL DE CONTEÚDO */}
-      <main className={`max-w-7xl mx-auto px-4 ${isCartao ? 'pt-[128px]' : 'pt-[84px]'} md:pt-[84px] pb-8 font-['Inter']`}>
-        
+      <main
+        className={`max-w-7xl mx-auto px-4 ${isCartao ? "pt-[128px]" : "pt-[84px]"} md:pt-[84px] pb-8 font-['Inter']`}
+      >
         {/* DESKTOP BARRA DE FILTRO E ORDENAÇÃO (Sempre visível) */}
         <div className="hidden md:flex w-full items-center justify-between gap-4 pt-2 pb-6">
           <div className="flex items-center">
-            <p className="text-sm font-normal text-slate-800 m-0">
-              {formattedTotal} anúncios
-            </p>
+            <p className="text-sm font-normal text-slate-800 m-0">{formattedTotal} anúncios</p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             {/* FILTRAR APENAS SE FOR CARTÃO */}
             {isCartao && (
-              <DesktopDropdown 
-                icon={SlidersHorizontal} 
-                label="Filtrar" 
-                value={selectedCategory} 
-                options={FILTER_OPTIONS} 
-                onChange={setSelectedCategory} 
-                align="left" 
+              <DesktopDropdown
+                icon={SlidersHorizontal}
+                label="Filtrar"
+                value={selectedCategory}
+                options={FILTER_OPTIONS}
+                onChange={handleCategoryChange}
+                align="left"
               />
             )}
-            
+
             {/* ORDENAR VISÍVEL PARA TODOS */}
-            <DesktopDropdown 
-              icon={ArrowUpDown} 
-              label="Ordenar" 
-              value={currentSort} 
-              options={SORT_OPTIONS} 
-              onChange={setCurrentSort} 
-              align="right" 
+            <DesktopDropdown
+              icon={ArrowUpDown}
+              label="Ordenar"
+              value={currentSort}
+              options={SORT_OPTIONS}
+              onChange={handleSortChange}
+              align="right"
             />
           </div>
         </div>
 
         {/* MOBILE: QUANTIDADE DE ANÚNCIOS (Esconde no desktop pois já está na barra acima) */}
         <div className="md:hidden mb-4">
-          <p className="text-sm font-normal text-slate-800 m-0">
-            {formattedTotal} anúncios
-          </p>
+          <p className="text-sm font-normal text-slate-800 m-0">{formattedTotal} anúncios</p>
         </div>
 
         {/* ENGINE DE CARDS UTILIZANDO O NOVO COMPONENTE CardOfferV */}
         {offersList.length === 0 && !loading ? (
           <div className="bg-white rounded-lg p-12 text-center border border-slate-200 shadow-xs my-12">
-            <p className="text-slate-600 font-medium text-sm">Nenhuma oferta encontrada para esta categoria no momento.</p>
+            <p className="text-slate-600 font-medium text-sm">
+              Nenhuma oferta encontrada para esta categoria no momento.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {offersList.map((item, idx) => (
-              <CardOfferV 
-                key={idx} 
-                item={item} 
-                isCartao={isCartao} 
-                loading={loading} 
-                onSimulate={handleSimulacao} 
-              />
+              <CardOfferV key={idx} item={item} isCartao={isCartao} loading={loading || submitting} onSimulate={handleSimulacao} />
             ))}
           </div>
         )}
 
-        {/* PAGINAÇÃO */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 py-8 mt-6">
-            <button onClick={() => setPageNumber(prev => Math.max(prev - 1, 1))} disabled={pageNumber === 1} className="px-4 py-2 text-xs font-semibold border border-slate-300 rounded-md bg-white text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer">Anterior</button>
-            <span className="text-xs text-slate-600 px-3 font-medium">Página {pageNumber} de {totalPages}</span>
-            <button onClick={() => setPageNumber(prev => Math.min(prev + 1, totalPages))} disabled={pageNumber >= totalPages} className="px-4 py-2 text-xs font-semibold border border-slate-300 rounded-md bg-white text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-all cursor-pointer">Próxima</button>
-          </div>
+        {/* RODAPÉ: paginação só no desktop; mobile usa scroll infinito */}
+        {totalElements > 0 && (
+          <>
+            {totalPages > 1 && (
+              <div className="hidden md:flex items-center justify-center gap-3 py-8 mt-6">
+                <Button
+                  variant="outline"
+                  disabled={pageNumber === 1 || loading}
+                  onClick={() => setPageNumber((p) => Math.max(p - 1, 1))}
+                  className="rounded-xl border-slate-300 text-xs font-semibold"
+                >
+                  ← Anterior
+                </Button>
+                <span className="text-xs text-slate-600 px-2 font-medium">
+                  Página {pageNumber} de {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  disabled={pageNumber >= totalPages || loading}
+                  onClick={() => setPageNumber((p) => Math.min(p + 1, totalPages))}
+                  className="rounded-xl border-slate-300 text-xs font-semibold"
+                >
+                  Próxima →
+                </Button>
+              </div>
+            )}
+
+            <div className="md:hidden py-8 text-center">
+              {loading && pageNumber > 1 && (
+                <span className="text-xs text-slate-500 font-medium">Carregando mais ofertas...</span>
+              )}
+              {!loading && pageNumber >= totalPages && (
+                <span className="text-xs text-slate-400 font-medium">Você viu todas as ofertas.</span>
+              )}
+            </div>
+          </>
         )}
 
       </main>

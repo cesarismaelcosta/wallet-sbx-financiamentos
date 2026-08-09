@@ -212,12 +212,14 @@ export function sbXPAYHome() {
         targetUrlObj.searchParams.set("flow", config.flowKey);
         targetUrlObj.searchParams.set("return_uri", window.location.pathname);
 
-        // Usamos o navigate do TanStack Router para transição interna:
+        // 1. Desliga o loading antes de navegar para evitar conflito de estado
+        setLoading(false); 
+        
+        // 2. Navega instantaneamente
         navigate({ 
-            to: targetUrlObj.pathname, 
-            search: Object.fromEntries(targetUrlObj.searchParams) as any 
-          })
-
+          to: targetUrlObj.pathname, 
+          search: Object.fromEntries(targetUrlObj.searchParams) as any 
+        });
         return;
       } else {
         throw new Error("URL de visita ausente na resposta do orquestrador.");
@@ -970,9 +972,9 @@ export function sbXPAYHome() {
 
       {/* OVERLAY DE LOADING DOS BOTÕES DE JORNADA */}
       {loading && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/85 backdrop-blur-sm font-sans">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
-          <p className="text-slate-600 font-medium text-sm">Processando...</p>
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm font-['Plus_Jakarta_Sans']">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-4"></div>
+          <p className="text-slate-600 font-medium text-sm">Carregando informações...</p>
         </div>
       )}
 
