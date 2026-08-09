@@ -972,9 +972,9 @@ export function sbXPAYHome() {
 
       {/* OVERLAY DE LOADING DOS BOTÕES DE JORNADA */}
       {loading && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm font-['Plus_Jakarta_Sans']">
+        <div className="fixed inset-0 z-[100] flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-4"></div>
-          <p className="text-slate-600 font-medium text-sm">Carregando informações...</p>
+          <p className="text-slate-500 font-medium text-sm">Carregando informações...</p>
         </div>
       )}
 

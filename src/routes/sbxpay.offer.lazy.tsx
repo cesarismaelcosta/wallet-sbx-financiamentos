@@ -363,12 +363,12 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
   return (
     <div className="min-h-screen bg-slate-50 font-['Inter'] pb-20 relative">
-      {/* OVERLAY DE LOADING (padrão Spinner do hub) */}
-      {((loading && pageNumber === 1) || submitting) && (
+      {/* OVERLAY DE LOADING: Só exibe na 1ª página se ainda não houver ofertas na lista (evita o piscar) */}
+      {(((loading && pageNumber === 1) && offersList.length === 0) || submitting) && (
         <div className="fixed inset-0 z-[100] flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-4"></div>
           <p className="text-slate-500 font-medium text-sm">
-            {submitting ? "Carregando informações..." : "Carregando ofertas..."}
+            Carregando informações...
           </p>
         </div>
       )}
