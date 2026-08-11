@@ -258,6 +258,8 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
           offer_description: rawOffer.product?.shortDesc || rawOffer.offerDescription?.offerDescription || "",
           offer_detailed_description: rawOffer.offerDescription?.offerDescription || "",
           offer_value: rawOffer.price || 0,
+          price_formatted: rawOffer.priceFormatted || rawOffer.offerDetail?.directSaleValueFormatted || rawOffer.offerDetail?.initialBidValueFormatted || "",
+          system_metric: rawOffer.systemMetric || null,
           category_id: rawOffer.product?.productType?.id || 0,
           category: rawOffer.product?.productType?.description || "",
           sub_category_id: rawOffer.product?.subCategory?.id || "",
@@ -266,8 +268,7 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
           sale_status: rawOffer.saleStatus || "",
           end_date: rawOffer.endDate || "",
           is_shopping: rawOffer.isShopping || false, 
-          acceptProposal: rawOffer.groupOffer?.acceptProposal ?? false,
-          currentBidIncrement: rawOffer.currentBidIncrement?.currentBidIncrement?? null,
+          offer_type_id: rawOffer.offerTypeId ?? null,
           location: {
             neighborhood: rawOffer.product?.location?.neighborhood || "Não informado",
             city: rawOffer.product?.location?.city || "Não informado",

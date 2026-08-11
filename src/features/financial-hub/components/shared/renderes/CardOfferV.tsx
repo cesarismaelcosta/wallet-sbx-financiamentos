@@ -6,31 +6,36 @@
  * [DOCUMENTAÇÃO DO COMPONENTE & REGRAS DE NEGÓCIO]
  * =========================================================================
  * Este componente renderiza a vitrine individual de uma oferta (versão vertical).
- * Ele gerencia o estado local do carrossel de imagens e implementa o 
- * "Semáforo de Modalidade" estrito da Superbid para a tag de encerramento/tipo:
+ * Ele gerencia o estado local do carrossel de imagens e implementa as 
+ * seguintes regras vitais de negócio baseadas na API da Superbid:
  * 
- * 1. MERCADO BALCÃO / COMPRE JÁ:
- *    - Identificado pelas flags `is_shopping` ou `shopping_offer_type`.
- *    - Visual: Fundo rosado (`bg-rose-100`), ícone de etiqueta (`Tag`) e texto "Compre já".
+ * REGRAS DO SEMÁFORO DE MODALIDADE (ModalityTag):
+ * 1. MERCADO BALCÃO / COMPRE JÁ (offerTypeId 8, 9, 10 e isShopping true):
+ *    - Visual: Fundo rosado, ícone de aperto de mão/etiqueta.
+ * 2. TOMADA DE PREÇO (modalityId 5):
+ *    - Visual: Fundo azul gelo, ícone de envelope e "Tomada de preço".
+ * 3. LEILÃO TRADICIONAL (offerTypeId 1):
+ *    - Visual: Fundo laranja claro, ícone de martelo e data de encerramento.
  * 
- * 2. TOMADA DE PREÇO:
- *    - Identificado pela descrição da modalidade (`modality_desc === "Tomada de preço"`).
- *    - Visual: Fundo azul gelo (`bg-sky-100`), ícone de envelope (`Mail`) e data curta (`DD/MM - HH:mm`).
- * 
- * 3. LEILÃO (PADRÃO):
- *    - Qualquer outro fluxo que não se enquadre nas regras acima.
- *    - Visual: Fundo laranja claro (`bg-orange-100`), ícone de martelo (`Gavel`) e data curta (`DD/MM - HH:mm`).
+ * REGRAS DE PRECIFICAÇÃO E MÉTRICA:
+ * 1. Rótulo Dinâmico: 
+ *    - Leilão: "Lance atual:"
+ *    - Tomada de Preço: "VALOR DE REFERÊNCIA:"
+ *    - Mercado Balcão/Shopping: "Valor de venda por unidade"
+ * 2. Exibição de Métrica (/UN, /JG, /TON):
+ *    - SÓ EXIBE em vendas de Varejo/Balcão.
+ *    - OCULTA OBRIGATORIAMENTE em Leilão e Tomada de Preço (pois o lance/referência é no lote).
  */
 
 import { useState } from "react";
-import { MapPin, ChevronLeft, ChevronRight, ExternalLink, Gavel, Mail, Tag, Handshake } from "lucide-react";
+import { MapPin, ChevronLeft, ChevronRight, ExternalLink, Gavel, Mail, Tag, Handshake, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // =========================================================================
 // [INTERFACES]
 // =========================================================================
 interface CardOfferVProps {
-  item: any; // Objeto normalizado contendo offer, event, seller, etc.
+  item: any; // Objeto normalizado contendo offer, event, seller (Contrato BFF)
   isCartao: boolean;
   loading: boolean;
   onSimulate: (item: any) => void;
@@ -76,13 +81,25 @@ const formatEventDate = (dateString?: string) => {
 // =========================================================================
 // [COMPONENTE SECUNDÁRIO]: ModalityTag (O "Semáforo" de Modalidades)
 // =========================================================================
-function ModalityTag({ modalityDesc, endDateStr, acceptProposal, currentBidIncrement, modalityId, isShopping }: any) {
+function ModalityTag({ modalityDesc, endDateStr, offerTypeId, modalityId, isShopping }: any) {
   const formattedDate = formatEventDate(endDateStr);
   
-  // 1. REGRA DE SHOPPING (isShopping: true)
+  // 1. REGRA DE SHOPPING (Mercado Balcão / Compre Já)
   if (isShopping === true) {
-    // Compre Já estrito: Aceita proposta E o incremento é EXATAMENTE 0 (não pode ser null)
-    if (acceptProposal && (currentBidIncrement === 0 || currentBidIncrement === null)) {
+    // Tipo 10: Mercado Balcão ou Compre Já combinados
+    if (offerTypeId === 10) {
+      return (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-100 text-[#003B73]">
+          <Handshake size={13} className="text-slate-700" strokeWidth={2.5} />
+          <Plus size={10} className="text-slate-700" strokeWidth={3} />
+          <Tag size={13} className="text-slate-700" strokeWidth={2.5} />
+          <span className="tracking-tight">Mercado Balcão ou Compre Já</span>
+        </div>
+      );
+    }
+    
+    // Tipo 8: Apenas Compre Já
+    if (offerTypeId === 8) {
       return (
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-100 text-[#003B73]">
           <Tag size={13} className="text-slate-700" strokeWidth={2.5} />
@@ -91,7 +108,7 @@ function ModalityTag({ modalityDesc, endDateStr, acceptProposal, currentBidIncre
       );
     }
     
-    // MERCADO BALCÃO: Qualquer outro caso de shopping (se for null, vazio, ou > 0)
+    // Tipo 9: Apenas Mercado Balcão
     return (
       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-100 text-[#003B73]">
         <Handshake size={13} className="text-slate-700" strokeWidth={2.5} />
@@ -110,7 +127,7 @@ function ModalityTag({ modalityDesc, endDateStr, acceptProposal, currentBidIncre
     );
   }
 
-  // 3. LEILÃO PADRÃO
+  // 3. LEILÃO PADRÃO (Exibe a data de encerramento)
   if (formattedDate === "—") return <div />;
   
   return (
@@ -153,18 +170,46 @@ export function CardOfferV({ item, isCartao, loading, onSimulate }: CardOfferVPr
     setPhotoIndex((prev) => (prev - 1 + sortedPhotos.length) % sortedPhotos.length);
   };
 
-  // Formatações finais de exibição visual
-  const valueFormatted = (offerData.offer_value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-  const locationDisplay = [offerData.location?.city, offerData.location?.state].filter(Boolean).join(" - ") || "Brasil";
+  const city = offerData.location?.city || "";
+  const state = offerData.location?.state || "";
+
+  // city.includes(" - ") verifica se o estado já está na cidade (evita redundância).
+  const locationDisplay = city.includes(" - ") ? city : [city, state].filter(Boolean).join(" - ");
+
   const offerDesc = offerData.offer_description || "Produto sem descrição";
   const sellerName = sellerData.trade_name;
+
+  // =========================================================================
+  // REGRAS DE EXIBIÇÃO: RÓTULO DE PREÇO E UNIDADE DE MEDIDA
+  // =========================================================================
+  
+  // Identificadores de modalidade baseados no payload
+  const isLeilao = offerData.offer_type_id === 1;
+  const isTomadaDePreco = eventData.modality_id === 5 && offerData.is_shopping === false;
+
+  // Lógica 1: Define o texto que aparece acima do preço
+  let priceLabel = "Valor de venda:"; // Fallback
+  if (isLeilao) {
+    priceLabel = "Lance atual:"; 
+  } else if (isTomadaDePreco) {
+    priceLabel = "Valor de referência:"; 
+  } else if (offerData.is_shopping === true) {
+    priceLabel = "Valor de venda por unidade:"; 
+  }
+
+  // Lógica 2: Pega o preço formatado entregue pelo BFF (ex: "R$ 50.000,00")
+  const priceFormatted = offerData.price_formatted || `R$ ${(offerData.offer_value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+
+  // Lógica 3: Regra restrita de exibição da Métrica (Sufixo /UN, /JG)
+  // SÓ exibe se NÃO for leilão E NÃO for tomada de preço, E SE a métrica existir.
+  const showMetric = !isLeilao && !isTomadaDePreco && !!offerData.system_metric;
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group">
       <div className="flex flex-col h-full">
         
         {/* ÁREA DE MÍDIA (CARROSSEL) */}
-        <div className="relative h-44 w-full bg-black overflow-hidden shrink-0">
+        <div className="relative h-44 w-full bg-slate-100 overflow-hidden shrink-0 rounded-t-lg">
           {hasError ? (
             <div className="absolute inset-0 bg-[#B300FF] flex items-center justify-center text-white text-xs font-bold">Sem foto</div>
           ) : (
@@ -177,15 +222,18 @@ export function CardOfferV({ item, isCartao, loading, onSimulate }: CardOfferVPr
           
           {!hasError && sortedPhotos.length > 1 && (
             <>
-              <button onClick={handlePrevPhoto} className="absolute left-1.5 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100 cursor-pointer border-none z-20">
+              <button onClick={handlePrevPhoto} className="absolute left-1.5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 backdrop-blur-xs text-white p-1.5 rounded-full transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20">
                 <ChevronLeft size={16} />
               </button>
-              <button onClick={handleNextPhoto} className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100 cursor-pointer border-none z-20">
+              <button onClick={handleNextPhoto} className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 backdrop-blur-xs text-white p-1.5 rounded-full transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20">
                 <ChevronRight size={16} />
               </button>
             </>
           )}
         </div>
+
+        {/* Linha divisória */}
+        <div className="h-px w-full bg-slate-100" />
 
         {/* METADADOS E INFORMAÇÕES DO PRODUTO */}
         <div className="p-4 flex flex-col flex-grow justify-between space-y-3">
@@ -196,14 +244,19 @@ export function CardOfferV({ item, isCartao, loading, onSimulate }: CardOfferVPr
               <ModalityTag 
                 modalityDesc={eventData.modality_desc} 
                 endDateStr={eventData.event_end_date}
-                acceptProposal={offerData.acceptProposal}
-                currentBidIncrement={offerData.currentBidIncrement}
-                modalityId={eventData.modality_id} // Adiciona isso
-                isShopping={offerData.is_shopping}  // Adiciona isso
+                offerTypeId={offerData.offer_type_id}
+                modalityId={eventData.modality_id}
+                isShopping={offerData.is_shopping}
               />
-              <a href={getSuperbidUrl(offerData)} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-[#B300FF] transition-colors p-1 ml-auto" onClick={(e) => e.stopPropagation()}>
-                <ExternalLink size={16} />
-              </a>
+                <a 
+                  href={getSuperbidUrl(offerData)} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-[#B300FF] hover:text-[#9300cc] transition-colors p-1 ml-auto" 
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink size={16} />
+                </a>
             </div>
 
             <h3 className="font-bold text-sm text-foreground line-clamp-2 uppercase min-h-[2.5rem]">
@@ -221,9 +274,18 @@ export function CardOfferV({ item, isCartao, loading, onSimulate }: CardOfferVPr
             </div>
           </div>
 
+          {/* ÁREA DE PREÇO DINÂMICA (Com a fonte e cor ajustadas baseadas no print) */}
           <div className="pt-2 border-t border-slate-100 mt-auto">
+            <div className="text-xs text-slate-400 font-normal mb-0.5">
+              {priceLabel}
+            </div>
             <div className="text-lg font-extrabold text-foreground">
-              R$ {valueFormatted}
+              {priceFormatted}
+              {showMetric && (
+                <span className="text-xs font-normal text-slate-500 ml-1 uppercase">
+                  /{offerData.system_metric}
+                </span>
+              )}
             </div>
           </div>
         </div>

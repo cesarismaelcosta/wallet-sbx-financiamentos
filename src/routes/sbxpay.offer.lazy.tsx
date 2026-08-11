@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 
-
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { UserDataContext } from "./sbxpay.lazy";
 import { fetchOffersQuery } from "@/services/offer";
@@ -43,11 +42,11 @@ const SUPERBID_CATEGORY_FILTERS = [
   { name: "Industrial, Máquinas & Equipamentos", filterValue: "industrial-maquinas-equipamentos", active: true },
   { name: "Animais", filterValue: "animais", active: false },
   { name: "Tecnologia", filterValue: "tecnologia", active: true },
-  { name: "Móveis e Decoração", filterValue: "moveis-decoracao", active: true },
+  { name: "Móveis e Decoração", filterValue: "moveis-e-decoracao", active: true },
   { name: "Bolsas, Canetas, Joias", filterValue: "bolsas-canetas-joias-e-relogios", active: true },
-  { name: "Sucatas & Resíduos", filterValue: "sucatas-residuos", active: true },
+  { name: "Sucatas , Materiais & Resíduos", filterValue: "sucatas-materiais-residuos", active: true },
   { name: "Eletrodomésticos", filterValue: "eletrodomesticos", active: true },
-  { name: "Outras Categorias", filterValue: "outras", active: false },
+  { name: "Materiais Para Construção Civil", filterValue: "materiais-para-construcao-civil", active: true },
 ];
 
 const FILTER_OPTIONS = [
@@ -153,6 +152,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   const { userData } = context || {};
 
   const isMobile = useIsMobile();
+  const isMobileRef = useRef(isMobile);
+  isMobileRef.current = isMobile;
 
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -204,7 +205,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   // Garante que a página nunca inicie travada no loading de submissão ao montar ou voltar pelo histórico
   useEffect(() => {
     setSubmitting(false);
-    
+
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
         setSubmitting(false);
@@ -217,9 +218,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       window.removeEventListener("pageshow", handlePageShow);
     };
   }, []);
-
-
-
 
   // Busca os dados da listagem (BFF Integration)
   useEffect(() => {
@@ -244,11 +242,11 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
         if (!controller.signal.aborted) {
           const newOffers = data?.offers || [];
-          setOffersList((prev) => (pageNumber === 1 ? newOffers : [...prev, ...newOffers]));
+          // Mobile: scroll infinito acumula. Desktop: paginação clássica substitui a lista.
+          setOffersList((prev) => (pageNumber === 1 || !isMobileRef.current ? newOffers : [...prev, ...newOffers]));
           setTotalElements(data?.total || 0);
-          if (pageNumber === 1) window.scrollTo({ top: 0, behavior: "smooth" });
+          if (pageNumber === 1 || !isMobileRef.current) window.scrollTo({ top: 0, behavior: "smooth" });
         }
-
       } catch (error: any) {
         if (error.name === "AbortError" || controller.signal.aborted) return;
         logSystemError({
@@ -292,8 +290,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isMobile, loading, pageNumber, totalPages]);
-
-
 
   // Delegação de Negócio via Gateway
   const handleSimulacao = async (offerItem: any) => {
@@ -360,16 +356,13 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
   const formattedTotal = totalElements.toLocaleString("pt-BR");
 
-
   return (
     <div className="min-h-screen bg-slate-50 font-['Inter'] pb-20 relative">
       {/* OVERLAY DE LOADING: Só exibe na 1ª página se ainda não houver ofertas na lista (evita o piscar) */}
-      {(((loading && pageNumber === 1) && offersList.length === 0) || submitting) && (
+      {((loading && pageNumber === 1 && offersList.length === 0) || submitting) && (
         <div className="fixed inset-0 z-[100] flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-4"></div>
-          <p className="text-slate-500 font-medium text-sm">
-            Carregando informações...
-          </p>
+          <p className="text-slate-500 font-medium text-sm">Carregando informações...</p>
         </div>
       )}
 
@@ -426,7 +419,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
                   handleCategoryChange(opt.value);
                   setFilterMenuOpen(false);
                 }}
-
               >
                 {opt.label}
               </div>
@@ -444,7 +436,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
                   handleSortChange(opt.value);
                   setSortMenuOpen(false);
                 }}
-
               >
                 {opt.label}
               </div>
@@ -503,7 +494,13 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {offersList.map((item, idx) => (
-              <CardOfferV key={idx} item={item} isCartao={isCartao} loading={loading || submitting} onSimulate={handleSimulacao} />
+              <CardOfferV
+                key={idx}
+                item={item}
+                isCartao={isCartao}
+                loading={loading || submitting}
+                onSimulate={handleSimulacao}
+              />
             ))}
           </div>
         )}
@@ -545,7 +542,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
             </div>
           </>
         )}
-
       </main>
     </div>
   );
