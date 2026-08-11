@@ -255,7 +255,7 @@ export function CardOfferV({ item, isCartao, loading, onSimulate }: CardOfferVPr
                   className="text-[#B300FF] hover:text-[#9300cc] transition-colors p-1 ml-auto" 
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <ExternalLink size={16} />
+                  <ExternalLink size={20} />
                 </a>
             </div>
 
