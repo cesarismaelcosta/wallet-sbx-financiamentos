@@ -249,7 +249,7 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
       }
 
       // Extração de referência do eventData (base para descrições, imagens e status)
-      const eventData = rawOffer.event || {};
+      const eventData = rawOffer.auction || {};
 
       return {
         offer: {
@@ -290,16 +290,13 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
           manager_name: rawOffer.manager?.name || "N/A"
         },
         event: {
-          event_id: String(rawOffer.auction?.id || ""),
-          event_description: `${rawOffer.auction?.desc || ""}${rawOffer.auction?.desc && eventData.fullDescription ? " - " : ""}${eventData.fullDescription || ""}`.trim(),
-          event_start_date: rawOffer.auction?.beginDate || "",
-          event_end_date: rawOffer.auction?.endDate || "",
+          event_id: String(eventData.id || ""),
+          event_description: eventData.desc || "",
+          event_start_date: eventData.beginDate || "",
+          event_end_date: eventData.endDate || "",
           modality_id: eventData.modalityId ?? null,
-          modality_desc: rawOffer.auction?.modalityDesc || "",
-          status_id: eventData.statusId ?? null,
-          event_short_description: rawOffer.auction?.desc || "",
-          event_full_description: eventData.fullDescription || "",
-          event_image_url: eventData.imageURL || ""
+          modality_desc: eventData.modalityDesc || "",
+          status_id: eventData.statusId ?? null    
         },
         seller: {
           seller_id: String(rawOffer.seller?.id || ""),

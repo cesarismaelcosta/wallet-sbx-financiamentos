@@ -99,26 +99,9 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
     }
 
     // -----------------------------------------------------------------------
-    // STEP 2.1: BUSCA COMPLEMENTAR DE EVENTO / LEILÃO
+    // STEP 2.1: BUSCA COMPLEMENTAR DE EVENTO / LEILÃO NA OFFER
     // -----------------------------------------------------------------------
-    let eventData: any = {};
-    const auctionId = rawOffer.auction?.id;
-    if (auctionId) {
-      const eventUrl = `${eventBaseUrl}/events/v2/?portalId=[2,15]&locale=pt_BR&timeZoneId=America%2FSao_Paulo&filter=id:${auctionId}&pageSize=1`;
-      
-      const eventResponse = await fetch(eventUrl, {
-        method: "GET",
-        headers: { 
-          "Accept": "application/json", 
-          "Content-Type": "application/json" 
-        },
-      });
-
-      if (eventResponse.ok) {
-        const eventJson = await eventResponse.json();
-        eventData = eventJson.events?.[0] || {};
-      }
-    }
+    const eventData = rawOffer.auction || {};
 
     // -----------------------------------------------------------------------
     // STEP 2.2: EXTRAÇÃO DE METADADOS DE VEÍCULO (Se aplicável)
@@ -183,23 +166,22 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
           manager_name: rawOffer.manager?.name || "N/A"
         },
         event: {
-          event_id: String(rawOffer.auction?.id || ""),
-          event_description: `${rawOffer.auction?.desc || ""}${rawOffer.auction?.desc && eventData.fullDescription ? " - " : ""}${eventData.fullDescription || ""}`.trim(),
-          event_start_date: rawOffer.auction?.beginDate || "",
-          event_end_date: rawOffer.auction?.endDate || "",
+          event_id: String(eventData.id || ""),
+          event_description: eventData.desc || "",
+          event_start_date: eventData.beginDate || "",
+          event_end_date: eventData.endDate || "",
           modality_id: eventData.modalityId ?? null,
-          modality_desc: rawOffer.auction?.modalityDesc || "",
-          status_id: eventData.statusId ?? null,
-          event_short_description: rawOffer.auction?.desc || "",
-          event_full_description: eventData.fullDescription || "",
-          event_image_url: eventData.imageURL || ""
+          modality_desc: eventData.modalityDesc || "",
+          status_id: eventData.statusId ?? null
         },
         seller: {
           seller_id: String(rawOffer.seller?.id || ""),
           legal_name: rawOffer.seller?.name || "N/A",
           trade_name: rawOffer.seller?.company?.[0]?.fantasyName || "N/A",
           economic_group: rawOffer.seller?.company?.[0]?.fantasyName || "N/A"
-        }
+        },
+        rawOffer: rawOffer,
+        rawEvento: eventData
       }
     };
 

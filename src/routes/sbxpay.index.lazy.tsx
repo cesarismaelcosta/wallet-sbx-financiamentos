@@ -438,7 +438,7 @@ export function sbXPAYHome() {
                     <h4 className="font-bold text-slate-900 text-sm">O seu dinheiro sempre protegido</h4>
                     <p className="text-slate-600 text-xs mt-1 leading-relaxed">
                       Fique tranquilo na hora de comprar. Os valores das suas negociações ficam guardados em contas
-                      pagamento de nossa Instituição de Pagamento regulada pelo BC.
+                      pagamento de nossa Instituição de Pagamento regulada pelo Banco Central do Brasil.
                     </p>
                   </div>
                 </div>
@@ -528,8 +528,8 @@ export function sbXPAYHome() {
                 </div>
               </div>
 
-              <p className="text-xs md:text-base text-slate-600 leading-relaxed">
-                Não deixe um bom negócio escapar. Amplie seu poder de compra usando o seu limite do cartão de crédito
+              <p className="text-sm md:text-base text-slate-600 leading-relaxed">
+                Não deixe um bom negócio escapar. Amplie seu poder de compra usando o limite do seu cartão de crédito
                 com total tranquilidade na hora de arrematar.
               </p>
 
@@ -540,8 +540,7 @@ export function sbXPAYHome() {
                     <span>Para PF e PJ</span>
                   </div>
                   <p className="text-slate-600 text-xs leading-relaxed">
-                    Condições válidas para pessoas físicas e jurídicas aproveitarem o parcelamento de aquisições no
-                    cartão.
+                    Condições válidas para pessoas físicas e jurídicas aproveitarem o parcelamento com cartão.
                   </p>
                 </div>
                 <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4 flex flex-col gap-2 transition-colors hover:bg-slate-50">
