@@ -161,9 +161,7 @@ serve(withSecurity('sbx-event', async (req: Request) => {
             is_shopping: rawEvento.internalParameters?.isShopping ?? false,
             has_advisor_intermediation: rawEvento.internalParameters?.hasAdvisorIntermediation ?? false,
           }
-        },
-        // O RawEvento é preservado apenas para fins de debug e log de auditoria
-        rawEvento: rawEvento
+        }
       }
     };
 

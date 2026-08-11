@@ -27,25 +27,18 @@ import { FinancialHubLayout } from "@/features/financial-hub/components/layout/F
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
 import { jwtDecode } from "jwt-decode"; 
-import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session";  // 👈 Resolução segura de ambiente, flag híbrida e encapsulamento de token
+import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session";  
 
 const FinanciamentosGuard = () => {
-  // [ARQUITETURA]: sessionToken do contexto global
   const { sessionToken: contextToken, isLoading } = useFinancialAuth();
-  
-  // 🔑 [SECURITY GATE]: Resgate encapsulado do token utilizando getTokenForPayload com proteção anti-SSR
   const sessionToken = contextToken || getTokenForPayload();
 
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    // 0. Ignora enquanto hidrata o estado inicial de auth
     if (isLoading) return;
 
-    // 1. [BUSINESS LOGIC]: Bloqueio proativo de acesso não autenticado (Somente em DEV).
-    // Se USE_COOKIE for true (Prod), o token não estará no JS. Confiamos que o backend (gateway)
-    // devolverá 401 se o cookie for inválido, e o próprio interceptor fará o redirect.
     if (!USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
       navigate({ 
         to: '/accounts/signin',
@@ -57,17 +50,10 @@ const FinanciamentosGuard = () => {
       return;
     }
 
-    // 2. [SECURITY]: Validação Passiva de Expiração (UX Guard)
-    // Se o JS tiver acesso ao token (DEV/Lovable), realiza a validação de Clock Drift.
-    // Em Produção, essa validação será feita exclusivamente na Borda (Edge Function).
     if (sessionToken) {
       try {
         const decoded = jwtDecode<{ exp?: number }>(sessionToken);
-        
-        // Resgata o desvio do relógio salvo no momento do login
         const timeDelta = getTimeDelta();
-        
-        // Hora da máquina + diferença = Hora Real sincronizada com o Servidor
         const syncedCurrentTimeInSeconds = Math.floor((Date.now() + timeDelta) / 1000);
 
         if (decoded.exp && decoded.exp < syncedCurrentTimeInSeconds) {
@@ -83,21 +69,26 @@ const FinanciamentosGuard = () => {
     }
   }, [sessionToken, isLoading, navigate, location.pathname]);
 
-  // [COMPLIANCE]: Fail-safe de segurança durante carregamento
+  // =========================================================================
+  // [UX REFINEMENT]: Substituição do Loader Bruto por Skeleton Estrutural
+  // Rationale: Evita Layout Shift e a sensação de "duplo carregamento" na tela,
+  // mantendo o container principal visível enquanto valida a sessão em background.
+  // =========================================================================
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-        <p className="text-slate-500 font-medium text-sm">
-          Carregando informações...
-        </p>
-      </div> 
+      <FinancialHubLayout>
+        <div className="max-w-7xl mx-auto px-6 py-16 space-y-8 animate-pulse">
+          <div className="h-8 w-64 bg-slate-200 rounded-lg"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6">
+            <div className="h-48 bg-slate-100 rounded-2xl"></div>
+            <div className="h-48 bg-slate-100 rounded-2xl"></div>
+            <div className="h-48 bg-slate-100 rounded-2xl"></div>
+          </div>
+        </div>
+      </FinancialHubLayout>
     );
   }
 
-  // [COMPLIANCE]: Fail-safe de segurança caso não haja sessionToken (Apenas em DEV).
-  // Em PROD (USE_COOKIE = true), permitimos renderizar o <Outlet /> para que a chamada
-  // fetch ao gateway dispare enviando o cookie e descubra a real situação da sessão.
   if (!USE_COOKIE && !sessionToken) return null;
 
   return (

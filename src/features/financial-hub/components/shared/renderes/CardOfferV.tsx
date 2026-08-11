@@ -28,7 +28,7 @@
  */
 
 import { useState } from "react";
-import { MapPin, ChevronLeft, ChevronRight, ExternalLink, Gavel, Mail, Tag, Handshake, Plus } from "lucide-react";
+import { MapPin, ChevronLeft, ChevronRight, ExternalLink, Gavel, Mail, Tag, Handshake, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // =========================================================================
@@ -38,6 +38,7 @@ interface CardOfferVProps {
   item: any; // Objeto normalizado contendo offer, event, seller (Contrato BFF)
   isCartao: boolean;
   loading: boolean;
+  disabled?: boolean;
   onSimulate: (item: any) => void;
 }
 
@@ -141,7 +142,7 @@ function ModalityTag({ modalityDesc, endDateStr, offerTypeId, modalityId, isShop
 // =========================================================================
 // [COMPONENTE PRINCIPAL]: CardOfferV
 // =========================================================================
-export function CardOfferV({ item, isCartao, loading, onSimulate }: CardOfferVProps) {
+export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: CardOfferVProps) {
   // Extração defensiva do contrato normalizado vindo do BFF
   const offerData = item.offer || {};
   const eventData = item.event || {};
@@ -293,8 +294,20 @@ export function CardOfferV({ item, isCartao, loading, onSimulate }: CardOfferVPr
 
       {/* BOTÃO DE CHAMADA PARA AÇÃO (CTA) */}
       <div className="p-4 pt-0">
-        <Button onClick={() => onSimulate(item)} disabled={loading} variant="outline" className="w-full rounded-md shadow-xs bg-white text-[#B300FF] border border-[#B300FF]/40 hover:bg-purple-50 font-medium text-xs py-2 cursor-pointer transition-colors">
-          {isCartao ? "Simular parcelamento" : "Simular financiamento"}
+        <Button 
+          onClick={() => onSimulate(item)} 
+          disabled={loading || disabled} // 👈 Desabilita se estiver carregando OU se a tela estiver bloqueada
+          variant="outline" 
+          className="w-full rounded-md shadow-xs bg-white text-[#B300FF] border border-[#B300FF]/40 hover:bg-purple-50 font-medium text-xs py-2 cursor-pointer transition-all"
+        >
+          {loading ? (
+            <div className="flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Aguarde...</span>
+            </div>
+          ) : (
+            isCartao ? "Simular parcelamento" : "Simular financiamento"
+          )}
         </Button>
       </div>
     </div>

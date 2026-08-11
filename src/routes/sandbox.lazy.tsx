@@ -50,7 +50,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { fetchOfferDetails } from "@/services/offer";
+import { fetchEventDetails } from "@/services/event";
+import { fetchOfferDetails, fetchOffersQuery } from "@/services/offer";
 import { getDefaultSbxEnvironment } from "@/services/session";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 
@@ -210,6 +211,7 @@ function SandboxPage() {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedOfferPayload, setSelectedOfferPayload] = useState<any>(null);
+  const [selectedEventPayload, setSelectedEventPayload] = useState<any>(null);
   const [drawerFotoAtiva, setDrawerFotoAtiva] = useState(0);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerOfferId, setDrawerOfferId] = useState("");
@@ -402,8 +404,7 @@ function SandboxPage() {
       key: "Cartão",
       label: "Cartão em até 18x",
       title: "Parcelamento com Cartão",
-      product_id: "8",
-      offerId: ambienteAtivo === "production" ? "4859144" : "3064406",
+      product_id: 8,
       flowKey: "Cartão",
       disabled: false,
       variant: "bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs",
@@ -412,7 +413,7 @@ function SandboxPage() {
       key: "Carros",
       label: "Financiar em até 60x",
       title: "Financiamento de Carros",
-      offerId: ambienteAtivo === "production" ? "4952846" : "2969794",
+      product_id: 2,
       flowKey: "Carros",
       disabled: false,
       variant: "bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs",
@@ -421,7 +422,7 @@ function SandboxPage() {
       key: "Caminhões",
       label: "Financiar em até 48x",
       title: "Financiamento de Caminhões",
-      offerId: "4680825",
+      product_id: 5,
       flowKey: "Caminhões",
       disabled: false,
       variant: "bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs",
@@ -430,7 +431,7 @@ function SandboxPage() {
       key: "Imóveis",
       label: "Financiar em até 240x",
       title: "Financiamento de Imóveis",
-      offerId: ambienteAtivo === "production" ? "4512612" : "2400058",
+      product_id: 1,
       flowKey: "Imóveis",
       disabled: true,
       variant: "bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60 font-light text-xs",
@@ -447,7 +448,8 @@ function SandboxPage() {
    */
   useEffect(() => {
     const loadSandboxData = async () => {
-      if (!activeToken) return;
+      const tokenToUse = activeToken || sessionToken;
+      if (!tokenToUse) return;
 
       if (!validateSessionBeforeAction()) return;
 
@@ -463,24 +465,35 @@ function SandboxPage() {
         }
 
         const promises = FLOW_OFFERS.map(async (item) => {
+          if (item.disabled || !item.product_id) return { key: item.key, data: null };
+
           try {
-            const data = await fetchOfferDetails(item.offerId);
-            return { key: item.key, data };
-          } catch (e) {
-            return { key: item.key, error: true };
+            const data = await fetchOffersQuery({
+              productId: item.product_id,
+              sort: "relevancia",
+              pageNumber: 1,
+              pageSize: 1,
+            });
+
+            const firstOffer = data?.offers?.[0] || null;
+            return { key: item.key, data: firstOffer };
+          } catch (err: any) {
+            console.error(`Falha na query de ${item.key}:`, err);
+            return { key: item.key, data: null };
           }
         });
 
-        const results = await Promise.allSettled(promises);
+        const results = await Promise.all(promises);
         const newVitrine: Record<string, any> = {};
+
         results.forEach((res) => {
-          if (res.status === "fulfilled" && res.value && !res.value.error) {
-            newVitrine[res.value.key] = res.value.data;
+          if (res && res.data) {
+            newVitrine[res.key] = res.data;
           }
         });
+
         setVitrineOffers(newVitrine);
       } catch (err: any) {
-        console.error("Erro ao carregar dados do sandbox:", err);
         if (!checkAndHandleSessionError(err.message)) {
           setError(err.message || "Erro ao carregar dados do sandbox.");
         }
@@ -488,8 +501,9 @@ function SandboxPage() {
         setLoading(false);
       }
     };
+
     loadSandboxData();
-  }, [activeToken, customOfferId, ambienteAtivo]);
+  }, [activeToken, sessionToken, customOfferId, ambienteAtivo]);
 
   const handleInspectOffer = async () => {
     if (!validateSessionBeforeAction()) return;
@@ -529,10 +543,19 @@ function SandboxPage() {
     setDrawerLoading(true);
     setDrawerFotoAtiva(0);
     setSelectedOfferPayload(null);
+    setSelectedEventPayload(null); // 👈 Reseta o evento anterior
 
     try {
-      const data = await fetchOfferDetails(targetOfferId);
-      setSelectedOfferPayload(data);
+      // 1. Busca os detalhes da oferta primeiro
+      const offerData = await fetchOfferDetails(targetOfferId);
+      setSelectedOfferPayload(offerData);
+
+      // 2. Se a oferta possuir o event_id mapeado, busca os detalhes do evento em paralelo/sequência
+      const eventId = offerData?.event?.event_id;
+      if (eventId) {
+        const eventData = await fetchEventDetails(eventId);
+        setSelectedEventPayload(eventData);
+      }
     } catch (err: any) {
       console.error("[DRAWER_FETCH_ERROR]:", err);
       checkAndHandleSessionError(err.message);
@@ -1815,7 +1838,10 @@ function SandboxPage() {
                 {FLOW_OFFERS.map((item) => {
                   const data = vitrineOffers[item.key];
 
-                  const rawPhotos = data?.offer?.photos || [];
+                  // Extrai dinamicamente o ID da oferta que veio da query
+                  const resolvedOfferId = data?.offer?.offer_id || data?.offer_id || data?.id || "";
+
+                  const rawPhotos = data?.offer?.photos || data?.photos || [];
                   const sortedPhotos = [...rawPhotos]
                     .sort((a: any, b: any) => {
                       if (a.highlight && !b.highlight) return -1;
@@ -1829,15 +1855,17 @@ function SandboxPage() {
 
                   const hasError = imageErrors[item.key] || !photoUrl;
 
-                  const offerDesc = data?.offer?.offer_description || item.title;
-                  const offerVal = data?.offer?.offer_value
-                    ? `R$ ${data.offer.offer_value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                  const offerDesc = data?.offer?.offer_description || data?.offer_description || item.title;
+                  const offerValueNum = data?.offer?.offer_value ?? data?.offer_value;
+                  const offerVal = offerValueNum
+                    ? `R$ ${Number(offerValueNum).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
                     : data
                       ? "Valor indisponível"
                       : "Carregando...";
-                  const sellerName = data?.seller?.trade_name || (data ? "Superbid" : "Carregando...");
-                  const eventDate = data?.event?.event_start_date
-                    ? new Date(data.event.event_start_date).toLocaleDateString("pt-BR")
+                  const sellerName = data?.seller?.trade_name || data?.seller_name || (data ? "Superbid" : "Carregando...");
+                  const rawEventDate = data?.event?.event_start_date || data?.event_start_date;
+                  const eventDate = rawEventDate
+                    ? new Date(rawEventDate).toLocaleDateString("pt-BR")
                     : "—";
 
                   return (
@@ -1883,7 +1911,7 @@ function SandboxPage() {
                           )}
 
                           <span className="absolute bottom-2 left-2 bg-black/75 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md z-10 shadow">
-                            Lote #{item.offerId}
+                            Lote #{resolvedOfferId || "—"}
                           </span>
 
                           {!hasError && sortedPhotos.length > 1 && (
@@ -1923,9 +1951,9 @@ function SandboxPage() {
                       <div className="p-4 pt-0 space-y-2">
                         <Button
                           onClick={() =>
-                            handleSimulateOfferForm(item.flowKey, item.offerId, item.product_id ?? "", item.disabled)
+                            handleSimulateOfferForm(item.flowKey, resolvedOfferId, String(item.product_id ?? ""), item.disabled)
                           }
-                          disabled={item.disabled || loadingAction === `${item.flowKey}_form`}
+                          disabled={item.disabled || !resolvedOfferId || loadingAction === `${item.flowKey}_form`}
                           variant="outline"
                           className={`w-full rounded-xl shadow-sm ${item.variant}`}
                         >
@@ -1942,9 +1970,9 @@ function SandboxPage() {
 
                         <Button
                           onClick={() =>
-                            handleSimulateOfferAjax(item.flowKey, item.offerId, item.product_id ?? "", item.disabled)
+                            handleSimulateOfferAjax(item.flowKey, resolvedOfferId, String(item.product_id ?? ""), item.disabled)
                           }
-                          disabled={item.disabled || loadingAction === `${item.flowKey}_ajax`}
+                          disabled={item.disabled || !resolvedOfferId || loadingAction === `${item.flowKey}_ajax`}
                           variant="outline"
                           className={`w-full rounded-xl shadow-sm ${item.variant}`}
                         >
@@ -1958,8 +1986,9 @@ function SandboxPage() {
                         <div className="flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 text-center pt-3 border-t mt-2">
                           <button
                             type="button"
-                            onClick={() => handleOpenConsultarOferta(item.offerId)}
-                            className="text-[11px] font-bold text-[#B300FF] hover:underline bg-transparent border-none cursor-pointer p-0"
+                            onClick={() => handleOpenConsultarOferta(resolvedOfferId)}
+                            disabled={!resolvedOfferId}
+                            className="text-[11px] font-bold text-[#B300FF] hover:underline bg-transparent border-none cursor-pointer p-0 disabled:opacity-50"
                           >
                             consultar oferta
                           </button>
@@ -2060,6 +2089,21 @@ function SandboxPage() {
                         {JSON.stringify(selectedOfferPayload, null, 2)}
                       </pre>
                     </div>
+                    {/* PAYLOAD EVENTO */}
+                    <div className="mt-6 pt-4 border-t border-slate-200">
+                      <h2 className="text-xs font-black uppercase text-[#B300FF] mb-2">Evento / Leilão Consolidado</h2>
+                      <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">
+                        Payload JSON (sbx-event):
+                      </p>
+                      {selectedEventPayload ? (
+                        <pre className="font-mono text-[10px] bg-slate-50 p-3 rounded-lg border border-slate-200 text-slate-800 whitespace-pre-wrap break-all">
+                          {JSON.stringify(selectedEventPayload, null, 2)}
+                        </pre>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">Nenhum evento vinculado a esta oferta ou falha ao carregar.</p>
+                      )}
+                    </div>
+
                   </div>
                 </div>
               ) : (

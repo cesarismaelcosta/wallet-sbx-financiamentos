@@ -179,9 +179,7 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
           legal_name: rawOffer.seller?.name || "N/A",
           trade_name: rawOffer.seller?.company?.[0]?.fantasyName || "N/A",
           economic_group: rawOffer.seller?.company?.[0]?.fantasyName || "N/A"
-        },
-        rawOffer: rawOffer,
-        rawEvento: eventData
+        }
       }
     };
 

@@ -1,17 +1,14 @@
 /**
  * @fileoverview Componente: SiteHeader
  * * PROPÓSITO:
- * Header fixo (sticky) para jornadas de crédito. Implementa navegação 
- * via âncoras (scroll manual) para contornar bloqueios do Router e garantir 
- * que o utilizador permaneça na rota correta.
+ * Header fixo para jornadas de crédito, padronizado com o mesmo design system 
+ * da home do sbxpay (altura, efeito glass, alinhamento e cores).
  * * INTEGRAÇÃO:
  * - Utiliza `scrollIntoView` para navegação suave dentro da mesma página.
- * - [NOVO] Integra telemetria visual (State Debugger) consumindo o contexto.
  */
 
 import { WalletLogo } from "@/components/brand/WalletLogo";
-import { useNavigate } from "@tanstack/react-router";
-import { useProductConsult } from "@/features/financial-hub/core/contexts/FinancialHubContext"; // 🚀 Import do Cofre
+import { useProductConsult } from "@/features/financial-hub/core/contexts/FinancialHubContext";
 
 const links = [
   { href: "simular", label: "Simular" },
@@ -20,13 +17,8 @@ const links = [
 ];
 
 export function SiteHeader() {
-  const navigate = useNavigate();
-  const context = useProductConsult(); // 🚀 Consome o estado hidratado da memória
+  const context = useProductConsult();
 
-  /**
-   * handleScroll
-   * Impede a navegação padrão do Router e força o scroll suave até o elemento com o ID alvo.
-   */
   const handleScroll = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
     e.preventDefault();
     const element = document.getElementById(id);
@@ -38,37 +30,45 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-        
-        {/* Lado Esquerdo: Logo */}
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:block">
-            <WalletLogo size="md" withTagline />
-          </div>
-          <div className="block sm:hidden">
-            <WalletLogo size="sm" />
-          </div>
-        </div>
+    <>
+      <style>{`
+        .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+      `}</style>
 
-        {/* Lado Direito: Navegação + Debugger */}
-        <div className="flex items-center gap-6">
-          {/* Navegação Manual (Âncoras) */}
-          <nav className="hidden md:flex gap-6">
-            {links.map((link) => (
-              <a
-                key={link.href}
-                href={`#${link.href}`}
-                onClick={(e) => handleScroll(e, link.href)}
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm px-1 -ml-1"
-              >
-                {link.label}
-              </a>
-            ))}
-          </nav>
-        </div>
+      {/* HEADER PADRONIZADO (Exatamente igual ao layout da Home sbXPAY) */}
+      <header className="fixed top-0 left-0 w-full z-50 glass border-b border-gray-100 py-3 transition-all duration-300 shadow-xs">
+        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
+          
+          {/* Lado Esquerdo: Logo alinhada perfeitamente */}
+          <div className="flex items-center">
+            <a href="#" className="flex items-center outline-none border-none focus:outline-none focus:ring-0">
+              <div className="hidden sm:block">
+                <WalletLogo size="md" withTagline />
+              </div>
+              <div className="block sm:hidden">
+                <WalletLogo size="sm" />
+              </div>
+            </a>
+          </div>
 
-      </div>
-    </header>
+          {/* Lado Direito: Navegação de âncoras limpa e fluida */}
+          <div className="flex items-center gap-6">
+            <nav className="hidden md:flex items-center space-x-1 text-[13px] font-semibold text-slate-600">
+              {links.map((link) => (
+                <a
+                  key={link.href}
+                  href={`#${link.href}`}
+                  onClick={(e) => handleScroll(e, link.href)}
+                  className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          </div>
+
+        </div>
+      </header>
+    </>
   );
 }

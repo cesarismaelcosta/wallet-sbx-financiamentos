@@ -115,17 +115,18 @@ async function validatePayload(
     if (!payload.offer?.offer_description) errors.push("offer.offer_description é obrigatório.");
     if (!payload.offer?.offer_value) errors.push("offer.offer_value é obrigatório.");
 
-    // Resolução Semântica de Categoria
-    if (payload.offer?.category) {
-      debugLog("ValidatePayload categoria recebida:", payload.offer?.category);
-      const { data: catData } = await supabaseClient
+    // Resolução da categoria estritamente por ID (Chave primária)
+    if (payload.offer?.category_id) {
+      debugLog("ValidatePayload category_id recebido:", payload.offer.category_id);
+      
+      const { data: catData, error: catError } = await supabaseClient
         .from("category_types")
-        .select("id, product_id")
-        .ilike("name", `%${payload.offer.category}%`)
-        .single();
+        .select("id, product_id, name")
+        .eq("id", Number(payload.offer.category_id))
+        .maybeSingle();
 
-      if (!catData) {
-        errors.push(`Categoria '${payload.offer.category}' não mapeada.`);
+      if (catError || !catData) {
+        errors.push(`Categoria com ID '${payload.offer.category_id}' não mapeada.`);
       } else {
         found_category_id = catData.id;
         payload.offer!.category_id = catData.id;
@@ -134,6 +135,8 @@ async function validatePayload(
           payload.product_id = catData.product_id;
         }
       }
+    } else {
+      errors.push("offer.category_id ausente.");
     }
   }
 

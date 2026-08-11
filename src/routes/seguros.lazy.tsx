@@ -15,8 +15,7 @@ import { FinancialHubLayout } from "@/features/financial-hub/components/layout/F
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
 import { jwtDecode } from "jwt-decode"; 
-// 👇 CORREÇÃO: import do getTimeDelta adicionado aqui!
-import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session";  
+import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session";  
 
 /**
  * SegurosGuard
@@ -64,7 +63,6 @@ const SegurosGuard = () => {
           return;
         }
       } catch (error) {
-        // 👇 CORREÇÃO: Catch honesto que mostra o erro real se quebrar, em vez de culpar o token
         console.error("⚠️ [UX Guard - Seguros] Erro crítico na validação (não é necessariamente o token):", error);
         window.dispatchEvent(new CustomEvent('session_expired'));
         return;
@@ -72,15 +70,23 @@ const SegurosGuard = () => {
     }
   }, [sessionToken, isLoading, navigate, location.pathname]);
 
-  // [COMPLIANCE]: Estado de carregamento seguro.
+  // =========================================================================
+  // [UX REFINEMENT]: Substituição do Loader Bruto por Skeleton Estrutural
+  // Rationale: Evita Layout Shift e a sensação de "duplo carregamento" na tela,
+  // mantendo o container principal visível enquanto valida a sessão em background.
+  // =========================================================================
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-        <p className="text-slate-500 font-medium text-sm">
-          Carregando informações...
-        </p>
-      </div> 
+      <FinancialHubLayout>
+        <div className="max-w-7xl mx-auto px-6 py-16 space-y-8 animate-pulse">
+          <div className="h-8 w-64 bg-slate-200 rounded-lg"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6">
+            <div className="h-48 bg-slate-100 rounded-2xl"></div>
+            <div className="h-48 bg-slate-100 rounded-2xl"></div>
+            <div className="h-48 bg-slate-100 rounded-2xl"></div>
+          </div>
+        </div>
+      </FinancialHubLayout>
     );
   }
 

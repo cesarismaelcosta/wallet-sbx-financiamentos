@@ -67,6 +67,10 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   // ==========================================
   // 4. OFERTAS & NEGÓCIO
   // ==========================================
+  'sbx-event': { 
+    methods: ['GET'], 
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
+  },
   'sbx-offer': { 
     methods: ['GET'], 
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 

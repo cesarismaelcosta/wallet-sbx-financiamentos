@@ -28,6 +28,7 @@ import { logSystemError } from "@/services/systemNotification";
 import { getDefaultSbxEnvironment, clearSession } from "@/services/session";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import { CardOfferV } from "@/features/financial-hub/components/shared/renderes/CardOfferV";
+import { CardOfferVSkeleton } from "@/features/financial-hub/components/shared/renderes/CardOfferVSkeleton";
 
 // =========================================================================
 // [TAXONOMIA VISUAL]: Dicionário Estático de Ícones de Categorias
@@ -85,6 +86,7 @@ function OfferDetailsSBXPage() {
 
 export const Route = createLazyFileRoute("/sbxpay/offer")({
   component: OfferDetailsSBXPage,
+  pendingComponent: OfferSkeletonLoader,
 });
 
 // =========================================================================
@@ -138,6 +140,26 @@ function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = 
   );
 }
 
+// 1. Esqueleto de carregamento da página de oferta usando o card fantasma
+function OfferSkeletonLoader() {
+  return (
+    <div className="max-w-7xl mx-auto px-6 py-28 space-y-8">
+      {/* Header da Página */}
+      <div className="flex justify-between items-center animate-pulse">
+        <div className="h-8 w-48 bg-slate-200 rounded-lg"></div>
+        <div className="h-8 w-28 bg-slate-200 rounded-lg"></div>
+      </div>
+
+      {/* Grid preenchido com os cards fantasmas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pt-6">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          <CardOfferVSkeleton key={i} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // =========================================================================
 // [COMPONENTE PRINCIPAL]: OfferDetailsSBXPAY
 // =========================================================================
@@ -155,8 +177,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   const isMobileRef = useRef(isMobile);
   isMobileRef.current = isMobile;
 
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [simulatingIndex, setSimulatingIndex] = useState<number | null>(null);
   const [offersList, setOffersList] = useState<any[]>([]);
   const [totalElements, setTotalElements] = useState<number>(0);
   const [fetchError, setFetchError] = useState<"TECHNICAL_INSTABILITY" | null>(null);
@@ -177,6 +199,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
 
   const totalPages = Math.max(Math.ceil(totalElements / pageSize), 1);
+
+  const mainPaddingTop = isMobile && isCartao ? "pt-[132px]" : "pt-[84px]";
 
   // Troca de ordenação/categoria: reseta lista e página no próprio handler
   const handleSortChange = (value: string) => {
@@ -204,11 +228,11 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
   // Garante que a página nunca inicie travada no loading de submissão ao montar ou voltar pelo histórico
   useEffect(() => {
-    setSubmitting(false);
+    setSimulatingIndex(null);
 
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
-        setSubmitting(false);
+        setSimulatingIndex(null);
         setLoading(false);
       }
     };
@@ -221,7 +245,10 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
   // Busca os dados da listagem (BFF Integration)
   useEffect(() => {
-    if (!sessionToken) return;
+    if (!sessionToken) {
+      setLoading(false); // 👈 Destrava o carregamento se o token estiver hidratando
+      return;
+    }
     const controller = new AbortController();
 
     const loadOffers = async () => {
@@ -292,8 +319,9 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   }, [isMobile, loading, pageNumber, totalPages]);
 
   // Delegação de Negócio via Gateway
-  const handleSimulacao = async (offerItem: any) => {
-    setSubmitting(true);
+  const handleSimulacao = async (offerItem: any, idx: number) => {
+    setSimulatingIndex(idx);
+
     try {
       const currentHref = window.location.href;
 
@@ -332,7 +360,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         navigate({ to: "/sbxpay" as any, replace: true });
         return;
       }
-      setSubmitting(false);
+      setSimulatingIndex(null);
     }
   };
 
@@ -358,13 +386,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
   return (
     <div className="min-h-screen bg-slate-50 font-['Inter'] pb-20 relative">
-      {/* OVERLAY DE LOADING: Só exibe na 1ª página se ainda não houver ofertas na lista (evita o piscar) */}
-      {((loading && pageNumber === 1 && offersList.length === 0) || submitting) && (
-        <div className="fixed inset-0 z-[100] flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-4"></div>
-          <p className="text-slate-500 font-medium text-sm">Carregando informações...</p>
-        </div>
-      )}
 
       {/* 1. HEADER FIXO */}
       <header className="fixed top-0 left-0 w-full h-[60px] z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center px-6 shadow-xs">
@@ -445,9 +466,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       </div>
 
       {/* ÁREA ÚTIL DE CONTEÚDO */}
-      <main
-        className={`max-w-7xl mx-auto px-4 ${isCartao ? "pt-[128px]" : "pt-[84px]"} md:pt-[84px] pb-8 font-['Inter']`}
-      >
+      <main className={`max-w-7xl mx-auto px-4 ${mainPaddingTop} pb-8 font-['Inter']`}>
         {/* DESKTOP BARRA DE FILTRO E ORDENAÇÃO (Sempre visível) */}
         <div className="hidden md:flex w-full items-center justify-between gap-4 pt-2 pb-6">
           <div className="flex items-center">
@@ -484,22 +503,29 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
           <p className="text-sm font-normal text-slate-800 m-0">{formattedTotal} anúncios</p>
         </div>
 
-        {/* ENGINE DE CARDS UTILIZANDO O NOVO COMPONENTE CardOfferV */}
-        {offersList.length === 0 && !loading ? (
+        {/* ENGINE DE CARDS UTILIZANDO OS COMPONENTES CardOfferV E CardOfferVScheleton*/}
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <CardOfferVSkeleton key={i} />
+            ))}
+          </div>
+        ) : offersList.length === 0 ? (
           <div className="bg-white rounded-lg p-12 text-center border border-slate-200 shadow-xs my-12">
             <p className="text-slate-600 font-medium text-sm">
               Nenhuma oferta encontrada para esta categoria no momento.
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in duration-500">
             {offersList.map((item, idx) => (
               <CardOfferV
-                key={idx}
+                key={item?.offer?.offer_id || idx}
                 item={item}
                 isCartao={isCartao}
-                loading={loading || submitting}
-                onSimulate={handleSimulacao}
+                loading={simulatingIndex === idx}
+                disabled={simulatingIndex !== null}
+                onSimulate={() => handleSimulacao(item, idx)}
               />
             ))}
           </div>

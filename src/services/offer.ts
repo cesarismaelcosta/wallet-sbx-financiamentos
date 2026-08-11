@@ -218,9 +218,19 @@ export async function fetchOffersQuery(
       throw bffError;
     }
 
-    // [DATA]: Retorno de matriz padronizada
+    // =======================================================================
+    // [DATA]: Retorno de matriz padronizada e limpa (Service Layer)
+    // =======================================================================
     const result = await response.json();
-    return result.data || result;
+    const payload = result.data || result;
+
+    // A MÁGICA AQUI: O Service Layer descasca o { status, data } de cada 
+    // item da lista antes de entregar para o Front-end
+    if (payload && Array.isArray(payload.offers)) {
+      payload.offers = payload.offers.map((item: any) => item.data || item);
+    }
+
+    return payload;
 
   } catch (error: any) {
     if (error.name === 'AbortError' || signal?.aborted) {

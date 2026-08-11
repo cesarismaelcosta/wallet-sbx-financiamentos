@@ -179,8 +179,14 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
               )}
 
               {/* 2. RENDERIZAÇÃO OCULTA (DOM Anti-Flicker) */}
+              {/* 
+                * [LAYOUT ARCHITECTURE]: Padding-top de compensação (pt-20).
+                * Como o SiteHeader utiliza 'fixed', o conteúdo principal é jogado para o topo.
+                * Este padding garante o offset necessário para manter o conteúdo 
+                * fora da zona de colisão do cabeçalho, mantendo o scroll fluido.
+                */}
               <main
-                className={`flex-1 w-full flex flex-col transition-opacity duration-500 ${
+                className={`flex-1 w-full flex flex-col transition-opacity duration-500 pt-20 ${
                   isOrchestratorHydrating ? "opacity-0 pointer-events-none h-0 overflow-hidden" : "opacity-100"
                 }`}
               >

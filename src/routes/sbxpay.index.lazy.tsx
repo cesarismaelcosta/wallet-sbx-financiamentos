@@ -121,13 +121,43 @@ export function sbXPAYHome() {
 
   const [isScrolled, setIsScrolled] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
 
+  // 🛡️ [UX FIX]: Reseta os loadings caso o usuário volte pelo histórico do navegador (bfcache)
+  useEffect(() => {
+    setLoading(false);
+    setLoginLoading(false);
+    setActiveKey(null);
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        setLoading(false);
+        setLoginLoading(false);
+        setActiveKey(null);
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+  
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Esta função decide se usamos SPA (navigate) ou redirecionamento total (window.location)
+  const performNavigation = (url: string) => {
+    // Se for uma URL absoluta (começa com http), precisamos de redirecionamento total
+    if (url.startsWith('http')) {
+      window.location.href = url;
+    } else {
+      // Se for uma rota interna, usamos o navigate do TanStack Router
+      navigate({ to: url });
+    }
+  };
 
   // =========================================================================
   // [HANDLERS]: Lógica Inteligente de Roteamento Bilateral
@@ -137,7 +167,6 @@ export function sbXPAYHome() {
     setActiveKey(configKey);
 
     const config = flowsConfig[configKey];
-
     if (!config) {
       console.error(`🚨 Erro Crítico: A chave "${String(configKey)}" não existe no flowsConfig!`);
       setLoading(false);
@@ -149,12 +178,11 @@ export function sbXPAYHome() {
       const currentHref = window.location.href;
       const ambiente = getDefaultSbxEnvironment();
       const currentSessionToken = sessionToken || getTokenForPayload() || "";
-
       const urlParams = new URLSearchParams(window.location.search);
       const existingVisitId = urlParams.get("visit_id");
 
       // -------------------------------------------------------------------
-      // [FLUXOS DIRETOS]: Executam CONSULT e redirecionam com a URL retornada
+      // [FLUXOS DIRETOS]
       // -------------------------------------------------------------------
       if (config.isDirect) {
         const payload = {
@@ -165,18 +193,18 @@ export function sbXPAYHome() {
           origin_url: currentHref,
           ...(existingVisitId && { visit_id: existingVisitId }),
           ...(userData && { entity: userData }),
-          interaction_context: {
-            origin_url: currentHref,
-            utm_source: "sbxpay_direct",
-            utm_medium: "referral",
-            utm_campaign: `flow_${configKey.toLowerCase()}`,
-          },
+          interaction_context: { origin_url: currentHref, utm_source: "sbxpay_direct", utm_medium: "referral", utm_campaign: `flow_${configKey.toLowerCase()}` },
         };
 
-        const response = await callOrchestrator(payload, "POST");
+        const consultResponse = await callOrchestrator(payload, "POST");
 
-        if (response?.url) {
-          window.location.href = response.url;
+        if (consultResponse && !consultResponse.success && consultResponse.code === "SESSION_EXPIRED" && consultResponse.fallback_url) {
+          window.location.href = consultResponse.fallback_url;
+          return;
+        }
+
+        if (consultResponse?.url) {
+          performNavigation(consultResponse.url); 
           return;
         } else {
           throw new Error("URL de redirecionamento ausente na resposta do orquestrador.");
@@ -184,42 +212,33 @@ export function sbXPAYHome() {
       }
 
       // -------------------------------------------------------------------
-      // [FLUXOS DE VITRINE]: Registram a visita (VISIT) no Gateway antes da navegação
+      // [FLUXOS DE VITRINE]
       // -------------------------------------------------------------------
-      const targetDestinationUrl = config.route;
       const visitPayload = {
         action: "VISIT",
         environment: ambiente,
-        target_url: targetDestinationUrl,
+        target_url: config.route,
         origin_url: currentHref,
         auth_token: currentSessionToken,
         ...(existingVisitId && { visit_id: existingVisitId }),
         ...(userData && { entity: userData }),
-        interaction_context: {
-          origin_url: currentHref,
-          utm_source: "sbxpay_direct",
-          utm_medium: "referral",
-          utm_campaign: `flow_${configKey.toLowerCase()}`,
-        },
+        interaction_context: { origin_url: currentHref, utm_source: "sbxpay_direct", utm_medium: "referral", utm_campaign: `flow_${configKey.toLowerCase()}` },
       };
 
       const visitResponse = await callOrchestrator(visitPayload, "POST");
 
-      if (visitResponse?.url) {
-        // Realiza o merge seguro garantindo que o flow e o return_uri caminhem juntos com a nova visita
-        const targetUrlObj = new URL(visitResponse.url, window.location.origin);
+      if (visitResponse && !visitResponse.success && visitResponse.code === "SESSION_EXPIRED" && visitResponse.fallback_url) {
+        window.location.href = visitResponse.fallback_url;
+        return;
+      }
 
+      if (visitResponse?.url) {
+        const targetUrlObj = new URL(visitResponse.url, window.location.origin);
         targetUrlObj.searchParams.set("flow", config.flowKey);
         targetUrlObj.searchParams.set("return_uri", window.location.pathname);
 
-        // 1. Desliga o loading antes de navegar para evitar conflito de estado
-        setLoading(false); 
-        
-        // 2. Navega instantaneamente
-        navigate({ 
-          to: targetUrlObj.pathname, 
-          search: Object.fromEntries(targetUrlObj.searchParams) as any 
-        });
+        setLoading(false);
+        performNavigation(targetUrlObj.pathname + targetUrlObj.search); 
         return;
       } else {
         throw new Error("URL de visita ausente na resposta do orquestrador.");
@@ -229,14 +248,12 @@ export function sbXPAYHome() {
       setLoading(false);
       setActiveKey(null);
     } finally {
-      if (!config.isDirect) {
-        setLoading(false);
-      }
+      if (!config.isDirect) setLoading(false);
     }
   };
 
-  const ghostBtn =
-    "border-2 border-purple-600 text-purple-600 hover:bg-purple-600 hover:text-white transition-all rounded-lg px-4 py-2 text-xs font-bold transform hover:scale-[1.02]";
+  const sharedButtonClasses = "flex items-center justify-center gap-2 px-5 py-2 font-normal rounded-lg transition-all text-sm border border-purple-600 text-purple-600 hover:bg-purple-50";
+  const ghostBtn = `${sharedButtonClasses} text-xs px-4 py-1.5`;
 
   const renderButton = (
     label: string,
@@ -247,17 +264,13 @@ export function sbXPAYHome() {
     const config = flowsConfig[configKey];
     const isCurrentLoading = loading && activeKey === configKey;
 
-    const baseClasses = `flex items-center justify-center gap-3 px-6 py-3 font-medium rounded-xl transition-all w-full md:w-auto`;
-
     if (config.disabled) {
       return (
         <button
           disabled
-          className={`${baseClasses} bg-slate-50 border border-slate-200 text-slate-400 cursor-not-allowed opacity-60`}
+          className="flex items-center justify-center gap-2 px-5 py-2 font-normal rounded-lg transition-all w-full md:w-auto text-sm bg-slate-50 border border-slate-200 text-slate-400 cursor-not-allowed opacity-60"
         >
-          <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-            <Icon className="w-full h-full" strokeWidth={1.5} />
-          </div>
+          <Icon className="w-4 h-4" strokeWidth={1.25} />
           <span className="font-jakarta tracking-tight text-left">{label}</span>
         </button>
       );
@@ -267,15 +280,13 @@ export function sbXPAYHome() {
       <button
         disabled={loading}
         onClick={() => handleProductClick(configKey)}
-        className={`${baseClasses} bg-white border border-purple-600 text-purple-600 ${loading ? "opacity-50 cursor-not-allowed" : "hover:bg-purple-50"}`}
+        className={`${sharedButtonClasses} ${loading ? "opacity-50 cursor-not-allowed" : ""} w-full md:w-auto`}
       >
-        <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-          {isCurrentLoading ? (
-            <Loader2 className="w-full h-full animate-spin" strokeWidth={1.5} />
-          ) : (
-            <Icon className="w-full h-full" strokeWidth={1.5} />
-          )}
-        </div>
+        {isCurrentLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.25} />
+        ) : (
+          <Icon className="w-4 h-4" strokeWidth={1.25} />
+        )}
         <span className="font-jakarta tracking-tight text-left">{isCurrentLoading ? "Aguarde..." : label}</span>
       </button>
     );
@@ -438,7 +449,7 @@ export function sbXPAYHome() {
                     <h4 className="font-bold text-slate-900 text-sm">O seu dinheiro sempre protegido</h4>
                     <p className="text-slate-600 text-xs mt-1 leading-relaxed">
                       Fique tranquilo na hora de comprar. Os valores das suas negociações ficam guardados em contas
-                      pagamento de nossa Instituição de Pagamento regulada pelo Banco Central do Brasil.
+                      pagamento de nossa Instituição de Pagamento regulada pelo Banco Central.
                     </p>
                   </div>
                 </div>
@@ -458,15 +469,32 @@ export function sbXPAYHome() {
               </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start pt-2">
-                <a
-                  href="https://accounts.superbid.net/signin?response_type=token&client_id=dzqC3VodSoXukD45BQKg3NQU6-faststore&redirect_uri=https://www.superbid.net/&authorization_uri=https://www.superbid.net/authorization/&language=pt-BR&portal_id=2&hostName=Superbid%20BR"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 px-6 py-3 bg-white border border-purple-600 text-purple-600 font-medium rounded-xl transition-all hover:bg-purple-50"
+                <button
+                  // 👈 Bloqueia se o login estiver rodando OU se qualquer outro botão de jornada estiver em loading
+                  disabled={loginLoading || loading}
+                  onClick={() => {
+                    setLoginLoading(true);
+                    setTimeout(() => {
+                      window.open(
+                        "https://accounts.superbid.net/signin?response_type=token&client_id=dzqC3VodSoXukD45BQKg3NQU6-faststore&redirect_uri=https://www.superbid.net/&authorization_uri=https://www.superbid.net/authorization/&language=pt-BR&portal_id=2&hostName=Superbid%20BR",
+                        "_blank"
+                      );
+                      setLoginLoading(false);
+                    }, 400);
+                  }}
+                  className={`${sharedButtonClasses} w-full md:w-auto ${
+                    loginLoading ? "opacity-50 cursor-not-allowed" : ""
+                  } ${loading ? "opacity-60 cursor-not-allowed" : ""}`}
                 >
-                  <UserPlus className="w-5 h-5" strokeWidth={1.5} />
-                  <span className="font-jakarta tracking-tight">Entrar ou abrir conta</span>
-                </a>
+                  {loginLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.25} />
+                  ) : (
+                    <UserPlus className="w-4 h-4" strokeWidth={1.25} />
+                  )}
+                  <span className="font-jakarta tracking-tight">
+                    {loginLoading ? "Aguarde..." : "Entrar na conta"}
+                  </span>
+                </button>
               </div>
             </div>
 
@@ -530,7 +558,7 @@ export function sbXPAYHome() {
 
               <p className="text-sm md:text-base text-slate-600 leading-relaxed">
                 Não deixe um bom negócio escapar. Amplie seu poder de compra usando o limite do seu cartão de crédito
-                com total tranquilidade na hora de arrematar.
+                com total tranquilidade na hora de pagar.
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
@@ -617,7 +645,7 @@ export function sbXPAYHome() {
 
               <p className="text-sm md:text-base text-slate-600 leading-relaxed max-w-2xl">
                 Compre seu carro ou caminhão com as melhores taxas do mercado. Nós fazemos o trabalho pesado de
-                assessoria, buscando as melhores opções nos maiores bancos do Brasil.
+                assessoria, buscando as melhores opções nos maiores bancos do país.
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 w-full max-w-2xl">
@@ -968,14 +996,6 @@ export function sbXPAYHome() {
           </div>
         </div>
       </footer>
-
-      {/* OVERLAY DE LOADING DOS BOTÕES DE JORNADA */}
-      {loading && (
-        <div className="fixed inset-0 z-[100] flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-4"></div>
-          <p className="text-slate-500 font-medium text-sm">Carregando informações...</p>
-        </div>
-      )}
 
       {/* MOBILE TAB BAR (Visível apenas no celular - 4 Atalhos) */}
       <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-50 flex justify-around items-center pt-2 pb-4 md:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
