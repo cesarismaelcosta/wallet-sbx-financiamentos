@@ -36,10 +36,16 @@ export const Route = createLazyFileRoute("/sbxpay")({
 // =========================================================================
 // CONTEXTO GLOBAL DE DADOS DO USUÁRIO
 // =========================================================================
+// =========================================================================
+// CONTEXTO GLOBAL DE DADOS DO USUÁRIO (Blindado contra null)
+// =========================================================================
 export const UserDataContext = createContext<{ 
   userData: BFFUserProfile | null; 
   performLogout: () => void; 
-} | null>(null);
+}>({
+  userData: null,
+  performLogout: () => {},
+});
 
 // =========================================================================
 // [COMPONENTES AUXILIARES]: Indicador Visual de Carregamento Nativo
