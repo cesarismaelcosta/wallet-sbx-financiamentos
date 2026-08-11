@@ -219,7 +219,8 @@ export async function fetchOffersQuery(
     }
 
     // [DATA]: Retorno de matriz padronizada
-    return await response.json();
+    const result = await response.json();
+    return result.data || result;
 
   } catch (error: any) {
     if (error.name === 'AbortError' || signal?.aborted) {

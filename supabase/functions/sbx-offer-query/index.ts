@@ -85,12 +85,15 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
   } catch (err: any) {
     const authUrl = req.headers.get("x-auth-fallback-url") || "/accounts/signin";
     debugLog(`[DEBUG] ❌ Falha de autenticação na borda: ${err.message}`);
-    return new Response(JSON.stringify({
-      success: false, 
-      code: "UNAUTHORIZED", 
-      message: "Sessão inválida ou expirada. Por favor, faça login novamente.", 
-      fallback_url: authUrl 
-    }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    return {
+      status: 401,
+      data: {
+        success: false, 
+        code: "UNAUTHORIZED", 
+        message: "Sessão inválida ou expirada. Por favor, faça login novamente.", 
+        fallback_url: authUrl 
+      }
+    };
   }
 
   // =========================================================================
@@ -187,8 +190,6 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
     if (keyword) queryParams.append("keyword", keyword);
     if (filter) queryParams.append("filter", filter);
     
-    // Se o usuário clicou em uma categoria, usamos o endpoint SEO com urlSeo.
-    // Caso contrário, usamos a raiz /offers/ para evitar o erro 500.
     let endpoint = "/offers/";
     if (categoryFilter) {
       endpoint = "/seo/offers/";
@@ -228,14 +229,13 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
     debugLog(`[DEBUG] ✨ Sucesso Upstream! Total elements: ${totalCount} | Ofertas retornadas: ${rawOffers.length}`);
 
     // =========================================================================
-    // FASE 5: NORMALIZAÇÃO DE DADOS (Payload Otimizado para Performance)
+    // FASE 5: NORMALIZAÇÃO DE DADOS (Payload Idêntico ao de sbx-offer)
     // =========================================================================
     const normalizedOffers = rawOffers.map((rawOffer: any) => {
       const productTypeId = rawOffer.product?.productType?.id;
       const isVehicleCategory = [10, 11].includes(productTypeId);
       let vehicleData: any | undefined;
 
-      // Extração de dados de veículos (mantido)
       if (isVehicleCategory) {
         const groups = rawOffer.product?.template?.groups || [];
         const getGroupProp = (groupId: string, propId: string) => 
@@ -248,93 +248,98 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
         };
       }
 
-      // Extração de referência do eventData (base para descrições, imagens e status)
       const eventData = rawOffer.auction || {};
 
+      // EXATAMENTE IGUAL À SBX-OFFER
       return {
-        offer: {
-          offer_id: String(rawOffer.id),
-          lot_number: rawOffer.lotNumber || 1,
-          offer_description: rawOffer.product?.shortDesc || rawOffer.offerDescription?.offerDescription || "",
-          offer_detailed_description: rawOffer.offerDescription?.offerDescription || "",
-          offer_value: rawOffer.price || 0,
-          price_formatted: rawOffer.priceFormatted || rawOffer.offerDetail?.directSaleValueFormatted || rawOffer.offerDetail?.initialBidValueFormatted || "",
-          system_metric: rawOffer.systemMetric || null,
-          category_id: rawOffer.product?.productType?.id || 0,
-          category: rawOffer.product?.productType?.description || "",
-          sub_category_id: rawOffer.product?.subCategory?.id || "",
-          sub_category: rawOffer.product?.subCategory?.description || "",
-          offer_status: rawOffer.offerStatus || "",
-          sale_status: rawOffer.saleStatus || "",
-          end_date: rawOffer.endDate || "",
-          is_shopping: rawOffer.isShopping || false, 
-          offer_type_id: rawOffer.offerTypeId ?? null,
-          location: {
-            neighborhood: rawOffer.product?.location?.neighborhood || "Não informado",
-            city: rawOffer.product?.location?.city || "Não informado",
-            state: rawOffer.product?.location?.state || "Não informado",
-            country: rawOffer.product?.location?.country || "Brasil"
+        status: 200,
+        data: {
+          offer: {
+            offer_id: String(rawOffer.id),
+            lot_number: rawOffer.lotNumber || 1,
+            offer_description: rawOffer.product?.shortDesc || rawOffer.offerDescription?.offerDescription || "",
+            offer_detailed_description: rawOffer.offerDescription?.offerDescription || "",
+            offer_value: rawOffer.price || 0,
+            price_formatted: rawOffer.priceFormatted || rawOffer.offerDetail?.directSaleValueFormatted || rawOffer.offerDetail?.initialBidValueFormatted || "",
+            system_metric: rawOffer.systemMetric || null,
+            category_id: rawOffer.product?.productType?.id || 0,
+            category: rawOffer.product?.productType?.description || "",
+            sub_category_id: rawOffer.product?.subCategory?.id || "",
+            sub_category: rawOffer.product?.subCategory?.description || "",
+            offer_status: rawOffer.offerStatus || "",
+            sale_status: rawOffer.saleStatus || "",
+            end_date: rawOffer.endDate || "",
+            is_shopping: rawOffer.isShopping || false, 
+            offer_type_id: rawOffer.offerTypeId ?? null,
+            location: {
+              neighborhood: rawOffer.product?.location?.neighborhood || "Não informado",
+              city: rawOffer.product?.location?.city || "Não informado",
+              state: rawOffer.product?.location?.state || "Não informado",
+              country: rawOffer.product?.location?.country || "Brasil"
+            },
+            ...(vehicleData && { vehicle_details: vehicleData }),
+            photos: rawOffer.product?.galleryJson?.map((p: any) => ({
+              highlight: p.highlight || false,
+              link: p.link,
+              thumbnail: p.thumbnailUrl,
+              file_name: p.originalFileName,
+              type: p.type || "photo",
+              content_type: p.contentType || "image/jpeg"
+            })) || []
           },
-          ...(vehicleData && { vehicle_details: vehicleData }),
-          photos: rawOffer.product?.galleryJson?.map((p: any) => ({
-            highlight: p.highlight || false,
-            link: p.link,
-            thumbnail: p.thumbnailUrl,
-            file_name: p.originalFileName,
-            type: p.type || "photo",
-            content_type: p.contentType || "image/jpeg"
-          })) || []
-        },
-        manager: {
-          manager_id: rawOffer.manager?.id || 0,
-          manager_name: rawOffer.manager?.name || "N/A"
-        },
-        event: {
-          event_id: String(eventData.id || ""),
-          event_description: eventData.desc || "",
-          event_start_date: eventData.beginDate || "",
-          event_end_date: eventData.endDate || "",
-          modality_id: eventData.modalityId ?? null,
-          modality_desc: eventData.modalityDesc || "",
-          status_id: eventData.statusId ?? null    
-        },
-        seller: {
-          seller_id: String(rawOffer.seller?.id || ""),
-          legal_name: rawOffer.seller?.name || "N/A",
-          trade_name: rawOffer.seller?.company?.[0]?.fantasyName || "N/A",
-          economic_group: rawOffer.seller?.company?.[0]?.fantasyName || "N/A"
+          manager: {
+            manager_id: rawOffer.manager?.id || 0,
+            manager_name: rawOffer.manager?.name || "N/A"
+          },
+          event: {
+            event_id: String(eventData.id || ""),
+            event_description: eventData.desc || "",
+            event_start_date: eventData.beginDate || "",
+            event_end_date: eventData.endDate || "",
+            modality_id: eventData.modalityId ?? null,
+            modality_desc: eventData.modalityDesc || "",
+            status_id: eventData.statusId ?? null    
+          },
+          seller: {
+            seller_id: String(rawOffer.seller?.id || ""),
+            legal_name: rawOffer.seller?.name || "N/A",
+            trade_name: rawOffer.seller?.company?.[0]?.fantasyName || "N/A",
+            economic_group: rawOffer.seller?.company?.[0]?.fantasyName || "N/A"
+          },
+          rawOffer: rawOffer,
+          rawEvento: eventData
         }
       };
     });
 
     // =========================================================================
-    // FASE 6: CONTRATO DE RESPOSTA BFF (Normalizado e limpo)
+    // FASE 6: CONTRATO DE RESPOSTA BFF (Padrão Unificado com withSecurity)
     // =========================================================================
-    return new Response(JSON.stringify({
-      success: true,
-      total: totalCount,
-      metadata: { 
-        total_elements: totalCount, 
-        page_number: pageNumber, 
-        page_size: pageSize 
-      },
-      offers: normalizedOffers
-    }), { 
-      status: 200, 
-      headers: { 'Content-Type': 'application/json' } 
-    });
+    return {
+      status: 200,
+      data: {
+        success: true,
+        total: totalCount,
+        metadata: { 
+          total_elements: totalCount, 
+          page_number: pageNumber, 
+          page_size: pageSize 
+        },
+        offers: normalizedOffers
+      }
+    };
 
   } catch (err: any) {
     debugLog(`[DEBUG] 💥 ERRO OPERACIONAL: ${err.message} | Code: ${err.errorCode || 'UNKNOWN'}`);
     const statusCode = ["MISSING_PARAM", "INVALID_PRODUCT", "UNSUPPORTED_CATALOG_PRODUCT"].includes(err.errorCode) ? 400 : 500;
     
-    return new Response(JSON.stringify({ 
-      success: false, 
-      code: err.errorCode || "UNKNOWN_ERROR", 
-      message: err.message || "Erro interno ao processar a busca de ofertas." 
-    }), { 
-      status: statusCode, 
-      headers: { 'Content-Type': 'application/json' } 
-    });
+    return {
+      status: statusCode,
+      data: { 
+        success: false, 
+        code: err.errorCode || "UNKNOWN_ERROR", 
+        message: err.message || "Erro interno ao processar a busca de ofertas." 
+      }
+    };
   }
 }));
