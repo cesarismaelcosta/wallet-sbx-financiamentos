@@ -183,7 +183,6 @@ export function CustomLogin() {
       // O ambiente ativo foi resolvido com segurança na montagem ou escolha.
       // -----------------------------------------------------------------------
       const response = await autenticateWalletsbX(login, password, ambienteAtivo);
-      console.log("🚨 O QUE O BACKEND DEVOLVEU:", response);
       
       if (response?.success) {
         // 1. EXTRAÇÃO ROBUSTA: Mapeia estritamente do user_profile retornado pela Edge Function

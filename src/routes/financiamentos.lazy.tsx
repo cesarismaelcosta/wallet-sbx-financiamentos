@@ -40,17 +40,24 @@ const FinanciamentosGuard = () => {
     if (isLoading) return;
 
     if (!USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
+      
+      // ✨ FIX: Usa o window.location nativo para garantir que o search é uma string
+      // e não o objeto parseado pelo TanStack Router.
+      const currentPath = typeof window !== "undefined" 
+        ? window.location.pathname + window.location.search 
+        : "/financiamentos";
+
       navigate({ 
         to: '/accounts/signin',
         search: { 
-          redirect_uri: location.pathname + location.search,
+          redirect_uri: currentPath,
           env: undefined 
-        }
+        } as any
       });
       return;
     }
 
-    if (sessionToken) {
+    if (sessionToken && typeof sessionToken === "string") {
       try {
         const decoded = jwtDecode<{ exp?: number }>(sessionToken);
         const timeDelta = getTimeDelta();

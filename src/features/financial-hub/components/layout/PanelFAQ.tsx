@@ -1,23 +1,17 @@
 /**
- * @fileoverview Componente: FAQSection
- * @path src/components/auto-equity/FAQSection.tsx
- * * ESTRUTURA DO PROJETO:
- * --------------------------------------------------------------------------------
- * src/
- * ├── components/
- * │   ├── layout/
- * │   │   ├── FAQSection.tsx        # [AQUI] Seção de perguntas frequentes
- * │   │   └── ...
- * │   └── products/
- * │       └── credit         
- * └── ...
- * --------------------------------------------------------------------------------
- * * PROPÓSITO:
- * Exibir perguntas e respostas frequentes em um formato de acordeão organizado.
- * * INTEGRAÇÃO:
- * - Recebe um array `items` que é automaticamente ordenado pela prop `position`.
- * * INTERDEPENDÊNCIAS:
- * - UI: Shadcn Accordion.
+ * @fileoverview Componente: PanelFAQ
+ * @path src/features/financial-hub/components/layout/PanelFAQ.tsx
+ * 
+ * =========================================================================
+ * [DOCUMENTAÇÃO DO COMPONENTE]
+ * =========================================================================
+ * @description Exibe perguntas e respostas frequentes em um layout de acordeão 
+ * de duas colunas (no desktop). Ordenação baseada na propriedade 'position'.
+ * 
+ * @responsibilities
+ * 1. Ordenação Dinâmica: Ordena os itens pela prop 'position'.
+ * 2. Divisão de Grid: Divide os itens igualmente em duas colunas.
+ * 3. Acessibilidade: Integração com Shadcn Accordion.
  * 
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
@@ -32,11 +26,11 @@ interface FAQItem {
   position?: number;
 }
 
-interface FAQSectionProps {
+interface PanelFAQProps {
   items?: FAQItem[];
 }
 
-export function FAQSection({ items }: FAQSectionProps) {
+export function PanelFAQ({ items }: PanelFAQProps) {
   if (!items || items.length === 0) return null;
 
   const sortedItems = [...items].sort((a, b) => (a.position || 0) - (b.position || 0));
@@ -48,7 +42,7 @@ export function FAQSection({ items }: FAQSectionProps) {
         <h2 className="text-center text-3xl font-bold mb-16 text-foreground/90">
           Dúvidas Frequentes
         </h2>
-        {/* Ajustado: grid-cols-1 no mobile para evitar vãos, md:grid-cols-2 no desktop */}
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
           
           {/* Coluna 1 */}
@@ -64,7 +58,7 @@ export function FAQSection({ items }: FAQSectionProps) {
                     {item.question}
                   </AccordionTrigger>
                   <AccordionContent className="text-muted-foreground leading-relaxed">
-                  <div className="mb-2">{item.answer}</div>
+                    <div className="mb-2">{item.answer}</div>
                     {item.bullets && item.bullets.length > 0 && (
                       <div className="space-y-1 mt-2">
                         {item.bullets.map((bullet, idx) => (
@@ -94,7 +88,7 @@ export function FAQSection({ items }: FAQSectionProps) {
                     {item.question}
                   </AccordionTrigger>
                   <AccordionContent className="text-muted-foreground leading-relaxed">
-                  <div className="mb-2">{item.answer}</div>
+                    <div className="mb-2">{item.answer}</div>
                     {item.bullets && item.bullets.length > 0 && (
                       <div className="space-y-1 mt-2">
                         {item.bullets.map((bullet, idx) => (

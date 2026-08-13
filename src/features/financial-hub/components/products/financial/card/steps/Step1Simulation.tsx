@@ -19,7 +19,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, ExternalLink } from "lucide-react"; 
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { CardWizardData } from "../card.types";
@@ -54,6 +54,20 @@ function useLoadingMessages(isLoading: boolean) {
 
   return messages[index];
 }
+
+// =========================================================================
+// Link para oferta na plataforma sbX
+// =========================================================================
+const getSuperbidUrl = (offerData: any) => {
+  if (!offerData?.offer_id) return "#";
+  const slug = (offerData.offer_description || "")
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `https://www.superbid.net/oferta/${slug}-${offerData.offer_id}`;
+};
 
 export function Step1Simulation() {
   const [loading, setLoading] = useState(false);
@@ -135,7 +149,8 @@ export function Step1Simulation() {
           * [PROGRESSIVE DISCLOSURE]
           * Rationale: Renderização imediata do contexto síncrono (Dados da Oferta).
           */}
-        <div className="flex items-center gap-4">
+        {/* [CABEÇALHO COM LINK] */}
+        <div className="flex items-start gap-4">
           <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
             <img src="/assets/home/cartao.webp" alt="Cartão" className="w-full h-full object-contain" />
           </div>
@@ -144,12 +159,32 @@ export function Step1Simulation() {
             <h3 className="text-[clamp(14px,4vw,20px)] sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full block">
               Simulação de parcelamento*!
             </h3>
+            
             <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-slate-600 truncate pt-0.5 w-full block">
               {offerDescText}
             </p>
-            <p className="text-xs text-slate-600 truncate pt-0.5 w-full block">
-              Lote {loteSubIndex} • <strong className="text-slate-900 font-bold">{BRL(offerValue || 0)}</strong>
-            </p>
+
+
+            {/* LINHA DO LOTE E PREÇO COM LINK AO LADO */}
+            <div className="flex items-center pt-0.5">
+              <p className="text-sm text-slate-600 truncate"> 
+                {/* text-sm deixa a fonte um pouco maior e mais clara que o text-xs */}
+                Lote {loteSubIndex} • <strong className="text-slate-900 font-bold mr-2">{BRL(offerValue || 0)}</strong>
+              </p>
+              
+              {offer && (
+                <a 
+                  href={getSuperbidUrl(offer)} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  // Adicionei outline-none, focus:outline-none e focus:ring-0
+                  className="text-[#B300FF] hover:text-[#9300cc] transition-colors flex items-center outline-none focus:outline-none focus:ring-0" 
+                  title="Ver oferta original na Superbid"
+                >
+                  <ExternalLink size={18} />
+                </a>
+              )}
+            </div>
           </div>
         </div>
 

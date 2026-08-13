@@ -28,7 +28,7 @@ import { StepLayout } from "@/features/financial-hub/components/shared/StepLayou
 // Importações do Domínio de Seguros
 import { FinancialHubDataInjector } from "@/features/financial-hub/components/layout/FinancialHubDataInjector";
 import { HowItWorks } from "@/features/financial-hub/components/products/insurance/auto/HowItWorks";
-import { BaseWizardLayout } from "@/features/financial-hub/components/shared/BaseWizardLayout";
+import { BaseWizardLayout } from "@/features/financial-hub/components/layout/BaseWizardLayout";
 import { SeguroAutoManifest } from "@/features/financial-hub/components/products/insurance/auto/seguro-auto.manifest";
 
 // Importação do Contexto (O MESMO DA JORNADA QUE FUNCIONA)

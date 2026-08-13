@@ -21,7 +21,7 @@ import { StepLayout } from "@/features/financial-hub/components/shared/StepLayou
 import { WizardLayout } from "@/features/financial-hub/components/products/financial/veiculos/WizardLayout";
 import { HowItWorks } from "@/features/financial-hub/components/products/financial/veiculos/HowItWorks";
 import { FinancialHubDataInjector } from "@/features/financial-hub/components/layout/FinancialHubDataInjector";
-import { BaseWizardLayout } from "@/features/financial-hub/components/shared/BaseWizardLayout";
+import { BaseWizardLayout } from "@/features/financial-hub/components/layout/BaseWizardLayout";
 import { VeiculosManifest } from "@/features/financial-hub/components/products/financial/veiculos/veiculos.manifest";
 
 // Hook de Contexto (Nova Arquitetura de Dados)

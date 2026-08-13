@@ -19,7 +19,7 @@ import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
 import { ArrowLeft, ChevronDown, SlidersHorizontal, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { WalletLogo } from "@/components/brand/WalletLogo";
+import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHeader";
 
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { UserDataContext } from "./sbxpay.lazy";
@@ -200,7 +200,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
   const totalPages = Math.max(Math.ceil(totalElements / pageSize), 1);
 
-  const mainPaddingTop = isMobile && isCartao ? "pt-[132px]" : "pt-[84px]";
+  const mainPaddingTop = isMobile && isCartao ? "pt-[136px]" : "pt-[80px]";
 
   // Troca de ordenação/categoria: reseta lista e página no próprio handler
   const handleSortChange = (value: string) => {
@@ -355,9 +355,11 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         throw new Error("URL de redirecionamento ausente.");
       }
     } catch (error: any) {
-      if (error?.code === "SESSION_EXPIRED" || error?.status === 401) {
+      // ✨ Se a sessão expirou ou deu 401, limpa e manda direto para o signin preservando a URL atual
+      if (error?.code === "SESSION_EXPIRED" || error?.status === 401 || error?.code === 401) {
         clearSession();
-        navigate({ to: "/sbxpay" as any, replace: true });
+        const currentPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/sbxpay";
+        window.location.href = error?.fallback_url || `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
         return;
       }
       setSimulatingIndex(null);
@@ -387,14 +389,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   return (
     <div className="min-h-screen bg-slate-50 font-['Inter'] pb-20 relative">
 
-      {/* 1. HEADER FIXO */}
-      <header className="fixed top-0 left-0 w-full h-[60px] z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center px-6 shadow-xs">
-        <div className="max-w-7xl mx-auto w-full">
-          <a href="/sbxpay/" className="flex items-center outline-none border-none focus:outline-none focus:ring-0">
-            <WalletLogo size="md" withTagline />
-          </a>
-        </div>
-      </header>
+      {/* 1. HEADER */}
+      <PanelHeader showNav={false} showAuth={false} />
 
       {/* 2. BARRA FLUTUANTE MOBILE FIXA (Sempre visível) */}
       <div

@@ -57,7 +57,6 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
    * Remove apenas os tokens e metadados de sessão, mantendo 'sbx_env_pref' intacto.
    */
   const handleAmnesia = () => {
-    console.warn("🚨 [SECURITY] Sessão expirada. Protocolo de Amnésia ativado.");
     
     if (typeof window !== 'undefined') {
       clearSession(); // Utiliza o purgador centralizado do session.ts

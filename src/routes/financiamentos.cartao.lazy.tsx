@@ -37,7 +37,7 @@ import { StepLayout } from "@/features/financial-hub/components/shared/StepLayou
 // Domínio (Específico da jornada Cartão)
 import { FinancialHubDataInjector } from "@/features/financial-hub/components/layout/FinancialHubDataInjector";
 import { HowItWorks } from "@/features/financial-hub/components/products/financial/card/HowItWorks";
-import { BaseWizardLayout } from "@/features/financial-hub/components/shared/BaseWizardLayout";
+import { BaseWizardLayout } from "@/features/financial-hub/components/layout/BaseWizardLayout";
 import { CardManifest } from "@/features/financial-hub/components/products/financial/card/card.manifest";
 
 // Hook de Contexto (Nova Arquitetura de Dados)

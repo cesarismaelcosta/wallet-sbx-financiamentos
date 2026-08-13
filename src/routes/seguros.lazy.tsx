@@ -38,18 +38,26 @@ const SegurosGuard = () => {
 
     // 1. [BUSINESS LOGIC]: Bloqueio proativo de acesso não autenticado (Somente em DEV).
     if (!USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
+      
+      // ✨ FIX: Usa o window.location nativo para garantir que o search é uma string
+      // e não o objeto parseado pelo TanStack Router.
+      const currentPath = typeof window !== "undefined" 
+        ? window.location.pathname + window.location.search 
+        : "/seguros";
+
       navigate({ 
         to: '/accounts/signin',
         search: { 
-          redirect_uri: location.pathname + location.search,
+          redirect_uri: currentPath,
           env: undefined 
-        }
+        } as any // Correção de tipagem do TanStack
       });
       return;
     }
 
     // 2. [SECURITY]: Validação Passiva de Expiração (UX Guard)
-    if (sessionToken) {
+    // ✨ FIX: Trava que impede o React de jogar o erro 'Cannot convert object to primitive value'
+    if (sessionToken && typeof sessionToken === "string") {
       try {
         const decoded = jwtDecode<{ exp?: number }>(sessionToken);
         const timeDelta = getTimeDelta();

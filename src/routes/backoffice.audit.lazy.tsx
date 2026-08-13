@@ -395,8 +395,8 @@ function AuditoriaPage() {
                 <th className="px-3 py-2.5 w-[200px]">E-mail</th>
                 <th className="px-3 py-2.5 w-[140px]">Evento</th>
                 <th className="px-3 py-2.5 w-[120px]">Resultado</th>
-                <th className="px-3 py-2.5 w-[180px]">Origem</th>
-                <th className="px-3 py-2.5 w-[180px]">Contexto</th>
+                <th className="px-3 py-2.5">Origem</th>
+                <th className="px-3 py-2.5">Contexto</th>
                 <th className="px-3 py-2.5">Dispositivo</th>
               </tr>
             </thead>
@@ -434,16 +434,18 @@ function AuditoriaPage() {
                           <span className="text-destructive font-semibold">Falha</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 w-[180px] text-muted-foreground">
-                        <div className="text-foreground">{r.ip_address || "—"}</div>
-                        <div className="text-foreground font-medium">{r.city || "—"}</div>
-                        <div className="text-[11px] text-muted-foreground">
+                      <td className="px-3 py-2.5 text-muted-foreground">
+                        <div className="text-foreground whitespace-nowrap">{r.ip_address || "—"}</div>
+                        <div className="text-foreground font-medium whitespace-nowrap">{r.city || "—"}</div>
+                        <div className="text-[11px] text-muted-foreground whitespace-nowrap">
                           {[r.state, r.country].filter(Boolean).join(" · ") || "—"}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 w-[180px]">
-                        <div className="font-bold text-foreground">{r.origin_page || "—"}</div>
-                        <div className="text-muted-foreground">{r.origin_function || "—"}</div>
+                      <td className="px-3 py-2.5">
+                        <div className="font-bold text-foreground whitespace-nowrap">{r.origin_page || "—"}</div>
+                        <div className="text-muted-foreground truncate max-w-[160px] md:max-w-[250px]">
+                          {r.origin_function || "—"}
+                        </div>
                       </td>
                       <td className="px-3 py-2.5 text-muted-foreground">
                         {r.device_type || "—"} · {r.operating_system || "—"}

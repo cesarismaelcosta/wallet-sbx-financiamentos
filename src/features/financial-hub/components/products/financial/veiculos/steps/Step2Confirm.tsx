@@ -13,8 +13,22 @@
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { Button } from "@/components/ui/button";
 import { ButtonWhatsApp } from "@/features/financial-hub/components/layout/ButtonWhatsApp";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
+
+// =========================================================================
+// Link para oferta na plataforma sbX
+// =========================================================================
+const getSuperbidUrl = (offerData: any) => {
+  if (!offerData?.offer_id) return "#";
+  const slug = (offerData.offer_description || "")
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `https://www.superbid.net/oferta/${slug}-${offerData.offer_id}`;
+};
 
 export function Step2Confirm() {
   const { state, back } = useWizard<any>();
@@ -75,10 +89,24 @@ export function Step2Confirm() {
                   {offerDescText}
                 </p>
 
-                {/* Linha 2: Lote e valor com destaque */}
-                <p className="text-xs text-slate-600 truncate pt-0.5 w-full block">
-                  Lote {loteSubIndex} • <strong className="text-slate-900 font-bold">{BRL(valorVeiculo)}</strong>
-                </p>
+                {/* Linha 2: Lote e valor com destaque + Link Externo Padronizado */}
+                <div className="flex items-center pt-0.5">
+                  <p className="text-sm text-slate-600 truncate">
+                    Lote {loteSubIndex} • <strong className="text-slate-900 font-bold mr-2">{BRL(valorVeiculo)}</strong>
+                  </p>
+
+                  {offer && (
+                    <a 
+                      href={getSuperbidUrl(offer)} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-[#B300FF] hover:text-[#9300cc] transition-colors flex items-center outline-none focus:outline-none focus:ring-0"
+                      title="Ver oferta original na Superbid"
+                    >
+                      <ExternalLink size={18} />
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
 

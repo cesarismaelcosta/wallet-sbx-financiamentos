@@ -28,6 +28,7 @@ import {
   Settings,
 } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
+import { PanelHeader, HeaderLink } from "@/features/financial-hub/components/layout/PanelHeader";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload } from "@/services/session"; // 👈 Resolução segura de ambiente, flag híbrida e encapsulamento de token
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
@@ -111,6 +112,16 @@ const flowsConfig: Record<string, FlowConfig> = {
   },
 };
 
+const homeLinks: HeaderLink[] = [
+  { href: "seguranca", label: "Segurança" },
+  { href: "cartao", label: "Cartão" },
+  { href: "veiculos", label: "Veículos" },
+  { href: "imoveis", label: "Imóveis" },
+  { href: "investidores", label: "Investidores" },
+  { href: "floorplan", label: "Floor Plan" },
+  { href: "seguros", label: "Seguros" },
+];
+
 // =========================================================================
 // [COMPONENTE PRINCIPAL]: Home do Financial Hub sbXPAY
 // =========================================================================
@@ -119,10 +130,16 @@ export function sbXPAYHome() {
   const { sessionToken, logout } = useFinancialAuth();
   const { userData } = useContext(UserDataContext) || {};
 
+  // 1️⃣ TODOS OS HOOKS NO TOPO (Ordem sempre fixa e garantida)
+  const [isMounted, setIsMounted] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // 🛡️ [UX FIX]: Reseta os loadings caso o usuário volte pelo histórico do navegador (bfcache)
   useEffect(() => {
@@ -168,7 +185,6 @@ export function sbXPAYHome() {
 
     const config = flowsConfig[configKey];
     if (!config) {
-      console.error(`🚨 Erro Crítico: A chave "${String(configKey)}" não existe no flowsConfig!`);
       setLoading(false);
       setActiveKey(null);
       return;
@@ -198,11 +214,6 @@ export function sbXPAYHome() {
 
         const consultResponse = await callOrchestrator(payload, "POST");
 
-        if (consultResponse && !consultResponse.success && consultResponse.code === "SESSION_EXPIRED" && consultResponse.fallback_url) {
-          window.location.href = consultResponse.fallback_url;
-          return;
-        }
-
         if (consultResponse?.url) {
           performNavigation(consultResponse.url); 
           return;
@@ -227,11 +238,6 @@ export function sbXPAYHome() {
 
       const visitResponse = await callOrchestrator(visitPayload, "POST");
 
-      if (visitResponse && !visitResponse.success && visitResponse.code === "SESSION_EXPIRED" && visitResponse.fallback_url) {
-        window.location.href = visitResponse.fallback_url;
-        return;
-      }
-
       if (visitResponse?.url) {
         const targetUrlObj = new URL(visitResponse.url, window.location.origin);
         targetUrlObj.searchParams.set("flow", config.flowKey);
@@ -244,7 +250,12 @@ export function sbXPAYHome() {
         throw new Error("URL de visita ausente na resposta do orquestrador.");
       }
     } catch (error) {
-      console.error("🚨 [HANDLE_PRODUCT_CLICK] Erro no roteamento:", error);
+      // Se o erro lançado pelo orquestrador for por sessão expirada, redireciona agora!
+      if (error && error.code === "SESSION_EXPIRED" && error.fallback_url) {
+        window.location.href = error.fallback_url;
+        return;
+      }
+
       setLoading(false);
       setActiveKey(null);
     } finally {
@@ -303,100 +314,15 @@ export function sbXPAYHome() {
                 .blob-shadow { filter: drop-shadow(0 20px 30px rgba(15, 23, 42, 0.05)); }
             `}</style>
 
-      {/* HEADER ATUAL */}
-      <header
-        className={`fixed top-0 left-0 w-full z-50 glass border-b border-gray-100 transition-all duration-300 ${isScrolled ? "shadow-sm py-2" : "py-3"}`}
-      >
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-          <a href="#" className="flex items-center outline-none border-none focus:outline-none focus:ring-0">
-            <WalletLogo size="md" withTagline />
-          </a>
-
-          <nav className="hidden md:flex items-center space-x-1 text-[13px] font-semibold text-slate-600">
-            <a
-              href="#seguranca"
-              className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all"
-            >
-              Segurança
-            </a>
-            <a
-              href="#cartao"
-              className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all"
-            >
-              Cartão
-            </a>
-            <a
-              href="#veiculos"
-              className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all"
-            >
-              Veículos
-            </a>
-            <a
-              href="#imoveis"
-              className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all"
-            >
-              Imóveis
-            </a>
-            <a
-              href="#investidores"
-              className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all"
-            >
-              Investidores
-            </a>
-            <a
-              href="#floorplan"
-              className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all"
-            >
-              Floor Plan
-            </a>
-            <a
-              href="#seguros"
-              className="px-4 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 focus:bg-purple-50 focus:text-purple-600 transition-all"
-            >
-              Seguros
-            </a>
-          </nav>
-
-          <div className="hidden md:flex items-center space-x-3">
-            {sessionToken ? (
-              <button onClick={() => logout({ purgeEnv: true })} className={`flex items-center gap-2 ${ghostBtn}`}>
-                Sair <LogOut className="w-3 h-3" />
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate({ 
-                  to: "/accounts/signin", 
-                  search: { 
-                    redirect_uri: window.location.pathname + window.location.search,
-                    env: undefined 
-                  } as any 
-                })}
-                className={`flex items-center gap-2 ${ghostBtn}`}
-              >
-                Entrar <LogIn className="w-3 h-3" />
-              </button>
-            )}
-            <div className="flex flex-col space-y-1">
-              <a
-                href="/backoffice"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-2 py-0.5 rounded-md outline-none focus:outline-none hover:bg-purple-50 focus:bg-purple-50 text-[11px] font-bold text-purple-600 transition-colors"
-              >
-                backoffice
-              </a>
-              <a
-                href="/sandbox"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-2 py-0.5 rounded-md outline-none focus:outline-none hover:bg-purple-50 focus:bg-purple-50 text-[11px] font-bold text-purple-600 transition-colors"
-              >
-                sandbox
-              </a>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* HEADER */}
+      <PanelHeader 
+        showNav={true} 
+        showAuth={true} 
+        links={homeLinks}
+        sessionToken={isMounted ? sessionToken : undefined} 
+        onLogout={() => logout({ purgeEnv: true })}
+        onNavigate={(path) => navigate({ to: path as any })}
+      />
 
       {/* HERO SECTION - Segurança */}
       <section
@@ -1024,7 +950,7 @@ export function sbXPAYHome() {
           <span className="text-[10px] font-medium">Backoffice</span>
         </a>
 
-        {sessionToken ? (
+        {isMounted && sessionToken ? (
           <button
             onClick={() => logout()}
             className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[60px] gap-1"

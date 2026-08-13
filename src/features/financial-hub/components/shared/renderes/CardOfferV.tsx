@@ -220,7 +220,14 @@ export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: Ca
           <span className="absolute bottom-2 left-2 bg-black/75 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md z-10 shadow">
             Lote #{offerData.lot_number || offerData.offer_id}
           </span>
-          
+
+          {/* 🏷️ Tag de Simulação embaixo à direita, alinhada com o Lote */}
+          {item.is_simulated && (
+            <span className="absolute bottom-2 right-2 bg-white text-slate-900 text-[10px] font-normal px-2.5 py-0.5 rounded-md z-10 shadow lowercase">
+              com simulação
+            </span>
+          )}
+
           {!hasError && sortedPhotos.length > 1 && (
             <>
               <button onClick={handlePrevPhoto} className="absolute left-1.5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 backdrop-blur-xs text-white p-1.5 rounded-full transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20">
@@ -306,7 +313,7 @@ export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: Ca
               <span>Aguarde...</span>
             </div>
           ) : (
-            isCartao ? "Simular parcelamento" : "Simular financiamento"
+            item.is_simulated ? "Refazer Simulação" : (isCartao ? "Simular parcelamento" : "Simular financiamento")
           )}
         </Button>
       </div>

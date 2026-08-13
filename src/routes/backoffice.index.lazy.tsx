@@ -19,6 +19,7 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, lazy, Suspense } from "react";
 import { DateRange } from "react-day-picker";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Ícones UI
 import {
@@ -147,7 +148,8 @@ function ChartsSkeleton() {
 // COMPONENTE PRINCIPAL
 // ===========================================================================
 function DashboardPage() {
-  const { backofficeUser } = useAuth(); // 👈 Adicionado aqui
+  const { backofficeUser } = useAuth(); 
+  const isMobile = useIsMobile();
   
   const [simKpis, setSimKpis] = useState<SimKpis | null>(null);
   const [visitKpis, setVisitKpis] = useState<VisitKpis | null>(null);
@@ -599,7 +601,7 @@ function DashboardPage() {
           <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:gap-2">
             
             {/* Filtro de Período */}
-            <Popover>
+            <Popover modal={isMobile}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
                   <span className="flex items-center gap-2 truncate">
@@ -611,7 +613,11 @@ function DashboardPage() {
               </PopoverTrigger>
               <PopoverContent className="w-[calc(100vw-2rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                 <Command className="bg-transparent">
-                  <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                  <CommandList 
+                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                  >
                     <CommandGroup>
                       <CommandItem onSelect={() => setDateRange("7")} className="text-[#d946ef] cursor-pointer">Últimos 7 dias</CommandItem>
                       <CommandItem onSelect={() => setDateRange("15")} className="text-[#d946ef] cursor-pointer">Últimos 15 dias</CommandItem>
@@ -644,7 +650,7 @@ function DashboardPage() {
             </Popover>
 
             {/* Filtro de Parceiro (Múltipla Escolha) */}
-            <Popover>
+            <Popover modal={isMobile}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
                   <span className="truncate">{selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}</span>
@@ -653,7 +659,11 @@ function DashboardPage() {
               </PopoverTrigger>
               <PopoverContent className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                 <Command className="bg-transparent">
-                  <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                  <CommandList 
+                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                  >
                     <CommandGroup>
                       <CommandItem onSelect={() => setSelectedPartners([])} className="text-[#d946ef] cursor-pointer">
                         <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
@@ -689,7 +699,7 @@ function DashboardPage() {
             </Popover>
 
             {/* Filtro de Produto (Múltipla Escolha) */}
-            <Popover>
+            <Popover modal={isMobile}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
                   <span className="truncate">{selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}</span>
@@ -698,7 +708,11 @@ function DashboardPage() {
               </PopoverTrigger>
               <PopoverContent className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                 <Command className="bg-transparent">
-                  <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                  <CommandList 
+                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                  >
                     <CommandGroup>
                       <CommandItem onSelect={() => setSelectedProducts([])} className="text-[#d946ef] cursor-pointer">
                         <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
@@ -858,7 +872,7 @@ function DashboardPage() {
             {/* Período Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
                     <span className="flex items-center gap-2 truncate">
@@ -870,7 +884,11 @@ function DashboardPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setDateRange("7")} className="text-[#d946ef] cursor-pointer">Últimos 7 dias</CommandItem>
                         <CommandItem onSelect={() => setDateRange("15")} className="text-[#d946ef] cursor-pointer">Últimos 15 dias</CommandItem>
@@ -906,7 +924,7 @@ function DashboardPage() {
             {/* Parceiro Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Parceiro</span>
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
                     <span className="truncate">{selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}</span>
@@ -915,7 +933,11 @@ function DashboardPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedPartners([])} className="text-[#d946ef] cursor-pointer">
                           <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
@@ -954,7 +976,7 @@ function DashboardPage() {
             {/* Produto Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Produto</span>
-              <Popover>
+              <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
                     <span className="truncate">{selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}</span>
@@ -963,7 +985,11 @@ function DashboardPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain" onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList 
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
+                    >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedProducts([])} className="text-[#d946ef] cursor-pointer">
                           <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>

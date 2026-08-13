@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Loader2, ThumbsUp } from "lucide-react";
+import { Loader2, ThumbsUp, ExternalLink } from "lucide-react";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { DynamicConsents } from "@/features/financial-hub/components/layout/DynamicConsents";
 import { SliderCustomizado } from "@/features/financial-hub/components/shared/SliderCustomizado";
@@ -18,6 +18,20 @@ import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { callOrchestrator, callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { SimulacaoWizardData } from "../simulacao.types";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
+
+// =========================================================================
+// Link para oferta na plataforma sbX
+// =========================================================================
+const getSuperbidUrl = (offerData: any) => {
+  if (!offerData?.offer_id) return "#";
+  const slug = (offerData.offer_description || "")
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `https://www.superbid.net/oferta/${slug}-${offerData.offer_id}`;
+};
 
 export function Step1Simulation() {
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
@@ -124,10 +138,24 @@ export function Step1Simulation() {
             {offerDescText}
           </p>
 
-          {/* Linha 2: Lote e valor com destaque */}
-          <p className="text-xs text-slate-600 truncate pt-0.5 w-full block">
-            Lote {loteSubIndex} • <strong className="text-slate-900 font-bold">{BRL(localValorOferta)}</strong>
-          </p>
+          {/* Linha 2: Substituiu apenas o <p> original por esta div com o link */}
+          <div className="flex items-center pt-0.5">
+            <p className="text-sm text-slate-600 truncate">
+              Lote {loteSubIndex} • <strong className="text-slate-900 font-bold mr-2">{BRL(localValorOferta)}</strong>
+            </p>
+
+            {offer && (
+              <a 
+                href={getSuperbidUrl(offer)} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-[#B300FF] hover:text-[#9300cc] transition-colors flex items-center outline-none focus:outline-none focus:ring-0"
+                title="Ver oferta original na Superbid"
+              >
+                <ExternalLink size={18} />
+              </a>
+            )}
+          </div>
         </div>
       </div>
 

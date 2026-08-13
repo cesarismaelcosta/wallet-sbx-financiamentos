@@ -1,18 +1,20 @@
 /**
- * @fileoverview Componente: Footer
- * @path src/components/common/Footer.tsx
- * * ESTRUTURA DO PROJETO:
- * --------------------------------------------------------------------------------
- * src/
- * ├── components/
- * │   └── common/
- * │       └── Footer.tsx        # [AQUI] Rodapé global da aplicação
- * └── ...
- * --------------------------------------------------------------------------------
- * * PROPÓSITO:
- * Componente de rodapé padrão para a aplicação, exibindo textos legais (disclaimers) 
- * e direitos autorais. Tudo é customizável através da injeção de configurações (JSON).
- * Suporta transformação de palavras específicas em links (ex: {Minha Empresa}).
+ * @fileoverview Componente: PanelFooter
+ * @path src/features/financial-hub/components/layout/PanelFooter.tsx
+ * 
+ * =========================================================================
+ * [DOCUMENTAÇÃO DO COMPONENTE]
+ * =========================================================================
+ * @description Rodapé global da aplicação customizável através de injeção de 
+ * configurações (JSON). Suporta a transformação dinâmica de termos entre chaves 
+ * em links externos protegidos.
+ * 
+ * @responsibilities
+ * 1. Renderização Segura: Valida a existência do texto base antes da renderização.
+ * 2. Motor de Parsing Textual: Converte marcações `{Empresa}` em hiperlinks funcionais.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import React from "react";
@@ -27,27 +29,26 @@ export interface FooterConfig {
   links?: FooterLink[];
 }
 
-interface FooterProps {
+interface PanelFooterProps {
   config?: FooterConfig;
 }
 
-export function Footer({ config }: FooterProps) {
-  // Se não vier configuração (ex: a API falhou ou não carregou), não quebra a tela.
+export function PanelFooter({ config }: PanelFooterProps) {
+  // Fail-fast se não houver configuração
   if (!config?.template_text) return null;
 
-  // Garantimos que links seja pelo menos um array vazio, evitando erros caso o JSON venha sem ele
   const { template_text, links = [] } = config;
 
-  // Motor de renderização: transforma textos entre {chaves} em links clicáveis
+  /**
+   * @function renderText
+   * @description Processa o texto com regex para identificar chaves e injetar links de forma segura.
+   */
   const renderText = () => {
-    // Separa o texto normal do texto que está entre chaves
     const parts = template_text.split(/\{([^}]+)\}/g);
 
     return parts.map((part, index) => {
-      // Procura se o trecho atual tem uma URL correspondente no array
       const linkMatch = links.find((l) => l.text === part);
 
-      // Se encontrou no array de links, renderiza a tag <a>
       if (linkMatch) {
         return (
           <a
@@ -62,7 +63,6 @@ export function Footer({ config }: FooterProps) {
         );
       }
 
-      // Se não encontrou, ou se o array de links estiver vazio ([]), renderiza o texto normal
       return <React.Fragment key={index}>{part}</React.Fragment>;
     });
   };

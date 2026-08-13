@@ -1,21 +1,30 @@
 /**
  * @fileoverview Componente: FinancialHubLayout
- *
- * Esqueleto mestre e injetor de dados das jornadas financeiras. Ele é o responsável por:
- * 1. Envolver as rotas filhas com o OrchestratorWrapper, garantindo que os dados da API sejam injetados corretamente.
- * 2. Gerenciar o estado global de "hidratação" (isOrchestratorHydrating) para controlar a exibição do loader (cortina).
- * 3. Tratar e exibir erros contextuais (ex: Sessão Expirada) vindos da API de forma amigável.
- *
- * --------------------------------------------------------------------------------
+ * @path src/features/financial-hub/components/layout/FinancialHubLayout.tsx
+ * 
+ * =========================================================================
+ * [DOCUMENTAÇÃO DO COMPONENTE]
+ * =========================================================================
+ * @description Esqueleto mestre e injetor de dados das jornadas financeiras. 
+ * Responsável por gerenciar a hidratação do Orquestrador, injetar o contexto 
+ * global, tratar erros críticos de sessão e orquestrar a exibição dos Skeletons
+ * estruturais durante o carregamento inicial.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import React, { useState, useEffect } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { OrchestratorWrapper } from "@/features/financial-hub/components/shared/OrchestratorWrapper";
-import { SiteHeader } from "./SiteHeader";
-import { FAQSection } from "./FAQSection";
-import { Footer } from "./Footer";
+import { PanelHeader } from "./PanelHeader";
+import { PanelFAQ } from "./PanelFAQ";
+import { PanelFooter } from "./PanelFooter";
+import { PanelProductOfferSkeleton } from "./PanelProductOfferSkeleton";
+import { PanelStepSkeleton } from "./PanelStepSkeleton";
+import { PanelFAQSkeleton } from "./PanelFAQSkeleton";
+import { PanelFooterSkeleton } from "./PanelFooterSkeleton";
 import { FinancialHubContext } from "@/features/financial-hub/core/contexts/FinancialHubContext";
 
 interface FinancialHubLayoutProps {
@@ -24,7 +33,7 @@ interface FinancialHubLayoutProps {
 
 /**
  * @component ErrorCountdown
- * @description Componente interno de fallback para erros críticos da jornada (ex: 401, 403, 404).
+ * @description Componente interno de fallback para erros críticos da jornada (401, 403, 404).
  */
 function ErrorCountdown({ fallbackUrl, message, title }: { fallbackUrl: string; message?: string; title?: string }) {
   const [countdown, setCountdown] = useState(5);
@@ -49,7 +58,7 @@ function ErrorCountdown({ fallbackUrl, message, title }: { fallbackUrl: string; 
       <p className="text-slate-400 font-medium text-xs mt-4 mb-6">Retornando em {countdown}s...</p>
       <button
         onClick={() => (window.location.href = fallbackUrl)}
-        className="flex items-center text-[#B400FF] font-semibold text-sm hover:opacity-80 transition-opacity"
+        className="flex items-center text-[#B400FF] font-semibold text-sm hover:opacity-80 transition-opacity cursor-pointer"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
         Retornar agora
@@ -90,13 +99,7 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
   return (
     <OrchestratorWrapper visitId={search.visit_id ?? ""} visitUpdateId={search.visit_update_id}>
       {(simData) => {
-        // =========================================================================
-        // TRATAMENTO DE TARGET_URL VIA USEEFFECT (Correção do SSR para evitar quebrar o Node)
-        // =========================================================================
-        // O window.location.replace foi movido para cá de forma segura:
-        // Se a API mandar target_url, o efeito roda apenas no browser e redireciona sem crashar o SSR.
-        // =========================================================================
-        // eslint-disable-next-line react-hooks/rules-of-hooks
+        // Redirecionamento seguro de target_url
         useEffect(() => {
           if (simData?.target_url && typeof window !== "undefined") {
             const currentPath = window.location.pathname.replace(/\/$/, "");
@@ -113,23 +116,7 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
           }
         }, [simData?.target_url]);
 
-        // Se estiver redirecionando, retorna nulo momentaneamente para evitar flicker
-        if (simData?.target_url && typeof window !== "undefined") {
-          const currentPath = window.location.pathname.replace(/\/$/, "");
-          let intendedPath = "";
-          try {
-            intendedPath = new URL(simData.target_url).pathname.replace(/\/$/, "");
-          } catch (e) {
-            intendedPath = simData.target_url.split("?")[0].replace(/\/$/, "");
-          }
-          if (currentPath !== intendedPath && intendedPath !== "") {
-            return null;
-          }
-        }
-
-        // =========================================================================
-        // PRIORIDADE: Se houver erro de runtime, mostra o countdown
-        // =========================================================================
+        // Tratamento de Erros de Runtime
         if (runtimeError) {
           let uiTitle = "Ops! Tivemos um problema";
           if (runtimeError.code === "SESSION_EXPIRED") uiTitle = "Sessão Expirada";
@@ -145,9 +132,7 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
           );
         }
 
-        // =========================================================================
-        // TRATAMENTO DE ERROS (API retornou success: false)
-        // =========================================================================
+        // Tratamento de Erros da API
         if (simData?.success === false) {
           let uiTitle = "Ops! Tivemos um problema";
           if (simData.code === "SESSION_EXPIRED") uiTitle = "Sessão Expirada";
@@ -157,9 +142,6 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
           return <ErrorCountdown title={uiTitle} message={simData.message} fallbackUrl={simData.fallback_url || "/"} />;
         }
 
-        // =========================================================================
-        // INJEÇÃO DE CONTEXTO (Sucesso Absoluto)
-        // =========================================================================
         const contextPayload = {
           ...simData,
           setIsOrchestratorHydrating,
@@ -168,36 +150,40 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
         return (
           <FinancialHubContext.Provider value={contextPayload}>
             <div className="min-h-screen bg-white text-foreground transition-colors duration-300 relative flex flex-col">
-              <SiteHeader />
+              {/* Header Padronizado Estático (64px) */}
+              <PanelHeader />
 
-              {/* 1. CORTINA VISUAL (LOADER GLOBAL) */}
+              {/* =========================================================================
+                * SKELETONS ESTRUTURAIS DE HIDRATAÇÃO (Substitui o spinner antigo)
+                * ========================================================================= */}
               {isOrchestratorHydrating && (
-                <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-                  <p className="text-slate-500 font-medium text-sm">Preparando sua simulação...</p>
-                </div>
+                <>
+                  <main className="flex-1 w-full flex flex-col pt-16">
+                    <div className="max-w-7xl mx-auto px-6 py-12 w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+                      <PanelProductOfferSkeleton />
+                      <PanelStepSkeleton />
+                    </div>
+                  </main>
+                  <PanelFAQSkeleton />
+                  <PanelFooterSkeleton />
+                </>
               )}
 
-              {/* 2. RENDERIZAÇÃO OCULTA (DOM Anti-Flicker) */}
-              {/* 
-                * [LAYOUT ARCHITECTURE]: Padding-top de compensação (pt-20).
-                * Como o SiteHeader utiliza 'fixed', o conteúdo principal é jogado para o topo.
-                * Este padding garante o offset necessário para manter o conteúdo 
-                * fora da zona de colisão do cabeçalho, mantendo o scroll fluido.
-                */}
+              {/* =========================================================================
+                * CONTEÚDO REAL DA APLICAÇÃO (Exibido após a hidratação)
+                * ========================================================================= */}
               <main
-                className={`flex-1 w-full flex flex-col transition-opacity duration-500 pt-20 ${
+                className={`flex-1 w-full flex flex-col transition-opacity duration-500 pt-16 ${
                   isOrchestratorHydrating ? "opacity-0 pointer-events-none h-0 overflow-hidden" : "opacity-100"
                 }`}
               >
                 {children}
               </main>
 
-              {/* 3. FOOTER E FAQS */}
               {!isOrchestratorHydrating && (
                 <>
-                  <FAQSection items={simData?.page_faqs} />
-                  <Footer config={simData?.page_configs?.footer} />
+                  <PanelFAQ items={simData?.page_faqs} />
+                  <PanelFooter config={simData?.page_configs?.footer} />
                 </>
               )}
             </div>

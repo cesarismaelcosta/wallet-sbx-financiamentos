@@ -32,6 +32,7 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateRequest } from "../_shared/auth.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
@@ -96,6 +97,15 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
     };
   }
 
+  // =========================================================================
+  // ✨ INSTANCIAÇÃO DO CLIENTE SUPABASE (Escopo Global da Edge Function)
+  // =========================================================================
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false } }
+  );
+  
   // =========================================================================
   // FASE 2: PARSE DO REQUEST & APLICAÇÃO DE FALLBACKS (PRODUTO)
   // =========================================================================
@@ -228,10 +238,55 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
     
     debugLog(`[DEBUG] ✨ Sucesso Upstream! Total elements: ${totalCount} | Ofertas retornadas: ${rawOffers.length}`);
 
+// =========================================================================
+    // FASE 5: ENRIQUECIMENTO DE SIMULAÇÕES DO CLIENTE (Esquema DDL Correto)
     // =========================================================================
-    // FASE 5: NORMALIZAÇÃO DE DADOS (Payload Idêntico ao de sbx-offer)
+    const offerIds = rawOffers.map((o: any) => String(o.id));
+    const simulatedMap = new Map();
+
+    if (offerIds.length > 0 && auth?.user_id) {
+      try {
+        const { data: userSims, error: simError } = await supabase
+          .from("simulations")
+          .select(`
+            id,
+            product_id,
+            entity_id,
+            simulation_offers!inner (
+              offer_id
+            )
+          `)
+          .eq("entity_id", auth.user_id)
+          .eq("product_id", Number(productId))
+          .in("simulation_offers.offer_id", offerIds);
+
+        if (simError) {
+          debugLog(`[ERROR] Erro na query do Supabase: ${JSON.stringify(simError)}`);
+        } else if (userSims) {
+          userSims.forEach((sim: any) => {
+            const offers = Array.isArray(sim.simulation_offers) 
+              ? sim.simulation_offers 
+              : [sim.simulation_offers];
+              
+            offers.forEach((so: any) => {
+              if (so?.offer_id) {
+                simulatedMap.set(String(so.offer_id), sim.id);
+              }
+            });
+          });
+        }
+      } catch (e) {
+        debugLog("[WARNING] Erro ao buscar simulações no banco:", e);
+      }
+    }
+    
+    // =========================================================================
+    // FASE 6: NORMALIZAÇÃO DE DADOS (Payload Idêntico ao de sbx-offer)
     // =========================================================================
     const normalizedOffers = rawOffers.map((rawOffer: any) => {
+      const offerIdStr = String(rawOffer.id);
+      const simulationId = simulatedMap.get(offerIdStr) || null;
+      const isSimulated = !!simulationId;
       const productTypeId = rawOffer.product?.productType?.id;
       const isVehicleCategory = [10, 11].includes(productTypeId);
       let vehicleData: any | undefined;
@@ -306,14 +361,14 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
             trade_name: rawOffer.seller?.company?.[0]?.fantasyName || "N/A",
             economic_group: rawOffer.seller?.company?.[0]?.fantasyName || "N/A"
           },
-          rawOffer: rawOffer,
-          rawEvento: eventData
+          is_simulated: isSimulated,         // 👈 Informações da simulação
+          simulation_id: simulationId        // 👈 Informações da simulação
         }
       };
     });
 
     // =========================================================================
-    // FASE 6: CONTRATO DE RESPOSTA BFF (Padrão Unificado com withSecurity)
+    // FASE 7: CONTRATO DE RESPOSTA BFF (Padrão Unificado com withSecurity)
     // =========================================================================
     return {
       status: 200,

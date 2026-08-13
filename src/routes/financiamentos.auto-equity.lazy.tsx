@@ -34,7 +34,7 @@ import React from "react";
 import { FinancialHubDataInjector } from "@/features/financial-hub/components/layout/FinancialHubDataInjector";
 
 // Domínio (Específico da jornada Auto-Equity)
-import { BaseWizardLayout } from "@/features/financial-hub/components/shared/BaseWizardLayout";
+import { BaseWizardLayout } from "@/features/financial-hub/components/layout/BaseWizardLayout";
 import { HowItWorks } from "@/features/financial-hub/components/products/credit/auto-equity/HowItWorks";
 import { AutoEquityManifest } from "@/features/financial-hub/components/products/credit/auto-equity/auto-equity.manifest";
 import { WizardProvider } from "@/features/financial-hub/components/shared/WizardProvider";

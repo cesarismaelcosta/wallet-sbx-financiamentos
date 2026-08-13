@@ -12,9 +12,9 @@
  */
 
 import { cn } from "@/lib/utils";
-import { OfferPanel } from "./OfferPanel";
-import { WizardEngine } from "./WizardEngine";
-import { useWizard } from "./WizardProvider";
+import { PanelProductOffer } from "@/features/financial-hub/components/layout/PanelProductOffer";
+import { WizardEngine } from "@/features/financial-hub/components/shared/WizardEngine";
+import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 
 interface BaseWizardLayoutProps {
   manifest: any; 
@@ -55,7 +55,7 @@ export function BaseWizardLayout({ manifest, className }: BaseWizardLayoutProps)
         'sticky' mantém o argumento de venda visível durante o preenchimento.
       */}
       <aside className="sticky top-8 p-8 lg:p-10 border-b lg:border-b-0 border-r border-slate-100 bg-white min-h-[50vh]">
-        <OfferPanel config={pageConfigs} />
+        <PanelProductOffer config={pageConfigs} />
       </aside>
 
       {/* Área principal: Motor de passos

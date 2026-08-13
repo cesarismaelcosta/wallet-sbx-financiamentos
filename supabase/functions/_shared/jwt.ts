@@ -78,7 +78,7 @@ export async function generateSessionToken(
   environment: string,
   expiresInSeconds: number = 21600
 ): Promise<SessionData> {
-  
+
   // O payload interno sela a identidade e o ambiente.
   // Qualquer tentativa de mudar o environment no Client invalidará a assinatura.
   const internalPayload = { 
@@ -114,6 +114,10 @@ export async function verifySessionToken(
   try {
     const { payload } = await jwtVerify(token, getJwtSecret());
     
+    // DEBUG: Vamos ver o que o JWT diz sobre a vida dele
+    const now = Math.floor(Date.now() / 1000);
+    debugLog(`[DEBUG] Token Verificado | exp: ${payload.exp} | agora: ${now} | expira em: ${Number(payload.exp) - now}s`);
+
     // Assegura a tipagem estrita do ambiente extraído da memória criptografada
     const safeEnv = payload.environment === "production" ? "production" : "staging";
 
