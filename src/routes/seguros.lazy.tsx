@@ -24,10 +24,10 @@
 import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
 import { FinancialHubLayout } from "@/features/financial-hub/components/layout/FinancialHubLayout";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { useEffect, useState, useRef } from "react";
+import { useEffect } from "react";
 import { jwtDecode } from "jwt-decode"; 
 import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session"; 
-import { redeemHandoffSession } from "@/services/exchange";
+import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoffRedeem";
 
 /**
  * SegurosGuard
@@ -36,7 +36,7 @@ import { redeemHandoffSession } from "@/services/exchange";
  */
 const SegurosGuard = () => {
   // [ARQUITETURA]: sessionToken do contexto global
-  const { sessionToken: contextToken, isLoading } = useFinancialAuth();
+  const { sessionToken: contextToken, isLoading, refreshSession } = useFinancialAuth();
   
   // 🔑 [SECURITY GATE]: Resgate encapsulado e seguro utilizando getTokenForPayload com proteção contra SSR
   const sessionToken = contextToken || getTokenForPayload();
@@ -44,39 +44,19 @@ const SegurosGuard = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Alocação de estados de controle de fluxo de handoff
-  const [isExchanging, setIsExchanging] = useState(false);
-  const handoffAttempted = useRef(false);
+  // Sniper Tático isolado no hook unificado (sem reload)
+  const { isExchanging } = useHandoffRedeem(() => {
+    if (refreshSession) refreshSession();
+  });
 
   useEffect(() => {
-    // 0. Ignora validações enquanto o estado inicial está hidratando
-    if (isLoading) return;
-
-    // =========================================================================
-    // 🎯 [STEP 0]: INTERCEPTAÇÃO STATELESS (O SNIPER TÁTICO)
-    // =========================================================================
-    const hash = window.location.hash;
-    if ((hash.includes("xt=") || hash.includes("exchange_token=")) && !handoffAttempted.current) {
-      handoffAttempted.current = true;
-      setIsExchanging(true);
-
-      redeemHandoffSession().then((res) => {
-        if (res.ok && res.session_token) {
-          console.log("[SegurosGuard] Token e ambiente resgatados com sucesso via Handoff.");
-          window.location.hash = "";
-          window.location.reload(); 
-        } else {
-          console.error("[SegurosGuard] Falha no resgate, seguindo para signin.");
-          setIsExchanging(false);
-        }
-      });
-      return; 
-    }
+    // 0. Ignora validações enquanto o estado inicial está hidratando ou trocando o token
+    if (isLoading || isExchanging) return;
 
     // =========================================================================
     // 🛡️ [STEP 1]: ZERO-TRUST GUARD & REDIRECIONAMENTO PROATIVO
     // =========================================================================
-    if (!isExchanging && !USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
+    if (!USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
       
       // ✨ FIX: Usa o window.location nativo para garantir que o search é uma string
       // e não o objeto parseado pelo TanStack Router.
