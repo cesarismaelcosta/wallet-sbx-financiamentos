@@ -16,7 +16,7 @@
  *    se a rota exige autenticação por sessão de usuário (`requiresSession`) ou 
  *    segredo server-to-server (`requiresSecret`), bloqueando acessos anônimos (`401`).
  * 4. Retrocompatibilidade de Resposta: Aceita tanto instâncias nativas de `Response` 
- *    quanto o padrão unificado de objetos `{ status, data }`.
+ *    quanto o padrão unificado de objetos `{ status, data, headers }`.
  * 5. Fail-Safe Global: Captura exceções não tratadas na regra de negócio, garantindo
  *    resposta JSON padronizada sem vazamento de stack trace.
  */
@@ -29,6 +29,7 @@ export interface StandardResponse {
   status: number;
   data?: any;
   error?: string;
+  headers?: Record<string, string>;
 }
 
 /**
@@ -80,7 +81,7 @@ export const withSecurity = (
     // -----------------------------------------------------------------------
     // [PASSO 2]: Montagem Dinâmica de Políticas CORS e Origem
     // -----------------------------------------------------------------------
-    const defaultHeaders = ["authorization", "x-client-info", "apikey", "content-type", "x-session-token", "x-access-token"];
+    const defaultHeaders = ["authorization", "x-client-info", "apikey", "content-type", "x-session-token", "x-access-token", "x-exchange-token", "x-sbx-env"];
     const allAllowedHeaders = [...new Set([...defaultHeaders, ...config.requiredHeaders])].join(", ");
     
     const reqOrigin = req.headers.get("Origin") || req.headers.get("Referer") || "";
@@ -182,7 +183,7 @@ export const withSecurity = (
         JSON.stringify(result.data || { error: result.error }), 
         {
           status: result.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
+          headers: { ...corsHeaders, "Content-Type": "application/json", ...(result.headers || {}) }
         }
       );
 

@@ -158,6 +158,11 @@ const autenticarAccountsSBX = async (username: string, password: string, environ
   };
 };
 
+/**
+ * =========================================================================
+ * [LOGIN DO SANDBOX EM DOIS SALTOS — MESMO CONTRATO DO HANDOFF]
+ * =========================================================================
+ */
 const trocarTokenNaEdgeFunction = async (rawTokenPayload: any, environment: "staging" | "production") => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -167,24 +172,47 @@ const trocarTokenNaEdgeFunction = async (rawTokenPayload: any, environment: "sta
     throw new Error("BAD_REQUEST: Access token ausente no payload OAuth.");
   }
 
-  const res = await fetch(`${supabaseUrl}/functions/v1/sbx-auth-exchange`, {
+  const endpoint = `${supabaseUrl}/functions/v1/sbx-auth-exchange`;
+  const baseHeaders = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${supabaseAnonKey}`,
+  };
+
+  // ---- SALTO 1: issue ----
+  const issueRes = await fetch(endpoint, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${supabaseAnonKey}`,
-      "x-access-token": sbxAccessToken, // 👈 Token da Superbid limpo no Header de Borda
+      ...baseHeaders,
+      "x-access-token": sbxAccessToken,
     },
     body: JSON.stringify({
-      environment: environment,
-      // Nenhum token opaco trafega mais dentro do JSON do body!
+      environment,
+      audience: window.location.origin,
     }),
   });
 
-  const data = await res.json();
-  if (!res.ok || !data.success) {
-    throw new Error(data.message || `Erro HTTP no exchange: ${res.status}`);
+  const issueData = await issueRes.json();
+  if (!issueRes.ok || !issueData.success || !issueData.exchange_token) {
+    throw new Error(issueData.message || `Erro HTTP no issue: ${issueRes.status}`);
   }
-  return data;
+
+  // ---- SALTO 2: redeem ----
+  const redeemRes = await fetch(endpoint, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      ...baseHeaders,
+      "x-exchange-token": issueData.exchange_token,
+    },
+    body: JSON.stringify({}),
+  });
+
+  const redeemData = await redeemRes.json();
+  if (!redeemRes.ok || !redeemData.success || !redeemData.session_token) {
+    throw new Error(redeemData.message || `Erro HTTP no redeem: ${redeemRes.status}`);
+  }
+
+  return { ...redeemData, user_profile: issueData.user_profile };
 };
 
 /**
@@ -226,33 +254,23 @@ function SandboxPage() {
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [simulating, setSimulating] = useState(false);
 
-  /**
-   * =========================================================================
-   * [IDLE & SESSION INTEGRITY GUARD]: Validação de Expiração por Inatividade
-   * =========================================================================
-   * Intercepta períodos prolongados de inatividade (ex: 10h com a aba aberta)
-   * decodificando o JWT e forçando o redirecionamento imediato para o login
-   * caso a sessão tenha perecido.
-   */
   const handleExpiredSession = () => {
     sessionStorage.removeItem("access_token_sbx");
     sessionStorage.removeItem("user_profile");
     sessionStorage.removeItem("session_token");
 
-    // Reseta o state para forçar o render do formulário interno na mesma página
     setAccessTokenSBX("");
     setUserData(null);
     setApiOfferData(null);
     setVitrineOffers({});
 
-    // Limpa o token do contexto global para sumir do cabeçalho
     if (logout) {
       logout({ purgeEnv: true } as any);
     }
   };
 
   const validateSessionBeforeAction = () => {
-    const token = sessionStorage.getItem("access_token_sbx") || sessionToken;
+    const token = sessionStorage.getItem("access_token_sbx");
     if (!token) {
       handleExpiredSession();
       return false;
@@ -271,15 +289,12 @@ function SandboxPage() {
         }
       }
     } catch (e) {
-      // Ignora erro de parsing em tokens opacos puros, delegando para a borda
+      // Ignora erro de parsing em tokens opacos puros
     }
 
     return true;
   };
 
-  /**
-   * Helper unificado para checar se o erro retornado indica expiração/falha de sessão
-   */
   const checkAndHandleSessionError = (errMessage: string, errorCode?: string) => {
     const msg = (errMessage || "").toLowerCase();
     const code = (errorCode || "").toUpperCase();
@@ -364,19 +379,11 @@ function SandboxPage() {
     return "";
   });
 
-  /**
-   * [HIDRATAÇÃO LOCAL DE SESSÃO E PERFIL]
-   * Lê o token bruto e o perfil unificado direto do sessionStorage ao montar,
-   * fazendo fallback automático caso a sessão global esteja ativa.
-   */
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedToken = sessionStorage.getItem("access_token_sbx");
       if (storedToken && !accessTokenSBX) {
         setAccessTokenSBX(storedToken);
-      } else if (!storedToken && sessionToken) {
-        sessionStorage.setItem("access_token_sbx", sessionToken);
-        setAccessTokenSBX(sessionToken);
       }
 
       const storedProfile = sessionStorage.getItem("user_profile");
@@ -438,17 +445,12 @@ function SandboxPage() {
     },
   ];
 
-  // O Sandbox agora é 100% isolado. Ele só olha para o token bruto guardado no sessionStorage.
   const activeToken =
     accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
-  /**
-   * [HIDRATAÇÃO DE PRATELEIRA DE OFERTAS]
-   * Coleta dados dinâmicos de lotes e prateleiras em memória.
-   */
   useEffect(() => {
     const loadSandboxData = async () => {
-      const tokenToUse = activeToken || sessionToken;
+      const tokenToUse = activeToken;
       if (!tokenToUse) return;
 
       if (!validateSessionBeforeAction()) return;
@@ -543,14 +545,12 @@ function SandboxPage() {
     setDrawerLoading(true);
     setDrawerFotoAtiva(0);
     setSelectedOfferPayload(null);
-    setSelectedEventPayload(null); // 👈 Reseta o evento anterior
+    setSelectedEventPayload(null);
 
     try {
-      // 1. Busca os detalhes da oferta primeiro
       const offerData = await fetchOfferDetails(targetOfferId);
       setSelectedOfferPayload(offerData);
 
-      // 2. Se a oferta possuir o event_id mapeado, busca os detalhes do evento em paralelo/sequência
       const eventId = offerData?.event?.event_id;
       if (eventId) {
         const eventData = await fetchEventDetails(eventId);
@@ -704,11 +704,6 @@ function SandboxPage() {
     }
   };
 
-  /**
-   * [LOGIN & EXCHANGE UNIFICADO]
-   * Executa a autenticação na Superbid e o exchange na Edge Function unificada,
-   * capturando tanto o token JWT quanto o perfil unificado retornado no payload.
-   */
   const handleSandboxLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
@@ -757,7 +752,10 @@ function SandboxPage() {
           }
 
           if (setSession) {
-            setSession(exchangeResponse.session_token, exchangeResponse.user_id || loginResponse.userId);
+            setSession(
+              exchangeResponse.session_token,
+              exchangeResponse.userId || exchangeResponse.user_id || loginResponse.userId,
+            );
           }
         } else {
           throw new Error("Falha ao gerar o token interno na exchange.");
@@ -772,10 +770,6 @@ function SandboxPage() {
     }
   };
 
-  /**
-   * [LOGOUT SEGURO]
-   * Realiza a purificação completa do estado local e remoção do storage.
-   */
   const handleSandboxLogout = () => {
     setLoadingAction("logout");
 
@@ -796,15 +790,19 @@ function SandboxPage() {
     }, 50);
   };
 
-  const handleSimulateOfferForm = (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
+  const handleSimulateOfferForm = (
+    flowKey: string, 
+    offerId: string, 
+    productId: string, 
+    isDisabled?: boolean, 
+    openInNewTab: boolean = false // <--- Novo parâmetro
+  ) => {
     if (isDisabled) return;
-
     if (!validateSessionBeforeAction()) return;
 
-    const tokenToUse: string | null = accessTokenSBX || activeToken;
-
+    const tokenToUse = activeToken;
     if (!tokenToUse) {
-      alert(`Token de autenticação não encontrado. Faça o login primeiro.`);
+      alert(`Token de autenticação não encontrado.`);
       return;
     }
 
@@ -817,6 +815,10 @@ function SandboxPage() {
     const form = document.createElement("form");
     form.method = "POST";
     form.action = gatewayUrl;
+    
+    if (openInNewTab) { // <--- Lógica de Nova Aba
+      form.target = "_blank";
+    }
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
@@ -838,7 +840,7 @@ function SandboxPage() {
     });
 
     document.body.appendChild(form);
-
+    
     try {
       form.submit();
     } catch (err: any) {
@@ -853,13 +855,16 @@ function SandboxPage() {
     }
   };
 
+  /**
+   * =========================================================================
+   * [MODO DEBUG CORPORATIVO]: handleSimulateOfferAjax
+   * =========================================================================
+   */
   const handleSimulateOfferAjax = async (flowKey: string, offerId: string, productId: string, isDisabled?: boolean) => {
     if (isDisabled) return;
-
     if (!validateSessionBeforeAction()) return;
 
-    const tokenToUse: string | null = accessTokenSBX || activeToken;
-
+    const tokenToUse = activeToken;
     if (!tokenToUse) {
       alert(`Token de autenticação não encontrado. Faça o login primeiro.`);
       return;
@@ -867,6 +872,7 @@ function SandboxPage() {
 
     setLoadingAction(`${flowKey}_ajax`);
     setError(null);
+    setSimulationResult(null);
 
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
@@ -886,59 +892,35 @@ function SandboxPage() {
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
           utm_medium: "referral",
-          utm_campaign: "flow_sbxpay_ajax",
+          utm_campaign: `flow_${flowKey.toLowerCase()}_ajax_debug`,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        // Verifica se é erro de sessão expirada ou token inválido para redirecionar automático
-        if (checkAndHandleSessionError(data.message || "", data.code)) {
-          return;
-        }
-        throw new Error(data.message || `Erro no gateway AJAX: ${res.status}`);
-      }
+      
+      setSimulationResult({
+        status: res.status,
+        ok: res.ok,
+        data,
+      });
+      setIsErrorDrawerOpen(true);
 
-      if (data.session_token) {
-        sessionStorage.setItem("session_token", data.session_token);
-      }
-
-      if (data.redirect_url) {
-        window.open(data.redirect_url, "_blank");
-      } else {
-        throw new Error("URL de redirecionamento ausente na resposta.");
-      }
     } catch (err: any) {
       console.error("[AJAX_GATEWAY_ERROR]:", err);
-      if (!checkAndHandleSessionError(err.message)) {
-        const errorMsg = err.message || "Erro desconhecido";
-        setError(`Erro no disparo AJAX: ${errorMsg}`);
-      }
+      setSimulationResult({
+        status: 500,
+        ok: false,
+        data: { error: err.message || "Erro de rede ao comunicar com a borda." }
+      });
+      setIsErrorDrawerOpen(true);
     } finally {
       setLoadingAction(null);
     }
   };
 
-  /**
-   * =========================================================================
-   * [GATEWAY TRANSPORT]: handleSbxPayGatewayForm
-   * =========================================================================
-   * Responsável por disparar o acesso à Landing Wallet (sbX Pay) através de
-   * uma submissão tradicional de formulário HTML (POST nativo).
-   *
-   * [FLUXO TÉCNICO]:
-   * 1. Validação de Credencial: Assegura o uso primário do token bruto da
-   *    Superbid (`accessTokenSBX`) para a validação inicial na borda.
-   * 2. Injeção de Payload: Cria campos ocultos (`inputs hidden`) contendo o token,
-   *    o ambiente ativo, o alvo de redirecionamento (`target_url: "/sbxpay"`)
-   *    e metadados de rastreio (UTMs).
-   * 3. Navegação: Submete o formulário, provocando um redirecionamento de
-   *    página inteira (Full Page Redirection) para a borda.
-   */
   const handleSbxPayGatewayForm = () => {
     if (!validateSessionBeforeAction()) return;
 
-    // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
     const tokenToUse: string | null =
       accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
@@ -960,7 +942,7 @@ function SandboxPage() {
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: tokenToUse, // Correto para Form: enviado no payload para a borda ler
+      auth_token: tokenToUse,
       target_url: "/sbxpay",
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
@@ -994,22 +976,12 @@ function SandboxPage() {
 
   /**
    * =========================================================================
-   * [GATEWAY TRANSPORT]: handleSbxPayGatewayAjax
+   * [MODO DEBUG CORPORATIVO]: handleSbxPayGatewayAjax
    * =========================================================================
-   * Responsável por disparar o acesso à Landing Wallet (sbX Pay) de forma
-   * assíncrona utilizando requisição AJAX (`fetch`).
-   *
-   * [FLUXO TÉCNICO]:
-   * 1. Validação de Credencial: Coleta o token bruto da Superbid (`accessTokenSBX`).
-   * 2. Requisição Fetch: Envia um JSON estruturado para o Edge Gateway de borda.
-   * 3. Tratamento de Resposta: Processa o JSON retornado pela borda, armazena
-   *    o novo token stateless gerado e abre a URL de redirecionamento em uma
-   *    nova aba (`window.open`), mantendo o painel do Sandbox intacto.
    */
   const handleSbxPayGatewayAjax = async () => {
     if (!validateSessionBeforeAction()) return;
 
-    // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
     const tokenToUse: string | null =
       accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
@@ -1021,6 +993,7 @@ function SandboxPage() {
 
     setLoadingAction("sbxpay_ajax");
     setError(null);
+    setSimulationResult(null);
 
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
@@ -1031,7 +1004,7 @@ function SandboxPage() {
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "x-access-token": tokenToUse, // Correto para AJAX: token vai no header
+          "x-access-token": tokenToUse,
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
@@ -1039,55 +1012,35 @@ function SandboxPage() {
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
           utm_medium: "referral",
-          utm_campaign: "flow_sbxpay_ajax",
+          utm_campaign: "flow_sbxpay_ajax_debug",
         }),
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        if (checkAndHandleSessionError(data.message || "", data.code)) {
-          return;
-        }
-        throw new Error(data.message || `Erro no gateway AJAX: ${res.status}`);
-      }
+      
+      setSimulationResult({
+        status: res.status,
+        ok: res.ok,
+        data,
+      });
+      setIsErrorDrawerOpen(true);
 
-      if (data.session_token) {
-        sessionStorage.setItem("session_token", data.session_token);
-      }
-
-      if (data.redirect_url) {
-        window.open(data.redirect_url, "_blank");
-      } else {
-        throw new Error("URL de redirecionamento ausente na resposta.");
-      }
     } catch (err: any) {
       console.error("[AJAX_GATEWAY_ERROR]:", err);
-      if (!checkAndHandleSessionError(err.message)) {
-        const errorMsg = err.message || "Erro desconhecido";
-        setError(`Erro no disparo AJAX: ${errorMsg}`);
-      }
+      setSimulationResult({
+        status: 500,
+        ok: false,
+        data: { error: err.message || "Erro de rede ao comunicar com a borda." }
+      });
+      setIsErrorDrawerOpen(true);
     } finally {
       setLoadingAction(null);
     }
   };
 
-  /**
-   * =========================================================================
-   * [GATEWAY TRANSPORT]: handleDirectGatewayForm
-   * =========================================================================
-   * Executa a submissão tradicional via formulário HTML (POST) para acessar
-   * produtos financeiros estruturais específicos (ex: Seguros Auto, Car Equity)
-   * mapeados por ID de produto (`product_id`).
-   *
-   * [FLUXO TÉCNICO]:
-   * 1. Validação de Credencial: Injeta o token bruto da Superbid (`accessTokenSBX`).
-   * 2. Parametrização: Serializa o `product_id` junto com os metadados contextuais.
-   * 3. Navegação: Realiza a submissão do DOM form provocando redirecionamento total.
-   */
   const handleDirectGatewayForm = (flowKey: string, productId: string) => {
     if (!validateSessionBeforeAction()) return;
 
-    // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
     const tokenToUse: string | null =
       accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
@@ -1109,7 +1062,7 @@ function SandboxPage() {
 
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
-      auth_token: tokenToUse, // Correto para Form: enviado no payload para a borda ler
+      auth_token: tokenToUse,
       product_id: String(productId),
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
@@ -1143,21 +1096,12 @@ function SandboxPage() {
 
   /**
    * =========================================================================
-   * [GATEWAY TRANSPORT]: handleDirectGatewayAjax
+   * [MODO DEBUG CORPORATIVO]: handleDirectGatewayAjax
    * =========================================================================
-   * Executa uma requisição assíncrona AJAX (`fetch`) para acessar produtos
-   * financeiros estruturais específicos com base no `product_id`.
-   *
-   * [FLUXO TÉCNICO]:
-   * 1. Validação de Credencial: Envia o token bruto da Superbid (`accessTokenSBX`).
-   * 2. Comunicação Assíncrona: Posta o JSON estruturado para a borda do gateway.
-   * 3. Processamento de Retorno: Trata a resposta JSON, armazena o token de sessão
-   *    atualizado e abre a URL de destino em uma nova aba via `window.open`.
    */
   const handleDirectGatewayAjax = async (flowKey: string, productId: string) => {
     if (!validateSessionBeforeAction()) return;
 
-    // 🔒 CORREÇÃO: Busca estritamente o token bruto (SBX). Ignora o JWT (activeToken).
     const tokenToUse: string | null =
       accessTokenSBX || (typeof window !== "undefined" ? sessionStorage.getItem("access_token_sbx") : null);
 
@@ -1169,6 +1113,7 @@ function SandboxPage() {
 
     setLoadingAction(`${flowKey}_ajax`);
     setError(null);
+    setSimulationResult(null);
 
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
@@ -1179,7 +1124,7 @@ function SandboxPage() {
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          "x-access-token": tokenToUse, // Correto para AJAX: token vai no header
+          "x-access-token": tokenToUse,
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
@@ -1187,33 +1132,27 @@ function SandboxPage() {
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
           utm_medium: "referral",
-          utm_campaign: `flow_${flowKey.toLowerCase()}_ajax`,
+          utm_campaign: `flow_${flowKey.toLowerCase()}_ajax_debug`,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        if (checkAndHandleSessionError(data.message || "", data.code)) {
-          return;
-        }
-        throw new Error(data.message || `Erro no gateway AJAX: ${res.status}`);
-      }
+      
+      setSimulationResult({
+        status: res.status,
+        ok: res.ok,
+        data,
+      });
+      setIsErrorDrawerOpen(true);
 
-      if (data.session_token) {
-        sessionStorage.setItem("session_token", data.session_token);
-      }
-
-      if (data.redirect_url) {
-        window.open(data.redirect_url, "_blank");
-      } else {
-        throw new Error("URL de redirecionamento ausente na resposta.");
-      }
     } catch (err: any) {
       console.error("[AJAX_GATEWAY_ERROR]:", err);
-      if (!checkAndHandleSessionError(err.message)) {
-        const errorMsg = err.message || "Erro desconhecido";
-        setError(`Erro no disparo AJAX: ${errorMsg}`);
-      }
+      setSimulationResult({
+        status: 500,
+        ok: false,
+        data: { error: err.message || "Erro de rede ao comunicar com a borda." }
+      });
+      setIsErrorDrawerOpen(true);
     } finally {
       setLoadingAction(null);
     }
@@ -1699,7 +1638,7 @@ function SandboxPage() {
                     className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
                     <ExternalLink className="h-4 w-4" />{" "}
-                    {loadingAction === "sbxpay_ajax" ? "Processando..." : "Ir para sbxpay (fetch)"}
+                    {loadingAction === "sbxpay_ajax" ? "Processando..." : "Ir para sbxpay (fetch - debug)"}
                   </Button>
                 </CardContent>
               </Card>
@@ -1741,7 +1680,7 @@ function SandboxPage() {
                     className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
                     <ShieldCheck className="h-4 w-4" />{" "}
-                    {loadingAction === "SeguroAuto_ajax" ? "Processando..." : "Acessar Seguros Auto (fetch)"}
+                    {loadingAction === "SeguroAuto_ajax" ? "Processando..." : "Acessar Seguros Auto (fetch - debug)"}
                   </Button>
 
                   <div className="flex justify-center items-center gap-2 pt-1 text-[11px] font-bold text-[#B300FF]">
@@ -1801,7 +1740,7 @@ function SandboxPage() {
                     className="w-full rounded-xl gap-2 bg-white text-[#B300FF] border border-[#B300FF]/30 hover:bg-[#B300FF]/5 font-light text-xs shadow-sm"
                   >
                     <Play className="h-4 w-4" />{" "}
-                    {loadingAction === "AutoEquity_ajax" ? "Processando..." : "Simular Car Equity (fetch)"}
+                    {loadingAction === "AutoEquity_ajax" ? "Processando..." : "Simular Car Equity (fetch - debug)"}
                   </Button>
 
                   <div className="flex justify-center items-center gap-2 pt-1 text-[11px] font-bold text-[#B300FF]">
@@ -1837,8 +1776,6 @@ function SandboxPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {FLOW_OFFERS.map((item) => {
                   const data = vitrineOffers[item.key];
-
-                  // Extrai dinamicamente o ID da oferta que veio da query
                   const resolvedOfferId = data?.offer?.offer_id || data?.offer_id || data?.id || "";
 
                   const rawPhotos = data?.offer?.photos || data?.photos || [];
@@ -1862,11 +1799,10 @@ function SandboxPage() {
                     : data
                       ? "Valor indisponível"
                       : "Carregando...";
-                  const sellerName = data?.seller?.trade_name || data?.seller_name || (data ? "Superbid" : "Carregando...");
+                  const sellerName =
+                    data?.seller?.trade_name || data?.seller_name || (data ? "Superbid" : "Carregando...");
                   const rawEventDate = data?.event?.event_start_date || data?.event_start_date;
-                  const eventDate = rawEventDate
-                    ? new Date(rawEventDate).toLocaleDateString("pt-BR")
-                    : "—";
+                  const eventDate = rawEventDate ? new Date(rawEventDate).toLocaleDateString("pt-BR") : "—";
 
                   return (
                     <div
@@ -1949,38 +1885,34 @@ function SandboxPage() {
                       </div>
 
                       <div className="p-4 pt-0 space-y-2">
+                        {/* Botão 1: Mesmo Tab */}
                         <Button
-                          onClick={() =>
-                            handleSimulateOfferForm(item.flowKey, resolvedOfferId, String(item.product_id ?? ""), item.disabled)
-                          }
+                          onClick={() => handleSimulateOfferForm(item.flowKey, resolvedOfferId, String(item.product_id ?? ""), item.disabled, false)}
                           disabled={item.disabled || !resolvedOfferId || loadingAction === `${item.flowKey}_form`}
                           variant="outline"
                           className={`w-full rounded-xl shadow-sm ${item.variant}`}
                         >
-                          {loadingAction === `${item.flowKey}_form` ? (
-                            <span className="flex items-center gap-2">
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Processando...
-                            </span>
-                          ) : item.disabled ? (
-                            "Indisponível (Em breve)"
-                          ) : (
-                            `${item.label} (form)`
-                          )}
+                          {loadingAction === `${item.flowKey}_form` ? "Processando..." : `${item.label} (Form)`}
                         </Button>
 
+                        {/* Botão 2: NOVA ABA */}
                         <Button
-                          onClick={() =>
-                            handleSimulateOfferAjax(item.flowKey, resolvedOfferId, String(item.product_id ?? ""), item.disabled)
-                          }
+                          onClick={() => handleSimulateOfferForm(item.flowKey, resolvedOfferId, String(item.product_id ?? ""), item.disabled, true)}
+                          disabled={item.disabled || !resolvedOfferId}
+                          variant="outline"
+                          className={`w-full rounded-xl shadow-sm bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 font-bold text-xs`}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-2" /> (Nova Aba)
+                        </Button>
+
+                        {/* Botão 3: Debug */}
+                        <Button
+                          onClick={() => handleSimulateOfferAjax(item.flowKey, resolvedOfferId, String(item.product_id ?? ""), item.disabled)}
                           disabled={item.disabled || !resolvedOfferId || loadingAction === `${item.flowKey}_ajax`}
                           variant="outline"
-                          className={`w-full rounded-xl shadow-sm ${item.variant}`}
+                          className={`w-full rounded-xl shadow-sm bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 font-light text-xs`}
                         >
-                          {loadingAction === `${item.flowKey}_ajax`
-                            ? "Processando..."
-                            : item.disabled
-                              ? "Indisponível (Em breve)"
-                              : `${item.label} (fetch)`}
+                          {loadingAction === `${item.flowKey}_ajax` ? "Processando..." : `Debug (Fetch)`}
                         </Button>
 
                         <div className="flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 text-center pt-3 border-t mt-2">
@@ -2089,21 +2021,20 @@ function SandboxPage() {
                         {JSON.stringify(selectedOfferPayload, null, 2)}
                       </pre>
                     </div>
-                    {/* PAYLOAD EVENTO */}
+
                     <div className="mt-6 pt-4 border-t border-slate-200">
                       <h2 className="text-xs font-black uppercase text-[#B300FF] mb-2">Evento / Leilão Consolidado</h2>
-                      <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">
-                        Payload JSON (sbx-event):
-                      </p>
+                      <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Payload JSON (sbx-event):</p>
                       {selectedEventPayload ? (
                         <pre className="font-mono text-[10px] bg-slate-50 p-3 rounded-lg border border-slate-200 text-slate-800 whitespace-pre-wrap break-all">
                           {JSON.stringify(selectedEventPayload, null, 2)}
                         </pre>
                       ) : (
-                        <p className="text-xs text-slate-400 italic">Nenhum evento vinculado a esta oferta ou falha ao carregar.</p>
+                        <p className="text-xs text-slate-400 italic">
+                          Nenhum evento vinculado a esta oferta ou falha ao carregar.
+                        </p>
                       )}
                     </div>
-
                   </div>
                 </div>
               ) : (
@@ -2165,11 +2096,6 @@ function SandboxPage() {
                     </p>
                   </div>
 
-                  {/* ========================================== */}
-                  {/* COMPONENTES DA FÁBRICA (PADRÃO SIMULATIONS)  */}
-                  {/* ========================================== */}
-
-                  {/* 1. Panel Product */}
                   {routeConfigData.page_configs && (
                     <PanelProduct
                       config={
@@ -2180,7 +2106,6 @@ function SandboxPage() {
                     />
                   )}
 
-                  {/* Detalhes de Integração e Regras (Mantidos nativos do Sandbox) */}
                   <div className="flex flex-col gap-4 my-4">
                     {routeConfigData.integration_details &&
                       Object.keys(routeConfigData.integration_details).length > 0 && (
@@ -2205,17 +2130,14 @@ function SandboxPage() {
                     )}
                   </div>
 
-                  {/* 2. Panel Consents */}
                   {routeConfigData.consent_configs && routeConfigData.consent_configs.length > 0 && (
                     <PanelConsents configs={routeConfigData.consent_configs} />
                   )}
 
-                  {/* 3. Panel FAQs */}
                   {routeConfigData.page_faqs && routeConfigData.page_faqs.length > 0 && (
                     <PanelFAQ faqs={routeConfigData.page_faqs} isPrint={false} />
                   )}
 
-                  {/* 4. Panel Footer */}
                   {routeConfigData.page_configs?.footer && (
                     <div className="pt-2 break-inside-avoid">
                       <PanelFooter footer={routeConfigData.page_configs.footer} />
@@ -2241,14 +2163,14 @@ function SandboxPage() {
         </div>
       )}
 
-      {/* PAINEL LATERAL (DRAWER) DE SIMULAÇÃO DE ERROS */}
+      {/* PAINEL LATERAL (DRAWER) DE SIMULAÇÃO DE ERROS & CONSOLE AJAX */}
       {isErrorDrawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-all">
           <div className="w-full max-w-xl bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-purple-50/60 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#B300FF]" />
-                <h3 className="text-sm font-black uppercase text-purple-900">{errorDrawerConfig?.title}</h3>
+                <h3 className="text-sm font-black uppercase text-purple-900">{errorDrawerConfig?.title || "Painel de Testes & Simulação de Erros"}</h3>
               </div>
               <button
                 onClick={() => setIsErrorDrawerOpen(false)}
@@ -2337,7 +2259,7 @@ function SandboxPage() {
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : errorDrawerConfig?.type === "direct" ? (
                 <div className="space-y-4">
                   <div className="border border-slate-200 p-4 rounded-xl space-y-3 bg-white shadow-sm">
                     <h5 className="font-bold text-slate-900 flex items-center gap-1.5">
@@ -2402,12 +2324,13 @@ function SandboxPage() {
                     </div>
                   </div>
                 </div>
-              )}
+              ) : null}
 
+              {/* CONSOLE DE RETORNO DO FETCH (DEBUG DE BOTÕES AJAX) */}
               {simulationResult && (
                 <div className="mt-4 p-4 rounded-xl border bg-slate-900 text-slate-100 space-y-2 font-mono text-[11px]">
                   <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <span className="font-bold text-purple-400">Retorno do Serviço (Fetch):</span>
+                    <span className="font-bold text-purple-400">Retorno do Serviço (Fetch Debug):</span>
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] ${simulationResult.ok ? "bg-green-900 text-green-200" : "bg-red-900 text-red-200"}`}
                     >

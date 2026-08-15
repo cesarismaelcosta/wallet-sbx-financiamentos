@@ -6,16 +6,16 @@
  * [ARQUITETURA BFF & CONTRATO DE ENTRADA]
  * ============================================================================
  * Atua como a porta de entrada (Front Door) unificada para o ecossistema.
- * Respeita estritamente a premissa de que a borda recebe obrigatoriamente o 
+ * Respeita estritamente a premissa de que a borda recebe obrigatoriamente o
  * token bruto da Superbid (`sbx_access_token`) enviado por sistemas externos ou pelo Sandbox.
- * 
+ *
  * [FLUXO OPERACIONAL DA BORDA]:
- * 1. Entrada Exclusiva SBX: O `auth_token` recebido é tratado sempre como o token bruto/opaco 
- *    ou objeto OAuth da Superbid. 
- * 2. Validação Upstream: A borda valida o token diretamente no endpoint `/account/v2/user/me` 
+ * 1. Entrada Exclusiva SBX: O `auth_token` recebido é tratado sempre como o token bruto/opaco
+ *    ou objeto OAuth da Superbid.
+ * 2. Validação Upstream: A borda valida o token diretamente no endpoint `/account/v2/user/me`
  *    da Superbid para autenticar o usuário e extrair o seu ID.
- * 3. Emissão Stateless: Gera o nosso JWT interno assinado via `generateSessionToken` (que retorna 
- *    o objeto `SessionData`) e extrai `session_token` para injetar no cabeçalho `x-session-token` 
+ * 3. Emissão Stateless: Gera o nosso JWT interno assinado via `generateSessionToken` (que retorna
+ *    o objeto `SessionData`) e extrai `session_token` para injetar no cabeçalho `x-session-token`
  *    do Orquestrador.
  * ============================================================================
  * @author César Ismael Pereira da Costa
@@ -23,7 +23,7 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { generateSessionToken } from "../_shared/jwt.ts";
+import { generateSessionToken, generateExchangeToken, hashUserAgent } from "../_shared/jwt.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
 import { getSafeRedirectUrl, getSafeCorsOrigin } from "../_shared/security.ts";
@@ -40,6 +40,15 @@ const ENV_URLS = {
     offer: "https://offer-query.stage.superbid.net",
     event: "https://event-query.stage.superbid.net",
   },
+};
+
+const originFromUrl = (candidate?: string): string => {
+  if (!candidate || !/^https?:\/\//i.test(candidate)) return "";
+  try {
+    return new URL(candidate).origin;
+  } catch (_) {
+    return "";
+  }
 };
 
 serve(
@@ -159,7 +168,9 @@ serve(
             debugLog("[GATEWAY-AUTH] JSON do OAuth detectado. access_token extraído com sucesso.");
           }
         } catch (e) {
-          debugLog("[GATEWAY-AUTH] Falha ao parsear JSON no auth_token, mantendo string original.", { error: String(e) });
+          debugLog("[GATEWAY-AUTH] Falha ao parsear JSON no auth_token, mantendo string original.", {
+            error: String(e),
+          });
         }
       }
 
@@ -189,9 +200,11 @@ serve(
       }
 
       // Emite o nosso JWT interno stateless e extrai a string JWS de dentro do objeto SessionData retornado por jwt.ts
-      const newTokenData = await generateSessionToken(userId, activeEnvironment, 21600);
+      const newTokenData = await generateSessionToken(userId, activeEnvironment);
       finalJwt = newTokenData.session_token;
-      debugLog("[GATEWAY-AUTH] Token da Superbid validado no /me. Nosso JWT interno emitido com sucesso para o orquestrador.");
+      debugLog(
+        "[GATEWAY-AUTH] Token da Superbid validado no /me. Nosso JWT interno emitido com sucesso para o orquestrador.",
+      );
 
       // =====================================================================
       // [STEP 4] HIDRATAÇÃO DE PERFIL (BFF Mapping - Suporte PF / PJ)
@@ -213,13 +226,8 @@ serve(
       };
 
       try {
-        const userRes = await fetch(`${urls.api}/account/v2/user/me`, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${sbx_access_token}` },
-        });
-
-        if (userRes.ok) {
-          const userData = await userRes.json();
+        if (upstreamUserData) {
+          const userData = upstreamUserData;
           const account = userData.userAccounts?.[0];
           const mainAddress = account?.addresses?.[0];
           const isJuridica = account?.type === "J";
@@ -233,7 +241,7 @@ serve(
           userProfile = {
             entity_id: userId,
             entity_type: account?.type || "F",
-            name: account?.basicInfo?.fullName || "N/A",
+            name: account?.basicInfo?.fullName || "",
             document: cleanDocument,
             document_rg: account?.documents?.find((doc: any) => doc.typeName === "rg")?.number || "",
             email: account?.basicInfo?.email?.address || "",
@@ -258,7 +266,9 @@ serve(
           };
         }
       } catch (e) {
-        debugLog("[GATEWAY-WARN] Falha ao hidratar perfil completo upstream, utilizando perfil base.", { error: String(e) });
+        debugLog("[GATEWAY-WARN] Falha ao hidratar perfil completo upstream, utilizando perfil base.", {
+          error: String(e),
+        });
       }
 
       // =====================================================================
@@ -418,29 +428,55 @@ serve(
 
       let targetUrl = orchestratorData.url;
 
-      let frontendOrigin = "";
-      const reqOrigin = req.headers.get("origin") || req.headers.get("referer");
-      if (reqOrigin) {
+      // ==================================================================
+      // RESOLUÇÃO DA ORIGEM DO APP DE DESTINO
+      // NUNCA usar Origin/Referer: no form POST cross-domain eles apontam
+      // para o REMETENTE (Superbid), o que absolutizaria o targetUrl para
+      // o domínio errado e selaria o `aud` do Exchange JWT na origem errada.
+      // ==================================================================
+      const originFromUrl = (candidate?: string): string => {
+        if (!candidate || !/^https?:\/\//i.test(candidate)) return "";
         try {
-          frontendOrigin = new URL(reqOrigin).origin;
-        } catch (_) {}
-      }
-      if (!frontendOrigin && return_uri && (return_uri.startsWith("http://") || return_uri.startsWith("https://"))) {
-        try {
-          frontendOrigin = new URL(return_uri).origin;
-        } catch (_) {}
-      }
-      if (!frontendOrigin) {
-        frontendOrigin = Deno.env.get("FRONTEND_URL") || "";
-      }
+          return new URL(candidate).origin;
+        } catch (_) {
+          return "";
+        }
+      };
+
+      let frontendOrigin =
+        originFromUrl(orchestratorData.url) ||
+        originFromUrl(target_url) ||
+        originFromUrl(return_uri) ||
+        "";
+
+      // Allowlist final: a origem resolvida precisa ser reconhecida pela allowlist da borda.
+      frontendOrigin = getSafeCorsOrigin(frontendOrigin) || "";
 
       if (targetUrl && targetUrl.startsWith("/") && frontendOrigin) {
         targetUrl = `${frontendOrigin}${targetUrl}`;
       }
 
       // =====================================================================
-      // [STEP 7] SMART DELIVERY E SEGURANÇA FINAL (HttpOnly Cookie vs Storage)
+      // [STEP 7] SMART DELIVERY (Handoff Stateless via Fragmento)
       // =====================================================================
+      // CONCEITO:
+      // - Ramo AJAX (mesma origem: Sandbox/app chamando por fetch): continua
+      //   recebendo o Session JWT de 6h no corpo/cookie. Nada muda para as
+      //   telas atuais.
+      // - Ramo NAVEGAÇÃO (<form method="POST"> cross-domain da Superbid):
+      //   o HTML antigo gravava `sessionStorage` na ORIGEM DO SUPABASE, então
+      //   a sessão nunca chegava ao app (storage é isolado por origem, e o
+      //   cookie HttpOnly é bloqueado pelo ITP em contexto cross-site).
+      //   Passa a emitir um Exchange JWT de 60s, SEM PII, amarrado à origem
+      //   do app (`aud`) e ao dispositivo (`uah`), transportado no FRAGMENTO
+      //   da URL — que nunca é enviado ao servidor, logo não entra em log de
+      //   acesso, proxy ou CDN. O app troca esse token pela sessão definitiva
+      //   já na sua própria origem (modo `redeem`).
+      //
+      // O que sai e o que entra
+      // Antes: HTML com <script> gravando sessionStorage / Session JWT 6h interpolado / window.location.replace
+      // Depois: Exchange JWT 60s no fragmento / 302 Location direto / Cookie emitido pelo redeem
+      
       const apiHost = new URL(Deno.env.get("SUPABASE_URL") || "").hostname;
       const frontendHost = frontendOrigin ? new URL(frontendOrigin).hostname : "";
       const eTLDplus1 = (h: string) => h.split(".").slice(-2).join(".");
@@ -455,6 +491,7 @@ serve(
       );
 
       if (isAjax) {
+        // ---- CAMINHO MESMA ORIGEM: comportamento atual preservado ----
         responseHeaders.set("Content-Type", "application/json");
         responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
 
@@ -467,32 +504,37 @@ serve(
           }),
           { status: 200, headers: responseHeaders },
         );
-      } else {
-        responseHeaders.set("Content-Type", "text/html; charset=utf-8");
-        responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
-
-        const html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <title>Autenticando...</title>
-        </head>
-        <body>
-            <script>
-                try {
-                    ${safeTokenToReturn ? `sessionStorage.setItem('session_token', '${safeTokenToReturn}');` : ""}
-                    sessionStorage.setItem('sbx_env_pref', '${activeEnvironment}');
-                } catch (e) {}
-                
-                window.location.replace('${targetUrl}');
-            </script>
-        </body>
-        </html>
-        `;
-
-        return new Response(html, { status: 200, headers: responseHeaders });
       }
+
+      // ---- CAMINHO CROSS-DOMAIN: handoff por fragmento ----
+      if (!frontendOrigin) {
+        // Sem origem confiável não há como selar o `aud` do Exchange JWT.
+        throw new Error("BAD_REQUEST: Origem do aplicativo de destino não pôde ser resolvida para o handoff.");
+      }
+
+      const exchangeToken = await generateExchangeToken({
+        userId,
+        environment: activeEnvironment as "staging" | "production",
+        aud: frontendOrigin, // origem única autorizada a resgatar (Plano Final)
+        uah: hashUserAgent(clientUa), // mesmo navegador dos dois lados (Plano Final)
+      });
+
+      // Em vez de bater de volta no próprio Gateway, joga direto para a URL destino final do App.
+      // O App no front-end pegará a variável #xt e fará o Redeem.
+      const handoffUrl =
+        `${targetUrl}` +
+        (targetUrl.includes("?") ? "&" : "?") +
+        `#xt=${encodeURIComponent(exchangeToken)}`;
+
+      // O Session JWT de 6h emitido acima NÃO sai da borda neste ramo: ele já
+      // cumpriu seu papel autenticando a chamada ao orquestrador (STEP 6). A
+      // sessão que o usuário vai usar é emitida no `redeem`, na origem do app.
+      // 302 puro: nenhum HTML, nenhum script inline, nenhum sessionStorage
+      // gravado na origem errada. O fragmento sobrevive ao redirect no browser.
+      responseHeaders.set("Location", handoffUrl);
+      responseHeaders.set("Cache-Control", "no-store, no-cache, must-revalidate");
+      return new Response(null, { status: 302, headers: responseHeaders });
+
     } catch (err: any) {
       debugLog("🚨 [Edge Gateway] Erro interceptado:", err.message);
 
@@ -548,8 +590,12 @@ function respondWithError(
   originalPayload: Record<string, any> = {},
 ): Response {
   const headers = new Headers();
-  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set(
+    "Access-Control-Allow-Origin",
+    getSafeCorsOrigin(req.headers.get("origin") || req.headers.get("referer")),
+  );
 
+  // 1. Tratamento para requisições AJAX: retorna JSON estruturado com os dados preservados
   if (isAjax) {
     headers.set("Content-Type", "application/json");
 
@@ -573,26 +619,16 @@ function respondWithError(
     );
   }
 
-  let frontendOrigin = "";
-  if (safeReturnUri && (safeReturnUri.startsWith("http://") || safeReturnUri.startsWith("https://"))) {
-    try {
-      frontendOrigin = new URL(safeReturnUri).origin;
-    } catch (_) {}
-  }
-
-  if (!frontendOrigin) {
-    const reqOrigin = req.headers.get("origin") || req.headers.get("referer");
-    if (reqOrigin) {
-      try {
-        frontendOrigin = new URL(reqOrigin).origin;
-      } catch (_) {}
-    }
-  }
+  // 2. Resolução da origem do front-end (prioriza safeReturnUri, depois headers, depois fallback)
+  let frontendOrigin =
+    originFromUrl(safeReturnUri) ||
+    originFromUrl(req.headers.get("origin") || req.headers.get("referer") || "");
 
   if (!frontendOrigin) {
     frontendOrigin = Deno.env.get("FRONTEND_URL") || "";
   }
 
+  // 3. Validação crítica: se a origem não puder ser resolvida, aborta com erro 500
   if (!frontendOrigin) {
     return new Response(
       JSON.stringify({ success: false, code: "CONFIG_ERROR", message: "Origem do front-end não identificada." }),
@@ -600,6 +636,7 @@ function respondWithError(
     );
   }
 
+  // 4. Montagem dos parâmetros de erro para a query string do redirecionamento
   const urlParams = new URLSearchParams({
     status: "error",
     code: code,
@@ -615,6 +652,7 @@ function respondWithError(
     }
   }
 
+  // 5. Redirecionamento HTTP 302 para a rota de erro do front-end
   const errorUrl = `${frontendOrigin}/financialGatewayGate?${urlParams.toString()}`;
 
   headers.set("Location", errorUrl);

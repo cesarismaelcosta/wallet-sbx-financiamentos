@@ -1,21 +1,32 @@
 /**
- * @fileoverview Componente: sbXPAYLayOut (Esqueleto Mestre e Gatekeeper do Hub Financeiro)
- * @path src/routes/sbxpay.lazy.tsx
+ * @fileoverview Componente Mestre: sbXPAYLayOut (Gatekeeper de Acesso e Hidratação de Sessão)
+ * @module features/financial-hub/core/layout
  * 
  * =========================================================================
- * [ARQUITETURA E FLUXO DE SEGURANÇA & ORQUESTRAÇÃO]
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: HYBRID GATEKEEPER & ZERO-TRUST HANDOFF
  * =========================================================================
- * Funciona como o Gatekeeper centralizado de Sessão, Hidratação e Visitas do Hub (sbxpay).
+ * Este módulo atua como o orquestrador absoluto de ciclo de vida e estado do cliente.
+ * Ele materializa o protocolo "Double JWT" no lado do frontend, fundindo a 
+ * recepção stateless com o guardião de rotas tradicional do React.
  * 
- * RESPONSABILIDADES CENTRAIS:
- * 1. GATEKEEPER DE AUTENTICAÇÃO: Intercepta acessos sem token ativo e redireciona 
- *    para o login preservando o `redirect_uri`.
- * 2. HIDRATAÇÃO DE PERFIL (BFF): Valida a sessão e puxa os dados do usuário logado diretamente do contexto/storage.
- * 3. GATEKEEPER DE VISITA AUTOMÁTICA: Valida se a URL já possui um `visit_id`. 
- *    Caso contrário, aciona o Orquestrador (`action: "VISIT"`) antes de renderizar as filhas,
- *    atualizando a URL silenciosamente via `replaceState` (Zero Flash / Zero Piscar).
- * 4. PROVEDOR DE ESTADO (`UserDataContext`): Compartilha o perfil (`BFFUserProfile`) 
- *    e a função de logout com toda a árvore de sub-rotas via `<Outlet />`.
+ * [POSTURA DE SEGURANÇA E FLUXO DE ORQUESTRAÇÃO]:
+ * 0. {Resgate Tático - Sniper}: O hook de inicialização opera com máxima prioridade
+ *    para inspecionar a URL. Se detectar um Exchange JWT, bloqueia a árvore 
+ *    de renderização e realiza o handoff (resgate), protegendo credenciais contra
+ *    vazamento para scripts de rastreamento (GTM, Sentry) ou extensões do navegador.
+ * 1. {Zero-Trust Guard}: Avalia o estado de autenticação antes de qualquer 
+ *    montagem de DOM persistente. Acessos anônimos sofrem early-return preventivo, 
+ *    preservando o estado da intenção de acesso via querystring `redirect_uri`.
+ * 2. {BFF Rehydration}: Restaura a integridade estrutural do perfil do usuário 
+ *    (BFFUserProfile) a partir da memória quente (Context) ou fria (sessionStorage).
+ * 3. {Phantom Visit}: Aciona o motor do Orquestrador (`action: "VISIT"`) em 
+ *    background, injetando o `visit_id` na URL via History API sem causar 
+ *    repaints na tela (Zero Flash), garantindo telemetria sem engasgar a UI.
+ * 4. {State Propagation}: Envelopa a aplicação no `UserDataContext`, garantindo
+ *    propagação determinística da identidade (Perfil) e mecanismo de kill-switch (Logout).
+ *
+ * @author César Ismael Pereira da Costa
+ * @version 6.0.0 (Integração de Resgate Stateless e Defesa Anti-Telemetry)
  */
 
 import { createContext, useState, useEffect, useRef } from "react";
@@ -23,19 +34,18 @@ import { createLazyFileRoute, Outlet, useNavigate } from "@tanstack/react-router
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHeader";
 import { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
-import { callOrchestrator } from "@/features/financial-hub/core/services/gateway"; // 👈 Serviço de Gateway para chamadas ao Orquestrador
-import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload } from "@/services/session"; // 👈 Resolução segura de ambiente, flag híbrida e encapsulamento de token
+import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
+import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload } from "@/services/session";
+import { redeemHandoffSession } from "@/services/exchange";
 
-// =========================================================================
-// CONFIGURAÇÃO DA ROTA (TanStack Router)
-// =========================================================================
 export const Route = createLazyFileRoute("/sbxpay")({
   component: sbXPAYLayOut, 
 });
 
-// =========================================================================
-// CONTEXTO GLOBAL DE DADOS DO USUÁRIO (Blindado contra null)
-// =========================================================================
+/**
+ * [CONTRATO DE CONTEXTO]
+ * Garante a tipagem estrita do contexto de usuário trafegado para os componentes filhos.
+ */
 export const UserDataContext = createContext<{ 
   userData: BFFUserProfile | null; 
   performLogout: () => void; 
@@ -44,9 +54,9 @@ export const UserDataContext = createContext<{
   performLogout: () => {},
 });
 
-// =========================================================================
-// [COMPONENTES AUXILIARES]: Indicador Visual de Carregamento Nativo
-// =========================================================================
+/**
+ * [FALLBACK UI]: Spinner Genérico
+ */
 const Spinner = ({ msg }: { msg: string }) => (
   <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-4"></div>
@@ -54,21 +64,16 @@ const Spinner = ({ msg }: { msg: string }) => (
   </div>
 );
 
-// =========================================================================
-// [COMPONENTES AUXILIARES]: Skeleton para carregamento
-// =========================================================================
+/**
+ * [PLACEHOLDER ESTRUTURAL]: Mitigação de Cumulative Layout Shift (CLS)
+ * Preserva o grid e a altura dos elementos durante processos assíncronos de Gatekeeping.
+ */
 function HomeSkeleton() {
   return (
     <div className="min-h-screen bg-white">
-      {/* 🚀 Já renderiza o header oficial instantaneamente */}
       <PanelHeader showNav={true} showAuth={true} links={[]} />
-
-      {/* Esqueleto apenas para o conteúdo abaixo */}
       <main className="max-w-7xl mx-auto px-6 pt-28 space-y-12 animate-pulse">
-        {/* Banner Hero Fantasma */}
         <div className="h-56 bg-slate-100 rounded-3xl w-full"></div>
-
-        {/* Grid de Cards Fantasmas */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="h-64 bg-slate-100 rounded-2xl"></div>
           <div className="h-64 bg-slate-100 rounded-2xl"></div>
@@ -79,67 +84,123 @@ function HomeSkeleton() {
   );
 }
 
-// =========================================================================
-// [COMPONENTE PRINCIPAL]: Layout e Gatekeeper Mestre do Hub
-// =========================================================================
 export function sbXPAYLayOut() {
-  const { sessionToken: contextToken, userProfile: contextProfile, isLoading, logout } = useFinancialAuth();
+  const authContext = useFinancialAuth();
+  const { sessionToken: contextToken, userProfile: contextProfile, isLoading, logout } = authContext;
   
-  // Resgate preventivo imediato utilizando o helper centralizado do session.ts
+  // Resolução de credencial aplicando priorização: Memória Quente > LocalStorage/Cookies
   const sessionToken = contextToken || getTokenForPayload();
 
   const navigate = useNavigate();
   const logoutRef = useRef(logout);
-  // ✨ Trava para impedir redirecionamentos em loop
   const isRedirecting = useRef(false);
 
-  // Mantém a referência da função de logout atualizada para evitar stale closures
+  // [DEFESA]: Previne Stale Closures (variáveis de escopo antigas) injetando a função de logout no Ref
   useEffect(() => { 
     logoutRef.current = logout; 
   }, [logout]);
 
   // =========================================================================
-  // TODOS OS USESTATES E USEEFFECTS NO TOPO ABSOLUTO (Evita erro de Hooks)
+  // ALOCAÇÃO DE ESTADOS DE CONTROLE DE FLUXO
   // =========================================================================
   const [userData, setUserData] = useState<BFFUserProfile | null>(contextProfile || null);
   const [isVerifying, setIsVerifying] = useState<boolean>(!contextProfile);
   
-  // CORREÇÃO DA HIDRATAÇÃO: Declarado no topo para não quebrar a árvore de execução
+  // Indicador de montagem (impede incompatibilidade entre servidor SSR e cliente inicial)
   const [isClientMounted, setIsClientMounted] = useState(false);
+  
+  // ✨ [LOCK ESTRUTURAL] Mantém a UI em Skeleton até sabermos o resultado da varredura de URL
+  const [isExchanging, setIsExchanging] = useState(true); 
+  const exchangeAttempted = useRef(false); // Flag para inibir disparos duplos em StrictMode
+
   useEffect(() => {
     setIsClientMounted(true);
   }, []);
 
-  // Hidrata via useEffect APÓS a montagem inicial
+  // =========================================================================
+  // 🎯 [STEP 0]: INTERCEPTAÇÃO STATELESS (O SNIPER TÁTICO)
+  // [VETOR DE DEFESA]: Corre em prioridade máxima (antes da renderização final) 
+  // para capturar e aniquilar o Exchange Token da URL, mitigando roubo passivo.
+  // =========================================================================
+  useEffect(() => {
+    if (!isClientMounted) return;
+    if (exchangeAttempted.current) return;
+    
+    // [HEURÍSTICA O(1)]: Verifica a existência do fragmento alvo na URL em microssegundos.
+    // [CORREÇÃO FINAL]: Ajustado para procurar a nova tag 'xt=' ou a legada 'exchange_token='
+    const hash = window.location.hash;
+    if (!hash.includes("xt=") && !hash.includes("exchange_token=")) {
+      exchangeAttempted.current = true;
+      setIsExchanging(false); // Rota limpa. Libera o fluxo natural do app.
+      return;
+    }
+
+    exchangeAttempted.current = true;
+
+    async function processStatelessHandoff() {
+      console.log("[AUTH GATEKEEPER] Aterrissagem cross-domain detectada. Iniciando protocolo de higienização de URL.");
+      
+      const result = await redeemHandoffSession();
+      
+      if (result.ok && result.session_token) {
+        console.log("[AUTH GATEKEEPER] Protocolo Double JWT concluído. Sessão persistida pelo serviço.");
+        
+        // Propagação de Estado (Avisa o restante da árvore React que o usuário está logado)
+        if (typeof (authContext as any).setSession === "function") {
+          await (authContext as any).setSession(result.session_token);
+        } else {
+          window.dispatchEvent(new Event("storage"));
+        }
+
+      } else if (result.reason === "invalid" || result.reason === "expired") {
+        console.error("[AUTH GATEKEEPER] Falha Crítica: Credencial efêmera expirada ou corrompida. Executando aborto de rota.");
+        navigate({ 
+          to: "/accounts/signin", 
+          search: { redirect_uri: window.location.pathname } as any, 
+          replace: true 
+        });
+        return;
+      }
+
+      // Desbloqueia o Render Tree para o Gatekeeper Principal assumir a Hidratação
+      setIsExchanging(false);
+    }
+
+    processStatelessHandoff();
+  }, [isClientMounted, navigate, authContext]);
+
+
+  // =========================================================================
+  // [SECUNDÁRIO]: HIDRATAÇÃO DE MEMÓRIA (Cold Start Fallback)
+  // =========================================================================
   useEffect(() => {
     if (typeof window !== "undefined") {
       const stored = sessionStorage.getItem("user_profile");
       if (stored) {
-        const parsed = JSON.parse(stored);
-        setUserData(parsed);
+        setUserData(JSON.parse(stored));
         setIsVerifying(false);
       }
     }
   }, []);
 
-  /**
-   * Encerra a sessão limpando os estados e acionando o contexto global de auth
-   */
   const performLogout = () => {
     setUserData(null);
     logoutRef.current();
   };
 
   // =========================================================================
-  // [GATEKEEPER & REHYDRATION MESTRE]: Leitura em Memória + Visita Automática
+  // 🛡️ [STEP 1 & 2]: ZERO-TRUST GUARD & ORQUESTRAÇÃO DE VISITAS
+  // Pipeline de autorização que garante que nenhum componente filho seja 
+  // renderizado sem um `session_token` e sem notificar o motor de Analytics.
   // =========================================================================
   useEffect(() => {
     let isMounted = true;
 
-    // Aguarda o contexto de autenticação inicializar
-    if (isLoading) return; 
+    // [WAIT-LOCK]: Impede a tomada de decisão do Guard se o Sniper ainda está operando 
+    // ou se o contexto de autenticação ainda está realizando fetching.
+    if (isLoading || isExchanging) return; 
 
-    // 🔒 CENÁRIO A: Sem credencial ativa
+    // ⛔ CENÁRIO A: Falha na Resolução de Credenciais (Acesso Anônimo)
     if (!USE_COOKIE && !sessionToken) {
       if (isMounted) setIsVerifying(false); 
       
@@ -147,6 +208,7 @@ export function sbXPAYLayOut() {
         ? `${window.location.pathname}${window.location.search}` 
         : "/sbxpay";
 
+      // Dispara Redirecionamento Proativo preservando a intenção na URL
       navigate({ 
         to: '/accounts/signin', 
         search: { redirect_uri: currentPath } as any,
@@ -155,12 +217,12 @@ export function sbXPAYLayOut() {
       return;
     }
 
-    // 🚀 CENÁRIO B: Sessão presente -> Hidrata do Contexto/Storage e gerencia a Visita
+    // ✅ CENÁRIO B: Credencial Válida (Autenticado). Procede para Hidratação e Telemetria.
     if (isMounted) setIsVerifying(true); 
 
     async function initializeHubSession() {
       try {
-        // 1. Hidrata o perfil priorizando a memória do contexto ou o fallback do sessionStorage
+        // [HIDRATAÇÃO BFF] Restaura o JSON do usuário para prover os dados de cabeçalho e saudação
         const storedProfileStr = sessionStorage.getItem("user_profile");
         const fallbackProfile = storedProfileStr ? JSON.parse(storedProfileStr) : null;
         
@@ -172,11 +234,13 @@ export function sbXPAYLayOut() {
 
         if (isMounted) {
           setUserData(userProfile);
-          
-          // ✨ Libera o shell principal IMEDIATAMENTE (Não segura a renderização da Home)
-          setIsVerifying(false);
+          setIsVerifying(false); // UI liberada. O restante opera em background (Thread-Safe).
 
-          // 2. Gatekeeper de Visita em Background: Executa o Orquestrador sem bloquear a UI
+          // =====================================================================
+          // 👻 [STEP 3] PHANTOM VISIT: Orquestração Silenciosa
+          // Injeta a visita no banco de dados e anexa o `visit_id` na URL via History API
+          // sem disparar ciclo de re-renderização do React Router.
+          // =====================================================================
           const searchParams = new URLSearchParams(window.location.search);
           if (!searchParams.get('visit_id')) {
             try {
@@ -197,6 +261,7 @@ export function sbXPAYLayOut() {
 
               callOrchestrator(visitPayload, "POST").then((visitResponse) => {
                 if (visitResponse?.visit_id && visitResponse?.url) {
+                  // Concatena parâmetros originais com a URL de rastreamento do orquestrador
                   const originalParams = new URLSearchParams(window.location.search);
                   const responseUrlObj = new URL(visitResponse.url, window.location.origin);
                   
@@ -205,6 +270,8 @@ export function sbXPAYLayOut() {
                   });
 
                   const finalCleanUrl = `${responseUrlObj.pathname}?${originalParams.toString()}`;
+                  
+                  // Injeção limpa de URL sem repaints da interface
                   window.history.replaceState({}, '', finalCleanUrl);
                 }
               }).catch((visitErr: any) => {
@@ -218,11 +285,8 @@ export function sbXPAYLayOut() {
                     window.location.href = visitErr?.fallback_url || `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
                   }
                 }
-                // Silenciado intencionalmente para não poluir o console com erros não bloqueantes
               });
-            } catch (visitErr) {
-              // Silenciado intencionalmente
-            }
+            } catch (visitErr) {}
           }
         }
       } catch (err: any) {
@@ -242,29 +306,29 @@ export function sbXPAYLayOut() {
     return () => { 
       isMounted = false; 
     }; 
-  }, [isLoading, sessionToken, contextProfile, navigate]);
+  }, [isLoading, isExchanging, sessionToken, contextProfile, navigate]);
 
   // =========================================================================
-  // [RENDERIZAÇÃO DE ESTADOS VISUAIS]
+  // [OUTPUT]: RESOLUÇÃO DE ÁRVORE DE RENDERIZAÇÃO
   // =========================================================================
 
-  // ✨ Bloqueia a renderização dinâmica até o cliente montar.
-  // Isso obriga o servidor e a primeira carga do navegador a usarem o Skeleton puro, eliminando o Hydration Mismatch.
-  if (!isClientMounted) {
+  // ✨ [PREVENÇÃO DE HYDRATION MISMATCH] 
+  // O servidor SSR (se houver) e o instante zero do cliente sempre renderizam o Skeleton puro.
+  // Isso também segura a tela enquanto o Sniper vasculha a URL.
+  if (!isClientMounted || isExchanging) {
     return <HomeSkeleton />;
   }
 
-  // A partir daqui, temos garantia que estamos rodando no cliente
   const hasLocalSession = Boolean(sessionToken || (typeof window !== "undefined" && sessionStorage.getItem("user_profile")));
 
-  // Só exibe o spinner se estiver carregando E NÃO houver absolutamente nada em cache local
   if (isLoading && !hasLocalSession) {
     return <HomeSkeleton />; 
   }
 
-  // Fail-safe em DEV caso não haja sessionToken (confia no cookie HttpOnly em PROD)
-  if (!USE_COOKIE && !sessionToken) return null;
+  if (!USE_COOKIE && !sessionToken) return null; // Aborto silencioso em falha total
 
+  // [INJEÇÃO DE CONTEXTO E RENDERIZAÇÃO DOM]
+  // As sub-rotas (Outlet) ganham acesso direto ao Profile e a função de Logout.
   return (
     <div className="sbxpay-shell min-h-screen bg-white">
       <UserDataContext.Provider value={{ userData, performLogout }}>

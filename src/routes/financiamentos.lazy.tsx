@@ -1,25 +1,24 @@
 /**
- * @fileoverview Rota Pai: /financiamentos
+ * @fileoverview Rota Pai: /financiamentos (Layout Mestre e Guardião de Handoff Stateless)
  * @path src/routes/financiamentos.lazy.tsx
  * 
- * * * * ÁRVORE DE DEPENDÊNCIAS (ROUTING):
- * --------------------------------------------------------------------------------
- * src/routes/
- * ├── financiamentos.lazy.tsx      # [AQUI] Layout Pai (Mestre)
- * │   ├── /cartao.tsx              # Rota Filha (Herda a estrutura)
- * │   ├── /veiculos.tsx            # Rota Filha (Herda a estrutura)
- * │   ├── /simulacao.tsx           # Rota Filha (Herda a estrutura)
- * │   └── /auto-equity.tsx         # Rota Filha (Herda a estrutura)
- * --------------------------------------------------------------------------------
- * * * PROPÓSITO:
- * Atuar como o "Wrapper" (Envoltório) global para todas as jornadas de crédito.
- * Define o `FinancialHubLayout` como a base visual comum e garante que a
- * estrutura base de todas as rotas financeiras seja consistente.
+ * =========================================================================
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: FINANCIAMENTOS STATELESS HANDOFF
+ * =========================================================================
+ * Este módulo atua como o Guardião e Layout Pai para todas as sub-rotas 
+ * de crédito e financiamentos. Garante o resgate tático do token efêmero (#xt=)
+ * caso o usuário aterrissie diretamente em uma sub-rota cross-domain.
  * 
- * * [ATUALIZAÇÃO DE ARQUITETURA - Híbrido Consciente]:
- * O Route Guard agora respeita a flag `USE_COOKIE`. Em produção, o token 
- * fica inacessível ao JS (HttpOnly). Logo, o Guard confia no backend para 
- * validar a sessão, evitando expulsões prematuras por falta de token no storage.
+ * [FLUXO DE SEGURANÇA E EXECUÇÃO]:
+ * 1. {Sniper Tático}: Inspeciona o fragmento da URL em prioridade máxima. 
+ *    Se detectar o token `#xt=`, intercepta o ciclo, executa o redeem via AJAX
+ *    e hidrata o sessionStorage antes de qualquer decisão do Guard.
+ * 2. {Zero-Trust Guard}: Valida a presença do session_token ou respeita a flag 
+ *    `USE_COOKIE` para evitar falsos positivos.
+ * 3. {State Rehydration}: Gerencia o ciclo de expiração via JWT e relógio sincronizado.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
@@ -27,36 +26,39 @@ import { FinancialHubLayout } from "@/features/financial-hub/components/layout/F
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { useEffect } from "react";
 import { jwtDecode } from "jwt-decode"; 
-import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session";  
+import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session"; 
+import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoffRedeem";
 
 const FinanciamentosGuard = () => {
-  const { sessionToken: contextToken, isLoading } = useFinancialAuth();
+  const { sessionToken: contextToken, isLoading, refreshSession } = useFinancialAuth();
   const sessionToken = contextToken || getTokenForPayload();
 
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Sniper Tático isolado no hook unificado (sem reload)
+  const { isExchanging } = useHandoffRedeem(() => {
+    if (refreshSession) refreshSession();
+  });
 
   useEffect(() => {
-    if (isLoading) return;
-
+    if (isLoading || isExchanging) return;
+    
+    // =========================================================================
+    // 🛡️ [STEP 1]: ZERO-TRUST GUARD & REDIRECIONAMENTO PROATIVO
+    // =========================================================================
     if (!USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
-      
-      // ✨ FIX: Usa o window.location nativo para garantir que o search é uma string
-      // e não o objeto parseado pelo TanStack Router.
-      const currentPath = typeof window !== "undefined" 
-        ? window.location.pathname + window.location.search 
-        : "/financiamentos";
-
+      const currentPath = window.location.pathname + window.location.search;
       navigate({ 
         to: '/accounts/signin',
-        search: { 
-          redirect_uri: currentPath,
-          env: undefined 
-        } as any
+        search: { redirect_uri: currentPath } as any
       });
       return;
     }
 
+    // =========================================================================
+    // ⏱️ [STEP 2]: VALIDAÇÃO DE EXPIRAÇÃO DE SESSÃO
+    // =========================================================================
     if (sessionToken && typeof sessionToken === "string") {
       try {
         const decoded = jwtDecode<{ exp?: number }>(sessionToken);
@@ -66,22 +68,18 @@ const FinanciamentosGuard = () => {
         if (decoded.exp && decoded.exp < syncedCurrentTimeInSeconds) {
           console.warn("🚨 [UX Guard] sessionToken expirado localmente. Acionando Amnésia.");
           window.dispatchEvent(new CustomEvent('session_expired'));
-          return;
         }
       } catch (error) {
         console.warn("⚠️ [UX Guard] sessionToken malformado. Expulsando por segurança.");
         window.dispatchEvent(new CustomEvent('session_expired'));
-        return;
       }
     }
-  }, [sessionToken, isLoading, navigate, location.pathname]);
+  }, [sessionToken, isLoading, navigate, location.pathname, isExchanging]);
 
   // =========================================================================
-  // [UX REFINEMENT]: Substituição do Loader Bruto por Skeleton Estrutural
-  // Rationale: Evita Layout Shift e a sensação de "duplo carregamento" na tela,
-  // mantendo o container principal visível enquanto valida a sessão em background.
+  // [OUTPUT]: RENDERIZAÇÃO DE SKELETON OU ROTA FILHA
   // =========================================================================
-  if (isLoading) {
+  if (isLoading || isExchanging) {
     return (
       <FinancialHubLayout>
         <div className="max-w-7xl mx-auto px-6 py-16 space-y-8 animate-pulse">

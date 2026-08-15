@@ -1,21 +1,33 @@
 /**
- * @fileoverview Rota Pai: /seguros
- * @description Wrapper de segurança e layout para as jornadas de seguros.
- * @context Garante a integridade da sessão do usuário antes de renderizar qualquer sub-rota de seguro.
- * @compliance Proteção de acesso e controle de sessão (Auth Guard) para evitar exposição de dados.
+ * @fileoverview Rota Pai: /seguros (Layout Mestre e Guardião de Handoff Stateless)
+ * @path src/routes/seguros.lazy.tsx
  * 
- * * [ATUALIZAÇÃO DE ARQUITETURA - Híbrido Consciente]:
- * O Route Guard agora respeita a flag `USE_COOKIE`. Em produção, o token 
- * fica inacessível ao JS (HttpOnly). Logo, o Guard confia no backend para 
- * validar a sessão, evitando expulsões prematuras por falta de token no storage.
+ * =========================================================================
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: SEGUROS STATELESS HANDOFF
+ * =========================================================================
+ * Este módulo atua como o Guardião e Layout Pai para todas as sub-rotas 
+ * de seguros. Garante o resgate tático do token efêmero (#xt=)
+ * caso o usuário aterrissie diretamente em uma sub-rota cross-domain.
+ * 
+ * [FLUXO DE SEGURANÇA E EXECUÇÃO]:
+ * 1. {Sniper Tático}: Inspeciona o fragmento da URL em prioridade máxima. 
+ *    Se detectar o token `#xt=`, intercepta o ciclo, executa o redeem via AJAX
+ *    e hidrata o sessionStorage antes de qualquer decisão do Guard.
+ * 2. {Zero-Trust Guard}: Valida a presença do session_token ou respeita a flag 
+ *    `USE_COOKIE` para evitar falsos positivos.
+ * 3. {State Rehydration}: Gerencia o ciclo de expiração via JWT e relógio sincronizado.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
 import { FinancialHubLayout } from "@/features/financial-hub/components/layout/FinancialHubLayout";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { jwtDecode } from "jwt-decode"; 
-import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session";  
+import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session"; 
+import { redeemHandoffSession } from "@/services/exchange";
 
 /**
  * SegurosGuard
@@ -32,12 +44,39 @@ const SegurosGuard = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Alocação de estados de controle de fluxo de handoff
+  const [isExchanging, setIsExchanging] = useState(false);
+  const handoffAttempted = useRef(false);
+
   useEffect(() => {
     // 0. Ignora validações enquanto o estado inicial está hidratando
     if (isLoading) return;
 
-    // 1. [BUSINESS LOGIC]: Bloqueio proativo de acesso não autenticado (Somente em DEV).
-    if (!USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
+    // =========================================================================
+    // 🎯 [STEP 0]: INTERCEPTAÇÃO STATELESS (O SNIPER TÁTICO)
+    // =========================================================================
+    const hash = window.location.hash;
+    if ((hash.includes("xt=") || hash.includes("exchange_token=")) && !handoffAttempted.current) {
+      handoffAttempted.current = true;
+      setIsExchanging(true);
+
+      redeemHandoffSession().then((res) => {
+        if (res.ok && res.session_token) {
+          console.log("[SegurosGuard] Token e ambiente resgatados com sucesso via Handoff.");
+          window.location.hash = "";
+          window.location.reload(); 
+        } else {
+          console.error("[SegurosGuard] Falha no resgate, seguindo para signin.");
+          setIsExchanging(false);
+        }
+      });
+      return; 
+    }
+
+    // =========================================================================
+    // 🛡️ [STEP 1]: ZERO-TRUST GUARD & REDIRECIONAMENTO PROATIVO
+    // =========================================================================
+    if (!isExchanging && !USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
       
       // ✨ FIX: Usa o window.location nativo para garantir que o search é uma string
       // e não o objeto parseado pelo TanStack Router.
@@ -55,7 +94,9 @@ const SegurosGuard = () => {
       return;
     }
 
-    // 2. [SECURITY]: Validação Passiva de Expiração (UX Guard)
+    // =========================================================================
+    // ⏱️ [STEP 2]: VALIDAÇÃO PASSIVA DE EXPIRAÇÃO (UX Guard)
+    // =========================================================================
     // ✨ FIX: Trava que impede o React de jogar o erro 'Cannot convert object to primitive value'
     if (sessionToken && typeof sessionToken === "string") {
       try {
@@ -76,14 +117,14 @@ const SegurosGuard = () => {
         return;
       }
     }
-  }, [sessionToken, isLoading, navigate, location.pathname]);
+  }, [sessionToken, isLoading, navigate, location.pathname, isExchanging]);
 
   // =========================================================================
   // [UX REFINEMENT]: Substituição do Loader Bruto por Skeleton Estrutural
   // Rationale: Evita Layout Shift e a sensação de "duplo carregamento" na tela,
   // mantendo o container principal visível enquanto valida a sessão em background.
   // =========================================================================
-  if (isLoading) {
+  if (isLoading || isExchanging) {
     return (
       <FinancialHubLayout>
         <div className="max-w-7xl mx-auto px-6 py-16 space-y-8 animate-pulse">

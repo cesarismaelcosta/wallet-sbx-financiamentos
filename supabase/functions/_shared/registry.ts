@@ -8,6 +8,10 @@ export type FunctionConfig = {
   methods: string[];
   requiredHeaders: string[];
   origin?: string;
+  /** Nome da env var com o segredo server-to-server exigido no perímetro. */
+  requiresSecret?: string;
+  /** Exige x-session-token válido antes de executar o handler. */
+  requiresSession?: boolean;
 };
 
 export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
@@ -59,6 +63,15 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
     methods: ['POST'], 
     requiredHeaders: [] 
   },
+
+  /**
+   * sbx-auth-exchange
+   * [DOUBLE JWT PROTOCOL - HYBRID ENGINE]
+   * Modo Issue:  Recebe x-access-token. Devolve Exchange JWT (60s) + Perfil BFF.
+   * Modo Redeem: Recebe x-exchange-token. Devolve Session JWT (6h) + Ambiente.
+   * Obs: Headers customizados de auth trafegam via Payload/Fetch, exigindo requiresHeaders vazio 
+   * para permitir a maleabilidade de entrada nas regras do withSecurity.
+   */
   'sbx-auth-exchange': { 
     methods: ['POST'], 
     requiredHeaders: [] 

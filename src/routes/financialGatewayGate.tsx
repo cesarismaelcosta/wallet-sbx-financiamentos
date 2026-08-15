@@ -1,17 +1,10 @@
 /**
- * @fileoverview Rota: financialGatewayGate (Front-end Error Fallback & Resilient Recovery)
+ * @fileoverview Rota: financialGatewayGate (Tela de Error Fallback do Gateway)
  * @path src/routes/financialGatewayGate.tsx
  *
- * =========================================================================
- * [ARQUITETURA & CLEAN ARCHITECTURE: FALLBACK DE BORDA]
- * =========================================================================
- * 1. [RESPONSABILIDADE ÚNICA]: Atua como a tela receptora de erros disparados
- *    pelo Edge Gateway via redirecionamento HTTP 302.
- * 2. [HIGIENIZAÇÃO DE CONTEXTO]: Extrai query parameters de falha e metadados
- *    (como offer_id, product_id) de forma estrita e segura.
- * 3. [RETORNO CONTEXTUAL]: Garante que o usuário seja devolvido para a origem
- *    correta (`targetReturnUrl`) de forma atômica, eliminando loops ou saltos
- *    para a raiz global (/).
+ * Atua exclusivamente como receptora de erros redirecionados pela borda quando 
+ * ocorre falha na autenticação ou orquestração. O handoff de sucesso (token #xt) 
+ * é tratado diretamente pelo Sniper Tático nos guards de rota.
  */
 
 import { createFileRoute } from "@tanstack/react-router";
@@ -30,9 +23,6 @@ interface SearchSchema {
 }
 
 export const Route = createFileRoute("/financialGatewayGate")({
-  // =====================================================================
-  // [VALIDAÇÃO DE PARÂMETROS]: Tipagem e saneamento da query string
-  // =====================================================================
   validateSearch: (search: Record<string, unknown>): SearchSchema => ({
     status: search.status as string | undefined,
     code: search.code as string | undefined,
@@ -43,13 +33,10 @@ export const Route = createFileRoute("/financialGatewayGate")({
     entity_id: search.entity_id as string | undefined,
   }),
 
-  component: function FinancialGatewayFallback() {
+  component: function FinancialGatewayErrorScreen() {
     const { status, code, message, return_uri, offer_id, product_id, entity_id } = Route.useSearch();
     const [countdown, setCountdown] = useState(5);
 
-    // =====================================================================
-    // [RESOLUÇÃO DE DESTINO]: Saneamento da URI de retorno para evitar rotas vazias
-    // =====================================================================
     const targetReturnUrl = return_uri && return_uri !== "/" ? return_uri : "/";
 
     // =====================================================================
@@ -75,26 +62,33 @@ export const Route = createFileRoute("/financialGatewayGate")({
     }, [status, code, message, targetReturnUrl, offer_id, product_id, entity_id]);
 
     // =====================================================================
+    // [GUARDAS DE SEGURANÇA]: Interceptação de sessão expirada via useEffect
+    // =====================================================================
+    useEffect(() => {
+      if (code === "SESSION_EXPIRED") {
+        const loginTarget = `/accounts/signin?redirect_uri=${encodeURIComponent(targetReturnUrl)}`;
+        window.location.replace(loginTarget);
+      }
+    }, [code, targetReturnUrl]);
+
+    // =====================================================================
     // [CONTROLE DE FLUXO]: Temporizador regressivo para redirecionamento automático
     // =====================================================================
     useEffect(() => {
+      if (code === "SESSION_EXPIRED") return; // Evita conflito com o redirect imediato acima
+
       if (countdown > 0) {
         const timer = setTimeout(() => setCountdown((prev) => prev - 1), 1000);
         return () => clearTimeout(timer);
       }
 
-      // Auto-retorno ao zerar o contador usando a URL de destino tratada
       if (countdown === 0) {
         window.location.replace(targetReturnUrl);
       }
-    }, [countdown, targetReturnUrl]);
+    }, [countdown, targetReturnUrl, code]);
 
-    // =====================================================================
-    // [GUARDAS DE SEGURANÇA]: Interceptação de cenários específicos de sessão
-    // =====================================================================
+    // Se a sessão expirou, retorna nulo momentaneamente enquanto o efeito executa o redirect
     if (code === "SESSION_EXPIRED") {
-      const loginTarget = `/accounts/signin?redirect_uri=${encodeURIComponent(targetReturnUrl)}`;
-      window.location.replace(loginTarget);
       return null;
     }
 
