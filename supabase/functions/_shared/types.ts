@@ -93,6 +93,8 @@ export interface Offer {
   offer_value: number;
   category_id?: number;    // Injetado pelo Orquestrador após o de-para
   category: string;        // Texto vindo do site
+  subcategory_id?: number | string;
+  subcategory?: string;
   [key: string]: any;      // Aqui entrará 'vehicle', 'equity' ou qualquer outro detalhe enviado
 }
 

@@ -138,8 +138,34 @@ export async function persistVisitData(
       }
 
       if (payload.offer?.offer_id && !hasOffer) {
-        await t`INSERT INTO visit_offers (visit_id, category_id, manager_name, manager_details, seller_id, legal_name, trade_name, economic_group, seller_details, event_id, event_description, event_start_date, event_end_date, event_details, offer_id, offer_description, offer_value, offer_details) 
-                VALUES (${visitId}, ${categoryId || null}, ${payload.manager?.manager_name || null}, ${payload.manager}::jsonb, ${payload.seller?.seller_id || null}, ${payload.seller?.legal_name || null}, ${payload.seller?.trade_name || null}, ${payload.seller?.economic_group || null}, ${payload.seller}::jsonb, ${payload.event?.event_id || null}, ${payload.event?.event_description || null}, ${payload.event?.event_start_date || null}, ${payload.event?.event_end_date || null}, ${payload.event}::jsonb, ${payload.offer.offer_id}, ${payload.offer.offer_description}, ${payload.offer.offer_value}, ${payload.offer}::jsonb)`;
+        await t`INSERT INTO visit_offers (
+                  visit_id, category_id, subcategory_id, subcategory, manager_name, manager_details, 
+                  seller_id, legal_name, trade_name, economic_group, seller_details, 
+                  event_id, event_description, event_start_date, event_end_date, event_details, 
+                  offer_id, offer_description, offer_value, offer_details
+                ) 
+                VALUES (
+                  ${visitId}, 
+                  ${categoryId || null}, 
+                  ${payload.offer.subcategory_id ? Number(payload.offer.subcategory_id) : null}, 
+                  ${payload.offer.subcategory || null}, 
+                  ${payload.manager?.manager_name || null}, 
+                  ${payload.manager}::jsonb, 
+                  ${payload.seller?.seller_id || null}, 
+                  ${payload.seller?.legal_name || null}, 
+                  ${payload.seller?.trade_name || null}, 
+                  ${payload.seller?.economic_group || null}, 
+                  ${payload.seller}::jsonb, 
+                  ${payload.event?.event_id || null}, 
+                  ${payload.event?.event_description || null}, 
+                  ${payload.event?.event_start_date || null}, 
+                  ${payload.event?.event_end_date || null}, 
+                  ${payload.event}::jsonb, 
+                  ${payload.offer.offer_id}, 
+                  ${payload.offer.offer_description}, 
+                  ${payload.offer.offer_value}, 
+                  ${payload.offer}::jsonb
+                )`;
       }
 
       if (payload.consents?.length > 0 && !hasConsent) {

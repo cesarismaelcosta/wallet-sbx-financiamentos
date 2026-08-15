@@ -326,7 +326,7 @@ function ConsultsPage() {
           product_types(name),
           partners(name, logo_url),
           visit_entities(id, name, document, phone, email, birth_date, gender, entity_type, entity_details),
-          visit_offers(id, visit_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, offer_id, offer_description, offer_value, category_id, category_types(name)),
+          visit_offers(id, visit_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, offer_id, offer_description, offer_value, category_id, category_types(name), subcategory ),
           visit_consents(id, consent_id, accepted, accepted_at, created_at, ip_address, country, state, city, operating_system, device_type, origin_details, page_snapshot)
         `)
         .eq("id", row.id)
@@ -1022,7 +1022,7 @@ function ConsultsPage() {
               return (
                 <div className="flex flex-col h-full overflow-hidden">
                   <div className="p-4 sm:p-6 pb-4 border-b bg-white shrink-0">
-                    <SheetHeader className="space-y-3">
+                    <SheetHeader className="space-y-3 text-left">
                       <div className="flex items-center justify-between gap-2 pr-8">
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="flex h-7 w-7 items-center justify-center rounded-md overflow-hidden border bg-white shrink-0">
@@ -1047,7 +1047,7 @@ function ConsultsPage() {
                         )}
                       </div>
 
-                      <div className="space-y-1 pr-8">
+                      <div className="space-y-1 pr-8 text-left w-full">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
                             {sim.product_types?.name || "Consulta / Visita"}
@@ -1066,7 +1066,7 @@ function ConsultsPage() {
                           </div>
                         </div>
 
-                        <SheetTitle className="text-lg sm:text-xl font-bold text-slate-900 break-words">
+                        <SheetTitle className="text-lg sm:text-xl font-bold text-slate-900 break-words text-left w-full">
                           {entity?.name || "Lead sem nome"}
                         </SheetTitle>
                       </div>

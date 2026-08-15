@@ -173,15 +173,15 @@ export async function insertSimulationData(
       // INSERT OFERTA: Persiste o contexto comercial, essencial para auditoria de originação.
       await t`
         INSERT INTO simulation_offers (
-          simulation_id, manager_name, manager_details, seller_id, legal_name, 
+          simulation_id, category_id, subcategory_id, subcategory, manager_name, manager_details, seller_id, legal_name, 
           trade_name, economic_group, seller_details, event_id, event_description, 
           event_start_date, event_end_date, event_details, offer_id, offer_description, 
-          offer_value, category_id, offer_details, raw_payload
+          offer_value, offer_details, raw_payload
         ) VALUES (
-          ${simulationId}, ${manager.manager_name || null}, ${manager}::jsonb, ${seller.seller_id || null}, ${seller.legal_name || null},
+          ${simulationId}, ${offer.category_id || null}, ${offer.subcategory_id ? Number(offer.subcategory_id) : null}, ${offer.subcategory || null}, ${manager.manager_name || null}, ${manager}::jsonb, ${seller.seller_id || null}, ${seller.legal_name || null},
           ${seller.trade_name || null}, ${seller.economic_group || null}, ${seller}::jsonb, ${event.event_id || null}, ${event.event_description || null},
           ${event.event_start_date || null}, ${event.event_end_date || null}, ${event}::jsonb, ${offer.offer_id || null}, ${offer.offer_description || null},
-          ${offer.offer_value || null}, ${offer.category_id || null}, ${offer}::jsonb, ${payload}::jsonb
+          ${offer.offer_value || null}, ${offer}::jsonb, ${payload}::jsonb
         )
       `;
 

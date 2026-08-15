@@ -884,7 +884,7 @@ function OrchestratorConfigEditor({
     config_type: initialData?.config_type || "PRODUCT",
     lookup_id: initialData?.lookup_id || "",
     entity_type: initialData?.entity_type || "PF+PJ",
-    page_url: initialData?.page_url || "http://localhost:8080/financiamentos/",
+    page_url: initialData?.page_url || "http://localhost:8080/financiamentos/veiculos",
     integration_method: initialData?.integration_method || "API",
     partner_id: initialData?.partner_id ? String(initialData.partner_id) : "none",
     is_active: initialData?.is_active ?? true,
@@ -1055,20 +1055,22 @@ function OrchestratorConfigEditor({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="PRODUCT">Produto (PRODUCT)</SelectItem>
-                        <SelectItem value="CATEGORY">Categoria (CATEGORY)</SelectItem>
                         <SelectItem value="EVENT">Evento (EVENT)</SelectItem>
                         <SelectItem value="SELLER">Seller (SELLER)</SelectItem>
+                        <SelectItem value="PRODUCT">Produto (PRODUCT)</SelectItem>
+                        <SelectItem value="SUBCATEGORY">Subcategoria (SUBCATEGORY)</SelectItem>
+                        <SelectItem value="CATEGORY">Categoria (CATEGORY)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1.5">
-                      {formData.config_type === "PRODUCT" && "Produto Oficial"}
-                      {formData.config_type === "CATEGORY" && "Categoria Oficial"}
+                      {formData.config_type === "EVENT" && "ID / Código do Evento"}       
                       {formData.config_type === "SELLER" && "Parceiro / Seller"}
-                      {formData.config_type === "EVENT" && "ID / Código do Evento"}
+                      {formData.config_type === "PRODUCT" && "Produto Oficial"}
+                      {formData.config_type === "SUBCATEGORY" && "ID da Subcategoria"}
+                      {formData.config_type === "CATEGORY" && "Categoria Oficial"}
                       <span className="text-red-500">*</span>
                     </label>
 
@@ -1123,6 +1125,14 @@ function OrchestratorConfigEditor({
                           )}
                         </SelectContent>
                       </Select>
+                    ) : formData.config_type === "SUBCATEGORY" ? (
+                      <Input
+                        type="number"
+                        value={formData.lookup_id}
+                        onChange={(e) => setFormData({ ...formData, lookup_id: e.target.value })}
+                        placeholder="Ex: 10102"
+                        className="h-11 rounded-xl font-mono text-sm"
+                      />
                     ) : (
                       <Input
                         value={formData.lookup_id}

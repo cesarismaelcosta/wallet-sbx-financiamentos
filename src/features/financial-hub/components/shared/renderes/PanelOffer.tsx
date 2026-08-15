@@ -18,10 +18,16 @@ export function PanelOffer({ offer, offerDetails, eventDetails }: any) {
         
         <div>
           <span className="text-slate-500 block">Categoria:</span>
-          <strong>
-            {offerDetails?.category || offer?.category_types?.name || "—"} 
-            {offerDetails?.sub_category ? ` (${offerDetails.sub_category})` : ""}
-          </strong>
+          <div className="flex flex-col">
+            <strong className="text-slate-900 truncate">
+              {offerDetails?.category || offer?.category_types?.name || "—"}
+            </strong>
+            {offer?.subcategory && (
+              <span className="text-xs text-slate-600 font-medium truncate">
+                {offer.subcategory}
+              </span>
+            )}
+          </div>
         </div>
         
         <div className="text-right">

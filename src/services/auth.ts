@@ -20,6 +20,8 @@
  * 3. **Mitigação de Assimetria Temporal (Clock Drift):** Realiza o cálculo contínuo 
  *    do desvio de relógio entre o relógio atômico do servidor backend e a máquina 
  *    do cliente, neutralizando falsos positivos de expiração de sessão em guards de UI.
+ * 4. **BFF Error Routing:** Desembrulha e repassa as ações de roteamento ('actions')
+ *    calculadas pelo Backend For Frontend baseadas no dicionário da Superbid.
  */
 
 import { setSessionToken, setSessionMetadata, USE_COOKIE } from "@/services/session";
@@ -34,8 +36,16 @@ import { setSessionToken, setSessionMetadata, USE_COOKIE } from "@/services/sess
  * @param {string} user - Identificador de acesso (E-mail ou Documento/CPF-CNPJ).
  * @param {string} pass - Senha de credenciamento do usuário.
  * @param {"staging" | "production"} environment - Alvo de infraestrutura upstream.
- * @returns {Promise<{success: boolean, session_token?: string, userId?: string, user_profile?: any, message?: string}>} 
- *          Contrato normalizado de resposta contendo o resultado da transação de sessão.
+ * @returns {Promise<{
+ *   success: boolean, 
+ *   session_token?: string, 
+ *   userId?: string, 
+ *   user_profile?: any, 
+ *   code?: string,
+ *   message?: string,
+ *   action?: "show_inline_error" | "show_banner_error" | "redirect",
+ *   redirect_path?: string
+ * }>} Contrato normalizado de resposta contendo o resultado da transação de sessão.
  */
 export const autenticateWalletsbX = async (
   user: string, 
@@ -71,10 +81,13 @@ export const autenticateWalletsbX = async (
     // ---------------------------------------------------------------------------
     if (response.ok) {
       const data = await response.json();
+      
+      // O envelopamento pode vir direto na raiz ou dentro do objeto `data`
+      const payload = data.data || data;
 
       // [ZERO-TRUST BARRIER]: Valida se o canal de transporte foi estabelecido com sucesso 
       // via token explícito no payload (DEV) ou via Handshake de Cookie HttpOnly (PROD)
-      if (data.session_token || USE_COOKIE) {
+      if (payload.session_token || USE_COOKIE) {
         
         // -----------------------------------------------------------------------
         // [SESSION LIFECYCLE MANAGEMENT]: Hidratação e Compensação de Deriva
@@ -82,20 +95,20 @@ export const autenticateWalletsbX = async (
         try {
           // [TRANSPORT ROUTING]: Delega o armazenamento do token ao session.ts, 
           // cumprindo rigorosamente a política de Zero LocalStorage.
-          if (data.session_token) {
-            setSessionToken(data.session_token);
+          if (payload.session_token) {
+            setSessionToken(payload.session_token);
           }
 
           // [CLOCK DRIFT MITIGATION]: Computa a assimetria temporal entre o servidor 
           // e o cliente, permitindo que os Guards da UI avaliem a validade do JWT 
           // de forma resiliente a atrasos de relógio local.
-          if (data.server_now_ms && data.expires_at) {
-            const serverTimeMs = data.server_now_ms;
+          if (payload.server_now_ms && payload.expires_at) {
+            const serverTimeMs = payload.server_now_ms;
             const localTimeMs = Date.now();
             const timeDelta = serverTimeMs - localTimeMs;
             
             // Persiste metadados inofensivos de expiração estritamente no sessionStorage
-            setSessionMetadata(data.expires_at, timeDelta);
+            setSessionMetadata(payload.expires_at, timeDelta);
           }
         } catch (err) {
           console.warn("⚠️ [auth.ts] Falha não bloqueante ao processar metadados temporais da sessão:", err);
@@ -104,27 +117,46 @@ export const autenticateWalletsbX = async (
         // [SUCCESS CONTRACT]: Retorna o payload estruturado para o consumidor de UI
         return { 
           success: true, 
-          session_token: data.session_token || null, 
-          userId: data.userId,
-          user_profile: data.user_profile
+          session_token: payload.session_token || null, 
+          userId: payload.userId,
+          user_profile: payload.user_profile
         };
       } else {
         // [ANOMALY DETECTION]: O servidor respondeu 200 OK mas omitiu as credenciais de sessão
         console.error("🚨 [auth.ts] Proxy validado com sucesso (200), mas o token de sessão está ausente na resposta:", data);
-        return { success: false, message: "Token de sessão ausente na resposta do servidor." };
+        return { 
+          success: false, 
+          code: "SESSION_TOKEN_MISSING",
+          message: "Token de sessão ausente na resposta do servidor.",
+          action: "show_banner_error"
+        };
       }
     } else {
-      // [CLIENT/SERVER ERROR NORMALIZATION]: Captura falhas controladas de autenticação (Ex: 401 Credenciais Inválidas)
+      // -----------------------------------------------------------------------
+      // [CLIENT/SERVER ERROR NORMALIZATION]: Contrato Inteligente do BFF
+      // -----------------------------------------------------------------------
+      // Desembrulha o JSON contendo os comandos de UI (action, redirect_path) 
+      // gerados pelo Edge Function com base na documentação da Superbid.
       const errorData = await response.json().catch(() => ({}));
+      const errorPayload = errorData.data || errorData;
+      
       return { 
         success: false, 
-        message: errorData.error || "Credenciais inválidas. Verifique seu usuário e senha." 
+        code: errorPayload.code || "AUTH_FAILED",
+        message: errorPayload.message || "Ocorreu um erro ao processar a autenticação.",
+        action: errorPayload.action || "show_banner_error",
+        redirect_path: errorPayload.redirect_path
       };
     }
 
   } catch (error) {
     // [CIRCUIT BREAKER CATCH]: Falhas de rede profundas, interrupções de túnel ou instabilidades de DNS
     console.error("🔥 [auth.ts] Erro crítico de rede na comunicação com o Proxy de Autenticação:", error);
-    return { success: false, message: "Erro de rede ao contatar o servidor interno de autenticação." };
+    return { 
+      success: false, 
+      code: "NETWORK_ERROR",
+      message: "Erro de rede ao contatar o servidor interno de autenticação. Verifique sua conexão.",
+      action: "show_banner_error"
+    };
   }
 };

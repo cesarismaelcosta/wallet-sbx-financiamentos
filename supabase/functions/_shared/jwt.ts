@@ -24,6 +24,7 @@
  */
 
 import { jwtVerify, SignJWT } from "https://deno.land/x/jose@v4.14.4/index.ts";
+import { debugLog } from "./logger.ts";
 
 /**
  * [CONTRATO FRONTEND]

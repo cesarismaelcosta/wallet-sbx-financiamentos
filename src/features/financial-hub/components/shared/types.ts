@@ -113,6 +113,8 @@ export interface Offer {
   offer_value: number;
   category_id?: number;    // Injetado pelo Orquestrador após o de-para
   category: string;        // Texto vindo do site
+  subcategory_id?: number | string; 
+  subcategory?: string;             
   [key: string]: any;      // Aqui entrará 'vehicle', 'equity' ou qualquer outro detalhe enviado
 }
 
@@ -222,4 +224,28 @@ export interface BFFUserProfile {
     processedAt: string;    // Timestamp do processamento no BFF
     originIp: string;       // IP de origem do request para fins de segurança
   };
+}
+
+/**
+ * @interface BFFUserProfile
+ * @description Contrato estrito entre o Backend (Edge Function) e o Frontend.
+ * Padronização de retornos.
+ */
+export interface BFFErrorResponse {
+  success: boolean;
+  code: string;
+  message: string;
+  fallback_url?: string;
+}
+
+/**
+ * @interface BFFUserProfile
+ * @description Contrato estrito entre o Backend (Edge Function) e o Frontend.
+ * Todas as alterações na estrutura de dados de oferta devem ser refletidas aqui.
+ */
+export interface BFFOfferDetails {
+  offer_id?: string | number;
+  offer_description?: string;
+  offer_value?: number | string;
+  [key: string]: any;
 }

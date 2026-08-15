@@ -36,20 +36,9 @@ import {
 // =========================================================================
 // [HELPERS]: Validação e Formatação de Documentos (CPF / CNPJ)
 // =========================================================================
-
-/**
- * Valida a estrutura numérica bruta de um CPF (11 dígitos).
- */
 const isCPF = (str: string) => /^\d{11}$/.test(str.replace(/\D/g, ''));
-
-/**
- * Valida a estrutura numérica bruta de um CNPJ (14 dígitos).
- */
 const isCNPJ = (str: string) => /^\d{14}$/.test(str.replace(/\D/g, ''));
 
-/**
- * Aplica a máscara visual padrão de CPF (000.000.000-00) em tempo real durante a digitação.
- */
 const formatCPF = (val: string) => 
   val
     .replace(/\D/g, '')
@@ -58,9 +47,6 @@ const formatCPF = (val: string) =>
     .replace(/(\d{3})(\d{1,2})/, '$1-$2')
     .slice(0, 14);
 
-/**
- * Aplica a máscara visual padrão de CNPJ (00.000.000/0001-00) em tempo real durante a digitação.
- */
 const formatCNPJ = (val: string) => 
   val
     .replace(/\D/g, '')
@@ -70,17 +56,14 @@ const formatCNPJ = (val: string) =>
     .replace(/(\d{4})(\d{1,2})/, '$1-$2')
     .slice(0, 18);
 
-// Configuração da rota lazy via TanStack Router
 export const Route = createLazyFileRoute('/accounts/signin')({
   component: CustomLogin,
 });
 
 export function CustomLogin() {
-  // Contexto de autenticação global em memória (não lê do disk)
   const { setSession } = useFinancialAuth();
   const navigate = useNavigate();
   
-  // Hook do TanStack Router para capturar parâmetros de busca na URL
   const search = useSearch({ from: '/accounts/signin' }) as { 
     redirect_uri?: string; 
     env?: "staging" | "production";
@@ -89,36 +72,25 @@ export function CustomLogin() {
   // =========================================================================
   // [LÓGICA DE RESOLUÇÃO DE AMBIENTE CASCATA & ANTI-FLICKER]
   // =========================================================================
-
-  // Flag de montagem para garantir paridade exata entre SSR e primeiro paint do client
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // O estado default utiliza o parâmetro da URL ou o default seguro do environment
   const [ambienteAtivo, setAmbienteAtivo] = useState<"staging" | "production">(() => {
     return search.env || getDefaultSbxEnvironment();
   });
 
-  // Sincroniza o ambiente real após a montagem no client (lendo sessionStorage/env)
   useEffect(() => {
     if (!mounted) return;
     setAmbienteAtivo(search.env || getDefaultSbxEnvironment());
   }, [mounted, search.env]);
 
-  // Propriedades derivadas estritamente ativas após a hidratação no client
   const isEnvFixed = mounted && isEnvironmentLocked();
   const hasPref = mounted && (hasSbxEnvironmentPreference() || !!search.env);
-
-  // O seletor só aparece se não estiver travado e se NENHUMA preferência tiver sido definida ainda
   const showEnvSelector = mounted && !isEnvFixed && !hasPref;
   const showStageBadge = mounted && ambienteAtivo === "staging" && isEnvFixed;
 
-  /**
-   * [HANDLER]: Troca Manual de Ambiente
-   * Atualiza o estado, persiste a escolha no session storage.
-   */
   const handleEnvChange = (env: "staging" | "production") => {
     setAmbienteAtivo(env);
   };
@@ -134,21 +106,26 @@ export function CustomLogin() {
   const [loginError, setLoginError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
+  
+  // ESTADO DE REDIRECIONAMENTO DE SEGURANÇA (O front é burro, só guarda a URL)
+  const [securityRedirectUrl, setSecurityRedirectUrl] = useState("");
 
-  /**
-   * [HANDLER]: Processamento de Autenticação
-   * Centraliza a validação dos campos, aciona o serviço do Proxy OAuth e executa
-   * o redirecionamento limpo para a aplicação sem expor tokens na URL.
-   */
   const handleRealLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // -----------------------------------------------------------------------
+    // INTERCEPTADOR DE SEGURANÇA: Se a tela travou pedindo biometria e o 
+    // usuário clicou em "Continuar", a gente obedece a URL enviada pelo BFF.
+    // -----------------------------------------------------------------------
+    if (securityRedirectUrl) {
+      window.location.href = securityRedirectUrl;
+      return;
+    }
+
     setLoginError(""); 
     setPasswordError(""); 
     setGeneralError("");
 
-    // -----------------------------------------------------------------------
-    // STEP 1: Validação síncrona dos campos obrigatórios e formatos de documento
-    // -----------------------------------------------------------------------
     let hasError = false;
     if (!login.trim()) { 
       setLoginError(tipoPessoa === "F" ? "O e-mail ou login devem ser informados" : "O CNPJ ou login devem ser informados"); 
@@ -172,20 +149,13 @@ export function CustomLogin() {
 
     if (hasError) return;
 
-    // Garante que o ambiente ativo seja persistido usando o serviço
     setSbxEnvironmentPreference(ambienteAtivo);
-
     setIsLoading(true);
 
     try {
-      // -----------------------------------------------------------------------
-      // [STEP 2] DISPARO DO PROXY: Autenticação via Edge Function sbx-auth
-      // O ambiente ativo foi resolvido com segurança na montagem ou escolha.
-      // -----------------------------------------------------------------------
       const response = await autenticateWalletsbX(login, password, ambienteAtivo);
       
       if (response?.success) {
-        // 1. EXTRAÇÃO ROBUSTA: Mapeia estritamente do user_profile retornado pela Edge Function
         const rawP = response.user_profile || {};
         const safeProfile = {
           entity_id: rawP.entity_id || response.userId || "",
@@ -203,20 +173,29 @@ export function CustomLogin() {
           metadata: rawP.metadata || {}
         };
 
-        // 2. Salva usando o seu Contexto (que fala com o session.ts e salva no sessionStorage)
         setSession(response.session_token, response.userId, safeProfile);
-
-        // 3. Libera o botão
         setIsLoading(false);
 
-        // 4. NAVEGAÇÃO NATIVA: Dá um reload forçado e limpo para o /sbxpay
         const redirectUri = search.redirect_uri || "/sbxpay";
         window.location.href = redirectUri.startsWith('http') 
           ? redirectUri 
           : `${window.location.origin}${redirectUri.startsWith('/') ? '' : '/'}${redirectUri}`;
           
       } else {
-        setPasswordError(response.message || "Usuário ou senha inválidos.");
+        const action = response.action;
+
+        if (action === "redirect" && response.redirect_path) {
+          // Salva a URL absoluta vinda da Edge Function no estado e trava a tela
+          setGeneralError(response.message || "Identificamos que uma validação de segurança é necessária.");
+          setSecurityRedirectUrl(response.redirect_path);
+        } 
+        else if (action === "show_inline_error") {
+          setPasswordError(response.message || "Usuário ou senha inválidos.");
+        } 
+        else {
+          setGeneralError(response.message || "Ocorreu um erro ao processar o login.");
+        }
+        
         setIsLoading(false);
       }
     } catch (err) {
@@ -231,12 +210,10 @@ export function CustomLogin() {
     <div className="min-h-screen flex items-start justify-center pt-24 sm:pt-32 bg-gray-50 px-4 font-sans">
       <div className="w-full max-w-[440px] bg-white rounded-xl shadow-sm border border-gray-100 p-8 sm:p-10">
         
-        {/* Cabeçalho do Card: Logo da Brand e Badge de Ambiente Fixo */}
         <div className="flex justify-between items-center mb-6">
           <WalletLogo size="md" withTagline />
-          {/* Badge de indicação visual caso o ambiente STAGE esteja fixado via build (.env) */}
           <span 
-            className={`text-[10px] uppercase font-bold px-2 py-1 rounded-full border bg-red-50 text-red-600 border-red-200 transition-opacity duration-150 ${
+            className={`text-[10px] uppercase font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200 transition-opacity duration-150 ${
               showStageBadge ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
             aria-hidden={!showStageBadge}
@@ -245,8 +222,7 @@ export function CustomLogin() {
           </span>
         </div>
 
-        {/* SELETOR DE AMBIENTE */}
-        {mounted && showEnvSelector && (
+        {mounted && showEnvSelector && !securityRedirectUrl && (
           <div className="mb-4">
             <p className="text-[11px] uppercase font-bold text-gray-500 mb-2 text-center tracking-wide">
               Selecione o ambiente de destino:
@@ -279,90 +255,103 @@ export function CustomLogin() {
         )}
 
         <form onSubmit={handleRealLogin} className="flex flex-col gap-5" noValidate>
-          {/* Alternador de Tipo de Pessoa (Física x Jurídica) */}
-          <div className="flex w-full border-b border-gray-200 mb-2">
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={() => { setTipoPessoa("F"); setLogin(""); setLoginError(""); setPasswordError(""); }}
-              className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none focus:outline-none ${
-                tipoPessoa === "F" 
-                ? "text-gray-900 border-gray-900" 
-                : "text-gray-400 border-transparent hover:text-gray-600"
-              } disabled:opacity-50 ${isLoading ? "cursor-wait" : "cursor-pointer"}`}
-            >
-              Pessoa Física
-            </button>
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={() => { setTipoPessoa("J"); setLogin(""); setLoginError(""); setPasswordError(""); }}
-              className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none focus:outline-none ${
-                tipoPessoa === "J" 
-                ? "text-gray-900 border-gray-900" 
-                : "text-gray-400 border-transparent hover:text-gray-600"
-              } disabled:opacity-50 ${isLoading ? "cursor-wait" : "cursor-pointer"}`}
-            >
-              Pessoa Jurídica
-            </button>
-          </div>
-
-          {/* Mensagem de Erro Geral da API */}
-          {generalError && (
-            <div className="bg-red-50 text-red-600 text-sm p-3 rounded border border-red-100 text-center font-medium">
-              {generalError}
+          
+          {/* Só mostra as abas se NÃO estiver travado pela tela de segurança */}
+          {!securityRedirectUrl && (
+            <div className="flex w-full border-b border-gray-200 mb-2">
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => { setTipoPessoa("F"); setLogin(""); setLoginError(""); setPasswordError(""); }}
+                className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none focus:outline-none ${
+                  tipoPessoa === "F" 
+                  ? "text-gray-900 border-gray-900" 
+                  : "text-gray-400 border-transparent hover:text-gray-600"
+                } disabled:opacity-50 ${isLoading ? "cursor-wait" : "cursor-pointer"}`}
+              >
+                Pessoa Física
+              </button>
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => { setTipoPessoa("J"); setLogin(""); setLoginError(""); setPasswordError(""); }}
+                className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none focus:outline-none ${
+                  tipoPessoa === "J" 
+                  ? "text-gray-900 border-gray-900" 
+                  : "text-gray-400 border-transparent hover:text-gray-600"
+                } disabled:opacity-50 ${isLoading ? "cursor-wait" : "cursor-pointer"}`}
+              >
+                Pessoa Jurídica
+              </button>
             </div>
           )}
 
-          {/* Campo de Entrada de Login com Formatação Dinâmica (CPF/CNPJ/E-mail) */}
-          <div className="flex flex-col gap-1.5">
-            <input
-              type="text"
-              disabled={isLoading}
-              value={login}
-              onChange={(e) => {
-                const rawValue = e.target.value;
-                const isNumeric = /^\d+$/.test(rawValue.replace(/\D/g, ''));
-                if (isNumeric) {
-                  setLogin(tipoPessoa === "F" ? formatCPF(rawValue) : formatCNPJ(rawValue));
-                } else {
-                  setLogin(rawValue);
-                }
-                if (loginError) setLoginError("");
-              }}
-              className={`w-full h-12 border rounded-full px-5 text-sm outline-none transition-all ${
-                loginError ? "border-[#C13535] focus:ring-1 focus:ring-[#C13535]" : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
-              } disabled:bg-gray-50 disabled:text-gray-500 ${isLoading ? "cursor-wait" : "cursor-text"}`}
-              placeholder={loginLabelText}
-            />
-            {loginError && <span className="text-[#C13535] text-[11px] pl-5 font-medium mt-1">{loginError}</span>}
-          </div>
-
-          {/* Campo de Senha */}
-          <div className="flex flex-col gap-1.5">
-            <div className="relative flex items-center w-full">
-              <input
-                type={showPassword ? "text" : "password"}
-                disabled={isLoading}
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(""); }}
-                className={`w-full h-12 border rounded-full pl-5 pr-12 text-sm outline-none transition-all ${
-                  passwordError ? "border-[#C13535] focus:ring-1 focus:ring-[#C13535]" : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
-                } disabled:bg-gray-50 disabled:text-gray-500 ${isLoading ? "cursor-wait" : "cursor-text"}`}
-                placeholder="Senha"
+          {generalError && (
+            <div className="flex items-center gap-4 bg-slate-50 text-slate-700 text-[13px] leading-relaxed p-4 rounded-xl border border-slate-200 shadow-sm font-medium animate-in fade-in zoom-in-95 duration-200">
+              <img 
+                src="/assets/error/error.webp" 
+                alt="Aviso" 
+                className="w-11 h-11 object-contain shrink-0 drop-shadow-sm" 
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 outline-none focus:outline-none flex items-center justify-center"
-              >
-                {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
-              </button>
+              <span className="text-left flex-1">{generalError}</span>
             </div>
-            {passwordError && <span className="text-[#C13535] text-[11px] pl-5 font-medium mt-1">{passwordError}</span>}
-          </div>
+          )}
 
-          {/* Botão de Submissão com Indicador Visual de Carregamento */}
+          {/* Oculta os inputs caso o usuário precise confirmar a identidade na Superbid */}
+          {!securityRedirectUrl && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <input
+                  type="text"
+                  disabled={isLoading}
+                  value={login}
+                  onChange={(e) => {
+                    const rawValue = e.target.value;
+                    const isNumeric = /^\d+$/.test(rawValue.replace(/\D/g, ''));
+                    if (isNumeric) {
+                      setLogin(tipoPessoa === "F" ? formatCPF(rawValue) : formatCNPJ(rawValue));
+                    } else {
+                      setLogin(rawValue);
+                    }
+                    if (loginError) setLoginError("");
+                  }}
+                  className={`w-full h-12 border rounded-full px-5 text-sm outline-none transition-all ${
+                    loginError 
+                      ? "border-gray-500 focus:border-gray-900 focus:ring-1 focus:ring-gray-900" 
+                      : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
+                  } disabled:bg-gray-50 disabled:text-gray-500 ${isLoading ? "cursor-wait" : "cursor-text"}`}
+                  placeholder={loginLabelText}
+                />
+                {loginError && <span className="text-gray-600 text-[11px] pl-5 font-medium mt-1">{loginError}</span>}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="relative flex items-center w-full">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    disabled={isLoading}
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(""); }}
+                    className={`w-full h-12 border rounded-full pl-5 pr-12 text-sm outline-none transition-all ${
+                      passwordError 
+                        ? "border-gray-500 focus:border-gray-900 focus:ring-1 focus:ring-gray-900" 
+                        : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
+                    } disabled:bg-gray-50 disabled:text-gray-500 ${isLoading ? "cursor-wait" : "cursor-text"}`}
+                    placeholder="Senha"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 outline-none focus:outline-none flex items-center justify-center"
+                  >
+                    {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                  </button>
+                </div>
+                {passwordError && <span className="text-gray-600 text-[11px] pl-5 font-medium mt-1">{passwordError}</span>}
+              </div>
+            </>
+          )}
+
           <button
             type="submit"
             disabled={isLoading}
@@ -375,6 +364,8 @@ export function CustomLogin() {
                 <Loader2 className="animate-spin" size={20} />
                 Validando...
               </>
+            ) : securityRedirectUrl ? (
+              "Continuar"
             ) : (
               "Entrar"
             )}

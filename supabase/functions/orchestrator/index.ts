@@ -114,6 +114,7 @@ async function validatePayload(
     if (!payload.offer?.offer_id) errors.push("offer.offer_id é obrigatório.");
     if (!payload.offer?.offer_description) errors.push("offer.offer_description é obrigatório.");
     if (!payload.offer?.offer_value) errors.push("offer.offer_value é obrigatório.");
+    if (!payload.offer?.subcategory_id) errors.push("offer.subcategory_id é obrigatório.");
 
     // Resolução da categoria estritamente por ID (Chave primária)
     if (payload.offer?.category_id) {
@@ -161,6 +162,7 @@ async function resolveDestination(
   eventId?: string | number,
   sellerId?: string | number,
   categoryId?: number,
+  subcategoryId?: number,
   productId?: number,
   entityType?: "F" | "J" | string,
 ) {
@@ -176,6 +178,7 @@ async function resolveDestination(
     { type: "EVENT", id: eventId ? Number(eventId) : undefined },
     { type: "SELLER", id: sellerId ? Number(sellerId) : undefined },
     { type: "PRODUCT", id: productId ? Number(productId) : undefined },
+    { type: "SUBCATEGORY", id: subcategoryId ? Number(subcategoryId) : undefined },
     { type: "CATEGORY", id: categoryId ? Number(categoryId) : undefined },
   ];
 
@@ -227,6 +230,7 @@ async function resolveOrchestratorConfigs(
   eventId?: any,
   sellerId?: any,
   categoryId?: any,
+  subcategoryId?: any,
   productId?: any,
   entityType?: "F" | "J" | string, // 👈 Aceita "F", "J" ou qualquer string genérica / undefined
 ) {
@@ -236,6 +240,7 @@ async function resolveOrchestratorConfigs(
     { type: "EVENT", id: eventId },
     { type: "SELLER", id: sellerId },
     { type: "PRODUCT", id: productId },
+    { type: "SUBCATEGORY", id: subcategoryId },
     { type: "CATEGORY", id: categoryId },
   ];
 
@@ -380,7 +385,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           .select(`
             id, product_id, partner_id, utm_source, utm_medium, utm_campaign, origin_url, target_url,
             visit_entities ( entity_id, entity_type, name, document, phone, email, birth_date, gender, entity_details ),
-            visit_offers ( offer_id, offer_value, manager_details, seller_details, event_details, offer_details, category_id )
+            visit_offers ( offer_id, offer_value, manager_details, seller_details, event_details, offer_details, category_id, subcategory_id, subcategory )
           `)
           .eq("id", visitId)
           .single();
@@ -453,7 +458,8 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           supabase,
           visitOfferData.event_details?.event_id, 
           visitOfferData.seller_details?.seller_id, 
-          visitOfferData.category_id, 
+          visitOfferData.category_id,
+          visitOfferData.subcategory_id, 
           visit.product_id, 
           visitEntityData.entity_type,
         );
@@ -595,6 +601,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           offer_id: [payload?.offer?.offer_id, typeof payload?.offer?.offer_id],
           offer_description: [payload?.offer?.offer_description, typeof payload?.offer?.offer_description],
           offer_value: [payload?.offer?.offer_value, typeof payload?.offer?.offer_value],
+          sub_category_id: [payload?.offer?.sub_category_id, typeof payload?.offer?.sub_category_id],
 
           // Consentimentos
           consents_count: [payload?.consents?.length, typeof payload?.consents?.length]
@@ -676,6 +683,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
             payload.event?.event_id,
             payload.seller?.seller_id,
             category_id,
+            payload.offer?.sub_category_id ? Number(payload.offer.sub_category_id) : undefined,
             product_id,
             payload.entity?.entity_type, 
           );

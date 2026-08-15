@@ -337,7 +337,7 @@ function SimulationsPage() {
           "result_partner_types(id, description)",
           
           /* Payload estruturado para Organizador, Vendedor e Oferta (PanelOffer / PanelSeller) */
-          "simulation_offers(id, simulation_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, event_start_date, offer_id, offer_description, offer_value, category_id, offer_details, event_details, manager_details, category_types(id, name))",
+          "simulation_offers(id, simulation_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, event_start_date, offer_id, offer_description, offer_value, category_id, subcategory_id, subcategory, offer_details, event_details, manager_details, category_types(id, name))",
           
           /* Payload para Termos e Auditoria LGPD (PanelAcceptedConsents) */
           "simulation_consents(id, consent_id, accepted, accepted_at, created_at, ip_address, country, state, city, operating_system, device_type, origin_details, page_snapshot)",
@@ -850,7 +850,7 @@ function SimulationsPage() {
             return (
               <div className="flex flex-col h-full overflow-hidden">
                 <div className="p-4 sm:p-6 pb-4 border-b bg-white shrink-0">
-                  <SheetHeader className="space-y-3">
+                  <SheetHeader className="space-y-3 text-left">
                     <div className="flex items-center justify-between gap-2 pr-8">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="flex h-7 w-7 items-center justify-center rounded-md overflow-hidden border bg-white shrink-0">
@@ -871,7 +871,7 @@ function SimulationsPage() {
                       )}
                     </div>
 
-                    <div className="space-y-1 pr-8">
+                    <div className="space-y-1 pr-8 text-left w-full">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
                           {sim.product_types?.name || "Financiamento"}
@@ -882,7 +882,7 @@ function SimulationsPage() {
                           </span>
                         </div>
                       </div>
-                      <SheetTitle className="text-lg sm:text-xl font-bold text-slate-900 break-words">
+                      <SheetTitle className="text-lg sm:text-xl font-bold text-slate-900 break-words text-left w-full">
                         {sim.name || "—"}
                       </SheetTitle>
                     </div>
