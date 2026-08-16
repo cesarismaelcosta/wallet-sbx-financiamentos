@@ -96,8 +96,6 @@ export async function persistVisitData(
       if (visitId && action !== 'CONTACT') {
         const updatedRows = await t`
           UPDATE visits SET 
-            product_id = COALESCE(${payload?.product_id || null}, product_id),
-            partner_id = COALESCE(${payload?.partner_id || null}, partner_id),
             action = ${payload.action},
             target_url = ${ (targetUrl || "").split('?')[0] },
             raw_payload = ${payload}::jsonb
@@ -114,14 +112,13 @@ export async function persistVisitData(
         const newVisitId = preGeneratedVisitId || crypto.randomUUID();
         const [newVisit] = await t`
           INSERT INTO visits (
-            id, product_id, partner_id, utm_source, utm_medium, utm_campaign, 
+            id, utm_source, utm_medium, utm_campaign, 
             origin_url, target_url, action, ip_address, country, state, 
             city, user_agent, device_type, operating_system, origin_details,
             raw_payload
           )
           VALUES (
             ${newVisitId},
-            ${payload.product_id ?? null}, ${payload.partner_id ?? null}, 
             ${payload.interaction_context?.utm_source ?? null},
             ${payload.interaction_context?.utm_medium ?? null},
             ${payload.interaction_context?.utm_campaign ?? null},
@@ -147,11 +144,13 @@ export async function persistVisitData(
       const newUpdateId = preGeneratedUpdateId || crypto.randomUUID();
       const [update] = await t`
         INSERT INTO visit_updates (
-          id, visit_id, utm_source, utm_medium, utm_campaign, action, origin_url, target_url, raw_payload
+          id, visit_id, partner_id, product_id, utm_source, utm_medium, utm_campaign, action, origin_url, target_url, raw_payload
         )
         VALUES (
           ${newUpdateId},
           ${visitId}, 
+          ${payload.partner_id ?? null}, 
+          ${payload.product_id ?? null}, 
           ${payload.interaction_context?.utm_source || 'direct'},
           ${payload.interaction_context?.utm_medium || null},
           ${payload.interaction_context?.utm_campaign || null},

@@ -359,9 +359,10 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           const result = await supabase
             .from("visits")
             .select(`
-              id, product_id, partner_id, utm_source, utm_medium, utm_campaign, origin_url, target_url,
+              id, utm_source, utm_medium, utm_campaign, origin_url, target_url,
               visit_entities ( entity_id, entity_type, name, document, phone, email, birth_date, gender, entity_details ),
-              visit_offers ( offer_id, offer_value, manager_details, seller_details, event_details, offer_details, category_id, subcategory_id, subcategory, created_at )
+              visit_offers ( offer_id, offer_value, manager_details, seller_details, event_details, offer_details, category_id, subcategory_id, subcategory, created_at ),
+              visit_updates ( id, partner_id, product_id, created_at )
             `)
             .eq("id", visitId)
             .maybeSingle();
@@ -377,6 +378,17 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         }
 
         if (visitError || !visit) throw new Error("Visita não encontrada ou expirada no banco de dados.");
+
+        // [EXTRAÇÃO DE PARCEIRO/PRODUTO 1:N] - Busca os IDs na tabela visit_updates do evento exato
+        const sortedUpdates = [...(visit.visit_updates || [])].sort(
+          (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        );
+        const activeUpdate = visitUpdateId 
+          ? sortedUpdates.find((u: any) => u.id === visitUpdateId) || sortedUpdates[0] || {}
+          : sortedUpdates[0] || {};
+        
+        const currentProductId = activeUpdate.product_id || null;
+        const currentPartnerId = activeUpdate.partner_id || null;
 
         // =====================================================================
         // C: VALIDAÇÃO DE JORNADA (GATEKEEPER) E HOME ESTÉRIL
@@ -471,7 +483,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           visitOfferData.seller_details?.seller_id, 
           visitOfferData.category_id,
           visitOfferData.subcategory_id, 
-          visit.product_id, 
+          currentProductId, 
           visitEntityData.entity_type,
         );
         
@@ -484,8 +496,10 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           // Na Home Estéril, é perfeitamente normal não ter metadados de produto.
           debugLog("🏠 [GET] Home sem orchestrator_configs. Retornando payload estrutural base.");
           return { status: 200, data: {
-            visit_id: visit.id, visit_update_id: visitUpdateId, simulation_id: simulationId || null, product_id: visit.product_id,
-            partner_id: visit.partner_id ?? null, origin_url: visit.origin_url, target_url: visit.target_url,
+            visit_id: visit.id, visit_update_id: visitUpdateId, simulation_id: simulationId || null, 
+            product_id: currentProductId, 
+            partner_id: currentPartnerId ?? null, 
+            origin_url: visit.origin_url, target_url: visit.target_url,
             interaction_context: { utm_source: visit.utm_source, utm_medium: visit.utm_medium, utm_campaign: visit.utm_campaign, origin_url: visit.origin_url },
             entity: visitEntityData.entity_details || {}, manager: {}, seller: {}, event: {}, offer: {},
             rules: null, consent_configs: null, page_configs: null, page_faqs: null,
@@ -498,8 +512,8 @@ serve(withSecurity('orchestrator', async (req: Request) => {
           visit_id: visit.id,
           visit_update_id: visitUpdateId,
           simulation_id: simulationId || null,
-          product_id: visit.product_id,
-          partner_id: orchestratorConfigs.partner_id,
+          product_id: currentProductId,
+          partner_id: orchestratorConfigs.partner_id || currentPartnerId,
           origin_url: visit.origin_url,
           interaction_context: {
             utm_source: visit.utm_source,
@@ -542,7 +556,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
               data: { 
                   success: false,
                   code: errorCode,          
-                  message: error.message,      
+                  message: error.message,       
                   fallback_url: error.fallback_url || "/" 
               }
           };
@@ -563,6 +577,19 @@ serve(withSecurity('orchestrator', async (req: Request) => {
 
           const sanitized: Record<string, any> = {};
           for (const key of Object.keys(obj)) {
+            const normalizedKey = key.toLowerCase();
+            
+            // ✨ A MÁGICA AQUI: Se for token de segurança, nós DELETAMOS a chave do objeto 
+            // antes de gravar no banco de dados. Mas deixamos o CPF, Nome e Email passarem ilesos!
+            if (
+              normalizedKey === "auth_token" || 
+              normalizedKey === "session_token" || 
+              normalizedKey === "access_token" || 
+              normalizedKey === "password"
+            ) {
+               continue; // Pula essa chave (não salva no banco)
+            }
+
             const val = obj[key];
             sanitized[key] = val === undefined ? null : sanitizePayload(val);
           }
@@ -578,6 +605,7 @@ serve(withSecurity('orchestrator', async (req: Request) => {
         payload.interaction_context = payload.interaction_context || {};
 
         const infra = await captureInfrastructure(req);
+        const { category_id, product_id, action } = await validatePayload(supabase, payload);
 
         // C: GATEKEEPER DE SEGURANÇA E NEGÓCIO (Zero-Trust)
         const targetVisitId = payload.visit_id || null;

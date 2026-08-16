@@ -16,6 +16,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { insertSimulationData } from "./persist-data.ts";
 import { updateSimulationData } from "./persist-data.ts";
 import { sql } from '../_shared/db.ts';
+import { validateSimulationIntegrity } from "../_shared/gateKeeper.ts"
 
 import {  
   OriginDetails, 
@@ -138,20 +139,20 @@ async function captureInfrastructure(req: Request): Promise<OriginDetails> {
   } as OriginDetails;
 }
 
-
 /**
- * Atualiza o estado da jornada na tabela 'visits' e gera um registro de auditoria em 'visit_updates'.
- * * @param supabaseClient - Instância do Supabase Service Role (acesso administrativo).
+ * Atualiza o estado da jornada na tabela 'visits' e ELEVA o status no 'visit_updates'.
+ * @param supabaseClient - Instância do Supabase Service Role (acesso administrativo).
  * @param visitId - O ID da visita (tabela 'visits') que está sendo atualizado.
- * @param newAction - O novo estado da jornada ('CONSULT' ou 'SIMULATE').
- * @throws Error se a atualização no banco falhar.
+ * @param newAction - O novo estado da jornada ('SIMULATE').
+ * @param actionDescription - Rastreabilidade textual.
+ * @param payload - O payload da simulação contendo opcionalmente o visit_update_id.
  */
 async function updateVisitStatus(
   supabaseClient: any, 
   visitId: string, 
   newAction: 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT',
   actionDescription: string,
-  payload: SimulationPayload
+  payload: any 
 ) {
   debugLog(`Atualizando status da visita ${visitId} para: ${newAction}`);
 
@@ -167,21 +168,61 @@ async function updateVisitStatus(
 
   if (visitError) throw new Error(`Falha ao atualizar status da visita: ${visitError.message}`);
     
-  // 2. Registra o rastro histórico na tabela 'visit_updates' (Diário de Bordo)
-  const { error: updateError } = await supabaseClient
+  // =========================================================================
+  // ✨ REGRA DE OURO DEFINITIVA: 
+  // Se temos o visit_update_id da consulta, tentamos dar UPDATE (CONSULT -> SIMULATE).
+  // Se não encontrar ou não houver ID, garantimos o fallback seguro (INSERT).
+  // =========================================================================
+  if (newAction === 'SIMULATE' && payload.visit_update_id) {
+    
+    // Verifica se o registro específico ainda está como CONSULT
+    const { data: existingUpdate } = await supabaseClient
+      .from('visit_updates')
+      .select('id, action, partner_id, product_id, raw_payload')
+      .eq('id', payload.visit_update_id)
+      .maybeSingle();
+
+    if (existingUpdate && existingUpdate.action === 'CONSULT') {
+      // Perfeito: A consulta existe e está pendente. Elevamos para SIMULATE.
+      const mergedPayload = { ...existingUpdate.raw_payload, ...payload };
+
+      const { error: updateError } = await supabaseClient
+        .from('visit_updates')
+        .update({
+          action: 'SIMULATE',
+          action_description: actionDescription,
+          raw_payload: mergedPayload
+        })
+        .eq('id', payload.visit_update_id);
+
+      if (updateError) {
+        debugLog("Aviso: Falha ao fazer UPDATE da Consulta para Simulação:", updateError.message);
+      } else {
+        return; // Sucesso absoluto na evolução, encerra aqui.
+      }
+    }
+  }
+
+  // Fallback / Demais Ações (VISIT, CONTACT ou SIMULATE sem update_id prévio):
+  // Insere um novo registro no histórico para não perder a rastreabilidade.
+  const { error: insertError } = await supabaseClient
     .from('visit_updates')
     .insert({
        visit_id: visitId,
-       utm_source: payload.interaction_context.utm_source,
-       utm_medium: payload.interaction_context.utm_medium,
-       utm_campaign: payload.interaction_context.utm_campaign,
-       origin_url: payload.interaction_context.origin_url,
+       partner_id: payload.partner_id || null,
+       product_id: payload.product_id || null,
+       utm_source: payload.interaction_context?.utm_source,
+       utm_medium: payload.interaction_context?.utm_medium,
+       utm_campaign: payload.interaction_context?.utm_campaign,
+       origin_url: payload.interaction_context?.origin_url,
        target_url: payload.target_url,
        action: newAction,
-       action_description: actionDescription
+       action_description: actionDescription,
+       raw_payload: payload,
+       created_at: new Date().toISOString()
     });
-
-  if (updateError) debugLog("Aviso: Falha ao registrar log de estado em visit_updates:", updateError.message);
+    
+  if (insertError) debugLog("Aviso: Falha ao registrar log de estado em visit_updates:", insertError.message);
 }
 
 /**
@@ -201,6 +242,51 @@ async function updateVisitStatus(
 export async function processSimulation(req: Request, payload: SimulationPayload, step: 'CHECK_ELIGIBILITY' | 'EXECUTE_SIMULATION' = 'EXECUTE_SIMULATION') {
 
   if (!payload) throw new Error("Payload vazio.");
+
+  // =========================================================================
+  // 🛡️ ZERO-TRUST GUARD: BLINDAGEM CONTRA IDOR E CORRUPÇÃO DE SESSÃO
+  // =========================================================================
+  try {
+    await validateSimulationIntegrity(
+      supabase, 
+      payload.visit_id, 
+      { 
+        simulation_id: payload.simulation_id,
+        entity_id: payload.entity?.entity_id,
+        offer_id: payload.offer?.offer_id 
+      }
+    );
+  } catch (err: any) {
+    debugLog("🚨 [Gatekeeper SIMULATION] Falha na validação:", err.message);
+
+    let userMessage = "Ocorreu um erro ao processar sua simulação.";
+    let errorCode = "UNKNOWN_ERROR";
+    let targetFallback = payload.interaction_context?.origin_url || "/"; 
+
+    if (err.message.includes("OFFER_NOT_FOUND")) {
+        userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
+        errorCode = "OFFER_NOT_FOUND";
+    } else if (err.message.includes("INVALID_RELATIONSHIP")) {
+        userMessage = "Você não tem permissão para acessar esta oferta ou visita.";
+        errorCode = "INVALID_RELATIONSHIP";
+    } else if (err.message.includes("SESSION_EXPIRED")) {
+        userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+        errorCode = "SESSION_EXPIRED";
+        targetFallback = req.headers.get("x-auth-fallback-url") || "/accounts/signin"; 
+    } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
+        userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
+        errorCode = "UPSTREAM_CONNECTION_ERROR";
+    } else if (err.message.includes("FORBIDDEN") || err.message.includes("INVALID_PAYLOAD")) {
+        userMessage = "Inconsistência nos dados de segurança (Bloqueio).";
+        errorCode = "FORBIDDEN";
+    }
+
+    const errorForUI = new Error(userMessage);
+    (errorForUI as any).errorCode = errorCode; 
+    (errorForUI as any).fallback_url = targetFallback; 
+    
+    throw errorForUI; 
+  }
 
   // Pega informações da origem da chamada
   const infra = await captureInfrastructure(req);
@@ -357,7 +443,7 @@ export async function processSimulation(req: Request, payload: SimulationPayload
   }
 
   // Logo antes de montar o JSON de resposta
-  // Isso garante que não dependemos de variáveis de escopo instáveis
+  // Isso garante que não dependemos de variáveis de escopo in
   const finalConsult = gatewayResult?.consults?.find(c => c.is_selected === true) || gatewayResult?.consults?.[0];
 
   const payloadFinal = {

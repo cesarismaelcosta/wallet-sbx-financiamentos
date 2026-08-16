@@ -24,6 +24,9 @@
 import { useState, useEffect, useRef } from "react";
 import { callOrchestrator, GatewayErrorResponse } from "@/features/financial-hub/core/services/gateway";
 
+// ✨ HELPER: Backoff Exponencial
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 /**
  * @interface Entity
  * @description Representa o proponente da transação (PF ou PJ).
@@ -174,16 +177,21 @@ export function useOrchestratorHydration(visitId: string | null, visitUpdateId?:
     lastFetchedHash.current = currentHash;
     setLoading(true);
 
-    callOrchestrator({ visit_id: visitId, visit_update_id: effectiveUpdateId }, "GET")
+  callOrchestrator({ visit_id: visitId, visit_update_id: effectiveUpdateId }, "GET")
       .then((data) => {
         setSimData(data);
         setError(null);
         setRetryCount(0); // Reseta resiliência após sucesso
         setLoading(false);
       })
-      .catch((err) => {
+      // ✨ 1. Transformamos o catch em async
+      .catch(async (err) => { 
         if (retryCount < MAX_RETRIES) {
           console.warn(`🔄 [Orchestrator] Consistência eventual ou falha de rede detectada. Acionando Retry Automático (${retryCount + 1}/${MAX_RETRIES})...`);
+          
+          // ✨ 2. INJETAMOS O BACKOFF AQUI ANTES DE DISPARAR O NOVO RENDER (150ms, 300ms)
+          await delay(150 * (retryCount + 1));
+          
           lastFetchedHash.current = null; // Destrava a ref otimista
           setRetryCount((prev) => prev + 1); // Mutação do estado re-dispara o useEffect
         } else {
@@ -193,7 +201,7 @@ export function useOrchestratorHydration(visitId: string | null, visitUpdateId?:
         }
       });
 
-  }, [visitId, visitUpdateId, retryCount]); 
+  }, [visitId, visitUpdateId, retryCount]); // ⚠️ FALTAVA ESTA LINHA AQUI!
 
   return { simData, loading, error };
 }

@@ -13,6 +13,11 @@
  * - Scroll robusto em popovers (evita conflito com o scroll da página).
  * - Responsividade mobile total via Sheet com seletor de período e calendário.
  * - Lazy Loading dos gráficos via Recharts (retirado do bundle inicial).
+ * 
+ * [MUDANÇAS ARQUITETURAIS - 1:N EVENT MODEL]:
+ * A consulta de Visitas (Topo de Funil) foi migrada para ler os IDs de Produto
+ * e Parceiro da tabela `visit_updates` (Eventos), uma vez que o modelo 1:N
+ * do banco removeu essas colunas da raiz (carrinho).
  * ============================================================================
  */
 
@@ -248,6 +253,7 @@ function DashboardPage() {
     }
 
     // 2) Disparo das Queries Base
+    // As simulações mantêm partner e product na raiz. Tudo certo aqui.
     let querySim = supabase
       .from("simulations")
       .select(
@@ -257,6 +263,8 @@ function DashboardPage() {
       .lte("created_at", end.toISOString())
       .limit(5000);
 
+    // ✨ [ARQUITETURA 1:N]: As visitas perdem o produto e parceiro da raiz. 
+    // Precisamos de um deep join para validar o filtro sem quebrar o banco.
     let queryVis = supabase
       .from("visits")
       .select(
@@ -265,10 +273,9 @@ function DashboardPage() {
         action, 
         utm_source, 
         created_at, 
-        partner_id, 
-        product_id, 
         ip_address,
-        visit_entities ( document )
+        visit_entities ( document ),
+        visit_updates!inner ( id, partner_id, product_id )
       `,
       )
       .gte("created_at", start.toISOString())
@@ -292,7 +299,7 @@ function DashboardPage() {
         }
         const partnerQueryIds = allowedPartners.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
         querySim = querySim.in("partner_id", partnerQueryIds);
-        queryVis = queryVis.in("partner_id", partnerQueryIds);
+        queryVis = queryVis.in("visit_updates.partner_id", partnerQueryIds); // Aponta para a nova tabela
       }
 
       // 2. Validação de Produtos Permitidos
@@ -305,7 +312,7 @@ function DashboardPage() {
         }
         const productQueryIds = allowedProducts.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
         querySim = querySim.in("product_id", productQueryIds);
-        queryVis = queryVis.in("product_id", productQueryIds);
+        queryVis = queryVis.in("visit_updates.product_id", productQueryIds); // Aponta para a nova tabela
       }
     }
     // ============================================================================
@@ -313,12 +320,12 @@ function DashboardPage() {
     // Filtros de seleção manual do usuário na tela
     if (selectedPartners.length > 0) {
       querySim = querySim.in("partner_id", selectedPartners);
-      queryVis = queryVis.in("partner_id", selectedPartners);
+      queryVis = queryVis.in("visit_updates.partner_id", selectedPartners);
     }
 
     if (selectedProducts.length > 0) {
       querySim = querySim.in("product_id", selectedProducts);
-      queryVis = queryVis.in("product_id", selectedProducts);
+      queryVis = queryVis.in("visit_updates.product_id", selectedProducts);
     }
 
     const [resSim, resVis] = await Promise.all([querySim, queryVis]);
@@ -434,7 +441,11 @@ function DashboardPage() {
       const source = v.utm_source || "Orgânico";
       sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
 
-      const prodName = currentProducts.find((p) => String(p.id) === String(v.product_id))?.name ?? "Outros";
+      // ✨ [EXTRAÇÃO DE PRODUTO]: Lê a matriz do evento para plotar no gráfico de barras
+      const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [v.visit_updates].filter(Boolean);
+      const mainEvent = updates[0] || {};
+      
+      const prodName = currentProducts.find((p) => String(p.id) === String(mainEvent.product_id))?.name ?? "Outros";
       visProductMap.set(prodName, (visProductMap.get(prodName) || 0) + 1);
 
       if (v.created_at) {

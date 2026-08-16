@@ -16,6 +16,11 @@
  * A extração `visit_offers[0]` foi substituída pelo "Extrator Temporal Determinístico",
  * que ordena as ofertas por `created_at DESC` em memória, assegurando que o Analista
  * visualizará sempre o último pageview / última intenção do lead.
+ * 
+ * [EVENT-LEVEL CONTEXT]:
+ * partner_id, product_id, partners, product_types e raw_payload agora
+ * são resolvidos milimetricamente através da relação visit_updates -> visit_offers
+ * (cruzamento via visit_update_id), extinguindo qualquer vazamento de estado.
  * ============================================================================
  */
 
@@ -153,7 +158,6 @@ function ConsultsPage() {
 
   // 2. Dispara a busca quando filtros mudam
   useEffect(() => {
-    // Só dispara a busca se o usuário já estiver carregado no contexto!
     if (!backofficeUser) return;
 
     const timeoutId = setTimeout(() => {
@@ -182,7 +186,6 @@ function ConsultsPage() {
     setLoading(true);
     try {
       const from = targetPage * PAGE_SIZE;
-      // Buscamos PAGE_SIZE + 1 para validar se há próxima página sem COUNT(*)
       const to = from + PAGE_SIZE;
 
       let dateLimit = new Date();
@@ -190,59 +193,57 @@ function ConsultsPage() {
       else if (dateRange === "90") dateLimit.setDate(dateLimit.getDate() - 90);
       else if (dateRange === "all") dateLimit = new Date("2020-01-01");
 
-      // Query limpa, sem count, pronta para paginação
-      // ✨ [OLAP TRACKING]: Adicionado 'created_at' em visit_offers para permitir a ordenação temporal
+      // ============================================================================
+      // ✨ ARQUITETURA 1:N - QUERY BLINDADA COM EVENT-LEVEL CONTEXT
+      // Parceiros, Produtos e Payloads agora vivem na relação visit_updates
+      // ============================================================================
       let query = supabase.from("visits").select(
         `
-          id, created_at, action, utm_source, state, partner_id, product_id,
-          product_types(name),
-          partners(name, logo_url),
+          id, created_at, action, utm_source, state,
           visit_entities(name, document, phone, email),
-          visit_offers(offer_description, offer_value, event_id, event_description, event_end_date, created_at, category_types(name))
+          visit_offers!inner(offer_id, offer_description, offer_value, event_id, event_description, event_end_date, created_at, visit_update_id, category_types(name)),
+          visit_updates!inner(id, action, created_at, partner_id, product_id, raw_payload, partners(name, logo_url), product_types(name))
         `
-      );
+      )
+      .in('visit_updates.action', ['SIMULATE', 'CONSULT', 'REDIRECT']);
 
       // ============================================================================
-      // RESTRIÇÕES DE ESCOPO POR USUÁRIO (RBAC - Viewer)
+      // RESTRIÇÕES DE ESCOPO POR USUÁRIO (RBAC - Viewer) -> APONTANDO PARA VISIT_UPDATES
       // ============================================================================
       if (backofficeUser && backofficeUser.role === 'viewer') {
         const allowedPartners = backofficeUser.allowed_partners || [];
         const allowedProducts = backofficeUser.allowed_products || [];
 
-        // 1. Validação de Parceiros
         if (!allowedPartners.includes("*")) {
           if (allowedPartners.length === 0) {
-            query = query.eq("partner_id", -1); // Bloqueia tudo
+            query = query.eq("id", "00000000-0000-0000-0000-000000000000"); // Bloqueia tudo
           } else {
             const partnerQueryIds = allowedPartners.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
-            query = query.in("partner_id", partnerQueryIds);
+            query = query.in("visit_updates.partner_id", partnerQueryIds);
           }
         }
 
-        // 2. Validação de Produtos
         if (!allowedProducts.includes("*")) {
           if (allowedProducts.length === 0) {
-            query = query.eq("product_id", -1); // Bloqueia tudo
+            query = query.eq("id", "00000000-0000-0000-0000-000000000000"); // Bloqueia tudo
           } else {
             const productQueryIds = allowedProducts.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
-            query = query.in("product_id", productQueryIds);
+            query = query.in("visit_updates.product_id", productQueryIds);
           }
         }
       }
       // ============================================================================
 
-      // Filtros de Data
       if (dateRange !== "all" && dateRange !== "custom") {
         query = query.gte("created_at", dateLimit.toISOString());
       } else if (dateRange === "custom" && customRange?.from && customRange?.to) {
         query = query.gte("created_at", customRange.from.toISOString()).lte("created_at", customRange.to.toISOString());
       }
 
-      // Filtros em Memória Passados para o Banco
-      if (selectedPartners.length > 0) query = query.in("partner_id", selectedPartners);
-      if (selectedProducts.length > 0) query = query.in("product_id", selectedProducts);
+      // Filtros de Tela em Memória Passados para o Banco
+      if (selectedPartners.length > 0) query = query.in("visit_updates.partner_id", selectedPartners);
+      if (selectedProducts.length > 0) query = query.in("visit_updates.product_id", selectedProducts);
 
-      // Paginação e Ordenação (buscando 1 a mais para checar limite)
       query = query.order("created_at", { ascending: false }).range(from, to);
 
       const { data: visitsData, error: visitError } = await query;
@@ -255,12 +256,10 @@ function ConsultsPage() {
         return;
       }
 
-      // Validação de existência de próxima página sem count do banco
       const hasMore = visitsData.length > PAGE_SIZE;
       const slicedData = hasMore ? visitsData.slice(0, PAGE_SIZE) : visitsData;
       setTotalPages(hasMore ? targetPage + 2 : targetPage + 1);
 
-      // Busca os contatos só do array paginado
       const visitIds = slicedData.map((v) => v.id);
       const { data: updatesData } = await supabase
         .from("visit_updates")
@@ -271,21 +270,52 @@ function ConsultsPage() {
         updatesData?.filter((u) => (u.action || "").toUpperCase().includes("CONTACT")).map((u) => u.visit_id) || [],
       );
 
-      // Normaliza
-      const normalized = slicedData.map((v) => {
+      // ============================================================================
+      // NORMALIZAÇÃO 1:N E DETERMINISMO TEMPORAL
+      // ============================================================================
+      const normalized = slicedData.flatMap((v) => {
         const sortedOffers = Array.isArray(v.visit_offers) 
           ? [...v.visit_offers].sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
           : [];
 
-        return {
+        const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [];
+
+        const baseVisit = {
           ...v,
-          has_contact: contactSet.has(v.id),
           visit_entities: Array.isArray(v.visit_entities) ? v.visit_entities[0] ?? null : v.visit_entities,
-          visit_offers: sortedOffers[0] ?? null, // ✨ Evita o vazamento de []
+          all_offers: sortedOffers, 
+          has_contact: contactSet.has(v.id),
         };
+
+        // EXPLOSÃO: Para cada oferta, acha o evento (visit_update) exato que a gerou!
+        return sortedOffers.map((off, index) => {
+          
+          const exactUpdate = updates.find((u: any) => u.id === off.visit_update_id) || updates[0] || {};
+          
+          let eventPayload = {};
+          if (typeof exactUpdate.raw_payload === 'string') {
+            try { eventPayload = JSON.parse(exactUpdate.raw_payload); } catch (e) {}
+          } else {
+            eventPayload = exactUpdate.raw_payload || {};
+          }
+
+          return {
+            ...baseVisit,
+            row_id: `${v.id}-${index}`, 
+            visit_offers: off,
+            
+            // 🔥 BLINDAGEM: O contexto injetado na grid herda APENAS do evento!
+            update_id: exactUpdate.id,
+            action: exactUpdate.action, // Ação Real do Evento
+            partner_id: exactUpdate.partner_id,
+            product_id: exactUpdate.product_id,
+            partners: exactUpdate.partners,
+            product_types: exactUpdate.product_types,
+            raw_payload: eventPayload
+          };
+        });
       });
 
-      // Filtro de busca textual em memória
       if (search.trim() !== "") {
         const rawSearch = search.toLowerCase().trim();
         const rawDocSearch = search.replace(/\D/g, "");
@@ -307,7 +337,7 @@ function ConsultsPage() {
   }
 
   async function loadStats() {
-    const { p_from, p_to } = getPeriodDates(dateRange, customRange); // Reaproveitando o helper de datas local
+    const { p_from, p_to } = getPeriodDates(dateRange, customRange);
 
     const { data, error } = await supabase.rpc("visit_stats", {
       p_from,
@@ -330,19 +360,17 @@ function ConsultsPage() {
 
   async function handleSelectConsult(row: any) {
     setDetailLoading(true);
-    // Abre imediatamente com os dados rasos da grid
+    // Abre imediatamente com os dados rasos da grid (Já blindados!)
     setActiveConsult(row);
 
     try {
-      // ✨ [OLAP TRACKING]: Adicionado 'created_at' em visit_offers no Deep Join
-      const { data: fullData, error } = await (supabase
-        .from("visits") as any)
+      // Como partner e product não vivem mais na raiz, buscamos apenas as entidades e consentimentos
+      const { data: fullData, error } = await supabase
+        .from("visits")
         .select(`
-          id, created_at, action, utm_source, utm_campaign, country, state, city, ip_address, operating_system, device_type, origin_url, target_url, raw_payload, partner_id, product_id,
-          product_types(name),
-          partners(name, logo_url),
+          id, created_at, action, utm_source, utm_campaign, country, state, city, ip_address, operating_system, device_type, origin_url, target_url,
           visit_entities(id, name, document, phone, email, birth_date, gender, entity_type, entity_details),
-          visit_offers(id, visit_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, offer_id, offer_description, offer_value, category_id, created_at, category_types(name), subcategory ),
+          visit_offers(id, visit_id, visit_update_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, offer_id, offer_description, offer_value, category_id, created_at, category_types(name), subcategory ),
           visit_consents(id, consent_id, accepted, accepted_at, created_at, ip_address, country, state, city, operating_system, device_type, origin_details, page_snapshot)
         `)
         .eq("id", row.id)
@@ -359,13 +387,24 @@ function ConsultsPage() {
           ? [...fullData.visit_offers].sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
           : [];
 
+        const clickedOfferTime = row.visit_offers?.created_at;
+        const mainOffer = sortedOffers.find((o: any) => o.created_at === clickedOfferTime) || sortedOffers[0] || null;
+
         setActiveConsult({
           ...fullData,
           has_contact: row.has_contact,
-          visit_entities: Array.isArray(fullData.visit_entities)
-            ? fullData.visit_entities[0] ?? null
-            : fullData.visit_entities,
-          visit_offers: sortedOffers[0] ?? null, // ✨ Evita o vazamento de []
+          visit_entities: Array.isArray(fullData.visit_entities) ? fullData.visit_entities[0] ?? null : fullData.visit_entities,
+          
+          // 🔥 MANTÉM OS DADOS DO EVENTO INTACTOS (Blindagem contra vazamento)
+          partner_id: row.partner_id,
+          product_id: row.product_id,
+          partners: row.partners,
+          product_types: row.product_types,
+          raw_payload: row.raw_payload,
+          action: row.action, 
+
+          visit_offers: mainOffer, 
+          other_offers: sortedOffers.filter((o: any) => o.created_at !== mainOffer?.created_at), 
           visit_consents: fullData.visit_consents || [],
         });
       }
@@ -378,14 +417,14 @@ function ConsultsPage() {
 
   function getVisitStatus(r: any): string {
     const act = (r.action ?? "").toUpperCase();
-    if (act.includes("SIMULATE") || act.includes("SIMULATION")) return "SIMULAÇÃO";
+    if (act.includes("SIMULATE")) return "SIMULAÇÃO";
     if (act.includes("CONSULT")) return "CONSULTA";
     if (act.includes("REDIRECT")) return "PARCEIRO";
-    if (act.includes("VISIT")) return "VISITA";
-    return r.action || "VISITA";
+    
+    return "CONSULTA"; 
   }
 
-  const statusOptions = ["Qualificadas", "VISITA", "SIMULAÇÃO", "CONSULTA", "PARCEIRO"];
+  const statusOptions = ["SIMULAÇÃO", "CONSULTA", "PARCEIRO"];
 
   const handleSelectStatus = (status: string) => {
     if (status === "Todas") {
@@ -394,11 +433,7 @@ function ConsultsPage() {
     }
     setSelectedStatus((prev) => {
       const current = Array.isArray(prev) ? prev : [];
-      if (status === "Qualificadas") {
-        return current.includes("Qualificadas") ? [] : ["Qualificadas"];
-      }
-      const filteredPrev = current.filter((s) => s !== "Qualificadas");
-      return filteredPrev.includes(status) ? filteredPrev.filter((s) => s !== status) : [...filteredPrev, status];
+      return current.includes(status) ? current.filter((s) => s !== status) : [...current, status];
     });
   };
 
@@ -416,7 +451,6 @@ function ConsultsPage() {
       else if (statusName === "PARCEIRO") t.siteParceiro++;
 
       if (safeStatus.length === 0) return true;
-      if (safeStatus.includes("Qualificadas")) return statusName !== "VISITA";
       return safeStatus.includes(statusName);
     });
 
@@ -760,19 +794,6 @@ function ConsultsPage() {
                           Todas
                         </CommandItem>
 
-                        {/* Opção Qualificadas (Macro Exclusiva) */}
-                        <CommandItem
-                          onSelect={() => handleSelectStatus("Qualificadas")}
-                          className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3]"
-                        >
-                          <div
-                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.includes("Qualificadas") ? "bg-[#d946ef] text-white" : "opacity-50"}`}
-                          >
-                            {selectedStatus.includes("Qualificadas") && "✓"}
-                          </div>
-                          Qualificadas
-                        </CommandItem>
-
                         {/* Demais Status (Múltipla Seleção) */}
                         {statusOptions
                           .filter((s) => s !== "Qualificadas")
@@ -889,7 +910,7 @@ function ConsultsPage() {
 
                 return (
                   <tr
-                    key={r.id}
+                    key={r.row_id}
                     onClick={() => handleSelectConsult(r)}
                     className="border-b border-border/60 hover:bg-accent/40 cursor-pointer transition-colors"
                     title="Clique para ver os detalhes completos da visita"
@@ -1096,9 +1117,31 @@ function ConsultsPage() {
                   <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     <PanelVisit visitData={sim} />
                     <PanelEntity entity={entity} entityDetails={ed} />
+                    
+                    {/* DESTAQUE: A oferta que o vendedor clicou na tabela */}
                     <PanelOffer offer={offer} />
                     <PanelSeller offer={offer} />
 
+                    {/* ✨ NOVO: HISTÓRICO DE INTERESSES (Outras consultas no mesmo carrinho) */}
+                    {sim.other_offers && sim.other_offers.length > 0 && (
+                      <div className="mt-8 space-y-4 pt-4 border-t border-slate-200">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
+                          Outras consultas nesta sessão ({sim.other_offers.length})
+                        </h3>
+                        {sim.other_offers.map((off: any, idx: number) => (
+                          <div key={idx} className="relative pl-4 border-l-2 border-[#B300FF]/20 space-y-4 opacity-70 hover:opacity-100 transition-opacity pb-4">
+                            <div className="absolute -left-[5px] top-0 h-2 w-2 rounded-full bg-[#B300FF]/40" />
+                            <div className="text-[10px] font-bold text-[#B300FF] uppercase">
+                              {formatDate(off.created_at).d} às {formatDate(off.created_at).h}
+                            </div>
+                            <PanelOffer offer={off} />
+                            <PanelSeller offer={off} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* RESTANTE DO CÓDIGO (Consents, Configs, FAQs, Footer) MANTIDO INTACTO */}
                     {sim.visit_consents && sim.visit_consents.length > 0 && (
                       <PanelAcceptedConsents consents={sim.visit_consents} />
                     )}
@@ -1303,18 +1346,6 @@ function ConsultsPage() {
                             {selectedStatus.length === 0 && "✓"}
                           </div>
                           Todas
-                        </CommandItem>
-
-                        <CommandItem
-                          onSelect={() => handleSelectStatus("Qualificadas")}
-                          className="cursor-pointer text-[#d946ef]"
-                        >
-                          <div
-                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.includes("Qualificadas") ? "bg-[#d946ef] text-white" : "opacity-50"}`}
-                          >
-                            {selectedStatus.includes("Qualificadas") && "✓"}
-                          </div>
-                          Qualificadas
                         </CommandItem>
 
                         {statusOptions

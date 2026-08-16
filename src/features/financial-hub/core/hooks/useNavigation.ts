@@ -21,7 +21,7 @@ export const NAVIGATION_INTENTS = {
 
 /**
  * Hook customizado para centralizar a lógica de redirecionamento e rastreamento.
- * * Este hook garante que toda saída para parceiros ou suporte humano seja
+ * Este hook garante que toda saída para parceiros ou suporte humano seja
  * devidamente registrada no backend via `orchestrateNavigation` antes da execução.
  */
 export function useNavigation() {
@@ -30,7 +30,7 @@ export function useNavigation() {
 
   /**
    * Executa a orquestração do evento e gerencia o redirecionamento.
-   * * @param intent - A intenção de navegação (ver NAVIGATION_INTENTS).
+   * @param intent - A intenção de navegação (ver NAVIGATION_INTENTS).
    * @param externalUrl - (Opcional) URL externa para abrir (ex: WhatsApp).
    * @param consentsData - Dados de consentimentos da visita para enviar junto.
    */
@@ -42,9 +42,14 @@ export function useNavigation() {
 
     setLoading(true);
     
+    // ✨ [CART PRESERVATION]: Failsafe buscando da URL caso o state.data perca a referência
+    const urlParams = new URLSearchParams(window.location.search);
+    const fallbackVisitId = urlParams.get('visit_id');
+
     // 1. Monta o payload padronizado com os dados do estado do Wizard
     const payload = {
       ...state.data,
+      visit_id: state.data?.visit_id || fallbackVisitId, // Garante amarração ao Backoffice
       action: intent.action,
       action_description: intent.action_description,
       origin_url: window.location.origin + window.location.pathname,
@@ -69,7 +74,6 @@ export function useNavigation() {
       // nós obedecemos e redirecionamos. Não calculamos rotas no frontend.
       // =========================================================================
       
-      // AJUSTE: Lendo direto da raiz do erro
       const redirectUrl = error?.fallback_url;
 
       if ((error?.code === 'SESSION_EXPIRED' || error?.code === 'UNAUTHORIZED') && redirectUrl) {

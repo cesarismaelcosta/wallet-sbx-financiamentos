@@ -1,11 +1,29 @@
 /**
  * @fileoverview Componente: FinancialHubDataInjector
- * * * * PROPÓSITO:
- * Hidratar a jornada uma única vez.
- * Bloqueia chamadas repetidas e avisa o Layout Pai para remover a tela de loading.
+ * @module features/financial-hub/components/layout
+ * 
+ * =========================================================================
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: CONTEXT-FIRST HYDRATION
+ * =========================================================================
+ * O FinancialHubDataInjector atua como o irrigador do React Hook Form (Wizard).
+ * Ele resolve o problema de concorrência com o Layout Pai (OrchestratorWrapper)
+ * priorizando os dados em memória (simData) e acionando a API apenas como Fallback.
+ * 
+ * [MUDANÇAS ARQUITETURAIS - OTIMIZAÇÃO EXTREMA]:
+ * 1. {Zero-Network Path}: Lê o `useProductConsult()` primeiro. Se o Pai já fez o GET,
+ *    injeta imediatamente no Wizard, economizando 1 requisição.
+ * 2. {Temporal Consistency}: Se o Fallback for acionado, envia o `visit_update_id`
+ *    garantindo que o Backend devolva o snapshot exato da tela.
+ * 3. {Entity Fallback}: Caso o Orquestrador omita a Entidade, resgata o perfil
+ *    do sessionStorage, blindando o fluxo de SIMULATE contra Erros 400.
+ * 4. {Hook Hygiene}: Dependências atreladas a primitivos (visitId, visitUpdateId)
+ *    para evitar re-renders por quebra de referência do objeto 'search'.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
@@ -13,66 +31,94 @@ import { useProductConsult } from "@/features/financial-hub/core/contexts/Financ
 
 export function FinancialHubDataInjector({ children }: { children: React.ReactNode }) {
   const { updateData } = useWizard();
-  const search = useSearch({ strict: false }) as { visit_id?: string };
+  
+  const search = useSearch({ strict: false }) as { 
+    visit_id?: string; 
+    visit_update_id?: string 
+  };
 
-  // Extrair a função de contexto
-  const { setIsOrchestratorHydrating } = useProductConsult();
-
-  // A trava: garante que o useEffect rode apenas uma vez
+  // 1. Acesso ao Contexto Global (O Pai já pode ter feito o GET)
+  const contextData = useProductConsult();
+  const setIsOrchestratorHydrating = contextData?.setIsOrchestratorHydrating;
+  
+  // 🔒 Lock Idempotente: Garante injeção única por montagem
   const hasInitialized = useRef(false);
-  const visitId = (search as any)?.visit_id;
+  
+  const visitId = search?.visit_id;
+  const visitUpdateId = search?.visit_update_id;
 
-  // Proteção: Se não houver visitId na rota, levanta a cortina de imediato
+  // =========================================================================
+  // 🛡️ [FAIL-SAFE]: ABORTAGEM PREVENTIVA (Sem ID = Sem Simulação)
+  // =========================================================================
   useEffect(() => {
     if (!visitId && setIsOrchestratorHydrating) {
       setIsOrchestratorHydrating(false);
     }
   }, [visitId, setIsOrchestratorHydrating]);
 
+  // =========================================================================
+  // 💧 [HYDRATION ENGINE]: CONTEXT-FIRST + API FALLBACK
+  // =========================================================================
   useEffect(() => {
-    // Se já foi inicializado ou não tem visit_id, interrompe
-    if (hasInitialized.current) return;
-
-    const visitId = (search as any)?.visit_id;
-    if (!visitId) return;
+    if (hasInitialized.current || !visitId) return;
 
     async function hydrate() {
       try {
-        hasInitialized.current = true; // Marca como iniciado antes do fetch
-        const data = await callOrchestrator({ visit_id: visitId }, "GET");
+        hasInitialized.current = true; // Aciona o Lock
+        
+        // Proteção Final de Entidade (SessionStorage Fallback)
+        const storedProfileStr = typeof window !== "undefined" ? sessionStorage.getItem("user_profile") : null;
+        const fallbackEntity = storedProfileStr ? JSON.parse(storedProfileStr) : {};
 
-        // Hidratação única
-        updateData({
-          ...data,
-        });
+        // ✨ 1. FAST-PATH (Zero-Network): Verifica se o Pai já tem os dados
+        const hasValidContext = Boolean(contextData?.entity?.entity_id || contextData?.offer?.offer_id);
 
-        // O GATILHO DA CORTINA
-        // Dá-se uma margem de segurança para o React renderizar os inputs preenchidos
+        if (hasValidContext) {
+          console.log("⚡ [DataInjector] Fast-Path: Hidratando via Contexto Pai (Zero Network)");
+          updateData({
+            ...contextData,
+            entity: contextData?.entity || fallbackEntity,
+          });
+        } else {
+          // 📡 2. FALLBACK PATH: (Aterrissagem direta via Handoff sem Contexto pronto)
+          console.log("📡 [DataInjector] Fallback: Buscando Orchestrator via API");
+          const orchestratorData = await callOrchestrator({ 
+            visit_id: visitId, 
+            visit_update_id: visitUpdateId || undefined 
+          }, "GET");
+
+          updateData({
+            ...orchestratorData,
+            entity: orchestratorData?.entity || fallbackEntity,
+          });
+        }
+
+        // ⏱️ [GATILHO DA CORTINA - ZERO FLICKER]
         setTimeout(() => {
           if (setIsOrchestratorHydrating) {
             setIsOrchestratorHydrating(false);
           }
         }, 50);
-      } catch (error: any) {
-        // Adicione o : any aqui para acessar as propriedades
-        hasInitialized.current = false;
 
-        // Envia o erro para o estado global.
-        // O Layout vai detectar esse 'success: false' e exibir a tela de erro automaticamente.
+      } catch (error: any) {
+        // Libera a trava para permitir retentativa manual/automática
+        hasInitialized.current = false;
+        
         updateData({
           success: false,
-          code: error.code || "UNKNOWN_ERROR",
-          message: error.message || "Falha ao carregar simulação.",
-          fallback_url: error.fallback_url || "/",
+          code: error?.code || "UNKNOWN_ERROR",
+          message: error?.message || "Falha ao carregar os dados da simulação.",
+          fallback_url: error?.fallback_url || "/",
         });
 
-        // Abre a cortina para mostrar a tela de erro
         if (setIsOrchestratorHydrating) setIsOrchestratorHydrating(false);
       }
     }
 
     hydrate();
-  }, [search, updateData]);
+    
+  // Higiene de Hooks: Dependências primitivas
+  }, [visitId, visitUpdateId, updateData, setIsOrchestratorHydrating, contextData]);
 
   return <>{children}</>;
 }
