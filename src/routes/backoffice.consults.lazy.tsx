@@ -4,10 +4,18 @@
  * @module Backoffice/Consults
  * @route /backoffice/consults
  *
- * @description
+ * =========================================================================
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: OLAP TEMPORAL DETERMINISM
+ * =========================================================================
  * Torre de controle de topo de funil de alta performance. Utiliza payload enxuto
  * na listagem principal, filtros de data no servidor, importação dinâmica do Excel
  * e carregamento sob demanda no Sheet de auditoria.
+ * 
+ * [MUDANÇAS ARQUITETURAIS - 1:N OFFERS]:
+ * Com a introdução do Cart Preservation, uma visita passou a possuir N ofertas.
+ * A extração `visit_offers[0]` foi substituída pelo "Extrator Temporal Determinístico",
+ * que ordena as ofertas por `created_at DESC` em memória, assegurando que o Analista
+ * visualizará sempre o último pageview / última intenção do lead.
  * ============================================================================
  */
 
@@ -183,13 +191,14 @@ function ConsultsPage() {
       else if (dateRange === "all") dateLimit = new Date("2020-01-01");
 
       // Query limpa, sem count, pronta para paginação
+      // ✨ [OLAP TRACKING]: Adicionado 'created_at' em visit_offers para permitir a ordenação temporal
       let query = supabase.from("visits").select(
         `
           id, created_at, action, utm_source, state, partner_id, product_id,
           product_types(name),
           partners(name, logo_url),
           visit_entities(name, document, phone, email),
-          visit_offers(offer_description, offer_value, event_id, event_description, event_end_date, category_types(name))
+          visit_offers(offer_description, offer_value, event_id, event_description, event_end_date, created_at, category_types(name))
         `
       );
 
@@ -263,12 +272,18 @@ function ConsultsPage() {
       );
 
       // Normaliza
-      const normalized = slicedData.map((v) => ({
-        ...v,
-        has_contact: contactSet.has(v.id),
-        visit_entities: Array.isArray(v.visit_entities) ? v.visit_entities[0] || null : v.visit_entities,
-        visit_offers: Array.isArray(v.visit_offers) ? v.visit_offers[0] || null : v.visit_offers,
-      }));
+      const normalized = slicedData.map((v) => {
+        const sortedOffers = Array.isArray(v.visit_offers) 
+          ? [...v.visit_offers].sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+          : [];
+
+        return {
+          ...v,
+          has_contact: contactSet.has(v.id),
+          visit_entities: Array.isArray(v.visit_entities) ? v.visit_entities[0] ?? null : v.visit_entities,
+          visit_offers: sortedOffers[0] ?? null, // ✨ Evita o vazamento de []
+        };
+      });
 
       // Filtro de busca textual em memória
       if (search.trim() !== "") {
@@ -319,6 +334,7 @@ function ConsultsPage() {
     setActiveConsult(row);
 
     try {
+      // ✨ [OLAP TRACKING]: Adicionado 'created_at' em visit_offers no Deep Join
       const { data: fullData, error } = await (supabase
         .from("visits") as any)
         .select(`
@@ -326,7 +342,7 @@ function ConsultsPage() {
           product_types(name),
           partners(name, logo_url),
           visit_entities(id, name, document, phone, email, birth_date, gender, entity_type, entity_details),
-          visit_offers(id, visit_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, offer_id, offer_description, offer_value, category_id, category_types(name), subcategory ),
+          visit_offers(id, visit_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, offer_id, offer_description, offer_value, category_id, created_at, category_types(name), subcategory ),
           visit_consents(id, consent_id, accepted, accepted_at, created_at, ip_address, country, state, city, operating_system, device_type, origin_details, page_snapshot)
         `)
         .eq("id", row.id)
@@ -339,13 +355,17 @@ function ConsultsPage() {
       }
 
       if (fullData) {
+        const sortedOffers = Array.isArray(fullData.visit_offers) 
+          ? [...fullData.visit_offers].sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+          : [];
+
         setActiveConsult({
           ...fullData,
           has_contact: row.has_contact,
           visit_entities: Array.isArray(fullData.visit_entities)
-            ? fullData.visit_entities[0] || null
+            ? fullData.visit_entities[0] ?? null
             : fullData.visit_entities,
-          visit_offers: Array.isArray(fullData.visit_offers) ? fullData.visit_offers[0] || null : fullData.visit_offers,
+          visit_offers: sortedOffers[0] ?? null, // ✨ Evita o vazamento de []
           visit_consents: fullData.visit_consents || [],
         });
       }

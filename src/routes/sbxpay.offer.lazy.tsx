@@ -3,15 +3,21 @@
  * @path src/routes/sbxpay/offer.tsx
  *
  * =========================================================================
- * [ARQUITETURA & CLEAN ARCHITECTURE - DOCUMENTAÇÃO DE NEGÓCIO]
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: CART PRESERVATION & 1:N OFFERS
  * =========================================================================
  * Vitrine central de listagem e detalhes de ofertas integrada ao BFF `sbx-offer-query`.
  *
- * DIRETRIZES DE ENGENHARIA DE UI:
- * 1. Layout Dinâmico: A interface muta seu cabeçalho baseada no fluxo.
- * 2. Fallback Estático de Categorias: Carrossel/Filtro otimizado para estabilidade.
- * 3. Delegação de Negócio: O clique no botão primário (Simulação) delega toda a
- *    complexidade de estado para o `callOrchestrator`.
+ * [MUDANÇAS ARQUITETURAIS - FECHAMENTO DE CICLO DE VISITA]:
+ * 1. {Cart Preservation}: O método `handleSimulacao` agora resgata ativamente o 
+ *    `visit_id` da URL e o repassa ao Gateway. Isso impede a fragmentação da jornada
+ *    (criação de visitas órfãs a cada clique).
+ * 2. {Atomic Pageviews}: O `visit_update_id` é deliberadamente suprimido do payload.
+ *    Isso força o backend a gerar um novo cursor temporal (novo update) e inserir 
+ *    a nova oferta na relação 1:N (`visit_offers`), sem sobrescrever o histórico.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
+ * @version 7.9.0 (Preservação de Sessão em Múltiplas Ofertas)
  */
 
 import { useState, useEffect, useContext, useRef } from "react";
@@ -325,10 +331,21 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     try {
       const currentHref = window.location.href;
 
+      // 1. Extraia o visit_id da URL no instante do clique
+      const urlParams = new URLSearchParams(window.location.search);
+      const cartVisitId = urlParams.get("visit_id");
+
+      // 2. Montagem do payload seguro
       const payload = {
         action: "CONSULT",
         environment: ambiente,
         ...(currentFlow.product_id && { product_id: String(currentFlow.product_id) }),
+        
+        // ✨ [CART PRESERVATION]: Mantém a mesma visita ao trocar de oferta.
+        // O visit_update_id NÃO é repassado: cada escolha é um novo pageview/cursor temporal.
+        // Com o banco permitindo 1:N, essa oferta será atrelada com sucesso a esta visita.
+        ...(cartVisitId ? { visit_id: cartVisitId } : {}),
+        
         offer: offerItem?.offer || offerItem,
         seller: offerItem?.seller || {},
         event: offerItem?.event || {},

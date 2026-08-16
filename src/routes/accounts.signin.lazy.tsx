@@ -56,6 +56,14 @@ const formatCNPJ = (val: string) =>
     .replace(/(\d{4})(\d{1,2})/, '$1-$2')
     .slice(0, 18);
 
+// Constante de módulo: evita recriação a cada renderização
+const HANDOFF_ERROR_MSGS = {
+  expired: "Seu link de acesso seguro expirou. Por favor, faça login novamente.",
+  invalid: "O link de acesso é inválido ou está corrompido.",
+  network: "Houve um problema de rede ao validar seu acesso automático.",
+  not_found: "Acesso seguro não encontrado. Faça login para continuar."
+} as const;
+
 export const Route = createLazyFileRoute('/accounts/signin')({
   component: CustomLogin,
 });
@@ -67,6 +75,7 @@ export function CustomLogin() {
   const search = useSearch({ from: '/accounts/signin' }) as { 
     redirect_uri?: string; 
     env?: "staging" | "production";
+    handoff_error?: "not_found" | "invalid" | "network" | "expired";
   };
   
   // =========================================================================
@@ -107,16 +116,23 @@ export function CustomLogin() {
   const [passwordError, setPasswordError] = useState("");
   const [generalError, setGeneralError] = useState("");
   
-  // ESTADO DE REDIRECIONAMENTO DE SEGURANÇA (O front é burro, só guarda a URL)
+  // ESTADO DE REDIRECIONAMENTO DE SEGURANÇA
   const [securityRedirectUrl, setSecurityRedirectUrl] = useState("");
+
+  // ✨ FIX: Consumo reativo do erro de handoff disparando alerta visual via UI
+  useEffect(() => {
+    if (mounted && search.handoff_error) {
+      console.warn(`[UX Login] Handoff rejeitado pelo Guard. Motivo: ${search.handoff_error}`);
+      setGeneralError(HANDOFF_ERROR_MSGS[search.handoff_error] || "Sessão expirada. Faça login para continuar.");
+      
+      // Higiene de URL mantida comentada (decisão de UX)
+      // window.history.replaceState(null, '', window.location.pathname + `?redirect_uri=${search.redirect_uri || '/'}`);
+    }
+  }, [mounted, search.handoff_error, search.redirect_uri]);
 
   const handleRealLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // -----------------------------------------------------------------------
-    // INTERCEPTADOR DE SEGURANÇA: Se a tela travou pedindo biometria e o 
-    // usuário clicou em "Continuar", a gente obedece a URL enviada pelo BFF.
-    // -----------------------------------------------------------------------
     if (securityRedirectUrl) {
       window.location.href = securityRedirectUrl;
       return;
@@ -185,7 +201,6 @@ export function CustomLogin() {
         const action = response.action;
 
         if (action === "redirect" && response.redirect_path) {
-          // Salva a URL absoluta vinda da Edge Function no estado e trava a tela
           setGeneralError(response.message || "Identificamos que uma validação de segurança é necessária.");
           setSecurityRedirectUrl(response.redirect_path);
         } 
@@ -256,7 +271,6 @@ export function CustomLogin() {
 
         <form onSubmit={handleRealLogin} className="flex flex-col gap-5" noValidate>
           
-          {/* Só mostra as abas se NÃO estiver travado pela tela de segurança */}
           {!securityRedirectUrl && (
             <div className="flex w-full border-b border-gray-200 mb-2">
               <button
@@ -297,7 +311,6 @@ export function CustomLogin() {
             </div>
           )}
 
-          {/* Oculta os inputs caso o usuário precise confirmar a identidade na Superbid */}
           {!securityRedirectUrl && (
             <>
               <div className="flex flex-col gap-1.5">

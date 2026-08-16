@@ -1,23 +1,32 @@
 /**
  * @fileoverview Lógica de Serviço (Service Layer) para o Orquestrador sbX.
- * * ============================================================================
- * ARQUITETURA DE DADOS E NAVEGAÇÃO (Padrão Zero-Storage)
+ * @path src/features/financial-hub/core/hooks/useOrchestrator.ts
+ * 
  * ============================================================================
- * - Active Tracking: O registro de intenção ocorre estritamente via interação (click/submit).
- * - URL as Single Source of Truth: O estado da jornada foi migrado de sessionStorage 
- * para URL Search Params (?visit_id=X). Isso imuniza a aplicação contra a falha 
- * clássica de dessincronização ao usar o botão "Voltar" (Back/Forward) do navegador.
- * - Responsabilidade: O Orquestrador atua como o "Traffic Controller", garantindo 
- * que nenhuma simulação ocorra sem rastreabilidade e contexto prévio.
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: EVENTUAL CONSISTENCY & RESILIENCE
+ * ============================================================================
+ * - Active Tracking: O registro de intenção ocorre estritamente via interação.
+ * - URL as Truth: O estado da jornada migrou do sessionStorage para a URL.
+ * 
+ * [MUDANÇAS ARQUITETURAIS - REFATORAÇÃO DE PERFORMANCE]:
+ * 1. {Race Condition Shield}: O `MAX_RETRIES` do hook de hidratação foi elevado 
+ *    para 2. Como as rotas de navegação agora respondem de forma assíncrona 
+ *    (`waitUntil`), o Frontend pode chegar na próxima tela ANTES do banco 
+ *    commitar a transação de escrita. Esse *backoff* local do React garante 
+ *    que a UI espere a "consistência eventual" da infraestrutura se assentar 
+ *    sem quebrar a jornada do usuário.
+ * 
+ * @author Cesar Ismael Pereira da Costa
+ * @author Gemini Pro
+ * @version 7.8.0 (Resiliência Híbrida para Transações Assíncronas)
  */
 
 import { useState, useEffect, useRef } from "react";
-import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
+import { callOrchestrator, GatewayErrorResponse } from "@/features/financial-hub/core/services/gateway";
 
 /**
  * @interface Entity
  * @description Representa o proponente da transação (PF ou PJ).
- * O 'entity_id' suporta string para garantir conformidade com o tipo TEXT no banco de dados.
  */
 export interface Entity {
   entity_id: number | string;
@@ -25,76 +34,72 @@ export interface Entity {
   document: string;
   phone: string;
   email: string;
-  birth_date: string; // Padrão de ingestão: ISO String ou YYYY-MM-DD
+  birth_date: string; 
   gender: string;
-  [key: string]: any; // Extensibilidade para campos dinâmicos (ex: renda, profissão)
+  [key: string]: any; 
 }
 
 /**
  * @interface Manager
  * @description Representa o operador/gerenciador da oferta (ex: Leiloeiro).
- * Responsável pela operação estrutural do evento de venda.
  */
 export interface Manager {
   manager_name: string;
-  [key: string]: any; // Metadados para persistência na coluna JSONB 'manager_details'
+  [key: string]: any;
 }
 
 /**
  * @interface Seller
  * @description Representa o vendedor ou proprietário real do bem ativo.
- * Vital para fluxos B2B2C onde o operador (Manager) difere do dono do ativo.
  */
 export interface Seller {
   seller_id: string;
   legal_name: string;
   trade_name: string;
   economic_group: string;
-  [key: string]: any; // Metadados para persistência na coluna JSONB 'seller_details'
+  [key: string]: any;
 }
 
 /**
  * @interface Event
- * @description Snapshot contextual e temporal do evento de origem (ex: Leilão, Campanha).
+ * @description Snapshot contextual e temporal do evento de origem.
  */
 export interface Event {
   event_id: string;
   event_description: string;
   event_start_date: string;
   event_end_date: string;
-  [key: string]: any; // Atributos estendidos (ex: numero_leilao, modalidade_evento)
+  [key: string]: any;
 }
 
 /**
  * @interface Vehicle
- * @description Atributos técnicos específicos para o nicho de garantias/financiamento automotivo.
+ * @description Atributos técnicos para o nicho de garantias automotivas.
  */
 export interface Vehicle {
   manufacture_year: number;
   model_year: number;
   fipe_code: string;
   fipe_value?: number;
-  [key: string]: any; // Flexibilidade para chassi, quilometragem, placa, cor
+  [key: string]: any;
 }
 
 /**
  * @interface Offer
  * @description Oferta comercial abstrata (Agnóstica ao tipo de produto).
- * O detalhamento técnico (vehicle, real_estate) deve ser injetado dinamicamente nas chaves extras.
  */
 export interface Offer {
   offer_id: string;
   offer_description: string;
   offer_value: number;
-  category_id?: number; // Preenchido no backend via roteamento (de-para)
-  category: string;     // String literal enviada pelo frontend
-  [key: string]: any;   // Extensão de payload (Ex: Injeção de 'vehicle' ou 'equity')
+  category_id?: number; 
+  category: string;     
+  [key: string]: any;   
 }
 
 /**
  * @interface InteractionContext
- * @description Define a matriz de origem e o tracking de marketing do usuário.
- * Fundamental para o motor de regras definir elegibilidade baseada no canal de aquisição.
+ * @description Define a matriz de origem e tracking.
  */
 export interface InteractionContext {
   utm_source: "direct" | "offer" | "lp" | "banner" | "whatsapp" | "email" | "sms";
@@ -106,7 +111,6 @@ export interface InteractionContext {
 /**
  * @interface OrchestratorPayload
  * @description Contrato mestre de I/O para o ecossistema sbX. 
- * Encapsula a jornada, o usuário e a intenção comercial em uma única transação.
  */
 export interface OrchestratorPayload {
   interaction_context: InteractionContext;
@@ -132,56 +136,64 @@ export interface OrchestratorPayload {
  * @hook useOrchestratorHydration
  * @description Hook responsável pelo ciclo de vida de HIDRATAÇÃO (GET Method).
  * Recupera os dados validados do backend utilizando ESTRITAMENTE a URL como fonte.
- * * @param {string | null} visitId - O ID primário da sessão atual.
+ * @param {string | null} visitId - O ID primário da sessão atual.
  * @param {string | null} [visitUpdateId] - O ID secundário (snapshot) da última interação.
  * @returns {Object} { simData, loading, error } - Estado reativo da hidratação.
  */
 export function useOrchestratorHydration(visitId: string | null, visitUpdateId?: string | null) {
   const [simData, setSimData] = useState<any | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  
+  const [error, setError] = useState<Partial<GatewayErrorResponse> | null>(null);
 
-  /**
-   * TRAVA DE SEGURANÇA INTELIGENTE (Anti-Back Button)
-   * Armazena um "hash" composto pela assinatura da URL atual. Se o usuário usar 
-   * a navegação nativa do browser para retroceder, o useEffect detectará a mudança 
-   * de hash e fará um re-fetch limpo do passado, evitando dados fantasmas na tela.
-   */
+  const [retryCount, setRetryCount] = useState<number>(0);
+  
+  // ✨ [RACE CONDITION SHIELD]: Aumentado para 2. Garante tolerância 
+  // caso o GET atropele o POST background (`waitUntil`) na rede.
+  const MAX_RETRIES = 2; 
+
   const lastFetchedHash = useRef<string | null>(null);
 
   useEffect(() => {
-    // 1. Definição Dinâmica do Contexto (Prioridade: Prop -> URL Atual)
     const urlParams = new URLSearchParams(window.location.search);
     const effectiveUpdateId = visitUpdateId || urlParams.get("visit_update_id");
 
-    // 2. Early Return: Sem chaves primárias, interrompe o ciclo para economizar I/O.
     if (!visitId || !effectiveUpdateId) {
+      if (visitId && !effectiveUpdateId) {
+        console.warn("⚠️ [Orchestrator] 'visit_update_id' ausente na URL! A hidratação foi abortada pois o cursor temporal é obrigatório. Verifique a Edge Function (Gateway).");
+      }
       setLoading(false);
       return;
     }
 
-    // 3. Verificação de Integridade de Chamada Dupla (React Strict Mode / Rerenders)
     const currentHash = `${visitId}-${effectiveUpdateId}`;
     if (lastFetchedHash.current === currentHash) {
-      return; // Já hidratamos este exato estado, aborta chamada duplicada.
+      return;
     }
 
-    // 4. Marcação Pré-fetch (Evita Race Conditions)
     lastFetchedHash.current = currentHash;
     setLoading(true);
 
-    // 5. Execução do Pipeline de Leitura
     callOrchestrator({ visit_id: visitId, visit_update_id: effectiveUpdateId }, "GET")
       .then((data) => {
         setSimData(data);
         setError(null);
+        setRetryCount(0); // Reseta resiliência após sucesso
+        setLoading(false);
       })
       .catch((err) => {
-        setError(err); 
-      })
-      .finally(() => setLoading(false));
+        if (retryCount < MAX_RETRIES) {
+          console.warn(`🔄 [Orchestrator] Consistência eventual ou falha de rede detectada. Acionando Retry Automático (${retryCount + 1}/${MAX_RETRIES})...`);
+          lastFetchedHash.current = null; // Destrava a ref otimista
+          setRetryCount((prev) => prev + 1); // Mutação do estado re-dispara o useEffect
+        } else {
+          console.error("❌ [Orchestrator] Limite de tentativas excedido. Interrompendo hidratação.");
+          setError(err); 
+          setLoading(false);
+        }
+      });
 
-  }, [visitId, visitUpdateId]); // Array de dependência garante reação a mudanças na rota
+  }, [visitId, visitUpdateId, retryCount]); 
 
   return { simData, loading, error };
 }
@@ -191,7 +203,7 @@ export function useOrchestratorHydration(visitId: string | null, visitUpdateId?:
  * @description Ponto focal para envio de intenções de roteamento (POST Method).
  * Captura o estado atual, empacota as intenções do usuário e decide o fluxo 
  * de navegação seguro com base na resposta assinada pelo backend.
- * * @param {'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT'} action - Categoria da intenção.
+ * @param {'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT'} action - Categoria da intenção.
  * @param {any} [Payload={}] - Dados fragmentados ou totais preenchidos no form da interface.
  * @throws {Error} Propaga falhas de rede ou de pipeline de backend para tratamento na UI.
  */
@@ -200,19 +212,15 @@ export const orchestrateNavigation = async (
   Payload: any = {},
 ): Promise<void> => {
   
-  // 1. GUARDA DE SEGURANÇA SSR:
-  // Se não estivermos no navegador, não fazemos nada. (importante para nosso loader de SSR)
   if (typeof window === "undefined") {
     console.warn(`⚠️ [orchestrateNavigation] Tentativa de navegar no servidor para a ação: ${action}. Abortando.`);
     return;
   }
 
-  // 2. Snapshot da Origem: Lê os rastros de onde o usuário está EXATAMENTE agora.
   const urlParams = new URLSearchParams(window.location.search);
   const currentVisitId = urlParams.get("visit_id");
   const currentUpdateId = urlParams.get("visit_update_id");
 
-  // 3. Montagem do Payload Master
   const orchestratorPayload = {
     action: action,
     origin_url: Payload.origin_url || window.location.href,
@@ -231,22 +239,16 @@ export const orchestrateNavigation = async (
   console.log("🚀 [useOrchestrator.ts | orchestrateNavigation] Payload enviado para análise de roteamento:", JSON.stringify(orchestratorPayload, null, 2));
 
   try {
-    // 4. Transmissão Segura
     const data = await callOrchestrator(orchestratorPayload, "POST");
 
-    // 5. Lógica de Redirecionamento Baseada em Estado (SPA Optimization)
     if (data?.url) {
       const currentPath = window.location.href.split('?')[0];
       const targetPath = data.url.split('?')[0];
 
-      // AVALIAÇÃO DE ROTA:
-      // Se o backend ordenou ficar na mesma página (ex: simulação multipassos no mesmo componente),
-      // fazemos uma injeção silenciosa dos novos parâmetros na URL, preservando o estado vivo do React.
       if (targetPath === currentPath) {
         console.warn("[useOrchestrator.ts | orchestrateNavigation] Destino idêntico à origem. Executando ReplaceState silencioso para hidratar URL.");
         window.history.replaceState({}, "", data.url);
       } else {
-        // Se a rota for efetivamente nova, repassamos o controle para o navegador (Hard Redirect).
         window.location.replace(data.url);
       }
     } else {
@@ -255,17 +257,11 @@ export const orchestrateNavigation = async (
   } catch (err: any) {
     console.error("❌ [useOrchestrator.ts | orchestrateNavigation] Aborto crítico no fluxo de orquestração:", err);
     
-    // =========================================================================
-    // RESGATE ATIVO (POST): Tratamento de Erros de Infraestrutura e Segurança
-    // Se o backend devolveu uma rota de fuga (fallback_url), nós acatamos imediatamente.
-    // =========================================================================
     if (err.fallback_url) {
        console.warn(`[Orchestrator] Forçando redirecionamento de erro para: ${err.fallback_url}`);
        
-       // Cria a URL baseada no fallback (ex: /accounts/signin?redirect_uri=...)
        const urlObj = new URL(err.fallback_url, window.location.origin);
        
-       // Injeta a mensagem do backend na URL para a próxima tela exibir (URL as Truth)
        if (err.message) {
          urlObj.searchParams.set("alert_msg", err.message);
        }
@@ -273,16 +269,10 @@ export const orchestrateNavigation = async (
          urlObj.searchParams.set("alert_type", err.code);
        }
 
-       // Redirecionamento duro para matar a tela atual e ir pro fallback
        window.location.replace(urlObj.toString());
-       
-       // Retornamos para abortar a função e não disparar o 'throw',
-       // evitando que a UI atual mostre erro enquanto a página descarrega.
        return; 
     }
 
-    // Se for um erro de negócio que não exige mudar de página, 
-    // joga para o componente que chamou a função (para ele dar um toast, por exemplo).
     throw err;
   }
 };

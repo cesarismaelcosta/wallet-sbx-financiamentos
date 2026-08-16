@@ -7,8 +7,9 @@
  * na expiração automática (amnésia) e limpeza total no logout manual.
  */
 
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { manualLogout, clearSession, setSessionToken, authHeaders } from "@/services/session";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+// 🧹 FIX: Importando getTokenForPayload para ler do Cookie em Prod
+import { manualLogout, clearSession, setSessionToken, authHeaders, getTokenForPayload } from "@/services/session";
 
 interface FinancialAuthContextType {
   sessionToken: string | null;
@@ -35,7 +36,8 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
    * Armazena o token, o ID e o perfil unificado do usuário utilizando o gerenciador session.ts
    * e atualiza o estado reativo do contexto.
    */
-  const setSession = (token: string, newUserId?: string, profile?: any) => {
+  // 🧹 FIX: useCallback adicionado para evitar re-criação da função a cada render
+  const setSession = useCallback((token: string, newUserId?: string, profile?: any) => {
     if (typeof window !== 'undefined') {
       setSessionToken(token); // Delega para session.ts (respeita USE_COOKIE e TOKEN_KEY)
       
@@ -50,14 +52,13 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
       }
     }
     setSessionTokenState(token);
-  };
+  }, []);
 
   /**
    * Protocolo de Amnésia (Expiração automática / Timeout):
    * Remove apenas os tokens e metadados de sessão, mantendo 'sbx_env_pref' intacto.
    */
-  const handleAmnesia = () => {
-    
+  const handleAmnesia = useCallback(() => {
     if (typeof window !== 'undefined') {
       clearSession(); // Utiliza o purgador centralizado do session.ts
       sessionStorage.removeItem("user_id");
@@ -69,14 +70,15 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     setSessionTokenState(null);
     setUserId(null);
     setUserProfile(null);
-  };
+  }, []);
 
   /**
    * Encerra a sessão atual. 
    * Se purgeEnv for true (logout manual explícito), limpa também a preferência de ambiente.
    * Se for falso ou omitido (expiração/timeout), preserva o sbx_env_pref.
    */
-  const logout = (opts?: { purgeEnv?: boolean }) => {
+  // 🧹 FIX: useCallback adicionado
+  const logout = useCallback((opts?: { purgeEnv?: boolean }) => {
     if (typeof window !== 'undefined') {
       if (opts?.purgeEnv) {
         manualLogout(); // Limpa tokens e apaga sbx_env_pref (Logout manual explícito)
@@ -90,23 +92,16 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     setSessionTokenState(null);
     setUserId(null);
     setUserProfile(null);
-  };
-
-  // -----------------------------------------------------------------------
-  // [SECURITY]: Listener Global do Protocolo de Amnésia
-  // -----------------------------------------------------------------------
-  useEffect(() => {
-    window.addEventListener('session_expired', handleAmnesia);
-    return () => window.removeEventListener('session_expired', handleAmnesia);
   }, []);
 
   // -----------------------------------------------------------------------
-  // [STATE]: Hidratação Inicial (Mount via SessionStorage / Gateway)
+  // [CORE]: Lógica Reutilizável de Hidratação
   // -----------------------------------------------------------------------
-  useEffect(() => {
+  const hydrateSession = useCallback(() => {
     if (typeof window === 'undefined') return;
     
-    const storedToken = sessionStorage.getItem("session_token");
+    // 🧹 FIX: Lê do storage (DEV) OU do Cookie (PROD) usando getTokenForPayload
+    const storedToken = sessionStorage.getItem("session_token") || getTokenForPayload();
     const storedUserId = sessionStorage.getItem("user_id");
     const storedProfile = sessionStorage.getItem("user_profile");
 
@@ -132,8 +127,42 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
     setIsLoading(false);
   }, []);
 
+  // -----------------------------------------------------------------------
+  // [EVENTS & LIFECYCLE]: Escuta de Handoff (Hydrate) e Expiração (Amnésia)
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    // 1. Executa a hidratação imediatamente no Mount
+    hydrateSession();
+
+    // 2. Define o listener para re-hidratação via Handoff (#xt=)
+    const onSessionHydrated = () => {
+      console.log("💧 [AuthContext] Evento 'session_hydrated' capturado. Re-hidratando estado...");
+      hydrateSession();
+    };
+
+    window.addEventListener('session_hydrated', onSessionHydrated);
+    window.addEventListener('session_expired', handleAmnesia);
+
+    // 3. Cleanup rigoroso na desmontagem
+    return () => {
+      window.removeEventListener('session_hydrated', onSessionHydrated);
+      window.removeEventListener('session_expired', handleAmnesia);
+    };
+  }, [hydrateSession, handleAmnesia]);
+
+  // 🧹 FIX: Memoização do Value inteiro. Evita que o React dispare renders 
+  // em todos os componentes filhos apenas porque o Provider foi reavaliado.
+  const contextValue = useMemo(() => ({
+    sessionToken,
+    userId,
+    userProfile,
+    isLoading,
+    setSession,
+    logout
+  }), [sessionToken, userId, userProfile, isLoading, setSession, logout]);
+
   return (
-    <FinancialAuthContext.Provider value={{ sessionToken, userId, userProfile, isLoading, setSession, logout }}>
+    <FinancialAuthContext.Provider value={contextValue}>
       {children}
     </FinancialAuthContext.Provider>
   );

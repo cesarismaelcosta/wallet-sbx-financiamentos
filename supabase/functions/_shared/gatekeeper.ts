@@ -3,13 +3,19 @@
  * @path supabase/functions/_shared/gatekeeper.ts
  *
  * =========================================================================
- * GATEKEEPER DE SEGURANÇA (Zero-Trust Authorization & Stateless DDD)
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: ZERO-TRUST & CART PRESERVATION
  * =========================================================================
  * Centraliza a validação de acesso a recursos e a integridade de jornada.
  * Opera 100% em memória validando o token Stateless via `verifySessionToken`.
  * 
+ * [MUDANÇAS ARQUITETURAIS - DDD: VERIFY vs LINK]:
+ * 1. {Link vs Verify}: Introdução do parâmetro `mode`. Permite que o Gatekeeper 
+ *    aceite a mutação da jornada (inserção de nova oferta na mesma Visita) sem 
+ *    afrouxar as regras de Identity Ownership (IDOR) e Validação Upstream.
+ * 
  * @author César Ismael Pereira da Costa
- * @version 5.0.0 (Migração para Validação Stateless em Memória - Sem Dependência de Banco)
+ * @author Gemini Pro
+ * @version 5.1.0 (Validação Diferenciada: Verify vs Link)
  */
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -20,24 +26,16 @@ import { verifySessionToken } from "./jwt.ts";
 // 1. GATEKEEPER DE JORNADA: VISITA + OFERTA
 // =========================================================================
 
-/**
- * @function validateVisitAndOfferIntegrity
- * @description Funde a Validação Triangular de Visita e o Gatekeeper de Sessão Stateless.
- *               1. Valida o token JWT em memória via verifySessionToken (extraindo user_id e environment).
- *               2. Valida IDOR da Visita e Vínculo da Oferta (se houver).
- *               3. Bate na API da Superbid usando o ambiente seguro e retorna a Oferta formatada.
- * 
- * @param {SupabaseClient} supabase - Cliente do Supabase com Service Role.
- * @param {Object} auth - Objeto contendo { session_token }.
- * @param {string | null} visitId - ID da visita alvo. Nulo se for criação.
- * @param {Object} payload - Objeto com entity_id e offer_id.
- * @returns {Promise<any>} - Retorna o objeto hidratado da oferta ou null.
- */
 export async function validateVisitAndOfferIntegrity(
   supabase: SupabaseClient,
   auth: { session_token: string },
   visitId: string | null | undefined,
-  payload: { entity_id?: string | null; offer_id?: string | null }
+  payload: { entity_id?: string | null; offer_id?: string | null },
+  /**
+   * "verify" (default): a oferta DEVE já estar vinculada à visita (GET, simulação).
+   * "link": este POST criará o vínculo. Validação upstream (Superbid) e Ownership continuam.
+   */
+  mode: "verify" | "link" = "verify"
 ): Promise<any> {
   const targetEntityId = payload.entity_id;
   const targetOfferId = payload.offer_id;
@@ -66,7 +64,7 @@ export async function validateVisitAndOfferIntegrity(
   // FASE 2: VALIDAÇÃO DA VISITA E VÍNCULO COM A OFERTA (Ownership/IDOR)
   // =====================================================================
   if (visitId) {
-    debugLog(`[Gatekeeper] Validando Visita (${visitId}) e Vínculos no DB...`);
+    debugLog(`[Gatekeeper] Validando Visita (${visitId}) e Vínculos no DB (Mode: ${mode})...`);
     
     const { data: visit, error: visitError } = await supabase
       .from('visits')
@@ -90,12 +88,14 @@ export async function validateVisitAndOfferIntegrity(
     }
 
     // C. Payload vs Banco (Vínculo da Oferta)
-    if (targetOfferId) {
+    if (targetOfferId && mode === "verify") {
       const isOfferLinked = visit.visit_offers?.some((o: any) => String(o.offer_id) === String(targetOfferId));
       if (!isOfferLinked) {
         debugLog(`[Security] FRAUDE: Oferta ${targetOfferId} não pertence à Visita ${visitId}.`);
         throw new Error("INVALID_RELATIONSHIP: Oferta não pertence a esta visita.");
       }
+    } else if (targetOfferId) {
+      debugLog(`[Gatekeeper] mode=link: Vínculo de oferta permitido para criação. Upstream prosseguirá.`);
     }
   } else {
     // Cenário CREATE: Valida se o usuário não está forjando entidade de outro
@@ -134,8 +134,6 @@ export async function validateVisitAndOfferIntegrity(
 
   const apiUrl = `${offerBaseUrl}/offers/?${params.toString()}`;
 
-  // Nota: Como o token JWT stateless contém apenas a identidade interna, 
-  // as requisições puramente públicas de catálogo de oferta usam cabeçalhos de contrato padrão.
   const response = await fetch(apiUrl, {
     method: "GET",
     headers: { 
@@ -159,7 +157,6 @@ export async function validateVisitAndOfferIntegrity(
     throw new Error("OFFER_NOT_FOUND: API retornou vazio.");
   }
 
-  // O Objeto Contract Exato
   const offerResult = {
     offer: {
       offer_id: String(offer.id),

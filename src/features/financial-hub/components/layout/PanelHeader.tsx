@@ -3,16 +3,25 @@
  * @path src/features/financial-hub/components/layout/PanelHeader.tsx
  * 
  * =========================================================================
- * [DOCUMENTAÇÃO DO COMPONENTE]
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: URL HYGIENE & STERILE NAVIGATION
  * =========================================================================
  * @description Header fixo e estático unificado para todo o ecossistema.
- * Mantém altura absoluta rigorosa (64px) e alinhamento milimétrico da logo.
+ * Além da UI, este componente atua como o Guardião de Contexto de Navegação.
+ * 
+ * [MUDANÇA ARQUITETURAL - URL HYGIENE]:
+ * O clique na Logo não faz um "Hard Reload", ele navega via SPA. Para evitar
+ * o vazamento de contexto (Memory Leak Visual), a propriedade `search` 
+ * atua como um filtro: retém ESTRITAMENTE a Sessão Macro (`visit_id`) e 
+ * destrói cursores atômicos (`visit_update_id`, `simulation_id`).
+ * Isso garante que a Home sempre carregue em modo "Estéril".
  * 
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
+ * @version 7.6.0 (Refatoração: Filtragem de Estado no TanStack Link)
  */
 
 import React from "react";
+import { Link } from "@tanstack/react-router";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { LogOut, LogIn } from "lucide-react";
 
@@ -63,14 +72,25 @@ export function PanelHeader({
           
           {/* Lado Esquerdo: Logo fixa com container block para preservar a tagline */}
           <div className="flex items-center shrink-0">
-            <a href="/sbxpay/" className="block outline-none border-none focus:outline-none focus:ring-0">
+            {/* 
+              ✨ [URL HYGIENE - ISOLAMENTO DE CONTEXTO]
+              Retém APENAS o visit_id (a sessão macro / carrinho). 
+              O visit_update_id e o simulation_id são propositalmente descartados.
+              Como a URL perde o update_id, o Guardião da Home (sbxpay.lazy) 
+              entenderá que é um novo pageview e disparará um Phantom Visit estéril.
+            */}
+            <Link 
+              to="/sbxpay" 
+              search={(prev: any) => ({ visit_id: prev?.visit_id })}
+              className="block outline-none border-none focus:outline-none focus:ring-0"
+            >
               <div className="hidden sm:block">
                 <WalletLogo size="md" withTagline />
               </div>
               <div className="block sm:hidden">
                 <WalletLogo size="sm" withTagline />
               </div>
-            </a>
+            </Link>
           </div>
 
           {/* Lado Direito: Navegação e Controles */}

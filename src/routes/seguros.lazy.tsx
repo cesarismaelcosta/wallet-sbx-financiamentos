@@ -24,10 +24,38 @@
 import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
 import { FinancialHubLayout } from "@/features/financial-hub/components/layout/FinancialHubLayout";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { jwtDecode } from "jwt-decode"; 
 import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session"; 
 import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoffRedeem";
+
+// Importando os componentes visuais para replicar o Layout Pixel-Perfect
+import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHeader";
+import { PanelProductOfferSkeleton } from "@/features/financial-hub/components/layout/PanelProductOfferSkeleton";
+import { PanelStepSkeleton } from "@/features/financial-hub/components/layout/PanelStepSkeleton";
+import { PanelFAQSkeleton } from "@/features/financial-hub/components/layout/PanelFAQSkeleton";
+import { PanelFooterSkeleton } from "@/features/financial-hub/components/layout/PanelFooterSkeleton";
+
+// =========================================================================
+// [ANTI-RACE CONDITION]: Skeleton Puro Desacoplado do Orquestrador
+// =========================================================================
+function RouteSkeleton() {
+  return (
+    <div className="min-h-screen bg-white text-foreground flex flex-col transition-colors duration-300 relative">
+      <PanelHeader showNav={true} showAuth={true} links={[]} />
+      
+      <main className="flex-1 w-full flex flex-col pt-16">
+        <div className="max-w-7xl mx-auto px-6 py-12 w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+          <PanelProductOfferSkeleton />
+          <PanelStepSkeleton />
+        </div>
+      </main>
+
+      <PanelFAQSkeleton />
+      <PanelFooterSkeleton />
+    </div>
+  );
+}
 
 /**
  * SegurosGuard
@@ -36,30 +64,37 @@ import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoff
  */
 const SegurosGuard = () => {
   // [ARQUITETURA]: sessionToken do contexto global
-  const { sessionToken: contextToken, isLoading, refreshSession } = useFinancialAuth();
+  const { sessionToken: contextToken, isLoading } = useFinancialAuth();
   
-  // 🔑 [SECURITY GATE]: Resgate encapsulado e seguro utilizando getTokenForPayload com proteção contra SSR
+  // 🔑 [SECURITY GATE]: Resgate encapsulado e seguro
   const sessionToken = contextToken || getTokenForPayload();
 
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Sniper Tático isolado no hook unificado (sem reload)
-  const { isExchanging } = useHandoffRedeem(() => {
-    if (refreshSession) refreshSession();
-  });
+  const { isExchanging, status, reason } = useHandoffRedeem();
+
+  // ✨ FIX: Log de segurança simétrico para rastreabilidade
+  useEffect(() => {
+    if (status === "error") {
+      console.error(`[AUTH GATEKEEPER - Seguros] Falha Crítica no Resgate Tático: ${reason}. Redirecionando para login.`);
+    }
+  }, [status, reason]);
+
+  const [isClientMounted, setIsClientMounted] = useState(false);
+  useEffect(() => {
+    setIsClientMounted(true);
+  }, []);
 
   useEffect(() => {
-    // 0. Ignora validações enquanto o estado inicial está hidratando ou trocando o token
-    if (isLoading || isExchanging) return;
+    // 🛡️ Previne vazamento de estado SSR antes da validação do Sniper
+    if (!isClientMounted || isLoading || isExchanging) return;
 
     // =========================================================================
     // 🛡️ [STEP 1]: ZERO-TRUST GUARD & REDIRECIONAMENTO PROATIVO
     // =========================================================================
     if (!USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
       
-      // ✨ FIX: Usa o window.location nativo para garantir que o search é uma string
-      // e não o objeto parseado pelo TanStack Router.
       const currentPath = typeof window !== "undefined" 
         ? window.location.pathname + window.location.search 
         : "/seguros";
@@ -68,8 +103,10 @@ const SegurosGuard = () => {
         to: '/accounts/signin',
         search: { 
           redirect_uri: currentPath,
-          env: undefined 
-        } as any // Correção de tipagem do TanStack
+          env: undefined,
+          handoff_error: reason 
+        } as any,
+        replace: true // ✨ FIX: Higiene de Histórico (Impede reentrada inválida via botão "Voltar")
       });
       return;
     }
@@ -77,7 +114,6 @@ const SegurosGuard = () => {
     // =========================================================================
     // ⏱️ [STEP 2]: VALIDAÇÃO PASSIVA DE EXPIRAÇÃO (UX Guard)
     // =========================================================================
-    // ✨ FIX: Trava que impede o React de jogar o erro 'Cannot convert object to primitive value'
     if (sessionToken && typeof sessionToken === "string") {
       try {
         const decoded = jwtDecode<{ exp?: number }>(sessionToken);
@@ -97,26 +133,15 @@ const SegurosGuard = () => {
         return;
       }
     }
-  }, [sessionToken, isLoading, navigate, location.pathname, isExchanging]);
+  }, [isClientMounted, sessionToken, isLoading, navigate, location.pathname, isExchanging, reason]);
 
   // =========================================================================
-  // [UX REFINEMENT]: Substituição do Loader Bruto por Skeleton Estrutural
-  // Rationale: Evita Layout Shift e a sensação de "duplo carregamento" na tela,
-  // mantendo o container principal visível enquanto valida a sessão em background.
+  // [UX REFINEMENT & ANTI-RACE CONDITION]: Renderização do Skeleton
   // =========================================================================
-  if (isLoading || isExchanging) {
-    return (
-      <FinancialHubLayout>
-        <div className="max-w-7xl mx-auto px-6 py-16 space-y-8 animate-pulse">
-          <div className="h-8 w-64 bg-slate-200 rounded-lg"></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6">
-            <div className="h-48 bg-slate-100 rounded-2xl"></div>
-            <div className="h-48 bg-slate-100 rounded-2xl"></div>
-            <div className="h-48 bg-slate-100 rounded-2xl"></div>
-          </div>
-        </div>
-      </FinancialHubLayout>
-    );
+  
+  // ✨ FIX: Montagem isolada. O Orquestrador só "nasce" depois dessa barreira visual.
+  if (!isClientMounted || isLoading || isExchanging) {
+    return <RouteSkeleton />;
   }
 
   // [COMPLIANCE]: Fail-safe de renderização (Apenas em DEV).

@@ -1,6 +1,7 @@
 /**
  * @fileoverview Componente Mestre: sbXPAYLayOut (Gatekeeper de Acesso e Hidratação de Sessão)
  * @module features/financial-hub/core/layout
+ * @path src/routes/sbxpay.lazy.tsx
  * 
  * =========================================================================
  * 🤖 GEMINI ARCHITECTURE SPECIFICATION: HYBRID GATEKEEPER & ZERO-TRUST HANDOFF
@@ -9,24 +10,20 @@
  * Ele materializa o protocolo "Double JWT" no lado do frontend, fundindo a 
  * recepção stateless com o guardião de rotas tradicional do React.
  * 
- * [POSTURA DE SEGURANÇA E FLUXO DE ORQUESTRAÇÃO]:
- * 0. {Resgate Tático - Sniper}: O hook de inicialização opera com máxima prioridade
- *    para inspecionar a URL. Se detectar um Exchange JWT, bloqueia a árvore 
- *    de renderização e realiza o handoff (resgate), protegendo credenciais contra
- *    vazamento para scripts de rastreamento (GTM, Sentry) ou extensões do navegador.
- * 1. {Zero-Trust Guard}: Avalia o estado de autenticação antes de qualquer 
- *    montagem de DOM persistente. Acessos anônimos sofrem early-return preventivo, 
- *    preservando o estado da intenção de acesso via querystring `redirect_uri`.
- * 2. {BFF Rehydration}: Restaura a integridade estrutural do perfil do usuário 
- *    (BFFUserProfile) a partir da memória quente (Context) ou fria (sessionStorage).
- * 3. {Phantom Visit}: Aciona o motor do Orquestrador (`action: "VISIT"`) em 
- *    background, injetando o `visit_id` na URL via History API sem causar 
- *    repaints na tela (Zero Flash), garantindo telemetria sem engasgar a UI.
- * 4. {State Propagation}: Envelopa a aplicação no `UserDataContext`, garantindo
- *    propagação determinística da identidade (Perfil) e mecanismo de kill-switch (Logout).
+ * [MUDANÇAS ARQUITETURAIS - REFATORAÇÃO DE PERFORMANCE E SESSÃO]:
+ * 1. {Idempotency Lock}: Introduzido o `hasRunPhantomVisit` (useRef). Como a logo 
+ *    agora limpa o `visit_update_id` da URL, a Home sempre dispara um Phantom Visit 
+ *    (um POST silencioso) para gerar um novo Pageview. O lock previne que o StrictMode 
+ *    do React ou re-renders de contexto flodem o backend com requisições duplicadas.
+ * 2. {Cart Preservation}: O Phantom Visit agora repassa o `visit_id` (se existir) 
+ *    para o POST, garantindo que o novo pageview pertença à mesma sessão global do usuário.
+ * 3. {Phantom Visit Seguro}: Inclusão da checagem `isEntityComplete` para prevenir
+ *    erros `400 Bad Request`. O envio da `entity` agora exige que o perfil possua
+ *    todos os campos obrigatórios validados pela Edge Function do Gateway.
  *
  * @author César Ismael Pereira da Costa
- * @version 6.0.0 (Integração de Resgate Stateless e Defesa Anti-Telemetry)
+ * @author Gemini Pro
+ * @version 7.8.0 (Phantom Visit Seguro & Preservação de Sessão)
  */
 
 import { createContext, useState, useEffect, useRef } from "react";
@@ -36,7 +33,7 @@ import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHea
 import { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload } from "@/services/session";
-import { redeemHandoffSession } from "@/services/exchange";
+import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoffRedeem";
 
 export const Route = createLazyFileRoute("/sbxpay")({
   component: sbXPAYLayOut, 
@@ -55,31 +52,94 @@ export const UserDataContext = createContext<{
 });
 
 /**
- * [FALLBACK UI]: Spinner Genérico
- */
-const Spinner = ({ msg }: { msg: string }) => (
-  <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B400FF] mb-4"></div>
-    <p className="text-slate-500 font-medium text-sm">{msg}</p>
-  </div>
-);
-
-/**
  * [PLACEHOLDER ESTRUTURAL]: Mitigação de Cumulative Layout Shift (CLS)
- * Preserva o grid e a altura dos elementos durante processos assíncronos de Gatekeeping.
+ * Preserva o grid, o zigue-zague responsivo e as alturas dos elementos 
+ * para uma transição invisível entre Skeleton e Conteúdo.
  */
 function HomeSkeleton() {
+  const skeletonSections = [
+    { isHero: true, isReverse: false },
+    { isHero: false, isReverse: false },
+    { isHero: false, isReverse: true },
+    { isHero: false, isReverse: false },
+  ];
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="bg-white min-h-screen antialiased font-sans overflow-x-hidden relative flex flex-col">
       <PanelHeader showNav={true} showAuth={true} links={[]} />
-      <main className="max-w-7xl mx-auto px-6 pt-28 space-y-12 animate-pulse">
-        <div className="h-56 bg-slate-100 rounded-3xl w-full"></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="h-64 bg-slate-100 rounded-2xl"></div>
-          <div className="h-64 bg-slate-100 rounded-2xl"></div>
-          <div className="h-64 bg-slate-100 rounded-2xl"></div>
+
+      <div className="flex-1">
+        {skeletonSections.map((section, index) => (
+          <section
+            key={index}
+            className={`relative bg-white border-b border-gray-100 overflow-hidden ${
+              section.isHero ? "pt-28 pb-10 md:pt-32 md:pb-12" : "py-10 md:py-12"
+            }`}
+          >
+            <div className="max-w-7xl mx-auto px-6 relative z-10 animate-pulse">
+              <div 
+                className={`flex flex-col ${
+                  section.isReverse ? "lg:flex-row-reverse" : "lg:flex-row"
+                } items-center justify-between gap-8 lg:gap-12`}
+              >
+                <div className="w-full lg:w-6/12 space-y-5">
+                  <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
+                    <div className="w-24 h-24 sm:hidden flex-shrink-0 bg-slate-100 rounded-full"></div>
+                    <div className="space-y-4 flex-1 mt-2 sm:mt-0">
+                      <div className="h-6 w-24 bg-slate-100 rounded-full"></div>
+                      <div className="space-y-2">
+                        <div className="h-8 md:h-10 w-3/4 bg-slate-100 rounded-lg"></div>
+                        <div className="h-8 md:h-10 w-1/2 bg-slate-100 rounded-lg"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <div className="h-4 w-full bg-slate-50 rounded"></div>
+                    <div className="h-4 w-5/6 bg-slate-50 rounded"></div>
+                    <div className="h-4 w-4/6 bg-slate-50 rounded"></div>
+                  </div>
+
+                  {section.isHero ? (
+                    <div className="border-t border-gray-100 pt-5 space-y-4">
+                       <div className="h-12 w-full bg-slate-50 rounded-lg"></div>
+                       <div className="h-12 w-full bg-slate-50 rounded-lg"></div>
+                       <div className="pt-2">
+                         <div className="h-10 w-full md:w-40 bg-slate-100 rounded-lg"></div>
+                       </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                        <div className="h-24 bg-slate-50 rounded-xl"></div>
+                        <div className="h-24 bg-slate-50 rounded-xl"></div>
+                      </div>
+                      <div className="flex flex-col md:flex-row gap-4 pt-4">
+                        <div className="h-10 w-full md:w-48 bg-slate-100 rounded-lg"></div>
+                        <div className="h-10 w-full md:w-48 bg-slate-50 rounded-lg"></div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="hidden sm:flex w-full lg:w-5/12 justify-center mt-8 lg:mt-0">
+                  <div className="w-full max-w-sm aspect-square bg-slate-50/50 rounded-full flex items-center justify-center">
+                     <div className="w-3/4 h-3/4 bg-slate-100 rounded-2xl rotate-3"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <footer className="w-full pt-10 pb-40 md:py-10 mt-auto bg-black border-t border-gray-800">
+        <div className="container mx-auto px-6 flex flex-col items-center gap-4 text-center animate-pulse">
+          <div className="h-20 w-20 rounded-md bg-gray-800"></div>
+          <div className="h-3 w-48 bg-gray-800 rounded mt-2"></div>
+          <div className="h-3 w-64 bg-gray-800 rounded"></div>
         </div>
-      </main>
+      </footer>
     </div>
   );
 }
@@ -87,207 +147,198 @@ function HomeSkeleton() {
 export function sbXPAYLayOut() {
   const authContext = useFinancialAuth();
   const { sessionToken: contextToken, userProfile: contextProfile, isLoading, logout } = authContext;
-  
-  // Resolução de credencial aplicando priorização: Memória Quente > LocalStorage/Cookies
+
   const sessionToken = contextToken || getTokenForPayload();
 
   const navigate = useNavigate();
   const logoutRef = useRef(logout);
   const isRedirecting = useRef(false);
 
-  // [DEFESA]: Previne Stale Closures (variáveis de escopo antigas) injetando a função de logout no Ref
+  // ✨ [IDEMPOTENCY LOCK]: Garante 1 único POST de Phantom Visit por montagem,
+  // mesmo que o React StrictMode ou Hooks re-renderizem o componente várias vezes.
+  const hasRunPhantomVisit = useRef(false);
+
   useEffect(() => { 
     logoutRef.current = logout; 
   }, [logout]);
 
-  // =========================================================================
-  // ALOCAÇÃO DE ESTADOS DE CONTROLE DE FLUXO
-  // =========================================================================
   const [userData, setUserData] = useState<BFFUserProfile | null>(contextProfile || null);
   const [isVerifying, setIsVerifying] = useState<boolean>(!contextProfile);
-  
-  // Indicador de montagem (impede incompatibilidade entre servidor SSR e cliente inicial)
   const [isClientMounted, setIsClientMounted] = useState(false);
-  
-  // ✨ [LOCK ESTRUTURAL] Mantém a UI em Skeleton até sabermos o resultado da varredura de URL
-  const [isExchanging, setIsExchanging] = useState(true); 
-  const exchangeAttempted = useRef(false); // Flag para inibir disparos duplos em StrictMode
 
   useEffect(() => {
     setIsClientMounted(true);
   }, []);
 
-  // =========================================================================
-  // 🎯 [STEP 0]: INTERCEPTAÇÃO STATELESS (O SNIPER TÁTICO)
-  // [VETOR DE DEFESA]: Corre em prioridade máxima (antes da renderização final) 
-  // para capturar e aniquilar o Exchange Token da URL, mitigando roubo passivo.
-  // =========================================================================
+  const { isExchanging, status, reason } = useHandoffRedeem();
+
   useEffect(() => {
-    if (!isClientMounted) return;
-    if (exchangeAttempted.current) return;
-    
-    // [HEURÍSTICA O(1)]: Verifica a existência do fragmento alvo na URL em microssegundos.
-    // [CORREÇÃO FINAL]: Ajustado para procurar a nova tag 'xt=' ou a legada 'exchange_token='
-    const hash = window.location.hash;
-    if (!hash.includes("xt=") && !hash.includes("exchange_token=")) {
-      exchangeAttempted.current = true;
-      setIsExchanging(false); // Rota limpa. Libera o fluxo natural do app.
-      return;
+    if (status === "error") {
+      console.error(`[AUTH GATEKEEPER] Falha Crítica no Resgate Tático: ${reason}. O Zero-Trust Guard abortará a rota.`);
     }
-
-    exchangeAttempted.current = true;
-
-    async function processStatelessHandoff() {
-      console.log("[AUTH GATEKEEPER] Aterrissagem cross-domain detectada. Iniciando protocolo de higienização de URL.");
-      
-      const result = await redeemHandoffSession();
-      
-      if (result.ok && result.session_token) {
-        console.log("[AUTH GATEKEEPER] Protocolo Double JWT concluído. Sessão persistida pelo serviço.");
-        
-        // Propagação de Estado (Avisa o restante da árvore React que o usuário está logado)
-        if (typeof (authContext as any).setSession === "function") {
-          await (authContext as any).setSession(result.session_token);
-        } else {
-          window.dispatchEvent(new Event("storage"));
-        }
-
-      } else if (result.reason === "invalid" || result.reason === "expired") {
-        console.error("[AUTH GATEKEEPER] Falha Crítica: Credencial efêmera expirada ou corrompida. Executando aborto de rota.");
-        navigate({ 
-          to: "/accounts/signin", 
-          search: { redirect_uri: window.location.pathname } as any, 
-          replace: true 
-        });
-        return;
-      }
-
-      // Desbloqueia o Render Tree para o Gatekeeper Principal assumir a Hidratação
-      setIsExchanging(false);
-    }
-
-    processStatelessHandoff();
-  }, [isClientMounted, navigate, authContext]);
-
-
-  // =========================================================================
-  // [SECUNDÁRIO]: HIDRATAÇÃO DE MEMÓRIA (Cold Start Fallback)
-  // =========================================================================
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem("user_profile");
-      if (stored) {
-        setUserData(JSON.parse(stored));
-        setIsVerifying(false);
-      }
-    }
-  }, []);
+  }, [status, reason]);
 
   const performLogout = () => {
     setUserData(null);
     logoutRef.current();
   };
 
-  // =========================================================================
-  // 🛡️ [STEP 1 & 2]: ZERO-TRUST GUARD & ORQUESTRAÇÃO DE VISITAS
-  // Pipeline de autorização que garante que nenhum componente filho seja 
-  // renderizado sem um `session_token` e sem notificar o motor de Analytics.
-  // =========================================================================
   useEffect(() => {
     let isMounted = true;
 
-    // [WAIT-LOCK]: Impede a tomada de decisão do Guard se o Sniper ainda está operando 
-    // ou se o contexto de autenticação ainda está realizando fetching.
     if (isLoading || isExchanging) return; 
 
-    // ⛔ CENÁRIO A: Falha na Resolução de Credenciais (Acesso Anônimo)
     if (!USE_COOKIE && !sessionToken) {
       if (isMounted) setIsVerifying(false); 
-      
+
       const currentPath = typeof window !== "undefined" 
         ? `${window.location.pathname}${window.location.search}` 
         : "/sbxpay";
 
-      // Dispara Redirecionamento Proativo preservando a intenção na URL
       navigate({ 
         to: '/accounts/signin', 
-        search: { redirect_uri: currentPath } as any,
+        search: { redirect_uri: currentPath, handoff_error: reason } as any,
         replace: true
       });
       return;
     }
 
-    // ✅ CENÁRIO B: Credencial Válida (Autenticado). Procede para Hidratação e Telemetria.
     if (isMounted) setIsVerifying(true); 
 
     async function initializeHubSession() {
       try {
-        // [HIDRATAÇÃO BFF] Restaura o JSON do usuário para prover os dados de cabeçalho e saudação
         const storedProfileStr = sessionStorage.getItem("user_profile");
         const fallbackProfile = storedProfileStr ? JSON.parse(storedProfileStr) : null;
-        
-        const userProfile = (contextProfile || fallbackProfile) as BFFUserProfile | null;
+        let userProfile = (contextProfile || fallbackProfile) as BFFUserProfile | null;
 
-        if (!userProfile) {
-          throw { code: 'SESSION_EXPIRED', fallback_url: '/accounts/signin' };
-        }
+        const searchParams = new URLSearchParams(window.location.search);
+        const vId = searchParams.get('visit_id');
+        const vUpId = searchParams.get('visit_update_id');
+        const hasValidVisit = Boolean(vId && vUpId);
 
-        if (isMounted) {
-          setUserData(userProfile);
-          setIsVerifying(false); // UI liberada. O restante opera em background (Thread-Safe).
+        if ((!userProfile && sessionToken) || !hasValidVisit) {
+          try {
+            let orchestratorData: any = null;
 
-          // =====================================================================
-          // 👻 [STEP 3] PHANTOM VISIT: Orquestração Silenciosa
-          // Injeta a visita no banco de dados e anexa o `visit_id` na URL via History API
-          // sem disparar ciclo de re-renderização do React Router.
-          // =====================================================================
-          const searchParams = new URLSearchParams(window.location.search);
-          if (!searchParams.get('visit_id')) {
-            try {
-              const currentHref = window.location.href;
-              const visitPayload = {
-                action: "VISIT",
-                environment: getDefaultSbxEnvironment(),
-                target_url: window.location.pathname,
-                origin_url: currentHref,
-                entity: userProfile,
-                interaction_context: {
+            if (hasValidVisit && !userProfile) {
+              // CENÁRIO 1: F5 Refresh. Tem Visita, falta Profile -> GET
+              console.log("🔄 [Home] Detectado Token sem Profile. Hidratando ativamente via Orquestrador GET...");
+              orchestratorData = await callOrchestrator({ visit_id: vId, visit_update_id: vUpId }, "GET");
+            } else if (!hasValidVisit) {
+              // CENÁRIO 2: Aterrissagem Direta (#xt=) ou Clique na Logo (Sem Update_id)
+              
+              if (hasRunPhantomVisit.current) {
+                console.log("⏭️ [Home] Phantom Visit já executado nesta montagem. Ignorando disparo duplicado.");
+              } else {
+                hasRunPhantomVisit.current = true;
+                console.log("👻 [Home] Iniciando Phantom Visit Estéril...");
+                const currentHref = window.location.href;
+                
+                // ✨ [PREVENÇÃO DE 400 BAD REQUEST]: Validador rígido de Entidade
+                // Só envia `entity` quando o perfil está completo o suficiente para a Edge Function.
+                const isEntityComplete = Boolean(
+                  userProfile?.entity_id &&
+                    userProfile?.name &&
+                    userProfile?.document &&
+                    userProfile?.phone &&
+                    userProfile?.email &&
+                    (String(userProfile.document).replace(/\D/g, "").length === 14 ||
+                      (userProfile.birth_date && userProfile.gender))
+                );
+
+                const visitPayload = {
+                  action: "VISIT",
+                  environment: getDefaultSbxEnvironment(),
+                  target_url: window.location.pathname,
                   origin_url: currentHref,
-                  utm_source: "sbxpay_direct",
-                  utm_medium: "organic",
-                  utm_campaign: "hub_layout_visit_init"
-                }
-              };
+                  // [HOME ESTÉRIL E SEGURA]: Omitimos offer e enviamos entity apenas se completa.
+                  ...(isEntityComplete ? { entity: userProfile } : {}),
+                  ...(vId ? { visit_id: vId } : {}), // [CART PRESERVATION]: Se tem visit_id, reaproveita.
+                  interaction_context: {
+                    origin_url: currentHref,
+                    utm_source: "sbxpay_direct",
+                    utm_medium: "organic",
+                    utm_campaign: "hub_layout_visit_init"
+                  }
+                };
 
-              callOrchestrator(visitPayload, "POST").then((visitResponse) => {
-                if (visitResponse?.visit_id && visitResponse?.url) {
-                  // Concatena parâmetros originais com a URL de rastreamento do orquestrador
+                try {
+                  // Como o POST agora usa `waitUntil`, essa chamada responde em ~50ms
+                  orchestratorData = await callOrchestrator(visitPayload, "POST");
+                } catch (postErr) {
+                  // Libera a trava caso haja uma falha real de rede para permitir retentativa
+                  hasRunPhantomVisit.current = false; 
+                  throw postErr;
+                }
+
+                // Se o Phantom Visit trouxe uma nova URL, injeta e atualiza o Router (PopState)
+                if (orchestratorData?.visit_id && orchestratorData?.url) {
+                  const responseUrlObj = new URL(orchestratorData.url, window.location.origin);
                   const originalParams = new URLSearchParams(window.location.search);
-                  const responseUrlObj = new URL(visitResponse.url, window.location.origin);
                   
                   responseUrlObj.searchParams.forEach((val, key) => {
                     originalParams.set(key, val);
                   });
 
                   const finalCleanUrl = `${responseUrlObj.pathname}?${originalParams.toString()}`;
-                  
-                  // Injeção limpa de URL sem repaints da interface
                   window.history.replaceState({}, '', finalCleanUrl);
+                  window.dispatchEvent(new Event('popstate'));
                 }
-              }).catch((visitErr: any) => {
-                if (visitErr?.code === 'SESSION_EXPIRED') {
-                  if (isRedirecting.current) return;
-                  isRedirecting.current = true;
+              }
+            }
 
-                  if (isMounted) {
-                    performLogout();
-                    const currentPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/sbxpay";
-                    window.location.href = visitErr?.fallback_url || `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
-                  }
-                }
-              });
-            } catch (visitErr) {}
+            // Populamos o Profile (caso faltasse)
+            if (!userProfile && orchestratorData?.entity) {
+              const e = orchestratorData.entity;
+              const mappedProfile: BFFUserProfile = {
+                entity_id: String(e.entity_id ?? ""),
+                entity_type: String(e.document ?? "").replace(/\D/g, "").length > 11 ? "J" : "F",
+                name: e.name || "Visitante",
+                document: e.document || "",
+                email: e.email || "",
+                phone: e.phone || "",
+                birth_date: e.birth_date || "",
+                gender: e.gender || "",
+                login: e.login || e.email || "",
+                mothers_name: e.mothers_name || "",
+                address: e.address ?? null,
+              };
+
+              userProfile = mappedProfile;
+              sessionStorage.setItem("user_profile", JSON.stringify(mappedProfile));
+              window.dispatchEvent(new Event('session_hydrated'));
+              console.log("✅ [Home] Perfil recuperado via Orquestrador e injetado no ecossistema.");
+            }
+
+          } catch (apiErr: any) {
+             if (apiErr?.code === 'SESSION_EXPIRED') throw apiErr;
+             console.warn("⚠️ [Home] Falha na comunicação com Orquestrador.", apiErr);
           }
+        }
+
+        // Failsafe Resiliente
+        if (!userProfile && sessionToken) {
+           console.warn("⚠️ [Home] Perfil não localizado após chamadas. Montando Perfil Resiliente temporário.");
+           userProfile = {
+             entity_id: "anonymous",
+             entity_type: "F",
+             name: "Usuário",
+             document: "",
+             email: "",
+             phone: "",
+             birth_date: "",
+             gender: "",
+             login: "",
+             mothers_name: "",
+             address: null,
+           };
+        } else if (!userProfile && !sessionToken) {
+           throw { code: 'SESSION_EXPIRED', fallback_url: '/accounts/signin' };
+        }
+
+        if (isMounted) {
+          setUserData(userProfile);
+          setIsVerifying(false); 
         }
       } catch (err: any) {
         if (isRedirecting.current) return;
@@ -306,29 +357,21 @@ export function sbXPAYLayOut() {
     return () => { 
       isMounted = false; 
     }; 
-  }, [isLoading, isExchanging, sessionToken, contextProfile, navigate]);
+  }, [isLoading, isExchanging, sessionToken, contextProfile, navigate, reason]);
 
-  // =========================================================================
-  // [OUTPUT]: RESOLUÇÃO DE ÁRVORE DE RENDERIZAÇÃO
-  // =========================================================================
-
-  // ✨ [PREVENÇÃO DE HYDRATION MISMATCH] 
-  // O servidor SSR (se houver) e o instante zero do cliente sempre renderizam o Skeleton puro.
-  // Isso também segura a tela enquanto o Sniper vasculha a URL.
   if (!isClientMounted || isExchanging) {
     return <HomeSkeleton />;
   }
 
   const hasLocalSession = Boolean(sessionToken || (typeof window !== "undefined" && sessionStorage.getItem("user_profile")));
+  const isProfileMissing = sessionToken && !contextProfile && !userData;
 
-  if (isLoading && !hasLocalSession) {
+  if ((isLoading && !hasLocalSession) || isProfileMissing) {
     return <HomeSkeleton />; 
   }
 
-  if (!USE_COOKIE && !sessionToken) return null; // Aborto silencioso em falha total
+  if (!USE_COOKIE && !sessionToken) return null; 
 
-  // [INJEÇÃO DE CONTEXTO E RENDERIZAÇÃO DOM]
-  // As sub-rotas (Outlet) ganham acesso direto ao Profile e a função de Logout.
   return (
     <div className="sbxpay-shell min-h-screen bg-white">
       <UserDataContext.Provider value={{ userData, performLogout }}>
