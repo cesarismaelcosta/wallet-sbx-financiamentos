@@ -71,11 +71,22 @@ export async function persistVisitData(
       let visitId: string = existingVisitId || "";
       let isNewVisit = !visitId;
       
-      // 1. Verificação de estado atual (Consulta transacional)
+      // Verificação de estado atual (Consulta transacional)
       const rows = visitId 
         ? await t`SELECT id FROM visits WHERE id = ${visitId}` 
         : [];
       const journeyState = rows.length > 0 ? rows[0] : null;
+
+      // ✨ Decide se faz autocura (topo de funil) ou bloqueia (fundo de funil)
+      if (visitId && !journeyState) {
+        if (payload.action === 'VISIT' || payload.action === 'CONSULT') {
+          debugLog("[Aviso] visit_id nao encontrado no banco. Autocurando para acesso inicial.");
+          visitId = ""; 
+          isNewVisit = true;
+        } else {
+          throw new Error("SESSION_EXPIRED");
+        }
+      }
 
       const hasEntity = journeyState ? await t`SELECT id FROM visit_entities WHERE visit_id = ${visitId}`.then((r: any) => r.length > 0) : false;
       
@@ -86,17 +97,28 @@ export async function persistVisitData(
 
       // 2. Atualização ou Criação da Âncora da Visita
       if (visitId && action !== 'CONTACT') {
-        const updatedRows = await t`
-          UPDATE visits SET 
-            action = ${payload.action},
-            target_url = ${ (targetUrl || "").split('?')[0] },
-            raw_payload = ${payload}::jsonb
-          WHERE id = ${visitId}
-          RETURNING id
-        `;
+        const isSimulate = payload.action === 'SIMULATE';
+
+        const updatedRows = isSimulate
+          ? await t`
+              UPDATE visits SET 
+                action = ${payload.action},
+                target_url = ${ (targetUrl || "").split('?')[0] },
+                raw_payload = ${payload}::jsonb
+              WHERE id = ${visitId}
+              RETURNING id
+            `
+          : await t`
+              UPDATE visits SET 
+                action = ${payload.action},
+                target_url = ${ (targetUrl || "").split('?')[0] }
+              WHERE id = ${visitId}
+              RETURNING id
+            `;
+
         const updated = updatedRows.length > 0 ? updatedRows[0] : null;
-          
-         if (!updated) isNewVisit = true;
+         
+        if (!updated) isNewVisit = true;
       }
 
       if (isNewVisit) {
@@ -127,12 +149,7 @@ export async function persistVisitData(
         visitId = newVisit.id;
       }
 
-      // 3. Vínculo de Auditoria
-      if (orchestratorConfigId && !hasOrchestratorConfig) {
-        await t`INSERT INTO visit_orchestrator_configs (visit_id, orchestrator_config_id) VALUES (${visitId}, ${orchestratorConfigId})`;
-      }
-
-      // 4. Log de Navegação (Atomic Pageview com Regra de Transição CONSULT -> REDIRECT / SIMULATE)
+      // 3. Log de Navegação (Atomic Pageview com Regra de Transição CONSULT -> REDIRECT / SIMULATE)
       // Tenta atualizar diretamente o update enviado no payload, SE ele for um CONSULT
       const targetUpdateId = payload.visit_update_id || null;
       let newUpdateId: string;
@@ -140,24 +157,44 @@ export async function persistVisitData(
 
       let updatedRows = [];
       if (targetUpdateId && visitId && (payload.action === 'SIMULATE' || payload.action === 'REDIRECT')) {
-        updatedRows = await t`
-          UPDATE visit_updates 
-          SET action = ${payload.action ?? null}, 
-              action_description = ${payload.action_description ?? null},
-              ip_address = ${origin?.ip_address ?? null},
-              country = ${origin?.country ?? null},
-              state = ${origin?.state ?? null},
-              city = ${origin?.city ?? null},
-              user_agent = ${origin?.user_agent ?? null},
-              device_type = ${origin?.device_type ?? null},
-              operating_system = ${origin?.operating_system ?? null},
-              origin_details = ${origin ? JSON.stringify(origin) : null}::jsonb,
-              raw_payload = ${payload ? JSON.stringify(payload) : null}::jsonb
-          WHERE id = ${targetUpdateId} 
-            AND visit_id = ${visitId} 
-            AND action = 'CONSULT'
-          RETURNING id
-        `;
+        const isSimulate = payload.action === 'SIMULATE';
+
+        updatedRows = isSimulate 
+          ? await t`
+              UPDATE visit_updates 
+              SET action = ${payload.action ?? null}, 
+                  action_description = ${payload.action_description ?? null},
+                  ip_address = ${origin?.ip_address ?? null},
+                  country = ${origin?.country ?? null},
+                  state = ${origin?.state ?? null},
+                  city = ${origin?.city ?? null},
+                  user_agent = ${origin?.user_agent ?? null},
+                  device_type = ${origin?.device_type ?? null},
+                  operating_system = ${origin?.operating_system ?? null},
+                  origin_details = ${origin ?? null}::jsonb,
+                  raw_payload = ${payload}::jsonb
+              WHERE id = ${targetUpdateId} 
+                AND visit_id = ${visitId} 
+                AND action = 'CONSULT'
+              RETURNING id
+            `
+          : await t`
+              UPDATE visit_updates 
+              SET action = ${payload.action ?? null}, 
+                  action_description = ${payload.action_description ?? null},
+                  ip_address = ${origin?.ip_address ?? null},
+                  country = ${origin?.country ?? null},
+                  state = ${origin?.state ?? null},
+                  city = ${origin?.city ?? null},
+                  user_agent = ${origin?.user_agent ?? null},
+                  device_type = ${origin?.device_type ?? null},
+                  operating_system = ${origin?.operating_system ?? null},
+                  origin_details = ${origin ?? null}::jsonb
+              WHERE id = ${targetUpdateId} 
+                AND visit_id = ${visitId} 
+                AND action = 'CONSULT'
+              RETURNING id
+            `;
       }
 
       if (updatedRows.length > 0) {
@@ -166,7 +203,7 @@ export async function persistVisitData(
         update = { id: newUpdateId };
       } else {
         // B: INSERT - Se não veio ID, ou se o ID não era um CONSULT, gera um ID NOVO do zero
-        newUpdateId = crypto.randomUUID();
+        newUpdateId = preGeneratedUpdateId || crypto.randomUUID();
         const [newUpd] = await t`
           INSERT INTO visit_updates (
             id, visit_id, partner_id, product_id, utm_source, utm_medium, utm_campaign, 
@@ -192,12 +229,21 @@ export async function persistVisitData(
             ${origin?.user_agent ?? null},
             ${origin?.device_type ?? null},
             ${origin?.operating_system ?? null},
-            ${origin ? JSON.stringify(origin) : null}::jsonb,
-            ${payload ? JSON.stringify(payload) : null}::jsonb
+            ${origin ?? null}::jsonb,
+            ${payload ?? null}::jsonb
           )
           RETURNING id
         `;
         update = newUpd;
+      }
+    
+      // 4. Vínculo de Auditoria das Configurações do Orquestrador (Agora utilizando visit_update_id)
+      if (orchestratorConfigId) {
+        await t`
+          INSERT INTO visit_orchestrator_configs (visit_id, visit_update_id, orchestrator_config_id) 
+          VALUES (${visitId}, ${newUpdateId}, ${orchestratorConfigId})
+          ON CONFLICT (visit_id, visit_update_id, orchestrator_config_id) DO NOTHING
+        `;
       }
 
       // 5. Persistência de Dados de Negócio (Entidades, Ofertas, Consentimentos)
@@ -240,29 +286,39 @@ export async function persistVisitData(
               )`;
       }
 
-      if (payload.consents?.length > 0 && !hasConsent) {
+      // ✨ [DETERMINISMO TEMPORAL LGPD]: 
+      // Injeção do update.id garantindo que o aceite pertence ao evento exato.
+      // Upsert: Se bater repetido no mesmo evento, apenas atualiza a hora e o payload.
+      if (payload.consents?.length > 0) {
         for (const c of payload.consents) {
           const acceptedValue = c.accepted === true || c.acceptedConsents === true;
           const acceptedAt = c.accepted_at || c.acceptedConsents_at || new Date().toISOString();
 
-          debugLog(`Persistindo consentimento: ${c.consent_id}`, { accepted: acceptedValue });
+          debugLog(`Persistindo consentimento: ${c.consent_id} para Update ${newUpdateId}`, { accepted: acceptedValue });
 
           await t`INSERT INTO visit_consents (
-            visit_id, consent_id, accepted, accepted_at, target_url, entity_id, 
+            visit_id, visit_update_id, consent_id, accepted, accepted_at, target_url, entity_id, 
             name, email, document, phone, birth_date, gender, entity_details, 
             ip_address, country, state, city, user_agent, device_type, 
             operating_system, origin_details, page_snapshot, raw_payload
           ) VALUES (
-            ${visitId}, ${c.consent_id}, ${acceptedValue}, ${acceptedAt}, 
-            ${(targetUrl || "").split('?')[0]}, ${payload.entity.entity_id}, 
-            ${payload.entity.name}, ${payload.entity.email}, ${payload.entity.document}, 
-            ${payload.entity.phone}, ${payload.entity.birth_date}, ${payload.entity.gender}, 
-            ${payload.entity}::jsonb, ${origin.ip_address}, ${origin.country}, 
-            ${origin.state}, ${origin.city}, ${origin.user_agent}, ${origin.device_type}, 
-            ${origin.operating_system}, ${origin}::jsonb, 
+            ${visitId}, ${newUpdateId}, ${c.consent_id}, ${acceptedValue}, ${acceptedAt}, 
+            ${(targetUrl || "").split('?')[0]}, ${payload.entity?.entity_id || null}, 
+            ${payload.entity?.name || null}, ${payload.entity?.email || null}, ${payload.entity?.document || null}, 
+            ${payload.entity?.phone || null}, ${payload.entity?.birth_date || null}, ${payload.entity?.gender || null}, 
+            ${payload.entity ?? null}::jsonb, ${origin?.ip_address || null}, ${origin?.country || null}, 
+            ${origin?.state || null}, ${origin?.city || null}, ${origin?.user_agent || null}, ${origin?.device_type || null}, 
+            ${origin?.operating_system || null}, ${origin ?? null}::jsonb, 
             ${{ branding: payload.page_configs, consents_rendered: payload.consent_configs, legal_text: c.legal_text_snapshot }}::jsonb, 
             ${payload}::jsonb
-          )`;
+          )
+          ON CONFLICT ON CONSTRAINT visit_consents_update_consent_unique DO UPDATE SET
+            accepted = EXCLUDED.accepted,
+            accepted_at = EXCLUDED.accepted_at,
+            page_snapshot = EXCLUDED.page_snapshot,
+            raw_payload = EXCLUDED.raw_payload,
+            updated_at = EXCLUDED.created_at
+          `;
         }
       }
 

@@ -1,85 +1,108 @@
-import { Checkbox } from "@/components/ui/checkbox";
+/**
+ * @fileoverview Painel de Configurações de Consentimento (Layout de Tela)
+ * @path src/features/financial-hub/components/shared/renderes/PanelConsents.tsx
+ *
+ * ============================================================================
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: RESILIENT RENDERING & UI SHIELDING
+ * ============================================================================
+ * Renderizador responsável por exibir as caixas de aceite (checkboxes) que 
+ * foram apresentadas ao usuário na interface durante a jornada.
+ *
+ * [ARQUITETURA DE DADOS E PERFORMANCE]:
+ * 1. {Safe Array Normalization}: Garante que o componente nunca tente iterar 
+ *    sobre objetos vazios, nulos ou indefinidos vindos de fallbacks de layout,
+ *    evitando o crash letal "configs is not iterable".
+ * 2. {Flat Extraction}: Valida a tipagem da propriedade `links` interna para
+ *    prevenir falhas na renderização do texto legal (`template_text`).
+ * ============================================================================
+ *
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
+ */
+
+import { CheckSquare } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { FileText } from "lucide-react";
+
+// Helper de segurança para garantir que o payload seja sempre um Array iterável
+const safeArray = (data: any) => {
+  if (!data) return [];
+  return Array.isArray(data) ? data : [data];
+};
 
 export function PanelConsents({ configs }: { configs: any[] }) {
-  if (!configs || configs.length === 0) return null;
+  // Verificação dupla: se não for array ou estiver vazio, aborta imediatamente
+  if (!Array.isArray(configs) || configs.length === 0) return null;
 
   return (
-    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm break-inside-avoid">
-      <h4 className="text-[11px] font-bold uppercase text-[#B300FF] mb-3 flex items-center gap-1.5">
-        <FileText size={14} /> Consentimentos da Rota (LGPD)
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4 break-inside-avoid">
+      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+        <CheckSquare className="h-3.5 w-3.5 text-primary" /> Regras de Aceite (Tela)
       </h4>
-      
-      <TooltipProvider delayDuration={200}>
-        <div className="flex flex-col rounded-lg border border-border bg-muted/10 p-3 space-y-2.5">
-          {[...configs]
-            .sort((a, b) => (a.position || 0) - (b.position || 0))
-            .map((opt) => (
-              <div key={opt.id} className="flex gap-2 items-start py-0.5 text-xs">
-                <div className="flex items-center mt-0.5">
-                  <Checkbox disabled checked={false} className="h-4 w-4 shrink-0 rounded-[4px] border-slate-400" />
-                </div>
-                <label className="text-[11px] text-muted-foreground leading-snug flex-1">
-                  {opt.template_text ? (
-                    opt.template_text.split(/(\{.*?\})/g).map((part: string, i: number) => {
-                      if (part.startsWith("{") && part.endsWith("}")) {
-                        const cleanText = part.replace(/[{}]/g, "");
-                        const linkConfig = opt.links?.find((l: any) => l.text === cleanText);
-
-                        if (!linkConfig) return <span key={i} className="underline font-bold inline mx-0.5 text-[#B300FF]">{cleanText}</span>;
-
-                        if (linkConfig.type === "web" || linkConfig.url) {
-                          return (
-                            <a
-                              key={i}
-                              href={linkConfig.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="underline font-bold inline mx-0.5 hover:opacity-80"
-                              style={{ color: "var(--brand-primary)" }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {cleanText}
-                            </a>
-                          );
-                        }
-
-                        // CORREÇÃO: Popover para suporte perfeito a clique no Mobile
-                        if (linkConfig.type === "tooltip" || linkConfig.tooltip_text) {
-                          return (
-                            <Popover key={i}>
-                              <PopoverTrigger asChild>
-                                <span
-                                  className="underline font-bold cursor-pointer border-b border-dashed inline mx-0.5 hover:opacity-80"
-                                  style={{ color: "var(--brand-primary)", borderColor: "var(--brand-primary)" }}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {cleanText}
-                                </span>
-                              </PopoverTrigger>
-                              <PopoverContent
-                                side="bottom"
-                                align="start"
-                                sideOffset={6}
-                                className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-xl leading-relaxed z-[100]"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <p className="font-normal">{linkConfig.tooltip_text}</p>
-                              </PopoverContent>
-                            </Popover>
-                          );
-                        }
-                      }
-                      return <span key={i}>{part}</span>;
-                    })
-                  ) : null}
-                </label>
+      <div className="bg-white rounded-xl border border-border shadow-sm divide-y divide-slate-100">
+        {configs.map((config: any, index: number) => {
+          // Garante que links internos também sejam arrays iteráveis
+          const links = safeArray(config.links);
+          
+          return (
+            <div key={index} className="p-4 space-y-3 break-inside-avoid">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                  {config.id || "Termo N/A"}
+                </span>
+                <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                  {config.required ? "Obrigatório" : "Opcional"}
+                </span>
               </div>
-            ))}
-        </div>
-      </TooltipProvider>
+              <div className="text-[11px] text-muted-foreground leading-relaxed bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+                {config.template_text ? (
+                  config.template_text.split(/(\{.*?\})/g).map((part: string, i: number) => {
+                    if (part.startsWith("{") && part.endsWith("}")) {
+                      const cleanText = part.replace(/[{}]/g, "");
+                      
+                      // Agora podemos usar .find() com segurança porque links é garantidamente um array
+                      const linkConfig = links.find((l: any) => l.text === cleanText);
+                      
+                      if (!linkConfig) {
+                        return (
+                          <span key={i} className="underline font-semibold inline mx-0.5 text-primary">
+                            {cleanText}
+                          </span>
+                        );
+                      }
+
+                      if (linkConfig.type === "web" || linkConfig.url) {
+                        return (
+                          <a key={i} href={linkConfig.url} target="_blank" rel="noopener noreferrer" className="underline font-semibold inline mx-0.5 text-primary">
+                            {cleanText}
+                          </a>
+                        );
+                      }
+
+                      if (linkConfig.type === "tooltip" || linkConfig.tooltip_text) {
+                        return (
+                          <Popover key={i}>
+                            <PopoverTrigger asChild>
+                              <span className="underline font-semibold cursor-pointer border-b border-dashed inline mx-0.5 text-primary border-primary">
+                                {cleanText}
+                              </span>
+                            </PopoverTrigger>
+                            <PopoverContent side="bottom" align="start" className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-xl leading-relaxed z-[100]">
+                              <p>{linkConfig.tooltip_text}</p>
+                            </PopoverContent>
+                          </Popover>
+                        );
+                      }
+                    }
+                    return <span key={i}>{part}</span>;
+                  })
+                ) : (
+                  "Nenhum texto de aceite configurado."
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

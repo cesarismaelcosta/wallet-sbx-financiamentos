@@ -39,6 +39,7 @@ import {
   SimulationFinancials
 } from "../_shared/types.ts";
 
+import { resolveOrchestratorConfigs } from "../_shared/orchestrator-configs.ts";
 import { processSimulationFandi } from "./fandi-service.ts";
 import { processSimulationCreditCard } from "./credit-card-service.ts";
 import { processSimulationCreditasAutoEquity } from "./creditas-auto-equity-service.ts";
@@ -141,6 +142,38 @@ export async function processSimulation(
   // Detalhes financeiros (Os únicos dados que de fato vieram do Front-end: prazos/entradas)
   const simulation = (payload.simulation_details as SimulationFinancials) ?? {};
   const vehicle = (offer as Offer)?.vehicle_details ?? {};
+
+  // ✨ [ZERO-TRUST SERVER-SIDE HYDRATION ROBUSTA]: 
+  // Sempre busca as configs do orquestrador e preenche o que estiver faltando no payload.
+  const resolvedConfig = await resolveOrchestratorConfigs({
+    supabase,
+    eventId: event.event_id ?? null,
+    sellerId: seller.seller_id ?? null,
+    productId: payload.product_id ?? offer.category_id ?? null,
+    subcategoryId: offer.subcategory_id ?? null,
+    categoryId: offer.category_id ?? null,
+    entityType: entity.entity_type ?? "F",
+  });
+
+  // Mescla inteligente: mantém o que veio do client/upstream ou aplica o resolvido pelo servidor
+  payload.page_configs = (payload.page_configs && Object.keys(payload.page_configs).length > 0) 
+    ? payload.page_configs 
+    : resolvedConfig.page_configs;
+
+  payload.consent_configs = (Array.isArray(payload.consent_configs) && payload.consent_configs.length > 0) 
+    ? payload.consent_configs 
+    : resolvedConfig.consent_configs;
+
+  payload.page_faqs = (Array.isArray(payload.page_faqs) && payload.page_faqs.length > 0) 
+    ? payload.page_faqs 
+    : resolvedConfig.page_faqs;
+
+  payload.rules = (payload.rules && Object.keys(payload.rules).length > 0) 
+    ? payload.rules 
+    : resolvedConfig.rules;
+
+  payload.is_integrated = payload.is_integrated ?? resolvedConfig.is_integrated;
+  payload.integration_method = payload.integration_method ?? resolvedConfig.integration_method;
 
   // Logging Exclusivo do Servidor (Seguro para Debug)
   debugLog("✅ [Motor Simulação] Payload Confiável Pronto -> ENTITY:", entity.document);

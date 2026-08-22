@@ -1,11 +1,36 @@
+/**
+ * @fileoverview Painel de Auditoria LGPD e Consentimentos
+ * @path src/features/financial-hub/components/shared/renderes/PanelAcceptedConsents.tsx
+ *
+ * ============================================================================
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: AUDIT RENDERING & UI SHIELDING
+ * ============================================================================
+ * Renderizador reativo para exibição dos termos de aceite LGPD capturados no banco.
+ *
+ * [ARQUITETURA DE DADOS E PERFORMANCE]:
+ * 1. {Safe Array Normalization}: Supabase pode retornar Objetos para relações 1:1. 
+ *    A normalização local garante que o `.map` nunca quebre a interface.
+ * 2. {String Safeparsing}: Blinda a descompressão do `page_snapshot`.
+ * 3. {Desnormalização com Fallback}: Leitura direta dos atributos de rede (ip, city).
+ * ============================================================================
+ *
+ * @author César Ismael Pereira da Costa
+ */
+
 import { CheckCircle2, FileText, MapPin, Smartphone } from "lucide-react";
 import { formatDate } from "@/features/financial-hub/components/shared/formatters";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-export function PanelAcceptedConsents({ consents }: { consents: any[] }) {
-  if (!consents || consents.length === 0) return null;
+const safeArray = (data: any) => {
+  if (!data) return [];
+  return Array.isArray(data) ? data : [data];
+};
 
-  const sortedConsents = [...consents].sort(
+export function PanelAcceptedConsents({ consents }: { consents: any | any[] }) {
+  const normalizedConsents = safeArray(consents);
+  if (normalizedConsents.length === 0) return null;
+
+  const sortedConsents = [...normalizedConsents].sort(
     (a, b) => new Date(a.accepted_at).getTime() - new Date(b.accepted_at).getTime()
   );
 
@@ -15,19 +40,29 @@ export function PanelAcceptedConsents({ consents }: { consents: any[] }) {
         <FileText className="h-3.5 w-3.5 text-primary" /> Auditoria de Aceite (LGPD)
       </h4>
 
-      {/* Caixa única geral */}
       <div className="bg-white rounded-xl border border-border shadow-sm divide-y divide-slate-100 overflow-hidden">
         {sortedConsents.map((consent: any, index: number) => {
           const acceptedAt = formatDate(consent.accepted_at);
-          const legalTextSnapshot = consent.page_snapshot?.legal_text || {};
-          const origin = consent.origin_details || consent;
+          
+          let snap = consent.page_snapshot;
+          if (typeof snap === "string") {
+            try { snap = JSON.parse(snap); } catch (e) { snap = {}; }
+          }
+          
+          const legalTextSnapshot = snap?.legal_text || {};
           const templateText = legalTextSnapshot.template_text || "";
-          const links = legalTextSnapshot.links || [];
+          const links = safeArray(legalTextSnapshot.links);
+
+          const origin = consent.origin_details || {};
+          const city = consent.city || origin.city || "N/A";
+          const state = consent.state || origin.state || "N/A";
+          const country = consent.country || origin.country || "N/A";
+          const ipAddress = consent.ip_address || origin.ip_address || "N/A";
+          const os = consent.operating_system || origin.operating_system || "N/A";
+          const device = consent.device_type || origin.device_type || "N/A";
 
           return (
             <div key={consent.id || index} className="p-3.5 space-y-3 break-inside-avoid">
-              
-              {/* Header com o nome do consentimento e data */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 pb-1">
                 <div className="flex items-center gap-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
@@ -40,7 +75,6 @@ export function PanelAcceptedConsents({ consents }: { consents: any[] }) {
                 </span>
               </div>
 
-              {/* Texto do Termo limpo (sem caixas internas) */}
               <div className="text-[11px] text-muted-foreground leading-relaxed flex gap-2 items-start py-0.5">
                 <div className="flex items-center mt-0.5">
                   <div className="h-4 w-4 shrink-0 rounded-[4px] border border-slate-400 bg-slate-50 flex items-center justify-center text-[10px] text-emerald-600 font-bold">✓</div>
@@ -85,22 +119,20 @@ export function PanelAcceptedConsents({ consents }: { consents: any[] }) {
                 </div>
               </div>
 
-              {/* Rodapé do item com IP e Localização */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-50 text-[10px] text-slate-600">
                 <div className="flex items-center gap-1.5">
                   <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
                   <span className="truncate">
-                    {origin.city || "N/A"} / {origin.state || "N/A"} / {origin.country || "N/A"}
+                    {city} / {state} / {country}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Smartphone className="h-3 w-3 text-muted-foreground shrink-0" />
                   <span className="truncate">
-                    {origin.ip_address || "N/A"} - {origin.operating_system || "N/A"} ({origin.device_type || "N/A"})
+                    {ipAddress} - {os} ({device})
                   </span>
                 </div>
               </div>
-
             </div>
           );
         })}

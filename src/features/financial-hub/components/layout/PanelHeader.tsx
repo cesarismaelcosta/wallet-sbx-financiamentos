@@ -69,7 +69,8 @@ export function PanelHeader({
       console.warn(`[PanelHeader] Elemento com id="${id}" não encontrado no DOM.`);
     }
   };
-
+  
+  // =========================================================================
   // =========================================================================
   // ✨ [DETERMINISTIC ROUTING]: O Header toma o controle da volta para a Home
   // =========================================================================
@@ -106,13 +107,28 @@ export function PanelHeader({
       if (visitResponse?.url) {
         // Sucesso: Roteia com o novo visit_update_id gerado atomicamente no Edge
         navigate({ to: visitResponse.url as any });
+      } else if (visitResponse?.fallback_url) {
+        // ✨ CORREÇÃO: O backend não lançou erro técnico, mas retornou fallback controlado (ex: 401)
+        navigate({ to: visitResponse.fallback_url as any });
       } else {
-        // Fallback: Preserva a fluidez de UX mesmo se o response.url falhar
+        // Fallback genérico caso a resposta venha realmente vazia
         navigate({ to: "/sbxpay" });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[PanelHeader] Erro na orquestração ao clicar na Logo:", error);
-      navigate({ to: "/sbxpay" });
+      
+      // ✨ CORREÇÃO: Se o callOrchestrator disparou um throw, temos que caçar o fallback_url.
+      // Dependendo do seu wrapper de fetch/axios, ele pode estar em lugares diferentes.
+      const fallbackUrl = 
+        error?.fallback_url || 
+        error?.response?.data?.fallback_url || 
+        error?.data?.fallback_url;
+
+      if (fallbackUrl) {
+        navigate({ to: fallbackUrl as any });
+      } else {
+        navigate({ to: "/sbxpay" }); // Somente em último caso chuta pra home cega
+      }
     } finally {
       setIsNavigating(false);
     }

@@ -180,38 +180,57 @@ serve(
           
           let intentVisitId = null;
           let intentUpdateId = null;
-          let intentTargetUrl = originPath;
+          let intentTargetUrl = originPath; // Default para a origem
 
           // Extraímos as memórias da requisição interceptada
           if (req.method === "GET") {
-            const url = new URL(req.url);
+            const url = new URL(req.url); // A URL aqui é a da API (ex: /orchestrator)
             intentVisitId = url.searchParams.get("visit_id");
             intentUpdateId = url.searchParams.get("visit_update_id");
+            
+            // ✨ CORREÇÃO DO BUG: Ignora o url.pathname da API. 
+            // Usa o originPath (header x-original-url com a rota do Front-end).
+            const [path] = originPath.split("?");
+            const qParams = new URLSearchParams(url.search);
+            
+            if (intentVisitId) qParams.set("visit_id", intentVisitId);
+            if (intentUpdateId) qParams.set("visit_update_id", intentUpdateId);
+            
+            const queryStr = qParams.toString();
+            intentTargetUrl = queryStr ? `${path}?${queryStr}` : path;
+
           } else if (req.method === "POST" && rawBodyText) {
             try {
               const thin = JSON.parse(rawBodyText);
               intentVisitId = thin.visit_id || null;
-              intentUpdateId = thin.visit_update_id || null;
-              intentTargetUrl = thin.target_url || originPath;
+              intentUpdateId = thin.visit_update_id || thin.origin_visit_update_id || null;
+              
+              // ✨ O POST já estava perfeito: retorna para a página donde partiu o clique.
+              const rawOrigin = thin.origin_url || originPath;
+              const [path, query = ""] = rawOrigin.split("?");
+              const qParams = new URLSearchParams(query);
+              
+              if (intentVisitId) qParams.set("visit_id", intentVisitId);
+              if (intentUpdateId) qParams.set("visit_update_id", intentUpdateId);
+              
+              const queryStr = qParams.toString();
+              intentTargetUrl = queryStr ? `${path}?${queryStr}` : path;
             } catch (e) {}
           }
 
           try {
-            // Assina matematicamente as intenções da UI
             const handoffToken = await signSigninParameters({
               visit_id: intentVisitId,
               visit_update_id: intentUpdateId,
-              target_url: intentTargetUrl,
+              target_url: intentTargetUrl, // Agora aponta para a origem segura com os IDs
               origin_url: originPath
             });
-            // O fallback agora está 100% blindado
             fallbackUrl = `/accounts/signin?handoff_token=${handoffToken}`;
             debugLog(`[Orquestrador] Sessao Expirada. Handoff Token emitido com sucesso.`);
           } catch(e) {
             debugLog(`[Orquestrador] Erro ao assinar Handoff Token. Roteando limpo.`);
             fallbackUrl = `/accounts/signin`;
           }
-
         } else if (raw.includes("FORBIDDEN")) {
           userMessage = "Voce nao tem permissao para acessar este recurso.";
           errorCode = "FORBIDDEN";
@@ -490,17 +509,27 @@ serve(
 
           if (isNavigationAction) {
             debugLog("[POST STEP 5A] Executando fluxo Fast Path (Navigation Action)...");
+            
+            // ✨ CORREÇÃO: Respeita os IDs do Payload (Handoff) antes de gerar novos
             const effectiveVisitId = payload.visit_id || crypto.randomUUID();
-            const generatedUpdateId = crypto.randomUUID();
+            // ✨ O visit_id continua o mesmo, mas cada clique gera um novo snapshot temporal (update_id)
+            const effectiveUpdateId = crypto.randomUUID();
 
-            let finalUrl = `${payload.target_url}?visit_id=${effectiveVisitId}&visit_update_id=${generatedUpdateId}`;
-            if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
+            const targetUrlStr = payload?.target_url || "/";
+            const [cleanPath, queryStr] = targetUrlStr.split("?");
+            const queryParams = new URLSearchParams(queryStr || "");
+
+            queryParams.set("visit_id", effectiveVisitId);
+            queryParams.set("visit_update_id", effectiveUpdateId);
+            if (simulationId) queryParams.set("simulation_id", simulationId);
+
+            let finalUrl = `${cleanPath}?${queryParams.toString()}`;
 
             const persistPromise = persistVisitData(
               sql, payload, infra, categoryId ?? undefined,
               payload.action, payload.origin_url, payload.target_url,
               payload.visit_id || null, orchestratorConfigId,
-              effectiveVisitId, generatedUpdateId,
+              effectiveVisitId, effectiveUpdateId, // ✨ Passa o ID correto pro banco
             );
 
             const rt = (globalThis as any).EdgeRuntime;
@@ -519,7 +548,7 @@ serve(
                 action: "REDIRECT",
                 url: finalUrl,
                 visit_id: effectiveVisitId,
-                visit_update_id: generatedUpdateId,
+                visit_update_id: effectiveUpdateId, // ✨ Devolve o ID correto pro Front
                 simulation_id: simulationId,
                 partner_id: payload.partner_id ?? null,
               },
@@ -527,6 +556,8 @@ serve(
           }
 
           debugLog("[POST STEP 5B] Executando persistência síncrona...");
+
+          // [POST STEP 5B] Executando persistência síncrona...
           const { visitId, visitUpdateId } = await persistVisitData(
             sql,
             payload,
@@ -538,10 +569,24 @@ serve(
             payload.visit_id,
             orchestratorConfigId,
           );
-          debugLog("[POST STEP 5B] Persistência síncrona finalizada:", { visitId, visitUpdateId });
 
-          let finalUrl = `${payload.target_url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
-          if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
+          debugLog("[POST STEP 5B] Persistência síncrona finalizada:", { visitId, visitUpdateId });
+        
+          // Extrai os parâmetros da URL destino para injetar as âncoras de sessão preservadas
+          const targetUrlStr = payload?.target_url || "/";
+          const [cleanPath, queryStr] = targetUrlStr.split("?");
+          const queryParams = new URLSearchParams(queryStr || "");
+
+          // ✨ O BANCO tem prioridade máxima no update temporal. 
+          // Se o banco gerou/retornou um ID, ele é o novo cursor.
+          const anchorVisitId = visitId;
+          const anchorUpdateId = visitUpdateId;
+
+          if (anchorVisitId) queryParams.set("visit_id", anchorVisitId);
+          if (anchorUpdateId) queryParams.set("visit_update_id", anchorUpdateId);
+          if (simulationId) queryParams.set("simulation_id", simulationId);
+
+          let finalUrl = `${cleanPath}?${queryParams.toString()}`;
 
           debugLog("[POST STEP 6] Retornando objeto final de sucesso...");
           return {
@@ -549,8 +594,8 @@ serve(
             data: {
               action: "REDIRECT",
               url: finalUrl,
-              visit_id: visitId,
-              visit_update_id: visitUpdateId,
+              visit_id: anchorVisitId,
+              visit_update_id: anchorUpdateId,
               simulation_id: simulationId,
               partner_id: payload.partner_id ?? null,
             },

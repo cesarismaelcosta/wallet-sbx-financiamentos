@@ -60,6 +60,13 @@ export function FinancialHubDataInjector({ children }: { children: React.ReactNo
   // 💧 [HYDRATION ENGINE]: CONTEXT-FIRST + API FALLBACK
   // =========================================================================
   useEffect(() => {
+    // ✨ A TRAVA MESTRA: Se o Pai (Wrapper) ainda está baixando os dados da API,
+    // o Injector cruza os braços e espera. Evita o atropelamento que corrompe o banco.
+    if (contextData?.success === 'loading') {
+      return; 
+    }
+
+    // Só avança se o Pai já resolveu a API e o componente ainda não foi inicializado
     if (hasInitialized.current || !visitId) return;
 
     async function hydrate() {
@@ -80,7 +87,7 @@ export function FinancialHubDataInjector({ children }: { children: React.ReactNo
             entity: contextData?.entity || fallbackEntity,
           });
         } else {
-          // 📡 2. FALLBACK PATH: (Aterrissagem direta via Handoff sem Contexto pronto)
+          // 📡 2. FALLBACK PATH: Só chega aqui se a hidratação global não trouxer dados
           console.log("📡 [DataInjector] Fallback: Buscando Orchestrator via API");
           const orchestratorData = await callOrchestrator({ 
             visit_id: visitId, 
@@ -101,9 +108,16 @@ export function FinancialHubDataInjector({ children }: { children: React.ReactNo
         }, 50);
 
       } catch (error: any) {
-        // Libera a trava para permitir retentativa manual/automática
         hasInitialized.current = false;
-        
+
+        // 🚨 Interceptação Radicular de Redirecionamento (Zero-Trust)
+        if (error?.code === "SESSION_EXPIRED" && error?.fallback_url) {
+          console.warn("🔐 [DataInjector] Sessão Expirada: Redirecionando para login seguro via Handoff Token...");
+          window.location.replace(error.fallback_url);
+          return;
+        }
+
+        // Tratamento de erros padrão
         updateData({
           success: false,
           code: error?.code || "UNKNOWN_ERROR",

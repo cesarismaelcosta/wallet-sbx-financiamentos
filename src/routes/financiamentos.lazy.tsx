@@ -107,25 +107,6 @@ const FinanciamentosGuard = () => {
       });
       return;
     }
-
-    // =========================================================================
-    // ⏱️ [STEP 2]: VALIDAÇÃO DE EXPIRAÇÃO DE SESSÃO
-    // =========================================================================
-    if (sessionToken && typeof sessionToken === "string") {
-      try {
-        const decoded = jwtDecode<{ exp?: number }>(sessionToken);
-        const timeDelta = getTimeDelta();
-        const syncedCurrentTimeInSeconds = Math.floor((Date.now() + timeDelta) / 1000);
-
-        if (decoded.exp && decoded.exp < syncedCurrentTimeInSeconds) {
-          console.warn("🚨 [UX Guard] sessionToken expirado localmente. Acionando Amnésia.");
-          window.dispatchEvent(new CustomEvent('session_expired'));
-        }
-      } catch (error) {
-        console.warn("⚠️ [UX Guard] sessionToken malformado. Expulsando por segurança.");
-        window.dispatchEvent(new CustomEvent('session_expired'));
-      }
-    }
   }, [isClientMounted, sessionToken, isLoading, navigate, location.pathname, isExchanging, reason]);
 
   // =========================================================================

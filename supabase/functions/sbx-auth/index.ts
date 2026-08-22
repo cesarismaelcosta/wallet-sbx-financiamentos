@@ -232,51 +232,65 @@ serve(
       const tokenData = await generateSessionToken(userId, environment);
 
       // =======================================================================
-      // FASE 6: DELEGAÇÃO S2S (Bypass Zero-Trust no Orquestrador)
+      // FASE 6: DELEGAÇÃO S2S / HANDOFF (Proteção contra criação de lixo)
       // =======================================================================
-      debugLog("[sbx-auth] Assinando Entidade e delegando ao Orquestrador S2S...");
+      debugLog("[sbx-auth] Assinando Entidade e verificando contexto de jornada...");
 
       const s2sToken = await signS2SEntity(userProfile);
+      let finalRedirectUrl = safeTargetUrl;
 
-      const orchestratorPayload: Record<string, any> = {
-        action: "VISIT",
-        origin_url: safeOriginUrl,
-        target_url: safeTargetUrl,
-        environment: environment,
-        s2s_signed_entity: s2sToken,
-        interaction_context: { utm_source: "sbx-auth-login", origin_url: safeOriginUrl }
-      };
+      // ✨ REGRA DE OURO: Se o Handoff trouxe um visit_id válido, a jornada já existe.
+      const isValidVisit = Boolean(safeVisitId);
 
-      // ✨ [REGRA DE OMISSÃO]: Só injeta as chaves se os IDs existirem e não forem a gambiarra de zeros.
-      const isValidVisit = safeVisitId && safeVisitId !== "00000000-0000-0000-0000-000000000000";
-      
-      if (isValidVisit) {
-        orchestratorPayload.visit_id = safeVisitId;
-        if (safeVisitUpdateId && safeVisitUpdateId !== "00000000-0000-0000-0000-000000000000") {
-            orchestratorPayload.visit_update_id = safeVisitUpdateId;
+      if (!isValidVisit) {
+        // Acesso limpo / Login direto (Sem oferta prévia): Criamos a raiz no Orquestrador
+        debugLog("[sbx-auth] Login limpo detectado. Orquestrando nova visita raiz...");
+        
+        const orchestratorPayload: Record<string, any> = {
+          action: "VISIT",
+          origin_url: safeOriginUrl,
+          target_url: safeTargetUrl,
+          environment: environment,
+          s2s_signed_entity: s2sToken,
+          interaction_context: { utm_source: "sbx-auth-login", origin_url: safeOriginUrl }
+        };
+
+        const orchestratorResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/orchestrator`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+            "x-session-token": tokenData.session_token, 
+            "x-original-url": safeOriginUrl,
+            "x-client-ip": clientIp,
+            "user-agent": userAgent
+          },
+          body: JSON.stringify(orchestratorPayload)
+        });
+
+        const orchestratorData = await orchestratorResponse.json();
+        if (!orchestratorResponse.ok) {
+          throw new Error(JSON.stringify({ code: "ORCHESTRATOR_FAIL", message: `Falha na orquestração - ${orchestratorData.message}`, action: "show_banner_error", status: orchestratorResponse.status }));
         }
+
+        const orchPayload = orchestratorData.data || orchestratorData;
+        safeVisitId = orchPayload.visit_id;
+        safeVisitUpdateId = orchPayload.visit_update_id;
+        finalRedirectUrl = orchPayload.url;
+      } else {
+        // Se tem Handoff válido, apenas preservamos a URL de destino e injetamos as âncoras
+        debugLog("[sbx-auth] Handoff preservado. Ignorando criação de nova visita no login.");
+        
+        // Trata o target url preservando query strings existentes de forma limpa
+        const [path, query = ""] = safeTargetUrl.split("?");
+        const searchParams = new URLSearchParams(query);
+        
+        if (safeVisitId) searchParams.set("visit_id", safeVisitId);
+        if (safeVisitUpdateId) searchParams.set("visit_update_id", safeVisitUpdateId);
+        
+        const queryString = searchParams.toString();
+        finalRedirectUrl = queryString ? `${path}?${queryString}` : path;
       }
-
-      const orchestratorResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/orchestrator`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-          "x-session-token": tokenData.session_token, 
-          "x-original-url": safeOriginUrl,
-          "x-client-ip": clientIp,
-          "user-agent": userAgent
-        },
-        body: JSON.stringify(orchestratorPayload)
-      });
-
-      const orchestratorData = await orchestratorResponse.json();
-      if (!orchestratorResponse.ok) {
-        throw new Error(JSON.stringify({ code: "ORCHESTRATOR_FAIL", message: `Falha na orquestração - ${orchestratorData.message}`, action: "show_banner_error", status: orchestratorResponse.status }));
-      }
-
-      // Desembrulha tolerante a falhas
-      const orchPayload = orchestratorData.data || orchestratorData;
 
       // =======================================================================
       // FASE 7: TRANSPORTE SEGURO DO CONTRATO
@@ -295,9 +309,9 @@ serve(
           environment: environment,
           user_profile: userProfile,
           initial_visit: {
-            visit_id: orchPayload.visit_id,
-            visit_update_id: orchPayload.visit_update_id,
-            final_redirect_url: orchPayload.url 
+            visit_id: safeVisitId,
+            visit_update_id: safeVisitUpdateId,
+            final_redirect_url: finalRedirectUrl 
           }
         },
         headers: {
