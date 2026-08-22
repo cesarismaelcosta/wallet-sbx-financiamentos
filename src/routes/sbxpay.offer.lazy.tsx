@@ -1,26 +1,31 @@
 /**
- * @fileoverview Componente: OfferDetailsSBXPAY (Rota: /sbxpay/offer)
+ * @fileoverview 🛍️ Componente: OfferDetailsSBXPAY (Rota: /sbxpay/offer)
  * @path src/routes/sbxpay/offer.tsx
  *
  * =========================================================================
- * 🤖 GEMINI ARCHITECTURE SPECIFICATION: CART PRESERVATION & 1:N OFFERS
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-TRUST & CART PRESERVATION (OLAP)
  * =========================================================================
- * Vitrine central de listagem e detalhes de ofertas integrada ao BFF `sbx-offer-query`.
+ * Vitrine central de ofertas (Prateleira) atuando como "Mid-Funnel". 
+ * Integrada diretamente ao BFF `sbx-offer-query` para performance máxima.
  *
- * [MUDANÇAS ARQUITETURAIS - FECHAMENTO DE CICLO DE VISITA]:
- * 1. {Cart Preservation}: O método `handleSimulacao` agora resgata ativamente o 
- *    `visit_id` da URL e o repassa ao Gateway. Isso impede a fragmentação da jornada
- *    (criação de visitas órfãs a cada clique).
- * 2. {Atomic Pageviews}: O `visit_update_id` é deliberadamente suprimido do payload.
- *    Isso força o backend a gerar um novo cursor temporal (novo update) e inserir 
- *    a nova oferta na relação 1:N (`visit_offers`), sem sobrescrever o histórico.
+ * [MECÂNICA ARQUITETURAL]:
+ * 1. {BFF Bypass}: A vitrine não faz `GET` no Orquestrador. Ela consome dados
+ *    diretamente do BFF de Ofertas para listagem. O Orquestrador só é invocado 
+ *    na intenção de clique (POST).
+ * 2. {Cart Preservation (OLAP)}: O método `handleSimulacao` atua como uma corrida 
+ *    de bastão. Ele extrai o `visit_id` (sessão) e o `visit_update_id` (cursor 
+ *    desta tela na linha do tempo) da URL e os injeta no payload `CONSULT`. 
+ *    Isso garante que o backend registre que o usuário saiu "da Vitrine e foi
+ *    para o Produto X", fechando a telemetria do funil sem criar visitas órfãs.
+ * 3. {Zero-Trust Thin Payload}: O Front-end não manipula e nem envia dados 
+ *    pessoais (PII) do usuário na transição. A validação de identidade é delegada 
+ *    ao Orquestrador (Edge) através do JWT.
  * 
  * @author César Ismael Pereira da Costa
- * @author Gemini Pro
- * @version 7.9.0 (Preservação de Sessão em Múltiplas Ofertas)
+ * @author Gemini Pro (Architectural Mechanics)
  */
 
-import { useState, useEffect, useContext, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
 import { ArrowLeft, ChevronDown, SlidersHorizontal, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +33,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHeader";
 
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { UserDataContext } from "./sbxpay.lazy";
+// Removida a importação inútil do UserDataContext
 import { fetchOffersQuery } from "@/services/offer";
 import { logSystemError } from "@/services/systemNotification";
 import { getDefaultSbxEnvironment, clearSession } from "@/services/session";
@@ -176,8 +181,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
   const currentFlow = FLOW_MAP[flowKey || "Carros"] || FLOW_MAP["Carros"];
   const isCartao = currentFlow.product_id === 8;
-  const context = useContext(UserDataContext);
-  const { userData } = context || {};
+  
+  // ✨ Remoção arquitetural: Contexto não é lido pois a Vitrine não consome dados do usuário
 
   const isMobile = useIsMobile();
   const isMobileRef = useRef(isMobile);
@@ -331,27 +336,35 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     try {
       const currentHref = window.location.href;
 
-      // 1. Extraia o visit_id da URL no instante do clique
+      // 1. Extraia o visit_id e visit_update_id da URL no instante do clique
       const urlParams = new URLSearchParams(window.location.search);
       const cartVisitId = urlParams.get("visit_id");
+      const cartVisitUpdateId = urlParams.get("visit_update_id"); // ✨ Cursor da Vitrine (Mantém a linha OLAP)
 
-      // 2. Montagem do payload seguro
+      // Extrai o offer_id do item da oferta selecionada
+      const rawOffer = offerItem?.offer || offerItem;
+      const targetOfferId = rawOffer?.offer_id || rawOffer?.id;
+
+      // 2. Montagem do payload seguro (THIN PAYLOAD)
       const payload = {
         action: "CONSULT",
         environment: ambiente,
         ...(currentFlow.product_id && { product_id: String(currentFlow.product_id) }),
         
-        // ✨ [CART PRESERVATION]: Mantém a mesma visita ao trocar de oferta.
-        // O visit_update_id NÃO é repassado: cada escolha é um novo pageview/cursor temporal.
-        // Com o banco permitindo 1:N, essa oferta será atrelada com sucesso a esta visita.
+        // ✨ [CART PRESERVATION]: Mantém a mesma visita e update ao trocar de oferta.
         ...(cartVisitId ? { visit_id: cartVisitId } : {}),
+        ...(cartVisitUpdateId ? { visit_update_id: cartVisitUpdateId } : {}),
         
-        offer: offerItem?.offer || offerItem,
+        // ✨ CORREÇÃO: Garante que o offer_id vá na raiz para o ThinPayload do Orquestrador
+        ...(targetOfferId ? { offer_id: String(targetOfferId) } : {}),
+        
+        offer: rawOffer,
         seller: offerItem?.seller || {},
         event: offerItem?.event || {},
         manager: offerItem?.manager || {},
         origin_url: currentHref,
-        ...(userData && { entity: userData }),
+        
+        // ✨ Remoção Arquitetural: `entity` não é mais enviada. Zero-Trust no Edge!
         interaction_context: {
           origin_url: currentHref,
           utm_source: "offer_list",
@@ -366,13 +379,17 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         if (response.url.startsWith("http")) {
           window.location.href = response.url;
         } else {
-          navigate({ to: response.url as any });
+          // Extraindo parâmetros da URL gerada pelo orquestrador para injetar via state do TanStack Router
+          const urlObj = new URL(response.url, window.location.origin);
+          navigate({ 
+            to: urlObj.pathname as any,
+            search: Object.fromEntries(urlObj.searchParams.entries()) as any,
+          });
         }
       } else {
         throw new Error("URL de redirecionamento ausente.");
       }
     } catch (error: any) {
-      // ✨ Se a sessão expirou ou deu 401, limpa e manda direto para o signin preservando a URL atual
       if (error?.code === "SESSION_EXPIRED" || error?.status === 401 || error?.code === 401) {
         clearSession();
         const currentPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/sbxpay";

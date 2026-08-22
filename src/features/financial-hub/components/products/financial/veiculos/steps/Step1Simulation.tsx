@@ -85,9 +85,13 @@ export function Step1Simulation() {
     setLoading(true);
 
     try {
-      // 2. Montagem do Payload de Paridade
+      // 2. Montagem do Payload Magro (Thin Payload / Zero-Trust)
       const payload = {
-        ...state.data,
+        action: "SIMULATE",
+        visit_id: state.data.visit_id,
+        visit_update_id: state.data.visit_update_id,
+        offer_id: state.data.offer?.offer_id,
+        product_id: state.data.product_id,
         simulation_details: {
           requested_value: localValorVeiculo,
           installments: localParcelas,
@@ -139,8 +143,10 @@ export function Step1Simulation() {
   }
 
   const { rules, consent_configs, offer } = state.data;
+  // Atributos extraídos com segurança e fallback para evitar NaN
   const tetoMaximo =
-    offer?.vehicle_details?.fipe_value ?? offer?.offer_value * (1 + (rules?.max_offer_cap_percent ?? 20) / 100);
+    offer?.vehicle_details?.fipe_value ?? 
+    ((offer?.offer_value || 0) * (1 + (rules?.max_offer_cap_percent ?? 20) / 100));
 
   // Atributo do lote (índice ou número)
   const loteSubIndex = offer?.lote_index || offer?.lote_numero || "1";

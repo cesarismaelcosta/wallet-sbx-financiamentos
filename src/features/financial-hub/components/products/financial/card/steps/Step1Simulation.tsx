@@ -15,11 +15,23 @@
  * 2. Segurança: Implementa travas de fluxo (isSimulating/hasAttempted) para impedir chamadas duplicadas e loops de renderização.
  * 3. Renderização: Exibe as opções de parcelamento (consults) retornadas pela API, permitindo a escolha do usuário.
  *
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO: STRICT THIN PAYLOAD (ZERO-TRUST)
+ * =========================================================================
+ * [MECÂNICA ARQUITETURAL]:
+ * O payload de rede foi purificado. O uso do `...state.data` foi abolido para
+ * evitar o envio de lixo de UI (estado interno, objetos aninhados) para a 
+ * camada de rede. O componente monta um payload estritamente "Thin", extraindo 
+ * os cursores temporais (`visit_id`, `visit_update_id`) da URL e enviando 
+ * APENAS os IDs identificadores e os inputs financeiros (valor e parcelas) 
+ * que o Gateway exige.
+ *
  * @author César Ismael Pereira da Costa
+ * @author Gemini Pro (Architectural Mechanics)
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, ExternalLink } from "lucide-react"; 
+import { Loader2, ExternalLink } from "lucide-react";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { CardWizardData } from "../card.types";
@@ -36,7 +48,7 @@ function useLoadingMessages(isLoading: boolean) {
     "Calculando opções de parcelamento...",
     "Finalizando simulação...",
   ];
-  
+
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -47,7 +59,7 @@ function useLoadingMessages(isLoading: boolean) {
     // Rotaciona as mensagens a cada 2.5 segundos para cobrir longas esperas
     const interval = setInterval(() => {
       setIndex((prev) => (prev < messages.length - 1 ? prev + 1 : prev));
-    }, 2500); 
+    }, 2500);
 
     return () => clearInterval(interval);
   }, [isLoading, messages.length]);
@@ -62,10 +74,10 @@ const getSuperbidUrl = (offerData: any) => {
   if (!offerData?.offer_id) return "#";
   const slug = (offerData.offer_description || "")
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   return `https://www.superbid.net/oferta/${slug}-${offerData.offer_id}`;
 };
 
@@ -92,18 +104,32 @@ export function Step1Simulation() {
   }, [offerValue, simResult]);
 
   const handleSimular = async () => {
-    if (hasAttempted.current || !state?.data) return; 
+    if (hasAttempted.current || !state?.data) return;
 
     isSimulating.current = true;
-    hasAttempted.current = true; 
+    hasAttempted.current = true;
     setLoading(true);
 
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlVisitId = urlParams.get("visit_id");
+      const urlVisitUpdateId = urlParams.get("visit_update_id");
+      
+      const rawOffer = state.data.offer || {};
+      const targetOfferId = rawOffer.offer_id || rawOffer.id;
+
+      // ✨ [STRICT THIN PAYLOAD]
+      // Abolido o uso de `...state.data`! Montagem cirúrgica e explícita.
       const payload = {
-        ...state.data,
+        ...(urlVisitId && { visit_id: urlVisitId }),
+        ...(urlVisitUpdateId && { visit_update_id: urlVisitUpdateId }),
+        ...(targetOfferId && { offer_id: String(targetOfferId) }),
+        
+        product_id: 8, // Produto: Cartão
+
         simulation_details: {
           requested_value: offerValue || 0,
-          installments: state.data.parcelas,
+          installments: state.data.parcelas || 1, // Default fallback de segurança
           down_payment_amount: 0,
           down_payment_percentage: 0,
           cet_rate: null,
@@ -112,6 +138,7 @@ export function Step1Simulation() {
 
       const result = await execute(() => callSimulation(payload));
 
+      // Atualiza o estado da UI com o resultado, mantendo o histórico
       update({
         data: {
           ...state.data,
@@ -144,11 +171,10 @@ export function Step1Simulation() {
   return (
     <div className="w-full space-y-8 animate-in fade-in duration-500">
       <div className="bg-white space-y-6">
-        
-        {/* 
-          * [PROGRESSIVE DISCLOSURE]
-          * Rationale: Renderização imediata do contexto síncrono (Dados da Oferta).
-          */}
+        {/*
+         * [PROGRESSIVE DISCLOSURE]
+         * Rationale: Renderização imediata do contexto síncrono (Dados da Oferta).
+         */}
         {/* [CABEÇALHO COM LINK] */}
         <div className="flex items-start gap-4">
           <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
@@ -159,26 +185,23 @@ export function Step1Simulation() {
             <h3 className="text-[clamp(14px,4vw,20px)] sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full block">
               Simulação de parcelamento*!
             </h3>
-            
+
             <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-slate-600 truncate pt-0.5 w-full block">
               {offerDescText}
             </p>
 
-
             {/* LINHA DO LOTE E PREÇO COM LINK AO LADO */}
             <div className="flex items-center pt-0.5">
-              <p className="text-sm text-slate-600 truncate"> 
-                {/* text-sm deixa a fonte um pouco maior e mais clara que o text-xs */}
+              <p className="text-sm text-slate-600 truncate">
                 Lote {loteSubIndex} • <strong className="text-slate-900 font-bold mr-2">{BRL(offerValue || 0)}</strong>
               </p>
-              
+
               {offer && (
-                <a 
-                  href={getSuperbidUrl(offer)} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  // Adicionei outline-none, focus:outline-none e focus:ring-0
-                  className="text-[#B300FF] hover:text-[#9300cc] transition-colors flex items-center outline-none focus:outline-none focus:ring-0" 
+                <a
+                  href={getSuperbidUrl(offer)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#B300FF] hover:text-[#9300cc] transition-colors flex items-center outline-none focus:outline-none focus:ring-0"
                   title="Ver oferta original na Superbid"
                 >
                   <ExternalLink size={18} />
@@ -188,16 +211,12 @@ export function Step1Simulation() {
           </div>
         </div>
 
-        {/* 
-          * [SKELETON UI + COGNITIVE DISTRACTION]
-          * Rationale: O usuário recebe a estrutura visual (mitigando CLS) e um 
-          * tracker de status dinâmico com design minimalista.
-          */}
+        {/*
+         * [SKELETON UI + COGNITIVE DISTRACTION]
+         */}
         <div className="py-2">
           {isLoadingUI ? (
-            // [PENDING STATE]: Status dinâmico sutil + Skeletons
             <div className="space-y-3 animate-in fade-in duration-300">
-              
               {/* STATUS TRACKER (Minimalista) */}
               <div className="flex items-center gap-2 px-1 text-slate-500">
                 <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-[var(--brand-primary)]" />
@@ -209,16 +228,14 @@ export function Step1Simulation() {
               {/* GRID FANTASMA PADRONIZADO (Estilo Ofertas Cartão) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div 
-                    key={`skeleton-${i}`} 
+                  <div
+                    key={`skeleton-${i}`}
                     className="w-full flex flex-col items-start p-4 bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-xs animate-pulse space-y-3"
                   >
-                    {/* Linha do valor da parcela */}
                     <div className="flex items-baseline gap-2 w-full">
                       <div className="h-5 w-8 bg-slate-200 rounded-md"></div>
                       <div className="h-6 w-28 bg-slate-200 rounded-md"></div>
                     </div>
-                    {/* Linha do valor total */}
                     <div className="h-3 w-20 bg-slate-100 rounded-md"></div>
                   </div>
                 ))}

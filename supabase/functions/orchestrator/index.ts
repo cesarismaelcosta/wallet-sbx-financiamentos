@@ -1,22 +1,21 @@
 /**
  * @fileoverview ORQUESTRADOR CENTRAL (Gateway de Roteamento Bilateral & Fast Path)
  * @path supabase/functions/orchestrator/index.ts
- * 
+ * @version 3.1.0
+ *
  * ============================================================================
- * 🤖 GEMINI ARCHITECTURE SPECIFICATION: HIGH-PERFORMANCE ROUTING & VISITS
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: ZERO-TRUST ROUTING & S2S BYPASS
  * ============================================================================
- * Este módulo é o coração do ecossistema sbX. Ele opera como E/S (Entrada/Saída):
- * - MODO LEITURA (GET): Hidrata o front-end com os dados da jornada atual.
- * - MODO ESCRITA (POST): Valida a intenção, registra a visita e define a rota.
- * 
- * [MUDANÇAS ARQUITETURAIS - REFATORAÇÃO DE PERFORMANCE]:
- * 1. {Fast Path Navigation}: Uso de `EdgeRuntime.waitUntil` para ações de navegação (VISIT, REDIRECT). 
- *    Retorna o redirecionamento ao cliente instantaneamente enquanto o banco commita em background.
- * 2. {Sterile Home}: Rotas de Home hidratam sem contexto de oferta, eliminando validações 
- *    upstream (API Superbid) desnecessárias e evitando "ofertas fantasmas".
- * 3. {1:N Offers}: Uma visita (carrinho) suporta múltiplas ofertas, sempre priorizando a mais recente.
- * 4. {Race Condition Shield}: Loop de retry com backoff no GET para suportar a consistência eventual do Fast Path.
- * 
+ *
+ * [EVOLUÇÃO v3.1.0 - SIGNED STATE & S2S TRUST]:
+ * 1. {Handoff Token / Signed State}: Emissão de token criptografado na interceptação 
+ *    do erro 401 (SESSION_EXPIRED). Preserva `visit_id`, `visit_update_id` e 
+ *    `target_url` para blindar o login contra manipulação manual de URL (Open Redirect).
+ * 2. {S2S Bypass Validation}: O pipeline de POST agora intercepta e valida a 
+ *    chancela `s2s_signed_entity` enviada de servidor para servidor pelo `sbx-auth`.
+ *    Isso garante que a identidade PII repassada é confiável, eliminando falsos 
+ *    positivos de `PROFILE_UNAVAILABLE` durante a hidratação da jornada.
+ *
  * @author Cesar Ismael Pereira da Costa
  * @author Gemini Pro
  */
@@ -27,780 +26,563 @@ import { validateRequest } from "../_shared/auth.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { sql } from "../_shared/db.ts";
 import { withSecurity } from "../_shared/server.ts";
-import { validateVisitAndOfferIntegrity } from "../_shared/gateKeeper.ts";
+import { validateOfferAccess } from "../_shared/gateKeeper.ts";
+import { hydrateVisitContext } from "../_shared/hydrate-data.ts";
+import { resolveOrchestratorConfigs } from "../_shared/orchestrator-configs.ts";
 import { persistVisitData } from "./persist-data.ts";
-
-import {
-  Entity,
-  Manager,
-  Seller,
-  Event,
-  Vehicle,
-  Offer,
-  InteractionContext,
-  OrchestratorPayload,
-  OrchestratorResponse,
-  OriginDetails,
-} from "../_shared/types.ts";
-
 import { debugLog } from "../_shared/logger.ts";
+
+// ✨ [INJEÇÃO ZERO-TRUST]: Ferramentas do Cartório Criptográfico S2S
+import { signSigninParameters, verifyS2SEntity } from "../_shared/s2s.ts";
+
+import type { OrchestratorPayload, ThinPayload } from "../_shared/types.ts";
 
 /**
  * ============================================================================
- * HELPER FUNCTIONS (Gatekeeper de Dados e Motor de Decisão)
+ * HELPERS LOCAIS
  * ============================================================================
  */
 
-async function validatePayload(
-  supabaseClient: any,
-  payload: OrchestratorPayload,
-): Promise<{ category_id?: number; product_id?: number; action: "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT" }> {
-  const errors: string[] = [];
-  let found_category_id: number | undefined;
-  let found_product_id: number | undefined = payload.product_id;
+const ACTIONS = ["VISIT", "CONSULT", "REDIRECT", "SIMULATE", "CONTACT"] as const;
+type Action = (typeof ACTIONS)[number];
 
-  const action = payload.action?.toUpperCase() as "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT";
-  payload.action = action;
+const NAVIGATION_ACTIONS: Action[] = ["VISIT", "REDIRECT", "CONTACT"];
+const HOME_ROUTES = ["/", "/sbxpay"];
+
+const normalizeRoute = (raw?: string | null) => {
+  if (!raw) return "";
+  try {
+    return new URL(raw, "http://local").pathname.replace(/\/+$/, "") || "/";
+  } catch {
+    return (raw.split("?")[0] || "").replace(/\/+$/, "") || "/";
+  }
+};
+
+function validateThinPayload(payload: ThinPayload): { action: Action } {
+  const errors: string[] = [];
+  const action = String(payload.action || "").toUpperCase() as Action;
+
+  if (!ACTIONS.includes(action)) {
+    errors.push(`action invalida ou ausente. Esperado um de: ${ACTIONS.join(", ")}.`);
+  }
 
   if (!payload.interaction_context?.utm_source) errors.push("interaction_context.utm_source ausente.");
-  const source = payload.interaction_context?.utm_source;
-
   if (!payload.interaction_context?.origin_url) errors.push("interaction_context.origin_url ausente.");
-  if (!payload.origin_url) errors.push("origin_url ausente na raiz do payload. É obrigatório para o roteamento.");
+  if (!payload.origin_url) errors.push("origin_url ausente na raiz do payload. Obrigatorio para o roteamento.");
 
-  if (["VISIT", "REDIRECT", "CONTACT"].includes(action) && !payload.target_url) {
-    errors.push(`target_url ausente. Obrigatório enviar o destino da página para ações do tipo ${action}.`);
+  if (NAVIGATION_ACTIONS.includes(action) && !payload.target_url) {
+    errors.push(`target_url ausente. Obrigatoria para acoes do tipo ${action}.`);
   }
 
-  if (action === "SIMULATE" || action === "CONSULT" || payload.entity) {
-    if (!payload.entity?.entity_id) errors.push("entity.entity_id ausente.");
-    if (!payload.entity?.name) errors.push("entity.name ausente.");
-    if (!payload.entity?.document) errors.push("entity.document ausente.");
-    if (!payload.entity?.phone) errors.push("entity.phone ausente.");
-    if (!payload.entity?.email) errors.push("entity.email ausente.");
-
-    const cleanDoc = String(payload.entity?.document || "").replace(/\D/g, "");
-    const isPJ = cleanDoc.length === 14;
-
-    if (!isPJ) {
-      if (!payload.entity?.birth_date) errors.push("entity.birth_date ausente. Obrigatório para PF.");
-      if (!payload.entity?.gender) errors.push("entity.gender ausente. Obrigatório para PF.");
-    } else {
-      if (payload.entity) {
-        payload.entity.gender = payload.entity.gender || "";
-        payload.entity.birth_date = payload.entity.birth_date || "";
-      }
-    }
-  }
-
-  const hasOfferContext = !!payload.offer && (source === "offer" || !!payload.offer.offer_id);
-  if (hasOfferContext) {
-    if (!payload.manager?.manager_name) errors.push("manager.manager_name é obrigatório.");
-    if (!payload.seller?.seller_id) errors.push("seller.seller_id é obrigatório.");
-    if (!payload.seller?.legal_name) errors.push("seller.legal_name é obrigatório.");
-    if (!payload.seller?.trade_name) errors.push("seller.trade_name é obrigatório.");
-    if (!payload.event?.event_id) errors.push("event.event_id é obrigatório.");
-    if (!payload.event?.event_description) errors.push("event.event_description é obrigatório.");
-    if (!payload.event?.event_start_date) errors.push("event.event_start_date é obrigatório.");
-    if (!payload.event?.event_end_date) errors.push("event.event_end_date é obrigatório.");
-    if (!payload.offer?.offer_id) errors.push("offer.offer_id é obrigatório.");
-    if (!payload.offer?.offer_description) errors.push("offer.offer_description é obrigatório.");
-    if (!payload.offer?.offer_value) errors.push("offer.offer_value é obrigatório.");
-    if (!payload.offer?.subcategory_id) errors.push("offer.subcategory_id é obrigatório.");
-
-    if (payload.offer?.category_id) {
-      debugLog("ValidatePayload category_id recebido:", payload.offer.category_id);
-      
-      const { data: catData, error: catError } = await supabaseClient
-        .from("category_types")
-        .select("id, product_id, name")
-        .eq("id", Number(payload.offer.category_id))
-        .maybeSingle();
-
-      if (catError || !catData) {
-        errors.push(`Categoria com ID '${payload.offer.category_id}' não mapeada.`);
-      } else {
-        found_category_id = catData.id;
-        payload.offer!.category_id = catData.id;
-        if (!payload.product_id && catData.product_id) {
-          found_product_id = catData.product_id;
-          payload.product_id = catData.product_id;
-        }
-      }
-    } else {
-      errors.push("offer.category_id ausente.");
-    }
-  }
-
-  if (["banner", "whatsapp", "email", "sms"].includes(source || "") && !found_product_id) {
-    errors.push(`Para o canal '${source}', o 'product_id' é obrigatório.`);
+  if (payload.offer_id && !payload.visit_id && !NAVIGATION_ACTIONS.includes(action)) {
+    errors.push("visit_id ausente para uma acao com contexto de oferta.");
   }
 
   if (errors.length > 0) throw new Error(`[sbX Validation Error]: ${errors.join(" | ")}`);
-  return { category_id: found_category_id, product_id: found_product_id, action };
+  return { action };
 }
 
-async function resolveDestination(
-  supabaseClient: any,
-  action: "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT",
-  payloadTargetUrl?: string,
-  eventId?: string | number,
-  sellerId?: string | number,
-  categoryId?: number,
-  subcategoryId?: number,
-  productId?: number,
-  entityType?: "F" | "J" | string,
-) {
-  debugLog(`RESOLVE DESTINATION: Ação ${action}. category: ${categoryId} | product_id: ${productId}`);
+function toUiError(err: any, fallbacks: { origin: string; auth: string }) {
+  let message = "Ocorreu um erro ao processar sua requisicao.";
+  let code = "UNKNOWN_ERROR";
+  let fallback_url = fallbacks.origin;
 
-  if (["VISIT", "REDIRECT", "CONTACT"].includes(action)) {
-    throw new Error(`Ação '${action}' não deve passar pelo motor de resolução de destinos.`);
+  const raw = String(err?.message || "");
+
+  if (raw.includes("OFFER_NOT_FOUND")) {
+    message = "Esta oferta nao esta mais disponivel ou nao foi encontrada.";
+    code = "OFFER_NOT_FOUND";
+  } else if (raw.includes("INVALID_RELATIONSHIP")) {
+    message = "Voce nao tem permissao para acessar esta oferta ou visita.";
+    code = "INVALID_RELATIONSHIP";
+  } else if (raw.includes("SESSION_EXPIRED")) {
+    message = "Sua sessao expirou. Por favor, faca login novamente.";
+    code = "SESSION_EXPIRED";
+    fallback_url = fallbacks.auth;
+  } else if (raw.includes("PROFILE_UNAVAILABLE")) {
+    message = "Perfil não identificado ou sessão anônima em rota protegida.";
+    code = "PROFILE_UNAVAILABLE";
+    fallback_url = fallbacks.auth;
+  } else if (raw.includes("UPSTREAM_CONNECTION_ERROR")) {
+    message = "Estamos com instabilidade no servico de ofertas. Tente novamente em instantes.";
+    code = "UPSTREAM_CONNECTION_ERROR";
+  } else if (raw.includes("FORBIDDEN") || raw.includes("INVALID_PAYLOAD")) {
+    message = "Inconsistencia nos dados de seguranca (Bloqueio).";
+    code = "FORBIDDEN";
+  } else if (raw) {
+    message = raw;
   }
 
-  const currentProfile = entityType === "J" ? "PJ" : "PF";
-
-  const priorities = [
-    { type: "EVENT", id: eventId ? Number(eventId) : undefined },
-    { type: "SELLER", id: sellerId ? Number(sellerId) : undefined },
-    { type: "PRODUCT", id: productId ? Number(productId) : undefined },
-    { type: "SUBCATEGORY", id: subcategoryId ? Number(subcategoryId) : undefined },
-    { type: "CATEGORY", id: categoryId ? Number(categoryId) : undefined },
-  ];
-
-  for (const priority of priorities) {
-    if (priority.id && !isNaN(priority.id)) {
-      debugLog(`Tentando query: ${priority.type} com ID: ${priority.id} para Perfil: ${entityType}`);
-      const { data, error } = await supabaseClient
-        .from("orchestrator_configs")
-        .select("id, page_url, partner_id, is_integrated, integration_method, integration_details, entity_type, rules, consent_configs, page_configs, page_faqs")
-        .eq("lookup_id", priority.id)
-        .eq("config_type", priority.type)
-        .eq("is_active", true)
-        .in("entity_type", [currentProfile, "PF+PJ"])
-        .maybeSingle();
-
-      if (error) {
-        debugLog(`[ROTEAMENTO AVISO] Erro na query de ${priority.type}:`, error.message);
-        continue;
-      }
-
-      if (!data) continue;
-
-      debugLog(`[ROTEAMENTO SUCESSO] Match cravado via ${priority.type} -> `, data);
-      return {
-        orchestrator_config_id: data.id,
-        url: data.page_url,
-        partner_id: data.partner_id,
-        is_integrated: data.is_integrated,
-        integration_method: data.integration_method,
-        integration_details: data.integration_details,
-        rules: data.rules,
-        consent_configs: data.consent_configs,
-        page_configs: data.page_configs,
-        page_faqs: data.page_faqs,
-      };
-    }
-  }
-
-  throw new Error("Nenhuma configuração de destino ativa encontrada para esta simulação.");
+  const uiError = new Error(message);
+  (uiError as any).errorCode = code;
+  (uiError as any).fallback_url = fallback_url;
+  return uiError;
 }
 
-async function resolveOrchestratorConfigs(
-  supabase: any,
-  eventId?: any,
-  sellerId?: any,
-  categoryId?: any,
-  subcategoryId?: any,
-  productId?: any,
-  entityType?: "F" | "J" | string,
-) {
-  const currentProfile = entityType === "J" ? "PJ" : "PF";
+// ✨ FIX: Chaves criptográficas não podem ir pro banco de dados em logs
+const SECRET_KEYS = new Set([
+  "auth_token", "session_token", "access_token", "refresh_token", 
+  "password", "s2s_signed_entity", "handoff_token"
+]);
 
-  const priorities = [
-    { type: "EVENT", id: eventId },
-    { type: "SELLER", id: sellerId },
-    { type: "PRODUCT", id: productId },
-    { type: "SUBCATEGORY", id: subcategoryId },
-    { type: "CATEGORY", id: categoryId },
-  ];
+const sanitizePayload = (obj: any): any => {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizePayload);
 
-  for (const priority of priorities) {
-    if (priority.id && priority.id !== "undefined") {
-      const { data, error } = await supabase
-        .from("orchestrator_configs")
-        .select("partner_id, rules, consent_configs, page_configs, page_faqs, is_integrated, integration_method, integration_details")
-        .eq("lookup_id", Number(priority.id))
-        .eq("config_type", priority.type)
-        .eq("is_active", true)
-        .in("entity_type", [currentProfile, "PF+PJ"])
-        .maybeSingle();
-
-      if (error) continue;
-      if (data) return data;
-    }
+  const sanitized: Record<string, any> = {};
+  for (const key of Object.keys(obj)) {
+    if (SECRET_KEYS.has(key.toLowerCase())) continue;
+    const val = obj[key];
+    sanitized[key] = val === undefined ? null : sanitizePayload(val);
   }
-  return null;
-}
+  return sanitized;
+};
 
 /**
  * ============================================================================
  * HANDLER PRINCIPAL (E/S BILATERAL)
  * ============================================================================
  */
-serve(withSecurity('orchestrator', async (req: Request) => {
+serve(
+  withSecurity("orchestrator", async (req: Request) => {
+    const globalFallbackUrl = req.headers.get("x-original-url") || "/";
 
-  const globalFallbackUrl = req.headers.get("x-original-url") || "/";
-
-  try  {
-
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-      auth: { persistSession: false },
-    });
-
-    const originPath = req.headers.get("x-original-url") || "/";
-    const authPath = req.headers.get("x-auth-fallback-url") || "/";
-    
-    let auth;
     try {
+      const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+        auth: { persistSession: false },
+      });
+
+      const originPath = req.headers.get("x-original-url") || "/";
+      const authPath = req.headers.get("x-auth-fallback-url") || "/";
+      const fallbacks = { origin: originPath, auth: authPath };
+
+      // Leitura direta do body sem clonar a stream para evitar travamento de I/O na borda
+      let rawBodyText = "";
+      if (req.method === "POST") {
+        try { rawBodyText = await req.text(); } catch { rawBodyText = ""; }
+      }
+
+      let auth;
+      try {
         auth = await validateRequest(req);
-    } catch (err: any) {
-
-        if (!originPath) {
-            return {
-              status: 400,
-              data: { 
-                success: false,
-                code: "INTERNAL_ERROR",
-                message: "Erro de segurança: A origem da requisição não foi identificada.",
-                fallback_url: "/"
-              }
-            };
-        }
-
-        let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
+      } catch (err: any) {
+        const raw = String(err?.message || "");
+        let userMessage = "Falha de autenticacao. Por favor, faca login novamente.";
         let errorCode = "UNAUTHORIZED";
         let fallbackUrl = authPath;
         let statusCode = 401;
 
-        if (err.message.includes("SESSION_EXPIRED")) {
-            userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-            errorCode = "SESSION_EXPIRED";
-            
-        } else if (err.message.includes("FORBIDDEN")) {
-            userMessage = "Você não tem permissão para acessar este recurso.";
-            errorCode = "FORBIDDEN";
-            fallbackUrl = originPath; 
-            statusCode = 403;
-            
-        } else if (err.message.includes("INTERNAL_ERROR")) {
-            userMessage = "Ocorreu um erro interno ao validar sua sessão.";
-            errorCode = "INTERNAL_ERROR";
-            fallbackUrl = originPath; 
-            statusCode = 500;
-        }
-
-        return { 
-          status: statusCode,
-          data: { 
-            success: false,
-            code: errorCode,
-            message: userMessage, 
-            fallback_url: fallbackUrl 
-          }
-        };
-    }
-
-    // =========================================================================
-    // PIPELINE DE LEITURA (GET): Hidratação do Front-End
-    // =========================================================================
-    if (req.method === "GET") {
-      try {
-        const url = new URL(req.url);
-        const visitId = url.searchParams.get("visit_id");
-        const visitUpdateId = url.searchParams.get("visit_update_id");
-        const simulationId = url.searchParams.get("simulation_id");
-
-        if (!visitId) throw new Error("O parâmetro 'visit_id' é obrigatório.");
-
-        // A: Busca de Simulação Prévia com Validação de Identidade (Ownership)
-        let simulationData = null;
-        if (simulationId) {
-          const { data: sim, error: simError } = await supabase
-            .from("simulations")
-            .select("*")
-            .eq("id", simulationId)
-            .eq("visit_id", visitId)
-            .eq("entity_id", auth.user_id) 
-            .maybeSingle();
-
-          if (simError || !sim) {
-            debugLog(`🚨 [Security] Tentativa de acesso não autorizada: ${simulationId}`);
-            const err = new Error("Você não tem permissão para simular nesta oferta.");
-            (err as any).errorCode = "INVALID_RELATIONSHIP"; 
-            (err as any).fallback_url = originPath; 
-            throw err; 
-          }
-          simulationData = sim;
-        }
-
-        // =====================================================================
-        // B: DEEP JOIN & RACE CONDITION SHIELD (Retry Loop)
-        // =====================================================================
-        // Como o POST agora usa `EdgeRuntime.waitUntil` (Fast Path), a transação
-        // de banco pode ainda estar "commitando" quando o frontend redireciona 
-        // e faz o GET. Este loop com backoff exponencial garante que não teremos 
-        // falhas de consistência eventual (Read-After-Write inconsistency).
-        const VISIT_FETCH_ATTEMPTS = 3;
-        const VISIT_FETCH_DELAY_MS = 120;
-        let visit: any = null;
-        let visitError: any = null;
-
-        for (let attempt = 1; attempt <= VISIT_FETCH_ATTEMPTS; attempt++) {
-          const result = await supabase
-            .from("visits")
-            .select(`
-              id, utm_source, utm_medium, utm_campaign, origin_url, target_url,
-              visit_entities ( entity_id, entity_type, name, document, phone, email, birth_date, gender, entity_details ),
-              visit_offers ( offer_id, offer_value, manager_details, seller_details, event_details, offer_details, category_id, subcategory_id, subcategory, created_at ),
-              visit_updates ( id, partner_id, product_id, created_at )
-            `)
-            .eq("id", visitId)
-            .maybeSingle();
-
-          visit = result.data;
-          visitError = result.error;
-          if (visit) break;
-
-          if (attempt < VISIT_FETCH_ATTEMPTS) {
-            debugLog(`⏳ [GET] Visita indisponível (tentativa ${attempt}). Consistência eventual... Aguardando ${VISIT_FETCH_DELAY_MS}ms.`);
-            await new Promise((r) => setTimeout(r, VISIT_FETCH_DELAY_MS));
-          }
-        }
-
-        if (visitError || !visit) throw new Error("Visita não encontrada ou expirada no banco de dados.");
-
-        // [EXTRAÇÃO DE PARCEIRO/PRODUTO 1:N] - Busca os IDs na tabela visit_updates do evento exato
-        const sortedUpdates = [...(visit.visit_updates || [])].sort(
-          (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-        );
-        const activeUpdate = visitUpdateId 
-          ? sortedUpdates.find((u: any) => u.id === visitUpdateId) || sortedUpdates[0] || {}
-          : sortedUpdates[0] || {};
-        
-        const currentProductId = activeUpdate.product_id || null;
-        const currentPartnerId = activeUpdate.partner_id || null;
-
-        // =====================================================================
-        // C: VALIDAÇÃO DE JORNADA (GATEKEEPER) E HOME ESTÉRIL
-        // =====================================================================
-        const visitEntityData = visit.visit_entities?.[0] || {};
-
-        // [1:N MODEL]: O schema permite múltiplas ofertas atreladas a uma única Visita (carrinho).
-        // A oferta corrente é sempre resolvida de forma temporal (a mais recente inserida).
-        const sortedOffers = [...(visit.visit_offers || [])].sort(
-          (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-        );
-        let visitOfferData: any = sortedOffers[0] || {};
-
-        const normalizeRoute = (raw?: string | null) => {
-          if (!raw) return "";
-          try { return new URL(raw, "http://local").pathname.replace(/\/+$/, "") || "/"; } 
-          catch { return (raw.split("?")[0] || "").replace(/\/+$/, "") || "/"; }
-        };
-        
-        // [HOME ESTÉRIL]: Se o usuário voltou para a Home, a jornada NÃO deve carregar 
-        // a oferta anterior. Limpar este contexto evita engessamento e corta a 
-        // latência severa de revalidar uma oferta expirada na API da Superbid.
-        const HOME_ROUTES = ["/", "/sbxpay"];
-        const currentRoute = normalizeRoute(originPath) || normalizeRoute(visit.target_url);
-        const isHomeRoute = currentRoute === "" || HOME_ROUTES.includes(currentRoute);
-
-        if (isHomeRoute) {
-          debugLog("🏠 [GET] Rota Home detectada. Hidratação estéril (Ofertas desassociadas do cache).");
-          visitOfferData = {};
-        }
-
-        const requestContext = {
-            entity_id: visitEntityData.entity_id,
-            offer_id: visitOfferData.offer_id || null
-        };
-
-        try {
-            // Apenas executa a validação Upstream (Pesada) se houver contexto comercial exigido.
-            if (requestContext.offer_id) {
-              debugLog("🚨 [GET] Validando integridade da jornada Upstream (Visita + Oferta)...");
-              const validatedOffer = await validateVisitAndOfferIntegrity(
-                  supabase, 
-                  auth, 
-                  visitId, 
-                  requestContext
-              );
-              
-              if (validatedOffer) {
-                  visitOfferData.offer_value = validatedOffer.offer.offer_value;
-              }
-            }
-        } catch (err: any) {
-            debugLog("🚨 [Gatekeeper GET] Falha na validação:", err.message);
-
-            let userMessage = "Ocorreu um erro ao carregar a oferta.";
-            let errorCode = "UNKNOWN_ERROR";
-            let targetFallback = visit?.origin_url || "/";
-
-            if (err.message.includes("OFFER_NOT_FOUND")) {
-                userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
-                errorCode = "OFFER_NOT_FOUND";
-            } else if (err.message.includes("INVALID_RELATIONSHIP")) {
-                userMessage = "Você não tem permissão para acessar esta oferta ou visita.";
-                errorCode = "INVALID_RELATIONSHIP";
-            } else if (err.message.includes("SESSION_EXPIRED")) {
-                userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-                errorCode = "SESSION_EXPIRED";
-                targetFallback = authPath; 
-            } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
-                userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
-                errorCode = "UPSTREAM_CONNECTION_ERROR";
-            } else if (err.message.includes("FORBIDDEN") || err.message.includes("INVALID_PAYLOAD")) {
-                userMessage = "Inconsistência nos dados de segurança (Bloqueio).";
-                errorCode = "FORBIDDEN";
-            }
-
-            debugLog("fallback_url: ", targetFallback)
-
-            const errorForUI = new Error(userMessage);
-            (errorForUI as any).errorCode = errorCode; 
-            (errorForUI as any).fallback_url = targetFallback; 
-            
-            throw errorForUI; 
-        }
-
-        // =====================================================================
-        // D: Resolução de Regras e Configurações Dinâmicas
-        // =====================================================================
-        const orchestratorConfigs = await resolveOrchestratorConfigs(
-          supabase,
-          visitOfferData.event_details?.event_id, 
-          visitOfferData.seller_details?.seller_id, 
-          visitOfferData.category_id,
-          visitOfferData.subcategory_id, 
-          currentProductId, 
-          visitEntityData.entity_type,
-        );
-        
-        if (!orchestratorConfigs) {
-          if (!isHomeRoute) {
-            // Em rotas de jornada (ex: Financiamento), faltar config é erro fatal.
-            throw new Error(`[resolveOrchestratorConfigs]: Configurações não localizadas para o perfil e contexto informados.`);
-          }
+        // ✨ [HANDOFF TOKEN / SIGNED STATE]: A Sessão Expirou. Lacramos o cofre.
+        if (raw.includes("SESSION_EXPIRED")) {
+          userMessage = "Sua sessao expirou. Por favor, faca login novamente.";
+          errorCode = "SESSION_EXPIRED";
           
-          // Na Home Estéril, é perfeitamente normal não ter metadados de produto.
-          debugLog("🏠 [GET] Home sem orchestrator_configs. Retornando payload estrutural base.");
-          return { status: 200, data: {
-            visit_id: visit.id, visit_update_id: visitUpdateId, simulation_id: simulationId || null, 
-            product_id: currentProductId, 
-            partner_id: currentPartnerId ?? null, 
-            origin_url: visit.origin_url, target_url: visit.target_url,
-            interaction_context: { utm_source: visit.utm_source, utm_medium: visit.utm_medium, utm_campaign: visit.utm_campaign, origin_url: visit.origin_url },
-            entity: visitEntityData.entity_details || {}, manager: {}, seller: {}, event: {}, offer: {},
-            rules: null, consent_configs: null, page_configs: null, page_faqs: null,
-            is_integrated: null, integration_method: null, integration_details: null, simulation_details: null,
-          }};
+          let intentVisitId = null;
+          let intentUpdateId = null;
+          let intentTargetUrl = originPath;
+
+          // Extraímos as memórias da requisição interceptada
+          if (req.method === "GET") {
+            const url = new URL(req.url);
+            intentVisitId = url.searchParams.get("visit_id");
+            intentUpdateId = url.searchParams.get("visit_update_id");
+          } else if (req.method === "POST" && rawBodyText) {
+            try {
+              const thin = JSON.parse(rawBodyText);
+              intentVisitId = thin.visit_id || null;
+              intentUpdateId = thin.visit_update_id || null;
+              intentTargetUrl = thin.target_url || originPath;
+            } catch (e) {}
+          }
+
+          try {
+            // Assina matematicamente as intenções da UI
+            const handoffToken = await signSigninParameters({
+              visit_id: intentVisitId,
+              visit_update_id: intentUpdateId,
+              target_url: intentTargetUrl,
+              origin_url: originPath
+            });
+            // O fallback agora está 100% blindado
+            fallbackUrl = `/accounts/signin?handoff_token=${handoffToken}`;
+            debugLog(`[Orquestrador] Sessao Expirada. Handoff Token emitido com sucesso.`);
+          } catch(e) {
+            debugLog(`[Orquestrador] Erro ao assinar Handoff Token. Roteando limpo.`);
+            fallbackUrl = `/accounts/signin`;
+          }
+
+        } else if (raw.includes("FORBIDDEN")) {
+          userMessage = "Voce nao tem permissao para acessar este recurso.";
+          errorCode = "FORBIDDEN";
+          fallbackUrl = originPath;
+          statusCode = 403;
+        } else if (raw.includes("INTERNAL_ERROR")) {
+          userMessage = "Ocorreu um erro interno ao validar sua sessao.";
+          errorCode = "INTERNAL_ERROR";
+          fallbackUrl = originPath;
+          statusCode = 500;
         }
 
-        // E: Construção do Payload Hidratado Completo (Jornadas Comerciais)
-        const hydratedPayload = {
-          visit_id: visit.id,
-          visit_update_id: visitUpdateId,
-          simulation_id: simulationId || null,
-          product_id: currentProductId,
-          partner_id: orchestratorConfigs.partner_id || currentPartnerId,
-          origin_url: visit.origin_url,
-          interaction_context: {
-            utm_source: visit.utm_source,
-            utm_medium: visit.utm_medium,
-            utm_campaign: visit.utm_campaign,
-            origin_url: visit.origin_url,
-          },
-          target_url: visit.target_url,
-          entity: visitEntityData.entity_details || {},
-          manager: visitOfferData.manager_details || {},
-          seller: visitOfferData.seller_details || {},
-          event: visitOfferData.event_details || {},
-          offer: visitOfferData.offer_details || {},
-          rules: orchestratorConfigs?.rules,
-          consent_configs: orchestratorConfigs?.consent_configs,
-          page_configs: orchestratorConfigs?.page_configs,
-          page_faqs: orchestratorConfigs?.page_faqs,
-          is_integrated: orchestratorConfigs?.is_integrated,
-          integration_method: orchestratorConfigs?.integration_method,
-          integration_details: orchestratorConfigs?.integration_details,
-          simulation_details: simulationData?.simulation_details || {
-            requested_value: visitOfferData.offer_details?.offer_value ? parseFloat(visitOfferData.offer_details.offer_value) : null,
-            installments: null,
-            down_payment_percentage: orchestratorConfigs?.simulation_rules?.min_down_payment_percentage ?? null, 
-            down_payment_amount: visitOfferData.offer_details?.offer_value && orchestratorConfigs?.simulation_rules?.min_down_payment_percentage
-                ? parseFloat(visitOfferData.offer_details.offer_value) * (orchestratorConfigs?.simulation_rules?.min_down_payment_percentage / 100)
-                : null,
-          },
+        return {
+          status: statusCode,
+          data: { success: false, code: errorCode, message: userMessage, fallback_url: fallbackUrl },
         };
+      }
 
-        return { status: 200, data: hydratedPayload };
+      const sessionUserId = auth?.user_id || auth?.userId || auth?.sub || auth?.payload?.sub || null;
 
-      } catch (error: any) {
-          debugLog(`[Orquestrador GET Error]: ${error.message}`);
-          const errorCode = error.errorCode || "UNKNOWN_ERROR";
-          debugLog("fallback url:", error.fallback_url);
+      // =====================================================================
+      // PIPELINE DE LEITURA (GET): Hidratacao do Front-End
+      // =====================================================================
+      if (req.method === "GET") {
+        try {
+          const url = new URL(req.url);
+          const visitId = url.searchParams.get("visit_id");
+          const visitUpdateId = url.searchParams.get("visit_update_id");
+          const simulationId = url.searchParams.get("simulation_id");
+
+          if (!visitId) throw new Error("O parametro 'visit_id' e obrigatorio.");
+          if (!visitUpdateId) throw new Error("O parametro 'visit_update_id' e obrigatorio.");
+
+          const currentRoute = normalizeRoute(originPath);
+          const isHomeRoute = currentRoute === "" || HOME_ROUTES.includes(currentRoute);
+
+          // 1. Hidratação única (traz entidade, oferta, product_id e dados da visita de uma só vez)
+          const ctx = await hydrateVisitContext({
+            sql,
+            visitId,
+            visitUpdateId,
+            userId: sessionUserId,
+            environment: auth.environment as "staging" | "production",
+            mode: isHomeRoute ? "light" : "full",
+          });
+
+          if (!ctx.visitExists) throw new Error("Visita nao encontrada ou expirada no banco de dados.");
+
+          if (!isHomeRoute && ctx.trustedOffer) {
+            debugLog("[GET] Validando integridade da jornada Upstream (Oferta)...");
+            validateOfferAccess({
+                trustedEntity: ctx.trustedEntity,
+                trustedOffer: ctx.trustedOffer,
+                sessionUserId: sessionUserId,
+            });
+          }
+
+          // 2. Resolução de configs usando o product_id que já veio na hidratação
+          const config = await resolveOrchestratorConfigs({
+            supabase,
+            eventId: ctx.trustedEvent?.event_id ?? null,
+            sellerId: ctx.trustedSeller?.seller_id ?? null,
+            productId: ctx.productId ?? undefined,
+            subcategoryId: ctx.trustedOffer?.subcategory_id ?? null,
+            categoryId: ctx.trustedOffer?.category_id ?? null,
+            entityType: ctx.trustedEntity?.entity_type,
+          });
+
+          if (!config.orchestrator_config_id && !isHomeRoute) {
+            throw new Error(
+              "[resolveOrchestratorConfig]: Configuracoes nao localizadas para o perfil e contexto informados.",
+            );
+          }
+
+          const offerValue = ctx.trustedOffer?.offer_value
+            ? parseFloat(String(ctx.trustedOffer.offer_value))
+            : null;
+          const minDown = config.rules?.min_down_payment_percentage ?? null;
+
+          // 3. Montagem do payload usando diretamente o ctx (Zero queries extras)
+          const hydratedPayload = {
+            visit_id: visitId,
+            visit_update_id: visitUpdateId,
+            simulation_id: simulationId || null,
+            product_id: config.product_id ?? ctx.productId ?? null,
+            partner_id: config.partner_id ?? null,
+            origin_url: ctx.originUrl || "",
+            target_url: ctx.targetUrl || "",
+            interaction_context: {
+              utm_source: ctx.utmSource || "",
+              utm_medium: ctx.utmMedium || "",
+              utm_campaign: ctx.utmCampaign || "",
+              origin_url: ctx.originUrl || "",
+            },
+            entity: ctx.trustedEntity ? {
+              ...ctx.trustedEntity.entity_details,
+              entity_id: ctx.trustedEntity.entity_id,
+              entity_type: ctx.trustedEntity.entity_type,
+              name: ctx.trustedEntity.name,
+              document: ctx.trustedEntity.document,
+              phone: ctx.trustedEntity.phone,
+              email: ctx.trustedEntity.email,
+              birth_date: ctx.trustedEntity.birth_date,
+              gender: ctx.trustedEntity.gender,
+            } : {},
+            manager: isHomeRoute ? {} : ctx.trustedManager || {},
+            seller: isHomeRoute ? {} : ctx.trustedSeller || {},
+            event: isHomeRoute ? {} : ctx.trustedEvent || {},
+            offer: isHomeRoute ? {} : ctx.trustedOffer || {},
+            rules: config.rules ?? null,
+            consent_configs: config.consent_configs ?? null,
+            page_configs: config.page_configs ?? null,
+            page_faqs: config.page_faqs ?? null,
+            is_integrated: config.is_integrated ?? null,
+            integration_method: config.integration_method ?? null,
+            integration_details: config.integration_details ?? null,
+            hydration_source: ctx.source ?? null,
+            config_matched_by: config.matched_by ?? null,
+            orchestrator_config_id: config.orchestrator_config_id ?? null,
+            simulation_details: isHomeRoute
+                ? null
+                : {
+                    requested_value: offerValue,
+                    installments: null,
+                    down_payment_percentage: minDown,
+                    down_payment_amount: offerValue && minDown ? offerValue * (minDown / 100) : null,
+                  },
+          };
+          
+          debugLog("Payload construído: ", hydratedPayload);
+          return { status: 200, data: hydratedPayload };
+        } catch (error: any) {
+          const uiError = toUiError(error, fallbacks);
+          debugLog(`[Orquestrador GET Error]: ${error?.message} -> ${(uiError as any).errorCode}`);
 
           return {
-              status: 400,
-              data: { 
-                  success: false,
-                  code: errorCode,          
-                  message: error.message,       
-                  fallback_url: error.fallback_url || "/" 
-              }
+            status: 400,
+            data: {
+              success: false,
+              code: (error as any).errorCode || (uiError as any).errorCode,
+              message: uiError.message,
+              fallback_url: (error as any).fallback_url || (uiError as any).fallback_url || "/",
+            },
           };
+        }
       }
-    }
 
-    // =========================================================================
-    // PIPELINE DE ESCRITA (POST): Orquestração do Clique
-    // =========================================================================
-    if (req.method === "POST") {
-      try {
-        const rawPayload = await req.json();
-
-        const sanitizePayload = (obj: any): any => {
-          if (obj === null || obj === undefined) return null;
-          if (typeof obj !== 'object') return obj;
-          if (Array.isArray(obj)) return obj.map(sanitizePayload);
-
-          const sanitized: Record<string, any> = {};
-          for (const key of Object.keys(obj)) {
-            const normalizedKey = key.toLowerCase();
-            
-            // ✨ A MÁGICA AQUI: Se for token de segurança, nós DELETAMOS a chave do objeto 
-            // antes de gravar no banco de dados. Mas deixamos o CPF, Nome e Email passarem ilesos!
-            if (
-              normalizedKey === "auth_token" || 
-              normalizedKey === "session_token" || 
-              normalizedKey === "access_token" || 
-              normalizedKey === "password"
-            ) {
-               continue; // Pula essa chave (não salva no banco)
-            }
-
-            const val = obj[key];
-            sanitized[key] = val === undefined ? null : sanitizePayload(val);
-          }
-          return sanitized;
-        };
-
-        const payload: OrchestratorPayload = sanitizePayload(rawPayload);
-
-        payload.offer = payload.offer || {};
-        payload.seller = payload.seller || {};
-        payload.event = payload.event || {};
-        payload.manager = payload.manager || {};
-        payload.interaction_context = payload.interaction_context || {};
-
-        const infra = await captureInfrastructure(req);
-        const { category_id, product_id, action } = await validatePayload(supabase, payload);
-
-        // C: GATEKEEPER DE SEGURANÇA E NEGÓCIO (Zero-Trust)
-        const targetVisitId = payload.visit_id || null;
-        const targetEntityId = payload.entity?.entity_id || null;
-        const targetOfferId = payload.offer?.offer_id || null;
-        
-        const requestContext = {
-            entity_id: targetEntityId,
-            offer_id: targetOfferId
-        };
-
-        // ✨ [MUDANÇA CRÍTICA - CART PRESERVATION]:
-        // Ações que ESCREVEM contexto de oferta criam o vínculo nesta transação.
-        const gatekeeperMode: "verify" | "link" =
-          targetOfferId && ["CONSULT", "SIMULATE", "VISIT", "REDIRECT"].includes(action) ? "link" : "verify";
-
+      // =====================================================================
+      // PIPELINE DE ESCRITA (POST): Orquestracao do Clique
+      // =====================================================================
+      if (req.method === "POST") {
         try {
-            debugLog(`🚨 [Gateway POST] Validando ownership da visita (Mode: ${gatekeeperMode})...`);
-            await validateVisitAndOfferIntegrity(
-                supabase, 
-                auth, 
-                targetVisitId, 
-                requestContext,
-                gatekeeperMode
-            );
-            debugLog("✅ Jornada validada com sucesso pelo Gatekeeper.");
-        } catch (err: any) {
-            debugLog("🚨 [Gatekeeper POST] Falha na validação:", err.message);
+          debugLog("[POST STEP 1] Iniciando parsing do body...");
+          const rawPayload = JSON.parse(rawBodyText || "{}");
+          const thin: ThinPayload = sanitizePayload(rawPayload);
 
-            let userMessage = "Ocorreu um erro ao processar sua requisição.";
-            let errorCode = "UNKNOWN_ERROR";
-            let targetFallback = originPath; 
+          thin.interaction_context = thin.interaction_context || {};
+          const { action } = validateThinPayload(thin);
+          thin.action = action;
 
-            if (err.message.includes("OFFER_NOT_FOUND")) {
-                userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
-                errorCode = "OFFER_NOT_FOUND";
-            } else if (err.message.includes("INVALID_RELATIONSHIP")) {
-                userMessage = "Você não tem permissão para acessar esta oferta ou visita.";
-                errorCode = "INVALID_RELATIONSHIP";
-            } else if (err.message.includes("SESSION_EXPIRED")) {
-                userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-                errorCode = "SESSION_EXPIRED";
-                targetFallback = authPath; 
-            } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
-                userMessage = "Estamos com instabilidade no serviço de ofertas. Tente novamente em instantes.";
-                errorCode = "UPSTREAM_CONNECTION_ERROR";
-            } else if (err.message.includes("FORBIDDEN") || err.message.includes("INVALID_PAYLOAD")) {
-                userMessage = "Inconsistência nos dados de segurança (Bloqueio).";
-                errorCode = "FORBIDDEN";
+          const infra = await captureInfrastructure(req);
+
+          const targetVisitId = thin.visit_id || null;
+          const targetOfferId = thin.offer_id || null;
+
+          // ✨ [S2S TRUST]: Validação de Entidade Assinada pelo sbx-auth
+          let validatedS2SEntity = null;
+          if (rawPayload.s2s_signed_entity) {
+            try {
+              validatedS2SEntity = await verifyS2SEntity(rawPayload.s2s_signed_entity);
+              debugLog("[Orquestrador POST] Assinatura S2S validada. Bypass de PII habilitado.");
+            } catch (e) {
+              debugLog("[Orquestrador POST] Assinatura S2S invalida. Descartando entidade externa.");
+            }
+          }
+
+          const userIdForHydrate = validatedS2SEntity ? null : sessionUserId;
+
+          debugLog("[POST STEP 2] Chamando hydrateVisitContext...");
+          const ctx = await hydrateVisitContext({
+            sql,
+            ...(targetVisitId && { visitId: targetVisitId }),
+            ...(thin.visit_update_id && { visitUpdateId: thin.visit_update_id }),
+            offerId: targetOfferId,
+            userId: userIdForHydrate,
+            trustedS2SEntity: validatedS2SEntity,
+            environment: auth.environment as "staging" | "production",
+            mode: NAVIGATION_ACTIONS.includes(action) && !targetOfferId ? "light" : "full",
+          });
+          debugLog("[POST STEP 2] Hydration concluída com sucesso.");
+
+          if (ctx.trustedOffer) {
+            try {
+              debugLog(`[POST STEP 3] Validando ownership da oferta...`);
+              validateOfferAccess({
+                  trustedEntity: ctx.trustedEntity,
+                  trustedOffer: ctx.trustedOffer,
+                  sessionUserId: sessionUserId,
+              });
+              debugLog("[POST STEP 3] Ownership validado.");
+            } catch (err: any) {
+              debugLog("[Gatekeeper POST] Falha na validacao:", err?.message);
+              throw toUiError(err, fallbacks);
+            }
+          }
+
+          const payload: OrchestratorPayload = {
+            ...thin,
+            action,
+            visit_id: targetVisitId,
+            entity: ctx.trustedEntity ? {
+              ...ctx.trustedEntity.entity_details,
+              entity_id: ctx.trustedEntity.entity_id,
+              entity_type: ctx.trustedEntity.entity_type,
+              name: ctx.trustedEntity.name,
+              document: ctx.trustedEntity.document,
+              phone: ctx.trustedEntity.phone,
+              email: ctx.trustedEntity.email,
+              birth_date: ctx.trustedEntity.birth_date,
+              gender: ctx.trustedEntity.gender,
+            } : {},
+            manager: ctx.trustedManager || {},
+            seller: ctx.trustedSeller || {},
+            event: ctx.trustedEvent || {},
+            offer: ctx.trustedOffer || {},
+            product_id: thin.product_id ?? null,
+            raw_client_payload: thin,
+            hydration_source: ctx.source ?? null,
+          } as OrchestratorPayload;
+
+          const categoryId = ctx.trustedOffer?.category_id ?? null;
+          const subcategoryId = ctx.trustedOffer?.subcategory_id ?? null;
+
+          let orchestratorConfigId: number | null = null;
+
+          if (NAVIGATION_ACTIONS.includes(action)) {
+            if (!payload.target_url) {
+              throw new Error(`Para acoes de '${action}', a target_url e obrigatoria no payload.`);
+            }
+          } else {
+            debugLog("[POST STEP 4] Resolvendo orchestrator configs...");
+            const resolved = await resolveOrchestratorConfigs({
+              supabase,
+              eventId: ctx.trustedEvent?.event_id ?? null,
+              sellerId: ctx.trustedSeller?.seller_id ?? null,
+              productId: payload.product_id ?? undefined,
+              subcategoryId: subcategoryId ?? null,
+              categoryId: categoryId ?? null,
+              entityType: ctx.trustedEntity?.entity_type,
+            });
+
+            if (!resolved.page_url) {
+              throw new Error("Nenhuma configuracao de destino ativa encontrada para esta simulacao.");
             }
 
-            const errorForUI = new Error(userMessage);
-            (errorForUI as any).errorCode = errorCode; 
-            (errorForUI as any).fallback_url = targetFallback; 
-            
-            throw errorForUI; 
-        }
+            payload.target_url = resolved.page_url;
+            payload.is_integrated = resolved.is_integrated;
+            payload.integration_method = resolved.integration_method;
+            payload.integration_details = resolved.integration_details;
+            if (resolved.partner_id !== null) payload.partner_id = resolved.partner_id;
 
-        // D: Motor de Decisão
-        let orchestratorConfigId = null;
+            payload.rules = resolved.rules;
+            payload.consent_configs = resolved.consent_configs;
+            payload.page_configs = resolved.page_configs;
+            payload.page_faqs = resolved.page_faqs;
+            payload.config_matched_by = resolved.matched_by ?? null;
 
-        if (["VISIT", "REDIRECT", "CONTACT"].includes(action)) {
-          if (!payload.target_url) {
-            throw new Error(`Para ações de '${action}', a target_url é obrigatória no payload.`);
+            orchestratorConfigId = resolved.orchestrator_config_id ?? null;
+            payload.orchestrator_config_id = orchestratorConfigId;
+            debugLog("[POST STEP 4] Configs resolvidas ID:", orchestratorConfigId);
           }
-        } else {
-          const resolved = await resolveDestination(
-            supabase,
-            action,
+
+          const hasVisitAnchor = Boolean(payload.visit_id);
+          const isNavigationAction = NAVIGATION_ACTIONS.includes(action) && hasVisitAnchor;
+          const simulationId = payload.simulation_id || null;
+
+          if (isNavigationAction) {
+            debugLog("[POST STEP 5A] Executando fluxo Fast Path (Navigation Action)...");
+            const effectiveVisitId = payload.visit_id || crypto.randomUUID();
+            const generatedUpdateId = crypto.randomUUID();
+
+            let finalUrl = `${payload.target_url}?visit_id=${effectiveVisitId}&visit_update_id=${generatedUpdateId}`;
+            if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
+
+            const persistPromise = persistVisitData(
+              sql, payload, infra, categoryId ?? undefined,
+              payload.action, payload.origin_url, payload.target_url,
+              payload.visit_id || null, orchestratorConfigId,
+              effectiveVisitId, generatedUpdateId,
+            );
+
+            const rt = (globalThis as any).EdgeRuntime;
+            if (rt && typeof rt.waitUntil === "function") {
+              rt.waitUntil(
+                persistPromise.catch((err: any) => console.error("[Background Persist Error]:", err?.message || err)),
+              );
+            } else {
+              await persistPromise; 
+            }
+
+            debugLog("[POST STEP 5A] Fast Path concluído. Retornando resposta...");
+            return {
+              status: 200,
+              data: {
+                action: "REDIRECT",
+                url: finalUrl,
+                visit_id: effectiveVisitId,
+                visit_update_id: generatedUpdateId,
+                simulation_id: simulationId,
+                partner_id: payload.partner_id ?? null,
+              },
+            };
+          }
+
+          debugLog("[POST STEP 5B] Executando persistência síncrona...");
+          const { visitId, visitUpdateId } = await persistVisitData(
+            sql,
+            payload,
+            infra,
+            categoryId ?? undefined,
+            payload.action,
+            payload.origin_url,
             payload.target_url,
-            payload.event?.event_id,
-            payload.seller?.seller_id,
-            category_id,
-            payload.offer?.sub_category_id ? Number(payload.offer.sub_category_id) : undefined,
-            product_id,
-            payload.entity?.entity_type, 
+            payload.visit_id,
+            orchestratorConfigId,
           );
+          debugLog("[POST STEP 5B] Persistência síncrona finalizada:", { visitId, visitUpdateId });
 
-          payload.target_url = resolved.url; 
-          if (resolved.is_integrated !== undefined) payload.is_integrated = resolved.is_integrated; 
-          if (resolved.integration_method !== undefined) payload.integration_method = resolved.integration_method;
-          if (resolved.integration_details !== undefined) payload.integration_details = resolved.integration_details;
-          if (resolved.partner_id !== undefined && resolved.partner_id !== null) {
-            payload.partner_id = resolved.partner_id;
-          }
-
-          payload.rules = resolved.rules;
-          payload.consent_configs = resolved.consent_configs;
-          payload.page_configs = resolved.page_configs;
-          payload.page_faqs = resolved.page_faqs;
-
-          orchestratorConfigId = resolved.orchestrator_config_id;
-        }
-
-        // =====================================================================
-        // E: PERSISTÊNCIA ASSÍNCRONA (FAST PATH) VS SÍNCRONA (SLOW PATH)
-        // =====================================================================
-        const isNavigationAction = ["VISIT", "REDIRECT", "CONTACT"].includes(action);
-        const simulationId = payload.simulation_id || null;
-
-        // [FAST PATH]: Ações puras de navegação (VISIT, REDIRECT) não precisam
-        // bloquear o usuário esperando o SQL.begin finalizar (I/O intensivo).
-        // Geramos os UUIDs em memória nativa e usamos waitUntil para soltar 
-        // a resposta em milissegundos.
-        if (isNavigationAction) {
-          const effectiveVisitId = payload.visit_id || crypto.randomUUID();
-          const generatedUpdateId = crypto.randomUUID();
-
-          let finalUrl = `${payload.target_url}?visit_id=${effectiveVisitId}&visit_update_id=${generatedUpdateId}`;
+          let finalUrl = `${payload.target_url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
           if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
 
-          const persistPromise = persistVisitData(
-            sql, payload, infra, category_id, payload.action,
-            payload.origin_url, payload.target_url,
-            payload.visit_id || null, orchestratorConfigId,
-            effectiveVisitId, generatedUpdateId,
-          );
-
-          // Delega a transação para o Runtime do Deno (Fire and Forget seguro)
-          const rt = (globalThis as any).EdgeRuntime;
-          if (rt && typeof rt.waitUntil === "function") {
-            rt.waitUntil(
-              persistPromise.catch((err: any) => console.error("🚨 [Background Persist Error]:", err?.message || err)),
-            );
-          } else {
-            await persistPromise; // Fallback para desenvolvimento local
-          }
-
-          // Return Early: A UI recebe a URL e renderiza antes do banco terminar
+          debugLog("[POST STEP 6] Retornando objeto final de sucesso...");
           return {
             status: 200,
             data: {
               action: "REDIRECT",
               url: finalUrl,
-              visit_id: effectiveVisitId,
-              visit_update_id: generatedUpdateId,
+              visit_id: visitId,
+              visit_update_id: visitUpdateId,
               simulation_id: simulationId,
-              partner_id: payload.partner_id,
+              partner_id: payload.partner_id ?? null,
+            },
+          };
+        } catch (error: any) {
+          debugLog(`[Orquestrador POST Error REAL]: ${error?.message}`, error);
+
+          return {
+            status: 400,
+            data: {
+              success: false,
+              code: (error as any).errorCode || "UNKNOWN_ERROR",
+              message: error?.message || "Erro ao processar a requisicao.",
+              fallback_url: (error as any).fallback_url || originPath,
             },
           };
         }
-
-        // [SLOW PATH]: Simulações exigem consistência forte e validação síncrona
-        const { visitId, visitUpdateId } = await persistVisitData(
-          sql, payload, infra, category_id, payload.action,
-          payload.origin_url, payload.target_url, payload.visit_id, orchestratorConfigId,
-        );
-
-        let finalUrl = `${payload.target_url}?visit_id=${visitId}&visit_update_id=${visitUpdateId}`;
-        if (simulationId) finalUrl += `&simulation_id=${simulationId}`;
-
-        return {
-          status: 200,
-          data: {
-            action: "REDIRECT",
-            url: finalUrl,
-            visit_id: visitId,
-            visit_update_id: visitUpdateId,
-            simulation_id: simulationId,
-            partner_id: payload.partner_id,
-          },
-        };
-
-      } catch (error: any) {
-        debugLog(`[Orquestrador POST Error REAL]: ${error.message}`);
-        
-        const errorCode = error.errorCode || "UNKNOWN_ERROR";
-
-        return {
-          status: 400,
-          data: { 
-              success: false,
-              code: errorCode,              
-              message: error.message,       
-              fallback_url: error.fallback_url || originPath 
-          }
-        };
       }
-    }
 
-    return { 
-      status: 405, 
-      data: { error: "Método HTTP não permitido." } 
-    };
-  } catch (fatalError: any) {
-    debugLog(`🚨 [CRASH FATAL INTERCEPTADO]: ${fatalError.message}`);
-    
-    return {
+      return { status: 405, data: { error: "Metodo HTTP nao permitido." } };
+    } catch (fatalError: any) {
+      debugLog(`[CRASH FATAL INTERCEPTADO]: ${fatalError?.message}`);
+
+      return {
         status: 500,
         data: {
-            success: false,
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Ocorreu um erro interno inesperado. Tente novamente.",
-            fallback_url: globalFallbackUrl
-        }
-    };
-  }
-}));
+          success: false,
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Ocorreu um erro interno inesperado. Tente novamente.",
+          fallback_url: globalFallbackUrl,
+        },
+      };
+    }
+  }),
+);

@@ -84,15 +84,20 @@ export function Step1Eligibility() {
     setErrorMsg(null);
 
     try {
-      // Monta payload unificando dados do form e consentimentos
+      // Monta Payload Magro (Thin Payload / Zero-Trust)
       const payload = {
-        ...state.data,
+        action: "SIMULATE",
+        visit_id: state.data.visit_id,
+        visit_update_id: state.data.visit_update_id,
+        product_id: state.data.product_id, // Ex: 7 (Auto Equity)
+        partner_id: state.data.partner_id, // OBRIGATÓRIO: O Gateway usa no 'switch (payload.partner_id)'
+        step: "CHECK_ELIGIBILITY", // OBRIGATÓRIO: Passar o step no corpo ou no wrapper do Orchestrator
         consents: state.data.consent_configs
           ?.filter((c: any) => acceptedConsents[c.id])
           .map((c: any) => ({
             consent_id: c.id,
-            accepted: true,
-            accepted_at: new Date().toISOString(),
+            acceptedConsents: true, // Use a chave exata exigida pelo seu contrato de consents
+            acceptedConsents_at: new Date().toISOString(),
             legal_text_snapshot: { template_text: c.template_text, links: c.links }
           }))
       };

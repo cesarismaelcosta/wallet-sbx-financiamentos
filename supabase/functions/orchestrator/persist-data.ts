@@ -81,14 +81,6 @@ export async function persistVisitData(
       
       // [1:N MODEL - CART PRESERVATION]
       // A visita é o carrinho; cada oferta escolhida é uma linha na visit_offers.
-      // O dedup agora atua APENAS sobre a mesma oferta, permitindo N ofertas diferentes.
-      const incomingOfferId = payload.offer?.offer_id ? String(payload.offer.offer_id) : null;
-      const hasOffer = journeyState && incomingOfferId
-        ? await t`SELECT id FROM visit_offers
-                  WHERE visit_id = ${visitId} AND offer_id = ${incomingOfferId}
-                  LIMIT 1`.then((r: any) => r.length > 0)
-        : false;
-
       const hasConsent = journeyState ? await t`SELECT id FROM visit_consents WHERE visit_id = ${visitId}`.then((r: any) => r.length > 0) : false;
       const hasOrchestratorConfig = journeyState ? await t`SELECT visit_id FROM visit_orchestrator_configs WHERE visit_id = ${visitId}`.then((r: any) => r.length > 0) : false;
 
@@ -140,27 +132,73 @@ export async function persistVisitData(
         await t`INSERT INTO visit_orchestrator_configs (visit_id, orchestrator_config_id) VALUES (${visitId}, ${orchestratorConfigId})`;
       }
 
-      // 4. Log de Navegação (Atomic Pageview)
-      const newUpdateId = preGeneratedUpdateId || crypto.randomUUID();
-      const [update] = await t`
-        INSERT INTO visit_updates (
-          id, visit_id, partner_id, product_id, utm_source, utm_medium, utm_campaign, action, origin_url, target_url, raw_payload
-        )
-        VALUES (
-          ${newUpdateId},
-          ${visitId}, 
-          ${payload.partner_id ?? null}, 
-          ${payload.product_id ?? null}, 
-          ${payload.interaction_context?.utm_source || 'direct'},
-          ${payload.interaction_context?.utm_medium || null},
-          ${payload.interaction_context?.utm_campaign || null},
-          ${payload.action}, 
-          ${ originUrl || null },
-          ${ (targetUrl || "").split('?')[0] },
-          ${payload}::jsonb
-        )
-        RETURNING id
-      `;
+      // 4. Log de Navegação (Atomic Pageview com Regra de Transição CONSULT -> REDIRECT / SIMULATE)
+      // Tenta atualizar diretamente o update enviado no payload, SE ele for um CONSULT
+      const targetUpdateId = payload.visit_update_id || null;
+      let newUpdateId: string;
+      let update;
+
+      let updatedRows = [];
+      if (targetUpdateId && visitId && (payload.action === 'SIMULATE' || payload.action === 'REDIRECT')) {
+        updatedRows = await t`
+          UPDATE visit_updates 
+          SET action = ${payload.action ?? null}, 
+              action_description = ${payload.action_description ?? null},
+              ip_address = ${origin?.ip_address ?? null},
+              country = ${origin?.country ?? null},
+              state = ${origin?.state ?? null},
+              city = ${origin?.city ?? null},
+              user_agent = ${origin?.user_agent ?? null},
+              device_type = ${origin?.device_type ?? null},
+              operating_system = ${origin?.operating_system ?? null},
+              origin_details = ${origin ? JSON.stringify(origin) : null}::jsonb,
+              raw_payload = ${payload ? JSON.stringify(payload) : null}::jsonb
+          WHERE id = ${targetUpdateId} 
+            AND visit_id = ${visitId} 
+            AND action = 'CONSULT'
+          RETURNING id
+        `;
+      }
+
+      if (updatedRows.length > 0) {
+        // A: UPDATE bem-sucedido (o ID do payload era um CONSULT válido e foi atualizado)
+        newUpdateId = updatedRows[0].id;
+        update = { id: newUpdateId };
+      } else {
+        // B: INSERT - Se não veio ID, ou se o ID não era um CONSULT, gera um ID NOVO do zero
+        newUpdateId = crypto.randomUUID();
+        const [newUpd] = await t`
+          INSERT INTO visit_updates (
+            id, visit_id, partner_id, product_id, utm_source, utm_medium, utm_campaign, 
+            action, origin_url, target_url, 
+            ip_address, country, state, city, user_agent, device_type, operating_system, origin_details,
+            raw_payload
+          )
+          VALUES (
+            ${newUpdateId},
+            ${visitId}, 
+            ${payload.partner_id ?? null}, 
+            ${payload.product_id ?? null}, 
+            ${payload.interaction_context?.utm_source || 'direct'},
+            ${payload.interaction_context?.utm_medium || null},
+            ${payload.interaction_context?.utm_campaign || null},
+            ${payload.action ?? null}, 
+            ${originUrl ?? null},
+            ${(targetUrl || "").split('?')[0]},
+            ${origin?.ip_address ?? null},
+            ${origin?.country ?? null},
+            ${origin?.state ?? null},
+            ${origin?.city ?? null},
+            ${origin?.user_agent ?? null},
+            ${origin?.device_type ?? null},
+            ${origin?.operating_system ?? null},
+            ${origin ? JSON.stringify(origin) : null}::jsonb,
+            ${payload ? JSON.stringify(payload) : null}::jsonb
+          )
+          RETURNING id
+        `;
+        update = newUpd;
+      }
 
       // 5. Persistência de Dados de Negócio (Entidades, Ofertas, Consentimentos)
       if (payload.entity?.entity_id && !hasEntity) {
@@ -170,39 +208,36 @@ export async function persistVisitData(
 
       // ✨ [INTEGRIDADE OLAP E PROTEÇÃO DE CONCORRÊNCIA]: 
       // Injeção do update.id (Pageview atual) atrelando a oferta à interação exata.
-      // O 'ON CONFLICT DO NOTHING' delega o bloqueio de duplicatas para a engine do Postgres (Index UQ),
-      // protegendo transações concorrentes provenientes do Fast Path (waitUntil).
-      if (payload.offer?.offer_id && !hasOffer) {
+      if (payload.offer?.offer_id) {
         await t`INSERT INTO visit_offers (
-                  visit_id, visit_update_id, category_id, subcategory_id, subcategory, manager_name, manager_details, 
-                  seller_id, legal_name, trade_name, economic_group, seller_details, 
-                  event_id, event_description, event_start_date, event_end_date, event_details, 
-                  offer_id, offer_description, offer_value, offer_details
-                ) 
-                VALUES (
-                  ${visitId},
-                  ${newUpdateId}, 
-                  ${categoryId || null}, 
-                  ${payload.offer.subcategory_id ? Number(payload.offer.subcategory_id) : null}, 
-                  ${payload.offer.subcategory || null}, 
-                  ${payload.manager?.manager_name || null}, 
-                  ${payload.manager}::jsonb, 
-                  ${payload.seller?.seller_id || null}, 
-                  ${payload.seller?.legal_name || null}, 
-                  ${payload.seller?.trade_name || null}, 
-                  ${payload.seller?.economic_group || null}, 
-                  ${payload.seller}::jsonb, 
-                  ${payload.event?.event_id || null}, 
-                  ${payload.event?.event_description || null}, 
-                  ${payload.event?.event_start_date || null}, 
-                  ${payload.event?.event_end_date || null}, 
-                  ${payload.event}::jsonb, 
-                  ${payload.offer.offer_id}, 
-                  ${payload.offer.offer_description}, 
-                  ${payload.offer.offer_value}, 
-                  ${payload.offer}::jsonb
-                )
-                ON CONFLICT (visit_id, offer_id) WHERE offer_id IS NOT NULL DO NOTHING`; // ✨ PREDICADO EXATO DO ÍNDICE
+                visit_id, visit_update_id, category_id, subcategory_id, subcategory, manager_name, manager_details, 
+                seller_id, legal_name, trade_name, economic_group, seller_details, 
+                event_id, event_description, event_start_date, event_end_date, event_details, 
+                offer_id, offer_description, offer_value, offer_details
+              ) 
+              VALUES (
+                ${visitId},
+                ${newUpdateId}, 
+                ${categoryId || null}, 
+                ${payload.offer.subcategory_id ? Number(payload.offer.subcategory_id) : null}, 
+                ${payload.offer.subcategory || null}, 
+                ${payload.manager?.manager_name || null}, 
+                ${payload.manager}::jsonb, 
+                ${payload.seller?.seller_id || null}, 
+                ${payload.seller?.legal_name || null}, 
+                ${payload.seller?.trade_name || null}, 
+                ${payload.seller?.economic_group || null}, 
+                ${payload.seller}::jsonb, 
+                ${payload.event?.event_id || null}, 
+                ${payload.event?.event_description || null}, 
+                ${payload.event?.event_start_date || null}, 
+                ${payload.event?.event_end_date || null}, 
+                ${payload.event}::jsonb, 
+                ${payload.offer.offer_id}, 
+                ${payload.offer.offer_description}, 
+                ${payload.offer.offer_value}, 
+                ${payload.offer}::jsonb
+              )`;
       }
 
       if (payload.consents?.length > 0 && !hasConsent) {

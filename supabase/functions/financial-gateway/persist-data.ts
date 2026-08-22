@@ -1,4 +1,26 @@
-// Importa o cliente já configurado
+/**
+ * @fileoverview FINANCIAL GATEWAY - CAMADA DE PERSISTÊNCIA E AUDITORIA
+ * @path supabase/functions/financial-gateway/persist-data.ts
+ *
+ * ============================================================================
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: FORENSIC AUDITING & BACKOFFICE COMPATIBILITY
+ * ============================================================================
+ * [MUDANÇAS ARQUITETURAIS - ZERO-TRUST & OLAP]:
+ * 1. {Trusted Snapshots}: As colunas `entity_details`, `offer_details`, etc.,
+ *    recebem os dados 100% validados e hidratados pelo `hydrate-data.ts`.
+ * 2. {Raw Payload Enriched}: A coluna `raw_payload` recebe o objeto `payload`
+ *    completo e REIDRATADO. Isso garante total compatibilidade com a 
+ *    desserialização do Backoffice, exibindo dados reais e imunes a fraude,
+ *    já que a origem desses dados agora é o próprio servidor (S2S).
+ * 3. {Auditoria Uniforme}: Correção estrutural onde o payload mestre enriquecido 
+ *    é gravado de forma consistente em TODAS as tabelas filhas (consults, 
+ *    updates, consents), evitando objetos soltos e quebra de relatórios no BI.
+ * 
+ * @author Cesar Ismael Pereira da Costa
+ * @author Gemini Pro
+ * @version 2.0.1 (Zero-Trust Persistency with Backoffice Compat)
+ */
+
 import { sql } from './../_shared/db.ts';
 
 import { 
@@ -7,31 +29,20 @@ import {
   Manager,
   Seller,
   Event,
-  Vehicle,
   Offer,
-  InteractionContext,
-  OrchestratorPayload,
-  OrchestratorResponse
+  SimulationPayload,
+  SimulationResponse,
+  Consultation, 
+  SimulationFinancials 
 } from "../_shared/types.ts";
 
-/**
- * FUNÇÃO DE LOG PADRONIZADA
- * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
- */
 import { debugLog } from "../_shared/logger.ts";
-
 
 /**
  * RESOLVE PARTNER RESULT
  * @description Normaliza retornos brutos de parceiros em IDs estruturados de 8 dígitos.
  * Lógica de ID: [PartnerID(2)][StatusID(2)][Counter(4)]
- * * Esta função opera dentro de uma transação atômica para garantir integridade referencial.
- * * @author Cesar Ismael
- * @param sql - Instância da transação ativa do postgres.js.
- * @param partnerId - ID do parceiro (ex: 1 para Fandi).
- * @param statusId - Status da operação (ex: 1-8).
- * @param rawMessage - Mensagem textual retornada pelo gateway de simulação.
- * @returns {Promise<string | null>} O ID de 8 dígitos gerado ou encontrado, ou null em caso de erro.
+ * Esta função opera dentro de uma transação atômica para garantir integridade referencial.
  */
 export async function resolvePartnerResult(
   sql: any,
@@ -40,14 +51,10 @@ export async function resolvePartnerResult(
   rawMessage: string | null
 ): Promise<string | null> {
 
-  // Validação de segurança: Interrompe o processo se dados críticos estiverem ausentes
   if (!rawMessage || !partnerId || !statusId) return null;
-
   const sanitizedMessage = rawMessage.trim();
   
   try {
-    // 1. Busca por um ID existente (Otimização para evitar duplicidade de registros)
-    // O uso de `sql` aqui garante que a query rode dentro da mesma transação do fluxo principal
     const [existing] = await sql`
       SELECT id FROM result_partner_types 
       WHERE partner_id = ${partnerId} 
@@ -57,8 +64,6 @@ export async function resolvePartnerResult(
 
     if (existing) return existing.id;
 
-    // 2. Cálculo do próximo contador para gerar ID sequencial único
-    // Conta quantos registros existem para esse parceiro e status para definir o próximo valor
     const [{ count }] = await sql`
       SELECT count(*) as count FROM result_partner_types 
       WHERE partner_id = ${partnerId} 
@@ -67,13 +72,11 @@ export async function resolvePartnerResult(
 
     const nextCounter = Number(count) + 1;
     
-    // 3. Mascaramento rigoroso do ID: [2 dig. Partner][2 dig. Status][4 dig. Contador]
     const pPart = String(partnerId).padStart(2, '0');
     const sPart = String(statusId).padStart(2, '0');
     const cPart = String(nextCounter).padStart(4, '0').slice(-4);
     const newId = `${pPart}${sPart}${cPart}`;
 
-    // 4. Inserção do novo tipo de resultado na tabela de referência
     await sql`
       INSERT INTO result_partner_types (id, partner_id, status_id, description)
       VALUES (${newId}, ${partnerId}, ${statusId}, ${sanitizedMessage})
@@ -82,8 +85,7 @@ export async function resolvePartnerResult(
     return newId;
 
   } catch (error) {
-    // Registro de erro crítico mantendo o rastreamento da transação
-    console.error(`[RESOLVE-PARTNER-RESULT-CRITICAL] Falha ao persistir tipo de parceiro:`, error);
+    console.error(`[RESOLVE-PARTNER-CRITICAL] Falha ao persistir tipo de parceiro:`, error);
     return null; 
   }
 }
@@ -92,14 +94,6 @@ export async function resolvePartnerResult(
  * PERSISTE DADOS DA SIMULAÇÃO (INSERT)
  * @description Executa a escrita primária de uma nova simulação. 
  * Realiza o "Triple-Write" (Simulations, Offers, Updates) de forma atômica.
- * * @param sql - Instância de conexão do postgres.js.
- * @param payload - Objeto completo da jornada contendo entidade, oferta e dados financeiros.
- * @param infra - Metadados de ambiente (Geo, IP, Dispositivo) para auditoria.
- * @param gatewayResult - Resposta do parceiro financeiro (Fandi/Creditas).
- * @param action - Ação disparada (ex: SIMULATE).
- * @param action_description - Rastreabilidade textual da ação.
- * @param step - Etapa do fluxo (Eligibility vs Execution).
- * @returns O ID da simulação criada.
  */
 export async function insertSimulationData(
   sql: any,
@@ -108,11 +102,11 @@ export async function insertSimulationData(
   gatewayResult: SimulationResponse,
   action: 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT',
   action_description: string,
-  step: 'CHECK_ELIGIBILITY' | 'EXECUTE_SIMULATION' = 'EXECUTE_SIMULATION'
+  step: 'CHECK_ELIGIBILITY' | 'EXECUTE_SIMULATION' = 'EXECUTE_SIMULATION',
+  syncVisit: boolean = true 
 ): Promise<{ simulationId: string, simulationUpdateId: string }> {
 
   try {
-    // Abre a transação atômica. Se qualquer um dos inserts abaixo falhar, o postgres.js reverte tudo.
     return await sql.begin(async (t: any) => {
       
       const entity = (payload.entity as Entity) ?? {};
@@ -123,7 +117,6 @@ export async function insertSimulationData(
       const simulation = (payload.simulation_details as SimulationFinancials) ?? {};
       const consents = payload.consents ?? [];
       
-      // Define estágio da simulação
       const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
       const stageId = stageMap[step];
 
@@ -150,7 +143,8 @@ export async function insertSimulationData(
       }
 
       // INSERT MESTRE: Salva a proposta na tabela 'simulations'.
-      // NOTA: O cast ::jsonb garante que o Postgres trate o objeto nativamente como JSONB, sem barras.
+      // O `payload` aqui é o objeto reidratado (Enriched) pelo Backend. 
+      // Garante que o Backoffice consiga ler o raw_payload.entity e raw_payload.offer com dados verdadeiros.
       const [sim] = await t`
         INSERT INTO simulations (
           id, visit_id, is_integrated, integration_method, partner_id, product_id,
@@ -167,10 +161,9 @@ export async function insertSimulationData(
         )
         RETURNING id
       `;
-
       const simulationId = sim.id;
 
-      // INSERT OFERTA: Persiste o contexto comercial, essencial para auditoria de originação.
+      // INSERT OFERTA
       await t`
         INSERT INTO simulation_offers (
           simulation_id, category_id, subcategory_id, subcategory, manager_name, manager_details, seller_id, legal_name, 
@@ -185,7 +178,7 @@ export async function insertSimulationData(
         )
       `;
 
-      // INSERT UPDATES: Grava o rastro de auditoria da inserção.
+      // INSERT UPDATES
       const [update] = await t`
         INSERT INTO simulation_updates (
           simulation_id, operation, stage_id, status_id, result_partner_id,
@@ -198,10 +191,9 @@ export async function insertSimulationData(
         )
         RETURNING id
       `;
-
       const simulationUpdateId = update.id;
 
-      // 4. PERSISTE CONSULTAS (Loop Blindado e Completo)
+      // PERSISTE CONSULTAS: O raw_payload aqui recebe o payload mestre enriquecido, e não o objeto isolado.
       for (const consult of (gatewayResult.consults || [])) {
         await t`
             INSERT INTO simulation_consults (
@@ -222,15 +214,14 @@ export async function insertSimulationData(
             ${consult.installment_value ?? null},
             ${consult.external_operation_id ?? null},
             ${consult ?? {}}::jsonb, 
-            ${payload ?? {}}::jsonb
+            ${payload}::jsonb
             )
         `;
       }
 
-      // 5. PERSISTE CONSENTIMENTOS (Padrão Unificado)
+      // PERSISTE CONSENTIMENTOS
       if (consents && consents.length > 0) {
         for (const c of consents) {
-          // Normalização: Captura o valor aceito independentemente da nomenclatura
           const isAccepted = c.accepted === true || c.acceptedConsents === true;
           const acceptedAt = c.accepted_at || c.acceptedConsents_at || new Date().toISOString();
 
@@ -258,13 +249,13 @@ export async function insertSimulationData(
                     consents_rendered: payload.consent_configs || [], 
                     legal_text: c.legal_text_snapshot || {} 
                 }}::jsonb, 
-                ${payload ?? {}}::jsonb
+                ${payload}::jsonb
             )
           `;
         }
       }
 
-      // 6. PERSISTE NOTIFICAÇÕES NA OUTBOX (Fila Quente, se existirem)
+      // PERSISTE NOTIFICAÇÕES NA OUTBOX
       const notifications = (gatewayResult as any).raw?.notifications;
       if (Array.isArray(notifications)) {
         for (const n of notifications) {
@@ -281,12 +272,130 @@ export async function insertSimulationData(
         }
       }
 
+      // ATUALIZAÇÃO DO FUNIL DE VISITAS
+      if (syncVisit && payload.visit_id) {
+        
+        await t`
+          UPDATE visits 
+          SET action = ${action}, 
+              action_description = ${action_description ?? null}, 
+              updated_at = NOW() 
+          WHERE id = ${payload.visit_id}
+        `;
+
+        let targetUpdateId = payload.visit_update_id;
+        let existingUpdate = null;
+
+        if (targetUpdateId) {
+          const [found] = await t`
+            SELECT id, action FROM visit_updates 
+            WHERE id = ${targetUpdateId} AND visit_id = ${payload.visit_id}
+            LIMIT 1
+          `;
+          existingUpdate = found;
+        }
+
+        let finalVisitUpdateId: string;
+        const canUpdateConsult = existingUpdate && 
+                                 existingUpdate.action === 'CONSULT' && 
+                                 (action === 'SIMULATE' || action === 'REDIRECT');
+
+        if (canUpdateConsult) {
+          await t`
+            UPDATE visit_updates 
+            SET action = ${action}, 
+                action_description = ${action_description ?? null},
+                ip_address = ${infra.ip_address ?? null},
+                country = ${infra.country ?? null},
+                state = ${infra.state ?? null},
+                city = ${infra.city ?? null},
+                user_agent = ${infra.user_agent ?? null},
+                device_type = ${infra.device_type ?? null},
+                operating_system = ${infra.operating_system ?? null},
+                origin_details = ${infra}::jsonb,
+                raw_payload = ${payload}::jsonb
+            WHERE id = ${existingUpdate.id}
+          `;
+          finalVisitUpdateId = existingUpdate.id;
+        } else {
+          finalVisitUpdateId = crypto.randomUUID();
+          
+          await t`
+            INSERT INTO visit_updates (
+              id, visit_id, partner_id, product_id, utm_source, utm_medium, utm_campaign, 
+              action, action_description, origin_url, target_url,
+              ip_address, country, state, city, user_agent, device_type, operating_system, origin_details,
+              raw_payload, created_at
+            )
+            VALUES (
+              ${finalVisitUpdateId},
+              ${payload.visit_id}, 
+              ${payload.partner_id ?? null}, 
+              ${payload.product_id ?? null}, 
+              ${payload.interaction_context?.utm_source || 'direct'},
+              ${payload.interaction_context?.utm_medium || null},
+              ${payload.interaction_context?.utm_campaign || null},
+              ${action}, 
+              ${action_description ?? null},
+              ${payload.interaction_context?.origin_url || null},
+              ${payload.target_url ? payload.target_url.split('?')[0] : null},
+              ${infra.ip_address ?? null},
+              ${infra.country ?? null},
+              ${infra.state ?? null},
+              ${infra.city ?? null},
+              ${infra.user_agent ?? null},
+              ${infra.device_type ?? null},
+              ${infra.operating_system ?? null},
+              ${infra}::jsonb,
+              ${payload}::jsonb,
+              NOW()
+            )
+          `;
+
+          if (payload.offer && Object.keys(payload.offer).length > 0) {
+            await t`
+              INSERT INTO visit_offers (
+                visit_id, visit_update_id, manager_name, manager_details, seller_id, legal_name, 
+                economic_group, trade_name, seller_details, event_id, event_description, 
+                event_start_date, event_end_date, event_details, offer_id, offer_description, 
+                offer_value, category_id, subcategory_id, subcategory, offer_details, created_at
+              ) VALUES (
+                ${payload.visit_id}, 
+                ${finalVisitUpdateId}, 
+                ${manager.manager_name ?? null}, 
+                ${manager}::jsonb, 
+                ${seller.seller_id ?? null}, 
+                ${seller.legal_name ?? null}, 
+                ${seller.economic_group ?? null}, 
+                ${seller.trade_name ?? null}, 
+                ${seller}::jsonb, 
+                ${event.event_id ?? null}, 
+                ${event.event_description ?? null}, 
+                ${event.event_start_date ?? null}, 
+                ${event.event_end_date ?? null}, 
+                ${event}::jsonb, 
+                ${offer.offer_id ?? null}, 
+                ${offer.offer_description ?? null}, 
+                ${offer.offer_value ?? null}, 
+                ${offer.category_id ?? null}, 
+                ${offer.subcategory_id ? Number(offer.subcategory_id) : null}, 
+                ${offer.subcategory ?? null}, 
+                ${offer}::jsonb,
+                NOW()
+              )
+            `;
+          }
+        }
+
+        payload.visit_update_id = finalVisitUpdateId;
+      }
+
       return { 
-        simulation_id: simulationId,
+        simulation_id: simulationId, 
         simulation_update_id: simulationUpdateId 
       };
-    });
 
+    });
   } catch (error) {
     console.error("[FATAL] Erro na inserção de dados da simulação:", error);
     throw error;
@@ -295,16 +404,7 @@ export async function insertSimulationData(
 
 /**
  * ATUALIZA DADOS DA SIMULAÇÃO (UPDATE)
- * @description Modifica uma simulação existente após receber retornos assíncronos
- * do gateway. Adiciona novas entradas em 'simulation_consults' e reflete o novo
- * status na tabela 'simulations'.
- * * @param sql - Instância de conexão do postgres.js.
- * @param simulationId - O ID do registro na tabela 'simulations'.
- * @param payload - Objeto completo com dados do cliente e oferta.
- * @param infra - Metadados de infraestrutura.
- * @param gatewayResult - Retorno do motor de simulação.
- * @param action - Ação da visita.
- * @param action_description - Descrição do rastro.
+ * @description Modifica uma simulação existente após receber retornos assíncronos do gateway.
  */
 export async function updateSimulationData(
   sql: any,
@@ -318,18 +418,15 @@ export async function updateSimulationData(
 ): Promise<string | number> {
   try {
     return await sql.begin(async (t: any) => {
-      // Define a melhor consultoria para persistência
+
       let bestConsult = gatewayResult.consults.find(c => c.is_selected === true) || gatewayResult.consults[0];
       if (!bestConsult.is_selected) bestConsult.is_selected = true;
 
-      // Resolve a referência do parceiro dentro da transação atual
       const mainResultPartnerId = await resolvePartnerResult(t, payload.partner_id, bestConsult.status_id, bestConsult.message);
 
-      // Define estágio da simulação
       const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
       const stageId = stageMap[step];
 
-      // INSERT CONSULTAS: Loop para registrar todas as propostas retornadas pelo gateway.
       for (const consult of gatewayResult.consults) {
         await t`
           INSERT INTO simulation_consults (
@@ -339,12 +436,11 @@ export async function updateSimulationData(
           ) VALUES (
             ${simulationId}, ${consult.financial_institution_id?.toString()}, ${consult.requested_value}, ${consult.down_payment_amount},
             ${consult.down_payment_percentage}, ${consult.financed_amount}, ${consult.installments}, ${consult.cet_rate},
-            ${consult.installment_value}, ${consult.external_operation_id}, ${consult.status_id}, ${consult}::jsonb, ${consult}::jsonb
+            ${consult.installment_value}, ${consult.external_operation_id}, ${consult.status_id}, ${consult}::jsonb, ${payload}::jsonb
           )
         `;
       }
 
-      // INSERT UPDATES: Grava o rastro de auditoria da inserção.
       const [update] = await t`
         INSERT INTO simulation_updates (
           simulation_id, operation, stage_id, status_id, result_partner_id,
@@ -360,7 +456,6 @@ export async function updateSimulationData(
 
       const simulationUpdateId = update.id;
 
-      // UPDATE MESTRE: Atualiza os dados financeiros da proposta selecionada.
       await t`
         UPDATE simulations SET
           status_id = ${bestConsult.status_id},
@@ -373,7 +468,6 @@ export async function updateSimulationData(
         WHERE id = ${simulationId}
       `;
 
-      // PERSISTE NOTIFICAÇÕES NA OUTBOX (Fila Quente, se existirem)
       const notifications = (gatewayResult as any).raw?.notifications;
       if (Array.isArray(notifications)) {
         for (const n of notifications) {
@@ -397,6 +491,3 @@ export async function updateSimulationData(
     throw error;
   }
 }
-
-
-

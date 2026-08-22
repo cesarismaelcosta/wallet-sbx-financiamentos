@@ -332,7 +332,9 @@ serve(
             lot_number: rawOffer.lotNumber || 1,
             offer_description: rawOffer.product?.shortDesc || rawOffer.offerDescription?.offerDescription || "",
             offer_detailed_description: rawOffer.offerDescription?.offerDescription || "",
-            offer_value: rawOffer.price || 0,
+            offer_value: rawOffer.price || rawOffer.offerDetail?.referenceValue || 0,
+            price_formatted: rawOffer.priceFormatted || rawOffer.offerDetail?.referenceValueFormatted || "",
+            system_metric: rawOffer.systemMetric || null, // 👈 INSERIDO
             category_id: rawOffer.product?.productType?.id || 0,
             category: rawOffer.product?.productType?.description || "",
             subcategory_id: rawOffer.product?.subCategory?.id || "",
@@ -340,6 +342,8 @@ serve(
             offer_status: rawOffer.offerStatus || "",
             sale_status: rawOffer.saleStatus || "",
             end_date: rawOffer.endDate || "",
+            is_shopping: rawOffer.isShopping || false,    // 👈 INSERIDO
+            offer_type_id: rawOffer.offerTypeId ?? null,  // 👈 INSERIDO
             location: {
               neighborhood: rawOffer.product?.location?.neighborhood || "Não informado",
               city: rawOffer.product?.location?.city || "Não informado",
@@ -368,6 +372,7 @@ serve(
             event_start_date: rawOffer.auction?.beginDate || "",
             event_end_date: rawOffer.auction?.endDate || "",
             modality_id: eventData.modalityId ?? null,
+            modality_desc: eventData.modalityDesc || rawOffer.auction?.modalityDesc || "", // 👈 INSERIDO
             status_id: eventData.statusId ?? null,
             event_short_description: rawOffer.auction?.desc || "",
             event_full_description: eventData.fullDescription || "",

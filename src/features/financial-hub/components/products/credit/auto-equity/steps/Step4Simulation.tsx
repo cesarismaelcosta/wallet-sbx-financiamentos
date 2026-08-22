@@ -51,14 +51,26 @@ export function Step4Simulation() {
     setLoading(true);
 
     try {
+      // Monta Payload Magro Zero-Trust encapsulando os dados no simulation_details
       const payload = {
-        ...state.data,
-        step: 'EXECUTE_SIMULATION'
+        action: "SIMULATE",
+        visit_id: state.data.visit_id,
+        visit_update_id: state.data.visit_update_id,
+        simulation_id: state.data.simulation_id, // Gerado na Elegibilidade
+        product_id: state.data.product_id,
+        partner_id: state.data.partner_id,
+        step: "EXECUTE_SIMULATION",
+        simulation_details: {
+          requested_value: amount, // O backend puxa isso na linha 72 e 101
+          purpose: purpose, // Vem da tela do Step 4
+          personalIncome: state.data.personalIncome, // Vem da tela do Step 2
+          vehicle: state.data.vehicle // Vem da tela do Step 3
+        }
       };
       
-      console.log("step4 payload:", payload)
+      console.log("step4 payload:", payload);
 
-      // Chamada via Gateway centralizado e captura do resultado
+      // Chamada via Gateway
       const result = await execute(() => callSimulation(payload, 'EXECUTE_SIMULATION'));
 
       if (result.success) {

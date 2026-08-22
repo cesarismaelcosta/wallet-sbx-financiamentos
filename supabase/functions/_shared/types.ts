@@ -13,17 +13,17 @@ export interface OriginDetails {
   metadata: {
     timestamp: string;
     tls_version?: string | null;
-    [key: string]: any; 
+    [key: string]: any;
   };
 }
 
 /**
  * @interface Entity
- * @description Representa o proponente. 
+ * @description Representa o proponente.
  * A mudança para 'number | string' no entity_id é para suportar o tipo TEXT do banco.
  */
 export interface Entity {
-  entity_id: number | string; 
+  entity_id: number | string;
   name: string;
   document: string;
   phone: string;
@@ -83,34 +83,34 @@ export interface Vehicle {
 
 /**
  * @interface Offer
- * @description A oferta comercial genérica. 
- * Não mapeamos detalhes específicos (veículo, imóvel) aqui para manter a 
+ * @description A oferta comercial genérica.
+ * Não mapeamos detalhes específicos (veículo, imóvel) aqui para manter a
  * flexibilidade total via index signature.
  */
 export interface Offer {
   offer_id: string;
   offer_description: string;
   offer_value: number;
-  category_id?: number;    // Injetado pelo Orquestrador após o de-para
-  category: string;        // Texto vindo do site
+  category_id?: number; // Injetado pelo Orquestrador após o de-para
+  category: string; // Texto vindo do site
   subcategory_id?: number | string;
   subcategory?: string;
-  [key: string]: any;      // Aqui entrará 'vehicle', 'equity' ou qualquer outro detalhe enviado
+  [key: string]: any; // Aqui entrará 'vehicle', 'equity' ou qualquer outro detalhe enviado
 }
 
 /**
  * @interface InteractionContext
  * @description Define a origem e o contexto da interação do usuário.
  * É o rastreador que determina as regras de validação que serão aplicadas.
- * 
+ *
  * @property {string} utm_source - O canal de entrada:
  *   - 'offer': Clique originado de um lote/item específico no site.
  *   - 'banner', 'whatsapp', 'email', 'sms': Origens de campanhas de marketing.
  * @property {string} origin_url - A URL exata onde o usuário estava (referência de origem).
  */
 export interface InteractionContext {
-  utm_source: 'direct' | 'offer' | 'lp' | 'banner' | 'whatsapp' | 'email' | 'sms';
-  utm_medium: 'none' | 'organic' | 'home' | 'event' | 'offer';
+  utm_source: "direct" | "offer" | "lp" | "banner" | "whatsapp" | "email" | "sms";
+  utm_medium: "none" | "organic" | "home" | "event" | "offer";
   utm_campaign: string;
   origin_url: string;
 }
@@ -122,14 +122,14 @@ export interface InteractionContext {
  */
 export interface OrchestratorPayload {
   // IDENTIFICAÇÃO (Sempre Obrigatórios)
-  interaction_context: InteractionContext;   // Obrigatório: GPS da visita (origem/canal)
-  entity?: Entity;                           // Obrigatório: Snapshot do proponente (entity_details)
+  interaction_context: InteractionContext; // Obrigatório: GPS da visita (origem/canal)
+  entity?: Entity; // Obrigatório: Snapshot do proponente (entity_details)
 
   // CONTEXTO DE NEGÓCIO (Opcionais na raiz, validados por regra)
-  manager?: Manager;  // Obrigatório se utm_source === 'offer' (manager_details)
-  seller?: Seller;    // Opcional: Dono do bem (seller_details)
-  event?: Event;      // Opcional: Contexto do leilão (event_details)
-  offer?: Offer;      // Opcional: Detalhes do bem e preço (offer_details)
+  manager?: Manager; // Obrigatório se utm_source === 'offer' (manager_details)
+  seller?: Seller; // Opcional: Dono do bem (seller_details)
+  event?: Event; // Opcional: Contexto do leilão (event_details)
+  offer?: Offer; // Opcional: Detalhes do bem e preço (offer_details)
 
   // Opcional: Detalhes do bem e preço (offer_details)
   consents?: Array<{
@@ -147,19 +147,19 @@ export interface OrchestratorPayload {
   page_faqs?: any;
 
   // ROTEAMENTO
-  is_integrated?: boolean;                    // Indica se a visita veio de um parceiro integrado (ex: Fandi, Cartão)
-  integration_method?: string;                // integration_method = 'API', 'EMAIL', 'FILE', 'MANUAL'
-  integration_details?: Record<string, any>;  // Permite enviar detalhes específicos do parceiro (ex: nome do parceiro, CNPJ, ponto de venda, webhook URL, etc.)  
-  product_id?: number; 
-  partner_id?: number; 
-  action?: 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT';
+  is_integrated?: boolean; // Indica se a visita veio de um parceiro integrado (ex: Fandi, Cartão)
+  integration_method?: string; // integration_method = 'API', 'EMAIL', 'FILE', 'MANUAL'
+  integration_details?: Record<string, any>; // Permite enviar detalhes específicos do parceiro (ex: nome do parceiro, CNPJ, ponto de venda, webhook URL, etc.)
+  product_id?: number;
+  partner_id?: number;
+  action?: "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT";
   action_description?: string; // Campo adicional para descrever a ação com mais detalhes (ex: 'REDIRECT_TO_WHATSAPP', 'SIMULATION_ELIGIBILITY_CHECK', etc.)
-  visit_id?: string; 
-  visit_update_id?: string;         // Identificador da visit_update da página atual
-  origin_visit_update_id?: string;  // Identificador da visit_update da página anterior
+  visit_id?: string;
+  visit_update_id?: string; // Identificador da visit_update da página atual
+  origin_visit_update_id?: string; // Identificador da visit_update da página anterior
   simulation_id?: string;
-  origin_url?:string;
-  target_url?:string;
+  origin_url?: string;
+  target_url?: string;
 }
 
 /**
@@ -202,7 +202,7 @@ export interface SimulationResponse {
   message?: string;
   consults: Consultation[];
   // Audit Trail individual para esta linha
-  raw: any; 
+  raw: any;
 }
 
 /**
@@ -211,11 +211,11 @@ export interface SimulationResponse {
  * Cada item aqui será uma linha na tabela 'simulation_consults'.
  */
 export interface Consultation {
-  status_id: number | null;             // ID sbX (1: Aprovado, 2: Negado, 8: Falha)
-  is_selected: boolean | null;          // Indica se esta consulta foi a escolhida pelo usuário (relevante para múltiplas opções) 
+  status_id: number | null; // ID sbX (1: Aprovado, 2: Negado, 8: Falha)
+  is_selected: boolean | null; // Indica se esta consulta foi a escolhida pelo usuário (relevante para múltiplas opções)
   external_operation_id: string | null; // ID no parceiro (proposta)
-  message: string | null;               // Mensagem do banco/parceiro
-  
+  message: string | null; // Mensagem do banco/parceiro
+
   // Barramento Financeiro Específico desta Consulta
   financial_institution_id: number | null;
   financial_institution_name: string | null;
@@ -228,21 +228,19 @@ export interface Consultation {
   installment_value: number | null;
 }
 
-
-
 /**
  * @interface SimulationFinancials
  * @description Define os campos financeiros obrigatórios para cálculos e auditoria.
  */
 export interface SimulationFinancials {
-  requested_value: number | null;          // Valor total do bem
-  down_payment_amount: number  | null;     // Valor da entrada em R$
-  down_payment_percentage: number | null;  // % da entrada
-  installments: number | null;             // Número de parcelas
-  financed_amount: number | null;          // Valor que será efetivamente financiado
-  cet_rate?: number | null;                // Taxa CET (opcional na entrada, obrigatória no retorno)
-  simulated_at?: string | null;            // Timestamp da simulação
-  [key: string]: any | null;               // Flexibilidade para taxas extras (IOF, TAC, etc)
+  requested_value: number | null; // Valor total do bem
+  down_payment_amount: number | null; // Valor da entrada em R$
+  down_payment_percentage: number | null; // % da entrada
+  installments: number | null; // Número de parcelas
+  financed_amount: number | null; // Valor que será efetivamente financiado
+  cet_rate?: number | null; // Taxa CET (opcional na entrada, obrigatória no retorno)
+  simulated_at?: string | null; // Timestamp da simulação
+  [key: string]: any | null; // Flexibilidade para taxas extras (IOF, TAC, etc)
 }
 
 /**
@@ -250,14 +248,14 @@ export interface SimulationFinancials {
  * @description Define a estrutura esperada para dados de garantia de veículos (Car Equity).
  */
 export interface VehicleCollateral {
-  license_plate: string;      // Placa do veículo
-  brand: string;              // Marca (ex: Toyota)
-  model: string;              // Modelo (ex: Corolla)
-  model_year: number;         // Ano do modelo
-  manufacture_year: number;   // Ano de fabricação
-  fipe_code: string;          // Código Tabela FIPE
-  fipe_value: number;         // Valor de mercado FIPE
-  kinship_degree: string;     // Relação de parentesco do proprietário
+  license_plate: string; // Placa do veículo
+  brand: string; // Marca (ex: Toyota)
+  model: string; // Modelo (ex: Corolla)
+  model_year: number; // Ano do modelo
+  manufacture_year: number; // Ano de fabricação
+  fipe_code: string; // Código Tabela FIPE
+  fipe_value: number; // Valor de mercado FIPE
+  kinship_degree: string; // Relação de parentesco do proprietário
 }
 
 /**
@@ -265,46 +263,46 @@ export interface VehicleCollateral {
  * @description Define a estrutura esperada para dados de garantia de imóveis (Home Equity).
  */
 export interface HomeCollateral {
-  real_estate_type: string;   // Tipo: HOUSE, APARTMENT, etc.
-  estimated_value: number;    // Valor estimado do imóvel
-  debt_amount: number;        // Saldo devedor atual
-  has_deed: string;           // Possui escritura? (YES/NO)
-  address: string;            // Logradouro
-  number: string;             // Número
-  complement?: string;        // Complemento (opcional)
-  neighborhood: string;       // Bairro
-  city: string;               // Cidade
-  state: string;              // Estado (UF)
-  postal_code: string;        // CEP
-  country: string;            // País
-  owners: string[];           // Lista de proprietários
+  real_estate_type: string; // Tipo: HOUSE, APARTMENT, etc.
+  estimated_value: number; // Valor estimado do imóvel
+  debt_amount: number; // Saldo devedor atual
+  has_deed: string; // Possui escritura? (YES/NO)
+  address: string; // Logradouro
+  number: string; // Número
+  complement?: string; // Complemento (opcional)
+  neighborhood: string; // Bairro
+  city: string; // Cidade
+  state: string; // Estado (UF)
+  postal_code: string; // CEP
+  country: string; // País
+  owners: string[]; // Lista de proprietários
 }
 
 /**
  * @interface SimulationPayload
  * @description Contrato mestre para o ecossistema sbX.
- * O uso de [key: string]: any permite que campos extras enviados pelo 
+ * O uso de [key: string]: any permite que campos extras enviados pelo
  * front-end sejam aceitos sem quebrar a validação do TypeScript.
  */
 export interface SimulationPayload {
   visit_id: string;
   simulation_id: string;
-  is_integrated: boolean;       // Indica se a simulação veio de um parceiro integrado (ex: Fandi, Cartão)
-  integration_method: string;   // integration_method = 'API', 'EMAIL', 'FILE', 'MANUAL'
+  is_integrated: boolean; // Indica se a simulação veio de um parceiro integrado (ex: Fandi, Cartão)
+  integration_method: string; // integration_method = 'API', 'EMAIL', 'FILE', 'MANUAL'
   partner_id: number;
   product_id: number;
-  action?: 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT';
+  action?: "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT";
   action_description?: string;
 
   // CONTEXTO DE VISITA (Sempre obrigatórios)
-  interaction_context: InteractionContext;   // Obrigatório: GPS da visita (origem/canal)
-  entity?: Entity;                           // Obrigatório: Snapshot do proponente (entity_details)
+  interaction_context: InteractionContext; // Obrigatório: GPS da visita (origem/canal)
+  entity?: Entity; // Obrigatório: Snapshot do proponente (entity_details)
 
   // CONTEXTO DE NEGÓCIO (Opcionais na raiz, validados por regra)
-  manager?: Manager;  // Obrigatório se utm_source === 'offer' (manager_details)
-  seller?: Seller;    // Opcional: Dono do bem (seller_details)
-  event?: Event;      // Opcional: Contexto do leilão (event_details)
-  offer?: Offer;      // Opcional: Detalhes do bem e preço (offer_details)
+  manager?: Manager; // Obrigatório se utm_source === 'offer' (manager_details)
+  seller?: Seller; // Opcional: Dono do bem (seller_details)
+  event?: Event; // Opcional: Contexto do leilão (event_details)
+  offer?: Offer; // Opcional: Detalhes do bem e preço (offer_details)
   simulation_details: SimulationFinancials;
   consents?: Array<{
     consent_id: string;
@@ -318,7 +316,7 @@ export interface SimulationPayload {
   page_configs?: any;
   consent_configs?: any;
   page_faqs?: any;
-  step?: 'CHECK_ELIGIBILITY' | 'EXECUTE_SIMULATION';
+  step?: "CHECK_ELIGIBILITY" | "EXECUTE_SIMULATION";
   [key: string]: any; // Permite novos nós na raiz do payload
 }
 
@@ -360,7 +358,7 @@ export interface SimulationConsent {
     faq: any;
     consents_rendered: any;
     legal_text: any;
-    [key: string]: any; 
+    [key: string]: any;
   };
   raw_payload: any;
 }
@@ -371,7 +369,7 @@ export interface SimulationConsent {
  */
 export interface SimulationUpdate {
   simulation_id: number;
-  operation: 'INSERT' | 'UPDATE' | 'DELETE';
+  operation: "INSERT" | "UPDATE" | "DELETE";
   stage_id: number;
   status_id: number;
   simulation_details: SimulationFinancials;
@@ -389,23 +387,22 @@ export interface SimulationUpdate {
 /**
  * @interface EmailTemplateResult
  * @description Estrutura de retorno padronizada para as funções geradoras de template de e-mail.
- * Encapsula o HTML processado e os metadados dos anexos embutidos (CID), garantindo que o 
+ * Encapsula o HTML processado e os metadados dos anexos embutidos (CID), garantindo que o
  * serviço de disparo permaneça agnóstico em relação ao conteúdo visual e regras de negócio.
  */
 export interface EmailTemplateResult {
   html: string;
   attachments: Array<{
-    content_id: string;   // O CID para embutir no HTML
-    storage_path: string;  // O caminho da imagem no Bucket
+    content_id: string; // O CID para embutir no HTML
+    storage_path: string; // O caminho da imagem no Bucket
   }>;
 }
 
-
 /**
  * @fileoverview Contratos de Dados (Shared Types) - Ecossistema sbX
- * Centraliza as interfaces de dados que trafegam entre o Upstream (Superbid), 
+ * Centraliza as interfaces de dados que trafegam entre o Upstream (Superbid),
  * o Gateway (BFF) e o Frontend.
- * 
+ *
  * * [PADRONIZAÇÃO]:
  * 1. Interfaces seguem a nomenclatura BFF (Backend For Frontend).
  * 2. Campos são mapeados para facilitar a legibilidade no frontend (camelCase).
@@ -416,16 +413,16 @@ export interface EmailTemplateResult {
 // [1] USUÁRIO: Perfil Identitário
 // =========================================================================
 export interface BFFUserProfile {
-  entity_id: string;      // ID único do usuário no ecossistema
+  entity_id: string; // ID único do usuário no ecossistema
   entity_type: "F" | "J"; // Tipo de entidade: "F" (Física) ou "J" (Jurídica)
-  name: string;           // Nome completo
-  document: string;       // CPF/CNPJ (Mapeado)
-  email: string;          // E-mail principal de contato
-  phone: string;          // Telefone formatado
-  birth_date: string;     // Data de nascimento ISO
-  gender: "M" | "F";      // Gênero
-  login: string;          // Usuário de login
-  mothers_name: string;   // Nome da mãe
+  name: string; // Nome completo
+  document: string; // CPF/CNPJ (Mapeado)
+  email: string; // E-mail principal de contato
+  phone: string; // Telefone formatado
+  birth_date: string; // Data de nascimento ISO
+  gender: "M" | "F"; // Gênero
+  login: string; // Usuário de login
+  mothers_name: string; // Nome da mãe
   address: {
     street: string;
     number: string;
@@ -514,4 +511,74 @@ export interface BFFAuthExchangeResponse {
   expires_at: number;
   server_now_ms: number;
   rehydration_payload: BFFRehydrationPayload; // Aqui reside o combo completo
+}
+
+/**
+ * =========================================================================
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: ZERO-TRUST PAYLOAD CONTRACTS
+ * =========================================================================
+ * Contratos complementares adicionados para suportar o modelo Zero-Trust sem 
+ * quebrar a base de código legada (React Frontend).
+ * 
+ * [MUDANÇAS ARQUITETURAIS]:
+ * 1. {ThinPayload}: O único contrato aceitável no Frontend. Garante a dieta 
+ *    de rede e impede Mass Assignment.
+ * 2. {EnrichedPayload}: O contrato restrito do Backend. Representa a junção
+ *    perfeita entre o pedido do usuário e a verdade irrefutável do servidor.
+ */
+
+// =========================================================================
+// [ZERO-TRUST] CONTRATOS DE PAYLOAD (THIN / ENRICHED)
+// =========================================================================
+
+/**
+ * @interface ThinPayload
+ * @description O ÚNICO formato que o cliente tem permissão de enviar.
+ * Só intenção, ponteiros e escolhas do usuário. Zero PII, zero valor de oferta.
+ * É exatamente a superfície que `pickThin` deixa passar.
+ */
+export interface ThinPayload {
+  visit_id: string;
+  visit_update_id: string;
+  offer_id?: string | number | null;
+  action?: "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT";
+  action_description?: string;
+  simulation_id?: string | null;
+  simulation_update_id?: string | null;
+  product_id?: number;
+  partner_id?: number;
+  step?: string;
+  origin_url?: string;
+  target_url?: string;
+  interaction_context?: Record<string, any>;
+  consents?: Array<Record<string, any>>;
+  /** Apenas inputs do usuário: prazo, entrada, opções. NUNCA preço da oferta. */
+  simulation_details?: Record<string, any>;
+}
+
+/**
+ * @interface EnrichedPayload
+ * @description O payload reconstruído SERVER-SIDE após a hidratação.
+ * É o que trafega internamente entre gateway -> handlers -> persistência.
+ * Nunca é aceito na entrada HTTP e nunca é devolvido cru ao cliente.
+ */
+export interface EnrichedPayload extends ThinPayload {
+  entity: Entity;
+  offer: Offer | null;
+  manager: Manager | null;
+  seller: Seller | null;
+  event: Event | null;
+  origin_details: OriginDetails;
+  /** Configuração de jornada resolvida server-side (rules / page_configs). */
+  resolved_config?: {
+    partner_id: number;
+    product_id: number;
+    is_integrated: boolean;
+    integration_method: string;
+    integration_details: Record<string, any>;
+    rules: Record<string, any>;
+    page_configs: Record<string, any>;
+  };
+  /** Procedência da oferta usada, para auditoria forense. */
+  hydration_source?: "payload_offer_id" | "db_last_offer" | "no_offer";
 }

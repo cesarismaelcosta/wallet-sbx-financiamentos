@@ -172,28 +172,42 @@ export const withSecurity = (
     // [PASSO 6]: Execução Isolada da Regra de Negócio
     // -----------------------------------------------------------------------
     try {
+      console.log(`[withSecurity DEBUG] Iniciando handler: ${functionName}`);
       const result = await handler(req);
-
+      
+      console.log(`[withSecurity DEBUG] Handler retornou. Tipo: ${typeof result}`);
+      
       if (result instanceof Response) {
+        console.log("[withSecurity DEBUG] Retorno é instância de Response nativa.");
         Object.entries(corsHeaders).forEach(([k, v]) => result.headers.set(k, v));
         return result;
       }
 
+      console.log("[withSecurity DEBUG] Retorno é StandardResponse. status:", (result as any).status);
+      
+      // Checagem pré-serialização para ver se o objeto não está quebrado
+      try {
+        const payload = JSON.stringify((result as any).data || { error: (result as any).error });
+        console.log("[withSecurity DEBUG] JSON.stringify do data funcionou. Tamanho:", payload.length);
+      } catch (e) {
+        console.error("[withSecurity DEBUG] ERRO NO JSON.STRINGIFY:", e);
+      }
+
       return new Response(
-        JSON.stringify(result.data || { error: result.error }), 
+        JSON.stringify((result as any).data || { error: (result as any).error }), 
         {
-          status: result.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json", ...(result.headers || {}) }
+          status: (result as any).status,
+          headers: { ...corsHeaders, "Content-Type": "application/json", ...((result as any).headers || {}) }
         }
       );
 
     } catch (err: any) {
-      console.error(`[WRAPPER GLOBAL CATCH em ${functionName}]:`, err);
+      console.error(`[withSecurity FATAL ERROR em ${functionName}]:`, err);
       return new Response(
         JSON.stringify({ 
           success: false, 
           code: "INTERNAL_SERVER_ERROR", 
-          message: err.message || "Erro crítico de execução na camada de borda." 
+          message: err.message || "Erro crítico no wrapper." 
         }), 
         { 
           status: 500, 

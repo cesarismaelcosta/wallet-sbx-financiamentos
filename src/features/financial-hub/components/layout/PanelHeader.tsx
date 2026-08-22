@@ -1,29 +1,35 @@
 /**
- * @fileoverview Componente: PanelHeader
+ * @fileoverview Componente Mestre: PanelHeader
  * @path src/features/financial-hub/components/layout/PanelHeader.tsx
  * 
  * =========================================================================
- * 🤖 GEMINI ARCHITECTURE SPECIFICATION: URL HYGIENE & STERILE NAVIGATION
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: DETERMINISTIC NAVIGATION
  * =========================================================================
  * @description Header fixo e estático unificado para todo o ecossistema.
- * Além da UI, este componente atua como o Guardião de Contexto de Navegação.
+ * Além da UI, este componente atua como o Gatilho Ativo de Navegação OLAP.
  * 
- * [MUDANÇA ARQUITETURAL - URL HYGIENE]:
- * O clique na Logo não faz um "Hard Reload", ele navega via SPA. Para evitar
- * o vazamento de contexto (Memory Leak Visual), a propriedade `search` 
- * atua como um filtro: retém ESTRITAMENTE a Sessão Macro (`visit_id`) e 
- * destrói cursores atômicos (`visit_update_id`, `simulation_id`).
- * Isso garante que a Home sempre carregue em modo "Estéril".
+ * [EVOLUÇÃO ARQUITETURAL v8.0.0 - FIM DO PHANTOM VISIT]:
+ * 1. {Orquestração Ativa}: O clique na Logo deixou de ser um Link SPA "cego".
+ *    Agora, o próprio Header intercepta o clique, isola as "race conditions"
+ *    e dispara um `POST` com `action: VISIT` para o Orquestrador.
+ * 2. {Navegação Determinística}: O Header aguarda o servidor responder com
+ *    a URL oficial (contendo o novo `visit_update_id` atômico) e só então
+ *    executa o roteamento (TanStack navigate).
+ * 3. {Plug & Play}: Como o payload lê dinamicamente a `window.location.href`,
+ *    qualquer tela que importar este Header ganha rastreabilidade completa
+ *    de retorno à Home automaticamente.
  * 
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
- * @version 7.6.0 (Refatoração: Filtragem de Estado no TanStack Link)
+ * @version 8.0.0 (Active Telemetry & Deterministic Routing)
  */
 
-import React from "react";
-import { Link } from "@tanstack/react-router";
+import React, { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { WalletLogo } from "@/components/brand/WalletLogo";
-import { LogOut, LogIn } from "lucide-react";
+import { LogOut, LogIn, Loader2 } from "lucide-react";
+import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
+import { getDefaultSbxEnvironment, getTokenForPayload } from "@/services/session";
 
 export interface HeaderLink {
   href: string;
@@ -44,12 +50,16 @@ export function PanelHeader({
   showNav = true, 
   showAuth = false, 
   links = [], 
-  sessionToken, 
+  sessionToken,
+  userData,
   onLogout, 
   onNavigate,
   showEnvironmentLinks = true
 }: PanelHeaderProps) {
   
+  const navigate = useNavigate();
+  const [isNavigating, setIsNavigating] = useState(false);
+
   const handleScroll = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
     e.preventDefault();
     const element = document.getElementById(id);
@@ -57,6 +67,54 @@ export function PanelHeader({
       element.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
       console.warn(`[PanelHeader] Elemento com id="${id}" não encontrado no DOM.`);
+    }
+  };
+
+  // =========================================================================
+  // ✨ [DETERMINISTIC ROUTING]: O Header toma o controle da volta para a Home
+  // =========================================================================
+  const handleLogoClick = async () => {
+    if (isNavigating) return;
+    setIsNavigating(true);
+
+    try {
+      const currentHref = window.location.href;
+      const ambiente = getDefaultSbxEnvironment();
+      const currentSessionToken = sessionToken || getTokenForPayload() || "";
+      const urlParams = new URLSearchParams(window.location.search);
+      const existingVisitId = urlParams.get("visit_id");
+      const existingVisitUpdateId = urlParams.get("visit_update_id");
+
+      const visitPayload = {
+        action: "VISIT",
+        environment: ambiente,
+        target_url: "/sbxpay",
+        origin_url: currentHref,
+        auth_token: currentSessionToken,
+        ...(existingVisitId && { visit_id: existingVisitId }),
+        ...(existingVisitUpdateId && { visit_update_id: existingVisitUpdateId }),        
+        interaction_context: {
+          origin_url: currentHref,
+          utm_source: "sbxpay_logo",
+          utm_medium: "navigation",
+          utm_campaign: "header_home_click",
+        },
+      };
+
+      const visitResponse = await callOrchestrator(visitPayload, "POST");
+
+      if (visitResponse?.url) {
+        // Sucesso: Roteia com o novo visit_update_id gerado atomicamente no Edge
+        navigate({ to: visitResponse.url as any });
+      } else {
+        // Fallback: Preserva a fluidez de UX mesmo se o response.url falhar
+        navigate({ to: "/sbxpay" });
+      }
+    } catch (error) {
+      console.error("[PanelHeader] Erro na orquestração ao clicar na Logo:", error);
+      navigate({ to: "/sbxpay" });
+    } finally {
+      setIsNavigating(false);
     }
   };
 
@@ -73,16 +131,15 @@ export function PanelHeader({
           {/* Lado Esquerdo: Logo fixa com container block para preservar a tagline */}
           <div className="flex items-center shrink-0">
             {/* 
-              ✨ [URL HYGIENE - ISOLAMENTO DE CONTEXTO]
-              Retém APENAS o visit_id (a sessão macro / carrinho). 
-              O visit_update_id e o simulation_id são propositalmente descartados.
-              Como a URL perde o update_id, o Guardião da Home (sbxpay.lazy) 
-              entenderá que é um novo pageview e disparará um Phantom Visit estéril.
+              ✨ [ACTIVE TELEMETRY]
+              O componente visual agora controla a orquestração formal.
+              Ao desabilitar o botão durante isNavigating, anulamos race conditions.
             */}
-            <Link 
-              to="/sbxpay" 
-              search={(prev: any) => ({ visit_id: prev?.visit_id })}
-              className="block outline-none border-none focus:outline-none focus:ring-0"
+            <button 
+              onClick={handleLogoClick}
+              disabled={isNavigating}
+              className={`block outline-none border-none focus:outline-none focus:ring-0 bg-transparent cursor-pointer p-0 transition-opacity ${isNavigating ? 'opacity-50' : 'hover:opacity-80'}`}
+              title="Voltar ao Início"
             >
               <div className="hidden sm:block">
                 <WalletLogo size="md" withTagline />
@@ -90,7 +147,7 @@ export function PanelHeader({
               <div className="block sm:hidden">
                 <WalletLogo size="sm" withTagline />
               </div>
-            </Link>
+            </button>
           </div>
 
           {/* Lado Direito: Navegação e Controles */}

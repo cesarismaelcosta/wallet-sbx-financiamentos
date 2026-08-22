@@ -7,13 +7,13 @@
  * Esta página atua como o centro nervoso operacional do Backoffice. Ela carrega,
  * processa e renderiza dados consolidados sobre as operações de crédito e
  * interações de topo de funil (visitas) geradas pelo Financial Hub.
- * 
+ *
  * Arquitetura otimizada:
  * - Filtros avançados com seleção múltipla (parceiros e produtos).
  * - Scroll robusto em popovers (evita conflito com o scroll da página).
  * - Responsividade mobile total via Sheet com seletor de período e calendário.
  * - Lazy Loading dos gráficos via Recharts (retirado do bundle inicial).
- * 
+ *
  * [MUDANÇAS ARQUITETURAIS - 1:N EVENT MODEL]:
  * A consulta de Visitas (Topo de Funil) foi migrada para ler os IDs de Produto
  * e Parceiro da tabela `visit_updates` (Eventos), uma vez que o modelo 1:N
@@ -57,7 +57,9 @@ import { supabase } from "@/integrations/supabase/client";
 // ============================================================================
 // LAZY LOADING DOS GRÁFICOS (FORA DO BUNDLE INICIAL)
 // ============================================================================
-const ChartsSimulationModule = lazy(() => import("@/features/financial-hub/components/shared/renderes/ChartsSimulation"));
+const ChartsSimulationModule = lazy(
+  () => import("@/features/financial-hub/components/shared/renderes/ChartsSimulation"),
+);
 const ChartsTrafficModule = lazy(() => import("@/features/financial-hub/components/shared/renderes/ChartsTraffic"));
 
 export const Route = createLazyFileRoute("/backoffice/")({
@@ -112,6 +114,7 @@ type VisitKpis = {
   unique: number; // Métrica de visitantes únicos
   redirects: number;
   simulates: number;
+  consultas: number;
   contacts: number;
   conversionRate: number;
   bySource: Array<{ name: string; count: number }>;
@@ -153,9 +156,9 @@ function ChartsSkeleton() {
 // COMPONENTE PRINCIPAL
 // ===========================================================================
 function DashboardPage() {
-  const { backofficeUser } = useAuth(); 
+  const { backofficeUser } = useAuth();
   const isMobile = useIsMobile();
-  
+
   const [simKpis, setSimKpis] = useState<SimKpis | null>(null);
   const [visitKpis, setVisitKpis] = useState<VisitKpis | null>(null);
 
@@ -178,12 +181,12 @@ function DashboardPage() {
       // 1. Carregar Parceiros filtrados pelo escopo do usuário
       const { data: pData } = await supabase.from("partners").select("id, name").eq("is_active", true).order("name");
       if (pData) {
-        if (backofficeUser.role === 'viewer') {
+        if (backofficeUser.role === "viewer") {
           const allowedPartners = backofficeUser.allowed_partners || [];
           if (allowedPartners.includes("*")) {
             setPartnersList(pData);
           } else {
-            const filteredPartners = pData.filter(p => allowedPartners.includes(String(p.id)));
+            const filteredPartners = pData.filter((p) => allowedPartners.includes(String(p.id)));
             setPartnersList(filteredPartners);
           }
         } else {
@@ -194,12 +197,12 @@ function DashboardPage() {
       // 2. Carregar Produtos filtrados pelo escopo do usuário
       const { data: prData } = await supabase.from("product_types").select("id, name").order("name");
       if (prData) {
-        if (backofficeUser.role === 'viewer') {
+        if (backofficeUser.role === "viewer") {
           const allowedProducts = backofficeUser.allowed_products || [];
           if (allowedProducts.includes("*")) {
             setProductsList(prData);
           } else {
-            const filteredProducts = prData.filter(pr => allowedProducts.includes(String(pr.id)));
+            const filteredProducts = prData.filter((pr) => allowedProducts.includes(String(pr.id)));
             setProductsList(filteredProducts);
           }
         } else {
@@ -212,7 +215,7 @@ function DashboardPage() {
 
   useEffect(() => {
     if (!backofficeUser) return; // Só dispara se o usuário estiver carregado
-    
+
     const timeoutId = setTimeout(() => {
       load();
     }, 400);
@@ -252,8 +255,11 @@ function DashboardPage() {
       end.setHours(23, 59, 59, 999);
     }
 
-    // 2) Disparo das Queries Base
-    // As simulações mantêm partner e product na raiz. Tudo certo aqui.
+    // 2) Converte IDs para Número (Segurança)
+    const cleanPartners = selectedPartners.map((id) => Number(id)).filter((n: number) => !isNaN(n));
+    const cleanProducts = selectedProducts.map((id) => Number(id)).filter((n: number) => !isNaN(n));
+
+    // 3) Query de Simulações (Filtros aplicados direto no banco)
     let querySim = supabase
       .from("simulations")
       .select(
@@ -263,19 +269,14 @@ function DashboardPage() {
       .lte("created_at", end.toISOString())
       .limit(5000);
 
-    // ✨ [ARQUITETURA 1:N]: As visitas perdem o produto e parceiro da raiz. 
-    // Precisamos de um deep join para validar o filtro sem quebrar o banco.
+    // 4) Query de Visitas (Busca limpa por período, filtramos o 1:N no Javascript)
     let queryVis = supabase
       .from("visits")
       .select(
         `
-        id, 
-        action, 
-        utm_source, 
-        created_at, 
-        ip_address,
+        id, action, utm_source, created_at, ip_address,
         visit_entities ( document ),
-        visit_updates!inner ( id, partner_id, product_id )
+        visit_updates ( id, partner_id, product_id, action )
       `,
       )
       .gte("created_at", start.toISOString())
@@ -283,50 +284,83 @@ function DashboardPage() {
       .limit(10000);
 
     // ============================================================================
-    // RESTRIÇÕES DE ESCOPO POR USUÁRIO (RBAC - Viewer)
+    // APLICANDO RESTRIÇÕES NO BANCO APENAS PARA SIMULAÇÕES
     // ============================================================================
-    if (backofficeUser.role === 'viewer') {
+    if (backofficeUser.role === "viewer") {
       const allowedPartners = backofficeUser.allowed_partners || [];
       const allowedProducts = backofficeUser.allowed_products || [];
 
-      // 1. Validação de Parceiros Permitidos
       if (!allowedPartners.includes("*")) {
         if (allowedPartners.length === 0) {
-          setSimKpis({ today: 0, week: 0, month: 0, monthVolume: 0, ticket: 0, uniqueClients: 0, byStatus: [], byProduct: [], byPartner: [], byDay: [] });
-          setVisitKpis({ total: 0, unique: 0, redirects: 0, simulates: 0, contacts: 0, conversionRate: 0, bySource: [], byAction: [], byProduct: [], byDay: [] });
+          setSimKpis({
+            today: 0,
+            week: 0,
+            month: 0,
+            monthVolume: 0,
+            ticket: 0,
+            uniqueClients: 0,
+            byStatus: [],
+            byProduct: [],
+            byPartner: [],
+            byDay: [],
+          });
+          setVisitKpis({
+            total: 0,
+            unique: 0,
+            redirects: 0,
+            simulates: 0,
+            consultas: 0,
+            contacts: 0,
+            conversionRate: 0,
+            bySource: [],
+            byAction: [],
+            byProduct: [],
+            byDay: [],
+          });
           setLoading(false);
           return;
         }
-        const partnerQueryIds = allowedPartners.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
+        const partnerQueryIds = allowedPartners.map((id: string) => Number(id)).filter((n: number) => !isNaN(n));
         querySim = querySim.in("partner_id", partnerQueryIds);
-        queryVis = queryVis.in("visit_updates.partner_id", partnerQueryIds); // Aponta para a nova tabela
       }
 
-      // 2. Validação de Produtos Permitidos
       if (!allowedProducts.includes("*")) {
         if (allowedProducts.length === 0) {
-          setSimKpis({ today: 0, week: 0, month: 0, monthVolume: 0, ticket: 0, uniqueClients: 0, byStatus: [], byProduct: [], byPartner: [], byDay: [] });
-          setVisitKpis({ total: 0, unique: 0, redirects: 0, simulates: 0, contacts: 0, conversionRate: 0, bySource: [], byAction: [], byProduct: [], byDay: [] });
+          setSimKpis({
+            today: 0,
+            week: 0,
+            month: 0,
+            monthVolume: 0,
+            ticket: 0,
+            uniqueClients: 0,
+            byStatus: [],
+            byProduct: [],
+            byPartner: [],
+            byDay: [],
+          });
+          setVisitKpis({
+            total: 0,
+            unique: 0,
+            redirects: 0,
+            simulates: 0,
+            consultas: 0,
+            contacts: 0,
+            conversionRate: 0,
+            bySource: [],
+            byAction: [],
+            byProduct: [],
+            byDay: [],
+          });
           setLoading(false);
           return;
         }
-        const productQueryIds = allowedProducts.map((id: string) => (isNaN(Number(id)) ? id : Number(id)));
+        const productQueryIds = allowedProducts.map((id: string) => Number(id)).filter((n: number) => !isNaN(n));
         querySim = querySim.in("product_id", productQueryIds);
-        queryVis = queryVis.in("visit_updates.product_id", productQueryIds); // Aponta para a nova tabela
       }
     }
-    // ============================================================================
 
-    // Filtros de seleção manual do usuário na tela
-    if (selectedPartners.length > 0) {
-      querySim = querySim.in("partner_id", selectedPartners);
-      queryVis = queryVis.in("visit_updates.partner_id", selectedPartners);
-    }
-
-    if (selectedProducts.length > 0) {
-      querySim = querySim.in("product_id", selectedProducts);
-      queryVis = queryVis.in("visit_updates.product_id", selectedProducts);
-    }
+    if (cleanPartners.length > 0) querySim = querySim.in("partner_id", cleanPartners);
+    if (cleanProducts.length > 0) querySim = querySim.in("product_id", cleanProducts);
 
     const [resSim, resVis] = await Promise.all([querySim, queryVis]);
 
@@ -337,13 +371,54 @@ function DashboardPage() {
     }
 
     const simRows = resSim.data ?? [];
-    const visRows = resVis.data ?? [];
+    let visRows = resVis.data ?? [];
 
+    // ============================================================================
+    // FILTRAGEM DE VISITAS EM MEMÓRIA (Compatível com Modelo 1:N)
+    // ============================================================================
+    if (backofficeUser.role === "viewer") {
+      const allowedPartners = backofficeUser.allowed_partners || [];
+      const allowedProducts = backofficeUser.allowed_products || [];
+
+      if (!allowedPartners.includes("*")) {
+        const pIds = allowedPartners.map((id: string | number) => String(id));
+        visRows = visRows.filter((v: any) => {
+          const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [v.visit_updates].filter(Boolean);
+          return updates.some((u: any) => pIds.includes(String(u.partner_id)));
+        });
+      }
+      if (!allowedProducts.includes("*")) {
+        const prIds = allowedProducts.map((id: string | number) => String(id));
+        visRows = visRows.filter((v: any) => {
+          const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [v.visit_updates].filter(Boolean);
+          return updates.some((u: any) => prIds.includes(String(u.product_id)));
+        });
+      }
+    }
+
+    if (cleanPartners.length > 0) {
+      const pIds = cleanPartners.map((id: string | number) => String(id));
+      visRows = visRows.filter((v: any) => {
+        const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [v.visit_updates].filter(Boolean);
+        return updates.some((u: any) => pIds.includes(String(u.partner_id)));
+      });
+    }
+
+    if (cleanProducts.length > 0) {
+      const prIds = cleanProducts.map((id: string | number) => String(id));
+      visRows = visRows.filter((v: any) => {
+        const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [v.visit_updates].filter(Boolean);
+        return updates.some((u: any) => prIds.includes(String(u.product_id)));
+      });
+    }
+
+    // ============================================================================
+    // PROCESSAMENTO DOS KPIS DE SIMULAÇÃO E VISITA
+    // ============================================================================
     const now = new Date();
     const todayStart = startOfDay(now).toISOString();
     const weekStart = startOfDay(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000)).toISOString();
 
-    // Restante do processamento de KPIs...
     const simToday = simRows.filter((r) => (r.created_at ?? "") >= todayStart).length;
     const simWeek = simRows.filter((r) => (r.created_at ?? "") >= weekStart).length;
     const simMonth = simRows.length;
@@ -358,7 +433,6 @@ function DashboardPage() {
 
     for (const r of simRows) {
       const amount = Number(r.financed_amount) || 0;
-
       const statusName = (r.status_types as any)?.name ?? "Indefinido";
       const currentS = statusMap.get(statusName) ?? { count: 0, volume: 0 };
       statusMap.set(statusName, { count: currentS.count + 1, volume: currentS.volume + amount });
@@ -385,18 +459,24 @@ function DashboardPage() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
+    // ✨ CORREÇÃO DOS GRÁFICOS DE DIAS
     const simDayMap = new Map<string, number>();
     const visDayMap = new Map<string, number>();
 
-    const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    const maxChartDays = dateRange === "all" ? 30 : Math.min(diffDays, 30);
+    let chartDaysCount = 30;
+    if (dateRange !== "all" && dateRange !== "custom") {
+      chartDaysCount = parseInt(dateRange);
+    } else if (dateRange === "custom" && customRange?.from && customRange?.to) {
+      const diffTime = Math.abs(customRange.to.getTime() - customRange.from.getTime());
+      chartDaysCount = Math.min(Math.ceil(diffTime / (1000 * 60 * 60 * 24)), 60);
+    }
 
-    for (let i = maxChartDays - 1; i >= 0; i--) {
-      const d = startOfDay(new Date(end.getTime() - i * 24 * 60 * 60 * 1000))
-        .toISOString()
-        .slice(0, 10);
-      simDayMap.set(d, 0);
-      visDayMap.set(d, 0);
+    for (let i = chartDaysCount - 1; i >= 0; i--) {
+      const d = new Date(end.getTime());
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      simDayMap.set(key, 0);
+      visDayMap.set(key, 0);
     }
 
     simRows.forEach((r: any) => {
@@ -407,6 +487,7 @@ function DashboardPage() {
     });
 
     const simByDay = Array.from(simDayMap.entries()).map(([day, count]) => ({ day, count }));
+
     setSimKpis({
       today: simToday,
       week: simWeek,
@@ -434,19 +515,34 @@ function DashboardPage() {
     const sourceMap = new Map<string, number>();
     const visProductMap = new Map<string, number>();
 
-    visRows.forEach((v: any) => {
-      const action = v.action || "Desconhecido";
-      actionMap.set(action, (actionMap.get(action) || 0) + 1);
+    let totalConsultas = 0;
+    let totalSimulates = 0;
+    let totalRedirects = 0;
+    let totalVisitsWithSimulate = 0;
 
+    visRows.forEach((v: any) => {
       const source = v.utm_source || "Orgânico";
       sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
 
-      // ✨ [EXTRAÇÃO DE PRODUTO]: Lê a matriz do evento para plotar no gráfico de barras
       const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [v.visit_updates].filter(Boolean);
-      const mainEvent = updates[0] || {};
-      
-      const prodName = currentProducts.find((p) => String(p.id) === String(mainEvent.product_id))?.name ?? "Outros";
-      visProductMap.set(prodName, (visProductMap.get(prodName) || 0) + 1);
+      let hasSimulateInThisVisit = false;
+
+      updates.forEach((u: any) => {
+        const act = (u.action || v.action || "").toUpperCase();
+        if (act && act !== "VISIT") actionMap.set(act, (actionMap.get(act) || 0) + 1);
+        if (act === "CONSULT") totalConsultas++;
+        if (act === "REDIRECT") totalRedirects++;
+        if (act === "SIMULATE") {
+          totalSimulates++;
+          hasSimulateInThisVisit = true;
+        }
+        if (act === "CONSULT" || act === "SIMULATE") {
+          const prodName = currentProducts.find((p) => String(p.id) === String(u.product_id))?.name ?? "Outros";
+          visProductMap.set(prodName, (visProductMap.get(prodName) || 0) + 1);
+        }
+      });
+
+      if (hasSimulateInThisVisit) totalVisitsWithSimulate++;
 
       if (v.created_at) {
         const key = v.created_at.slice(0, 10);
@@ -455,34 +551,27 @@ function DashboardPage() {
     });
 
     const contactsCount = await getUniqueContactCount(start, end);
-    actionMap.set("CONTACT", contactsCount);
+    if (contactsCount > 0) {
+      actionMap.set("CONTACT", contactsCount);
+    } else {
+      actionMap.delete("CONTACT"); // Garante que não vai renderizar barra com 0
+    }
 
-    const bySource = Array.from(sourceMap.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 20);
-    const byAction = Array.from(actionMap.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 20);
-    const visByProduct = Array.from(visProductMap.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 20);
     const visByDay = Array.from(visDayMap.entries()).map(([day, count]) => ({ day, count }));
 
-      setVisitKpis({
-        total: totalVisits,
-        unique: uniqueDocs.size > 0 ? uniqueDocs.size : totalVisits,
-        redirects: actionMap.get("REDIRECT") || 0,
-        simulates: actionMap.get("SIMULATE") || 0,
-        contacts: contactsCount,
-        conversionRate: totalVisits > 0 ? ((actionMap.get("SIMULATE") || 0) / totalVisits) * 100 : 0,
-        bySource,
-        byAction,
-        byProduct: visByProduct,
-        byDay: visByDay,
-      });
+    setVisitKpis({
+      total: totalVisits,
+      unique: uniqueDocs.size > 0 ? uniqueDocs.size : totalVisits,
+      redirects: totalRedirects,
+      simulates: totalSimulates,
+      consultas: totalConsultas,
+      contacts: contactsCount,
+      conversionRate: totalVisits > 0 ? (totalVisitsWithSimulate / totalVisits) * 100 : 0,
+      bySource: Array.from(sourceMap.entries()).map(([name, count]) => ({ name, count })),
+      byAction: Array.from(actionMap.entries()).map(([name, count]) => ({ name, count })),
+      byProduct: Array.from(visProductMap.entries()).map(([name, count]) => ({ name, count })),
+      byDay: visByDay,
+    });
 
     setLoading(false);
   }
@@ -539,10 +628,10 @@ function DashboardPage() {
   const visitCards = visitKpis
     ? [
         {
-          label: "Total de Acessos",
+          label: "Consultas + Simulações",
           subLabel: periodLabel,
-          value: `${visitKpis.total.toLocaleString("pt-BR")} / ${visitKpis.unique.toLocaleString("pt-BR")}`,
-          hint: "visitas registradas / visitantes",
+          value: `${(visitKpis.consultas + visitKpis.simulates).toLocaleString("pt-BR")} / ${visitKpis.total.toLocaleString("pt-BR")}`,
+          hint: "consultas + simulações / visitas",
           icon: MousePointerClick,
         },
         {
@@ -599,8 +688,8 @@ function DashboardPage() {
         <div className="flex flex-col gap-3 bg-muted/30 p-3 rounded-2xl border">
           {/* Botão de Filtros exclusivo para Mobile */}
           <div className="lg:hidden">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setMobileFilterOpen(true)}
               className="w-full h-11 rounded-xl gap-2 justify-start bg-white border-slate-200 text-slate-700 shadow-sm"
             >
@@ -610,29 +699,49 @@ function DashboardPage() {
 
           {/* Filtros em linha para Desktop */}
           <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:gap-2">
-            
             {/* Filtro de Período */}
             <Popover modal={isMobile}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
+                <Button
+                  variant="outline"
+                  className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"
+                >
                   <span className="flex items-center gap-2 truncate">
                     <CalendarIcon className="h-4 w-4 shrink-0" />
-                    Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "7" ? "7 dias" : dateRange === "15" ? "15 dias" : "Tudo"}
+                    Período:{" "}
+                    {dateRange === "custom"
+                      ? "Personalizado"
+                      : dateRange === "30"
+                        ? "30 dias"
+                        : dateRange === "7"
+                          ? "7 dias"
+                          : dateRange === "15"
+                            ? "15 dias"
+                            : "Tudo"}
                   </span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[calc(100vw-2rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+              <PopoverContent
+                className="w-[calc(100vw-2rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                align="start"
+              >
                 <Command className="bg-transparent">
-                  <CommandList 
-                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                    style={{ WebkitOverflowScrolling: 'touch' }}
+                  <CommandList
+                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                    style={{ WebkitOverflowScrolling: "touch" }}
                     onWheelCapture={(e) => e.stopPropagation()}
                   >
                     <CommandGroup>
-                      <CommandItem onSelect={() => setDateRange("7")} className="text-[#d946ef] cursor-pointer">Últimos 7 dias</CommandItem>
-                      <CommandItem onSelect={() => setDateRange("15")} className="text-[#d946ef] cursor-pointer">Últimos 15 dias</CommandItem>
-                      <CommandItem onSelect={() => setDateRange("30")} className="text-[#d946ef] cursor-pointer">Últimos 30 dias</CommandItem>
+                      <CommandItem onSelect={() => setDateRange("7")} className="text-[#d946ef] cursor-pointer">
+                        Últimos 7 dias
+                      </CommandItem>
+                      <CommandItem onSelect={() => setDateRange("15")} className="text-[#d946ef] cursor-pointer">
+                        Últimos 15 dias
+                      </CommandItem>
+                      <CommandItem onSelect={() => setDateRange("30")} className="text-[#d946ef] cursor-pointer">
+                        Últimos 30 dias
+                      </CommandItem>
                     </CommandGroup>
                     <div className="border-t p-3">
                       <p className="text-xs text-muted-foreground mb-2">Personalizado:</p>
@@ -663,21 +772,31 @@ function DashboardPage() {
             {/* Filtro de Parceiro (Múltipla Escolha) */}
             <Popover modal={isMobile}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
-                  <span className="truncate">{selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}</span>
+                <Button
+                  variant="outline"
+                  className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"
+                >
+                  <span className="truncate">
+                    {selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}
+                  </span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+              <PopoverContent
+                className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                align="start"
+              >
                 <Command className="bg-transparent">
-                  <CommandList 
-                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                    style={{ WebkitOverflowScrolling: 'touch' }}
+                  <CommandList
+                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                    style={{ WebkitOverflowScrolling: "touch" }}
                     onWheelCapture={(e) => e.stopPropagation()}
                   >
                     <CommandGroup>
                       <CommandItem onSelect={() => setSelectedPartners([])} className="text-[#d946ef] cursor-pointer">
-                        <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                        <div
+                          className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                        >
                           {selectedPartners.length === 0 && "✓"}
                         </div>
                         Todos Parceiros
@@ -696,7 +815,9 @@ function DashboardPage() {
                             }}
                             className="text-[#d946ef] cursor-pointer"
                           >
-                            <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                            <div
+                              className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                            >
                               {isSelected && "✓"}
                             </div>
                             {p.name}
@@ -712,21 +833,31 @@ function DashboardPage() {
             {/* Filtro de Produto (Múltipla Escolha) */}
             <Popover modal={isMobile}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors">
-                  <span className="truncate">{selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}</span>
+                <Button
+                  variant="outline"
+                  className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"
+                >
+                  <span className="truncate">
+                    {selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}
+                  </span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+              <PopoverContent
+                className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                align="start"
+              >
                 <Command className="bg-transparent">
-                  <CommandList 
-                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                    style={{ WebkitOverflowScrolling: 'touch' }}
+                  <CommandList
+                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                    style={{ WebkitOverflowScrolling: "touch" }}
                     onWheelCapture={(e) => e.stopPropagation()}
                   >
                     <CommandGroup>
                       <CommandItem onSelect={() => setSelectedProducts([])} className="text-[#d946ef] cursor-pointer">
-                        <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                        <div
+                          className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                        >
                           {selectedProducts.length === 0 && "✓"}
                         </div>
                         Todos Produtos
@@ -745,7 +876,9 @@ function DashboardPage() {
                             }}
                             className="text-[#d946ef] cursor-pointer"
                           >
-                            <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                            <div
+                              className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                            >
                               {isSelected && "✓"}
                             </div>
                             {p.name}
@@ -757,7 +890,6 @@ function DashboardPage() {
                 </Command>
               </PopoverContent>
             </Popover>
-
           </div>
         </div>
 
@@ -879,31 +1011,51 @@ function DashboardPage() {
             <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-4 w-full">
-            
             {/* Período Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
+                  <Button
+                    variant="outline"
+                    className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]"
+                  >
                     <span className="flex items-center gap-2 truncate">
                       <CalendarIcon className="h-4 w-4 shrink-0" />
-                      Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "7" ? "7 dias" : dateRange === "15" ? "15 dias" : "Tudo"}
+                      Período:{" "}
+                      {dateRange === "custom"
+                        ? "Personalizado"
+                        : dateRange === "30"
+                          ? "30 dias"
+                          : dateRange === "7"
+                            ? "7 dias"
+                            : dateRange === "15"
+                              ? "15 dias"
+                              : "Tudo"}
                     </span>
                     <ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <PopoverContent
+                  className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                  align="start"
+                >
                   <Command className="bg-transparent">
-                    <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    <CommandList
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                      style={{ WebkitOverflowScrolling: "touch" }}
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
-                        <CommandItem onSelect={() => setDateRange("7")} className="text-[#d946ef] cursor-pointer">Últimos 7 dias</CommandItem>
-                        <CommandItem onSelect={() => setDateRange("15")} className="text-[#d946ef] cursor-pointer">Últimos 15 dias</CommandItem>
-                        <CommandItem onSelect={() => setDateRange("30")} className="text-[#d946ef] cursor-pointer">Últimos 30 dias</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("7")} className="text-[#d946ef] cursor-pointer">
+                          Últimos 7 dias
+                        </CommandItem>
+                        <CommandItem onSelect={() => setDateRange("15")} className="text-[#d946ef] cursor-pointer">
+                          Últimos 15 dias
+                        </CommandItem>
+                        <CommandItem onSelect={() => setDateRange("30")} className="text-[#d946ef] cursor-pointer">
+                          Últimos 30 dias
+                        </CommandItem>
                       </CommandGroup>
                       <div className="border-t p-3">
                         <p className="text-xs text-muted-foreground mb-2">Personalizado:</p>
@@ -937,21 +1089,33 @@ function DashboardPage() {
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Parceiro</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
-                    <span className="truncate">{selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}</span>
+                  <Button
+                    variant="outline"
+                    className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]"
+                  >
+                    <span className="truncate">
+                      {selectedPartners.length === 0
+                        ? "Todos Parceiros"
+                        : `${selectedPartners.length} parceiro(s) sel.`}
+                    </span>
                     <ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <PopoverContent
+                  className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                  align="start"
+                >
                   <Command className="bg-transparent">
-                    <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    <CommandList
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                      style={{ WebkitOverflowScrolling: "touch" }}
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedPartners([])} className="text-[#d946ef] cursor-pointer">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                          <div
+                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                          >
                             {selectedPartners.length === 0 && "✓"}
                           </div>
                           Todos Parceiros
@@ -970,7 +1134,9 @@ function DashboardPage() {
                               }}
                               className="text-[#d946ef] cursor-pointer"
                             >
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                              <div
+                                className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                              >
                                 {isSelected && "✓"}
                               </div>
                               {p.name}
@@ -989,21 +1155,31 @@ function DashboardPage() {
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Produto</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
-                    <span className="truncate">{selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}</span>
+                  <Button
+                    variant="outline"
+                    className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]"
+                  >
+                    <span className="truncate">
+                      {selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}
+                    </span>
                     <ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <PopoverContent
+                  className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                  align="start"
+                >
                   <Command className="bg-transparent">
-                    <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    <CommandList
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                      style={{ WebkitOverflowScrolling: "touch" }}
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
                         <CommandItem onSelect={() => setSelectedProducts([])} className="text-[#d946ef] cursor-pointer">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                          <div
+                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                          >
                             {selectedProducts.length === 0 && "✓"}
                           </div>
                           Todos Produtos
@@ -1022,7 +1198,9 @@ function DashboardPage() {
                               }}
                               className="text-[#d946ef] cursor-pointer"
                             >
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                              <div
+                                className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                              >
                                 {isSelected && "✓"}
                               </div>
                               {p.name}
@@ -1036,7 +1214,10 @@ function DashboardPage() {
               </Popover>
             </div>
 
-            <Button onClick={() => setMobileFilterOpen(false)} className="w-full h-11 rounded-xl bg-[#B300FF] hover:bg-[#9f00e6] text-white font-semibold mt-2">
+            <Button
+              onClick={() => setMobileFilterOpen(false)}
+              className="w-full h-11 rounded-xl bg-[#B300FF] hover:bg-[#9f00e6] text-white font-semibold mt-2"
+            >
               Aplicar Filtros
             </Button>
           </div>

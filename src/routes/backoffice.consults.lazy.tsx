@@ -10,13 +10,13 @@
  * Torre de controle de topo de funil de alta performance. Utiliza payload enxuto
  * na listagem principal, filtros de data no servidor, importação dinâmica do Excel
  * e carregamento sob demanda no Sheet de auditoria.
- * 
+ *
  * [MUDANÇAS ARQUITETURAIS - 1:N OFFERS]:
  * Com a introdução do Cart Preservation, uma visita passou a possuir N ofertas.
  * A extração `visit_offers[0]` foi substituída pelo "Extrator Temporal Determinístico",
  * que ordena as ofertas por `created_at DESC` em memória, assegurando que o Analista
  * visualizará sempre o último pageview / última intenção do lead.
- * 
+ *
  * [EVENT-LEVEL CONTEXT]:
  * partner_id, product_id, partners, product_types e raw_payload agora
  * são resolvidos milimetricamente através da relação visit_updates -> visit_offers
@@ -116,32 +116,32 @@ function ConsultsPage() {
   const printRef = useRef<HTMLDivElement>(null);
 
   const [stats, setStats] = useState({
-  total: 0,
-  consultas: 0,
-  sites_parceiros: 0,
-  simulacoes: 0
+    total: 0,
+    consultas: 0,
+    sites_parceiros: 0,
+    simulacoes: 0,
   });
 
   useEffect(() => {
     async function loadDropdowns() {
       if (!backofficeUser) return;
 
-      const { data: pData } = await supabase.from('partners').select('id, name').eq('is_active', true).order('name');
-      const { data: prData } = await supabase.from('product_types').select('id, name').order('name');
+      const { data: pData } = await supabase.from("partners").select("id, name").eq("is_active", true).order("name");
+      const { data: prData } = await supabase.from("product_types").select("id, name").order("name");
 
       if (pData) {
-        if (backofficeUser.role === 'viewer' && !backofficeUser.allowed_partners?.includes("*")) {
+        if (backofficeUser.role === "viewer" && !backofficeUser.allowed_partners?.includes("*")) {
           const allowed = backofficeUser.allowed_partners || [];
-          setPartnersList(pData.filter(p => allowed.includes(String(p.id))));
+          setPartnersList(pData.filter((p) => allowed.includes(String(p.id))));
         } else {
           setPartnersList(pData);
         }
       }
 
       if (prData) {
-        if (backofficeUser.role === 'viewer' && !backofficeUser.allowed_products?.includes("*")) {
+        if (backofficeUser.role === "viewer" && !backofficeUser.allowed_products?.includes("*")) {
           const allowed = backofficeUser.allowed_products || [];
-          setProductsList(prData.filter(pr => allowed.includes(String(pr.id))));
+          setProductsList(prData.filter((pr) => allowed.includes(String(pr.id))));
         } else {
           setProductsList(prData);
         }
@@ -197,20 +197,26 @@ function ConsultsPage() {
       // ✨ ARQUITETURA 1:N - QUERY BLINDADA COM EVENT-LEVEL CONTEXT
       // Parceiros, Produtos e Payloads agora vivem na relação visit_updates
       // ============================================================================
-      let query = supabase.from("visits").select(
-        `
-          id, created_at, action, utm_source, state,
-          visit_entities(name, document, phone, email),
-          visit_offers!inner(offer_id, offer_description, offer_value, event_id, event_description, event_end_date, created_at, visit_update_id, category_types(name)),
-          visit_updates!inner(id, action, created_at, partner_id, product_id, raw_payload, partners(name, logo_url), product_types(name))
-        `
-      )
-      .in('visit_updates.action', ['SIMULATE', 'CONSULT', 'REDIRECT']);
+      let query = supabase
+        .from("visit_updates")
+        .select(
+          `
+          id, action, created_at, partner_id, product_id, raw_payload,
+          partners(name, logo_url),
+          product_types(name),
+          visits!inner(
+            id, created_at, utm_source, state,
+            visit_entities(name, document, phone, email),
+            visit_offers(visit_update_id, offer_id, offer_description, offer_value, event_id, event_description, event_start_date, event_end_date, created_at, category_types(name))
+          )
+        `,
+        )
+        .in("action", ["SIMULATE", "CONSULT", "REDIRECT"]);
 
       // ============================================================================
       // RESTRIÇÕES DE ESCOPO POR USUÁRIO (RBAC - Viewer) -> APONTANDO PARA VISIT_UPDATES
       // ============================================================================
-      if (backofficeUser && backofficeUser.role === 'viewer') {
+      if (backofficeUser && backofficeUser.role === "viewer") {
         const allowedPartners = backofficeUser.allowed_partners || [];
         const allowedProducts = backofficeUser.allowed_products || [];
 
@@ -273,47 +279,47 @@ function ConsultsPage() {
       // ============================================================================
       // NORMALIZAÇÃO 1:N E DETERMINISMO TEMPORAL
       // ============================================================================
-      const normalized = slicedData.flatMap((v) => {
-        const sortedOffers = Array.isArray(v.visit_offers) 
-          ? [...v.visit_offers].sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+      const normalized = slicedData.map((u) => {
+        const visit: any = Array.isArray(u.visits) ? (u.visits[0] ?? {}) : (u.visits || {});
+        const entity = Array.isArray(visit.visit_entities) ? (visit.visit_entities[0] ?? null) : visit.visit_entities;
+
+        // Filtramos as ofertas da visita pai para manter APENAS a que pertence a esta linha.
+        // No caso do Seguro, como não tem oferta pra ele, isso vai retornar vazio [].
+        const updateOffers = Array.isArray(visit.visit_offers)
+          ? visit.visit_offers.filter((o: any) => o.visit_update_id === u.id)
           : [];
 
-        const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [];
+        // Ordena o array filtrado (que estará vazio para o Seguro)
+        const sortedOffers = updateOffers.sort(
+          (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+        );
 
-        const baseVisit = {
-          ...v,
-          visit_entities: Array.isArray(v.visit_entities) ? v.visit_entities[0] ?? null : v.visit_entities,
-          all_offers: sortedOffers, 
-          has_contact: contactSet.has(v.id),
+        let eventPayload = {};
+        if (typeof u.raw_payload === "string") {
+          try {
+            eventPayload = JSON.parse(u.raw_payload);
+          } catch (e) {}
+        } else {
+          eventPayload = u.raw_payload || {};
+        }
+
+        return {
+          id: visit.id,
+          row_id: u.id,
+          created_at: u.created_at,
+          action: u.action,
+          utm_source: visit.utm_source,
+          state: visit.state,
+          visit_entities: entity,
+          visit_offers: sortedOffers[0] || {},
+          all_offers: sortedOffers,
+          partner_id: u.partner_id,
+          product_id: u.product_id,
+          partners: u.partners,
+          product_types: u.product_types,
+          raw_payload: eventPayload,
+          has_contact: false,
         };
-
-        // EXPLOSÃO: Para cada oferta, acha o evento (visit_update) exato que a gerou!
-        return sortedOffers.map((off, index) => {
-          
-          const exactUpdate = updates.find((u: any) => u.id === off.visit_update_id) || updates[0] || {};
-          
-          let eventPayload = {};
-          if (typeof exactUpdate.raw_payload === 'string') {
-            try { eventPayload = JSON.parse(exactUpdate.raw_payload); } catch (e) {}
-          } else {
-            eventPayload = exactUpdate.raw_payload || {};
-          }
-
-          return {
-            ...baseVisit,
-            row_id: `${v.id}-${index}`, 
-            visit_offers: off,
-            
-            // 🔥 BLINDAGEM: O contexto injetado na grid herda APENAS do evento!
-            update_id: exactUpdate.id,
-            action: exactUpdate.action, // Ação Real do Evento
-            partner_id: exactUpdate.partner_id,
-            product_id: exactUpdate.product_id,
-            partners: exactUpdate.partners,
-            product_types: exactUpdate.product_types,
-            raw_payload: eventPayload
-          };
-        });
       });
 
       if (search.trim() !== "") {
@@ -337,25 +343,51 @@ function ConsultsPage() {
   }
 
   async function loadStats() {
-    const { p_from, p_to } = getPeriodDates(dateRange, customRange);
+    try {
+      let dateLimit = new Date();
+      if (dateRange === "30") dateLimit.setDate(dateLimit.getDate() - 30);
+      else if (dateRange === "90") dateLimit.setDate(dateLimit.getDate() - 90);
+      else if (dateRange === "all") dateLimit = new Date("2020-01-01");
 
-    const { data, error } = await supabase.rpc("visit_stats", {
-      p_from,
-      p_to,
-      p_partner_ids: selectedPartners.length > 0 ? selectedPartners.map(Number) : null,
-      p_product_ids: selectedProducts.length > 0 ? selectedProducts.map(Number) : null,
-      p_search: search.trim() || null,
-      p_status: selectedStatus.length > 0 ? selectedStatus : null
-    });
+      let query = supabase
+        .from("visit_updates")
+        .select("action, visit_id, partner_id, product_id, visits!inner(id, created_at)")
+        .in("action", ["SIMULATE", "CONSULT", "REDIRECT"]);
 
-    if (error) {
-      console.error("Erro ao carregar estatísticas de visitas:", error);
-      return;
+      // Aplica o filtro de período
+      if (dateRange !== "all" && dateRange !== "custom") {
+        query = query.gte("visits.created_at", dateLimit.toISOString());
+      } else if (dateRange === "custom" && customRange?.from && customRange?.to) {
+        query = query
+          .gte("visits.created_at", customRange.from.toISOString())
+          .lte("visits.created_at", customRange.to.toISOString());
+      }
+
+      // Aplica os filtros de parceiros e produtos
+      if (selectedPartners.length > 0) query = query.in("partner_id", selectedPartners);
+      if (selectedProducts.length > 0) query = query.in("product_id", selectedProducts);
+
+      const { data: updates, error } = await query;
+      if (error) throw error;
+
+      const items = updates || [];
+
+      // Total de visitas únicas considerando os filtros
+      const uniqueVisits = new Set(items.map((i) => i.visit_id)).size;
+
+      const simulacoes = items.filter((u) => (u.action || "").toUpperCase().includes("SIMULATE")).length;
+      const consultas = items.filter((u) => (u.action || "").toUpperCase().includes("CONSULT")).length;
+      const sites_parceiros = items.filter((u) => (u.action || "").toUpperCase().includes("REDIRECT")).length;
+
+      setStats({
+        total: uniqueVisits,
+        consultas,
+        sites_parceiros,
+        simulacoes,
+      });
+    } catch (e) {
+      console.error("Erro ao calcular estatísticas com filtros:", e);
     }
-
-    const s = data?.[0] ?? { total: 0, consultas: 0, sites_parceiros: 0, simulacoes: 0 };
-    setStats(s);
-    setTotalPages(Math.ceil(Number(s.total) / PAGE_SIZE));
   }
 
   async function handleSelectConsult(row: any) {
@@ -364,16 +396,23 @@ function ConsultsPage() {
     setActiveConsult(row);
 
     try {
-      // Como partner e product não vivem mais na raiz, buscamos apenas as entidades e consentimentos
-      const { data: fullData, error } = await supabase
-        .from("visits")
-        .select(`
-          id, created_at, action, utm_source, utm_campaign, country, state, city, ip_address, operating_system, device_type, origin_url, target_url,
-          visit_entities(id, name, document, phone, email, birth_date, gender, entity_type, entity_details),
-          visit_offers(id, visit_id, visit_update_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_end_date, offer_id, offer_description, offer_value, category_id, created_at, category_types(name), subcategory ),
-          visit_consents(id, consent_id, accepted, accepted_at, created_at, ip_address, country, state, city, operating_system, device_type, origin_details, page_snapshot)
-        `)
-        .eq("id", row.id)
+      // 🔥 AGORA SIM: Buscamos a partir do visit_updates (a ação exata no tempo)
+      const { data: updateData, error } = await supabase
+        .from("visit_updates")
+        .select(
+          `
+          id, action, created_at, partner_id, product_id, raw_payload,
+          partners(name, logo_url),
+          product_types(name),
+          visits!inner(
+            id, utm_source, utm_campaign, country, state, city, ip_address, operating_system, device_type, origin_url, target_url,
+            visit_entities(id, name, document, phone, email, birth_date, gender, entity_type, entity_details),
+            visit_offers(id, visit_id, visit_update_id, manager_name, seller_id, legal_name, trade_name, event_id, event_description, event_start_date, event_end_date, offer_id, offer_description, offer_value, category_id, created_at, category_types(name), subcategory ),
+            visit_consents(id, consent_id, accepted, accepted_at, created_at, ip_address, country, state, city, operating_system, device_type, origin_details, page_snapshot)
+          )
+        `,
+        )
+        .eq("id", row.row_id) // 👈 Buscando estritamente pelo ID do update!
         .single();
 
       if (error) {
@@ -382,30 +421,41 @@ function ConsultsPage() {
         return;
       }
 
-      if (fullData) {
-        const sortedOffers = Array.isArray(fullData.visit_offers) 
-          ? [...fullData.visit_offers].sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+      if (updateData) {
+        const visit: any = Array.isArray(updateData.visits)
+          ? (updateData.visits[0] ?? {})
+          : (updateData.visits || {});
+
+        // FIM DO VAZAMENTO: As ofertas vêm restritas a este update_id específico
+        const updateOffers = Array.isArray(visit.visit_offers)
+          ? visit.visit_offers.filter((o: any) => o.visit_update_id === updateData.id)
           : [];
 
-        const clickedOfferTime = row.visit_offers?.created_at;
-        const mainOffer = sortedOffers.find((o: any) => o.created_at === clickedOfferTime) || sortedOffers[0] || null;
+        const sortedOffers = updateOffers.sort(
+          (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+        );
+        const mainOffer = sortedOffers[0] || null;
 
         setActiveConsult({
-          ...fullData,
-          has_contact: row.has_contact,
-          visit_entities: Array.isArray(fullData.visit_entities) ? fullData.visit_entities[0] ?? null : fullData.visit_entities,
-          
-          // 🔥 MANTÉM OS DADOS DO EVENTO INTACTOS (Blindagem contra vazamento)
-          partner_id: row.partner_id,
-          product_id: row.product_id,
-          partners: row.partners,
-          product_types: row.product_types,
-          raw_payload: row.raw_payload,
-          action: row.action, 
+          // 1. Herda os atributos gerais da visita raiz (utm_source, state, etc)
+          ...visit,
 
-          visit_offers: mainOffer, 
-          other_offers: sortedOffers.filter((o: any) => o.created_at !== mainOffer?.created_at), 
-          visit_consents: fullData.visit_consents || [],
+          // 2. Sobrescreve com os dados do EVENTO exato (o update)
+          created_at: updateData.created_at,
+          action: updateData.action,
+          raw_payload: updateData.raw_payload,
+          partner_id: updateData.partner_id,
+          product_id: updateData.product_id,
+          partners: updateData.partners,
+          product_types: updateData.product_types,
+          has_contact: row.has_contact,
+
+          // 3. Estruturas filhas 100% blindadas e normalizadas
+          visit_entities: Array.isArray(visit.visit_entities)
+            ? (visit.visit_entities[0] ?? null)
+            : visit.visit_entities,
+          visit_offers: mainOffer,
+          visit_consents: visit.visit_consents || [],
         });
       }
     } catch (e) {
@@ -420,8 +470,8 @@ function ConsultsPage() {
     if (act.includes("SIMULATE")) return "SIMULAÇÃO";
     if (act.includes("CONSULT")) return "CONSULTA";
     if (act.includes("REDIRECT")) return "PARCEIRO";
-    
-    return "CONSULTA"; 
+
+    return "CONSULTA";
   }
 
   const statusOptions = ["SIMULAÇÃO", "CONSULTA", "PARCEIRO"];
@@ -652,8 +702,8 @@ function ConsultsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-56 p-0" align="start">
                   <Command>
-                    <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                    <CommandList
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
@@ -711,8 +761,8 @@ function ConsultsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-56 p-0" align="start">
                   <Command>
-                    <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                    <CommandList
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
@@ -775,9 +825,9 @@ function ConsultsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-56 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    <CommandList
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                      style={{ WebkitOverflowScrolling: "touch" }}
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
@@ -846,9 +896,9 @@ function ConsultsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-auto" align="start">
                   <Command>
-                    <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    <CommandList
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                      style={{ WebkitOverflowScrolling: "touch" }}
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
@@ -1117,29 +1167,10 @@ function ConsultsPage() {
                   <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     <PanelVisit visitData={sim} />
                     <PanelEntity entity={entity} entityDetails={ed} />
-                    
+
                     {/* DESTAQUE: A oferta que o vendedor clicou na tabela */}
                     <PanelOffer offer={offer} />
                     <PanelSeller offer={offer} />
-
-                    {/* ✨ NOVO: HISTÓRICO DE INTERESSES (Outras consultas no mesmo carrinho) */}
-                    {sim.other_offers && sim.other_offers.length > 0 && (
-                      <div className="mt-8 space-y-4 pt-4 border-t border-slate-200">
-                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
-                          Outras consultas nesta sessão ({sim.other_offers.length})
-                        </h3>
-                        {sim.other_offers.map((off: any, idx: number) => (
-                          <div key={idx} className="relative pl-4 border-l-2 border-[#B300FF]/20 space-y-4 opacity-70 hover:opacity-100 transition-opacity pb-4">
-                            <div className="absolute -left-[5px] top-0 h-2 w-2 rounded-full bg-[#B300FF]/40" />
-                            <div className="text-[10px] font-bold text-[#B300FF] uppercase">
-                              {formatDate(off.created_at).d} às {formatDate(off.created_at).h}
-                            </div>
-                            <PanelOffer offer={off} />
-                            <PanelSeller offer={off} />
-                          </div>
-                        ))}
-                      </div>
-                    )}
 
                     {/* RESTANTE DO CÓDIGO (Consents, Configs, FAQs, Footer) MANTIDO INTACTO */}
                     {sim.visit_consents && sim.visit_consents.length > 0 && (
@@ -1205,9 +1236,9 @@ function ConsultsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-0" align="start">
                   <Command>
-                    <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    <CommandList
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                      style={{ WebkitOverflowScrolling: "touch" }}
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
@@ -1265,9 +1296,9 @@ function ConsultsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-0" align="start">
                   <Command>
-                    <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    <CommandList
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                      style={{ WebkitOverflowScrolling: "touch" }}
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
@@ -1330,9 +1361,9 @@ function ConsultsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-72 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    <CommandList
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                      style={{ WebkitOverflowScrolling: "touch" }}
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
@@ -1399,9 +1430,9 @@ function ConsultsPage() {
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-auto" align="start">
                   <Command>
-                    <CommandList 
-                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    <CommandList
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                      style={{ WebkitOverflowScrolling: "touch" }}
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>

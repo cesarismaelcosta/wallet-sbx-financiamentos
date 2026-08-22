@@ -69,7 +69,14 @@ export function Step1Simulation() {
 
     try {
       const payload = {
-        ...state.data,
+        // 1. Identificadores Estritos (Thin)
+        action: "SIMULATE",
+        visit_id: state.data.visit_id,
+        visit_update_id: state.data.visit_update_id,
+        offer_id: state.data.offer?.offer_id,
+        product_id: state.data.product_id,
+
+        // 2. O que o usuário efetivamente alterou/escolheu na tela
         simulation_details: {
           requested_value: localValorOferta,
           installments: localParcelas,
@@ -77,6 +84,8 @@ export function Step1Simulation() {
           down_payment_percentage: localPercentualEntrada,
           cet_rate: state.data.taxa || 0,
         },
+
+        // 3. Consentimentos assinados
         consents: state.data.consent_configs
           ?.filter((c: any) => acceptedConsents[c.id])
           .map((c: any) => ({
@@ -112,7 +121,10 @@ export function Step1Simulation() {
   }
 
   const { rules, consent_configs, offer } = state.data;
-  const tetoMaximo = offer?.vehicle_details?.fipe_value ?? (offer?.offer_value * (1 + (rules?.max_offer_cap_percent ?? 20) / 100));
+  // Atributos extraídos com segurança e fallback para evitar NaN no cálculo do teto
+  const tetoMaximo = 
+    offer?.vehicle_details?.fipe_value ?? 
+    ((offer?.offer_value || 0) * (1 + (rules?.max_offer_cap_percent ?? 20) / 100));
 
   // Atributos extraídos com segurança idênticos aos de Veículos
   const loteSubIndex = offer?.lote_index || offer?.lote_numero || "1";
