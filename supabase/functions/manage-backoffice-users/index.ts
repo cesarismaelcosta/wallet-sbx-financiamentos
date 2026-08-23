@@ -94,7 +94,7 @@ async function ensureAdmin(authHeader: string | null) {
   const { data: profile, error } = await adminClient
     .from("backoffice_users")
     .select("role")
-    .ilike("email", user.email)
+    .eq("email", user.email.toLowerCase())
     .eq("is_active", true)
     .single();
 

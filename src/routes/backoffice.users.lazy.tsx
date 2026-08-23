@@ -14,10 +14,40 @@
  * - Viewer: Possui acesso granular e restrito. A seleção é feita a partir de uma listagem 
  *   dinâmica. Agora permite explicitamente enviar `["*"]` caso precise dar acesso total.
  * 
- * @behavior Promoção de Cargo (changeRole):
- * - Se um usuário com perfil 'viewer' for promovido para 'admin' ou 'manager' 
- *   diretamente pelo dropdown da tabela, o sistema intercepta a chamada e anexa 
- *   `["*"]` ao payload. Isso limpa quaisquer restrições residuais no banco.
+ * [MUTAÇÕES & DELEGAÇÃO SERVERLESS]:
+ * - Operações críticas (Cadastrar, Mudar Cargo, Inativar e Editar Permissões) NUNCA 
+ *   são realizadas via queries diretas no cliente (`.insert()` ou `.update()`).
+ * - O frontend atua como um mensageiro (Dumb Client) e delega toda a intenção 
+ *   de mudança para a Edge Function `manage-backoffice-users`. 
+ * - É o servidor que assume a responsabilidade de auditar, validar o domínio e 
+ *   limpar restrições residuais (ex: injetar `["*"]` ao promover um Viewer para Admin).
+ * 
+ * [ENTERPRISE ZERO-TRUST - OBFUSCATION V3]:
+ * - As 4 consultas originais de LEITURA (`backoffice_users`, `domains`, `partners`, 
+ *   `products`) foram consolidadas na RPC `get_backoffice_users_data`. Isso elimina 
+ *   a exposição do esquema de tabelas estruturais de segurança na aba Network (F12) 
+ *   e reduz o tempo de carregamento da tela via otimização de Round-Trips de rede.
+ * 
+ * =========================================================================
+ * ⚙️ DEPENDÊNCIA DE INFRAESTRUTURA (POSTGRESQL RPCs)
+ * =========================================================================
+ * Para proteger o esquema, as queries de leitura em lote dependem desta Procedure:
+ * 
+ * -------------------------------------------------------------------------
+ * PROCEDURE: Busca Consolidada de Usuários e Metadados
+ * -------------------------------------------------------------------------
+ * CREATE OR REPLACE FUNCTION get_backoffice_users_data() RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+ * DECLARE v_result JSONB;
+ * BEGIN
+ *   SELECT jsonb_build_object(
+ *     'users', (SELECT COALESCE(jsonb_agg(row_to_json(bu)), '[]'::jsonb) FROM (SELECT * FROM backoffice_users ORDER BY created_at DESC) bu),
+ *     'domains', (SELECT COALESCE(jsonb_agg(d.domain), '[]'::jsonb) FROM allowed_email_domains d WHERE d.is_active = true),
+ *     'partners', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name)), '[]'::jsonb) FROM partners p),
+ *     'products', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', pt.id, 'name', pt.name)), '[]'::jsonb) FROM product_types pt)
+ *   ) INTO v_result;
+ *   RETURN v_result;
+ * END;
+ * $$;
  * ============================================================================
  */
 
@@ -131,24 +161,19 @@ function UsuariosPage() {
   async function load() {
     setLoading(true);
     
-    const { data: userData } = await supabase
-      .from("backoffice_users")
-      .select("*")
-      .order("created_at", { ascending: false });
-      
-    const { data: domainData, error: domainError } = await supabase
-      .from("allowed_email_domains")
-      .select("domain")
-      .eq("is_active", true);
+    // =========================================================================
+    // [ENTERPRISE ZERO-TRUST]: Chamada cega via RPC para carregar todos os dados
+    // =========================================================================
+    const { data, error } = await supabase.rpc('get_backoffice_users_data');
 
-    const { data: partnersData } = await supabase.from("partners").select("id, name");
-    const { data: productsData } = await supabase.from("product_types").select("id, name");
-
-    if (userData) setUsers(userData as BackofficeUserRow[]);
-    if (domainData) setDomains(domainData.map((d) => d.domain));
-    if (partnersData) setPartnersList(partnersData);
-    if (productsData) setProductsList(productsData);
-    if (domainError) toast.error("Não foi possível carregar os domínios permitidos.");
+    if (error) {
+      toast.error("Erro ao carregar dados de usuários.");
+    } else if (data) {
+      setUsers(data.users || []);
+      setDomains(data.domains || []);
+      setPartnersList(data.partners || []);
+      setProductsList(data.products || []);
+    }
     
     setLoading(false);
   }
@@ -363,7 +388,6 @@ function UsuariosPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                   <Command>
-                    {/* HACK DE SCROLL: onWheelCapture para evitar bloqueio do Dialog no PC */}
                     <CommandList 
                       className="max-h-56 overflow-y-auto overscroll-contain"
                       onWheelCapture={(e) => e.stopPropagation()}
@@ -425,7 +449,6 @@ function UsuariosPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                   <Command>
-                    {/* HACK DE SCROLL: onWheelCapture */}
                     <CommandList 
                       className="max-h-56 overflow-y-auto overscroll-contain"
                       onWheelCapture={(e) => e.stopPropagation()}
@@ -508,7 +531,6 @@ function UsuariosPage() {
             </PopoverTrigger>
             <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
               <Command>
-                {/* HACK DE SCROLL: onWheelCapture */}
                 <CommandList 
                   className="max-h-56 overflow-y-auto overscroll-contain"
                   onWheelCapture={(e) => e.stopPropagation()}
@@ -570,7 +592,6 @@ function UsuariosPage() {
             </PopoverTrigger>
             <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
               <Command>
-                {/* HACK DE SCROLL: onWheelCapture */}
                 <CommandList 
                   className="max-h-56 overflow-y-auto overscroll-contain"
                   onWheelCapture={(e) => e.stopPropagation()}

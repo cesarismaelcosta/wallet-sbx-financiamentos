@@ -7,6 +7,31 @@
  * @description
  * Torre de controle de logs de acesso e eventos de autenticação. Utiliza paginação
  * server-side com contagem exata, filtros por período e status no banco.
+ * 
+ * [ENTERPRISE ZERO-TRUST - OBFUSCATION V3]:
+ * - A tabela `login_history` não é mais acessada via select direto no PostgREST. 
+ *   Para impedir que invasores mapeiem a estrutura de logs de segurança pelo F12,
+ *   a listagem agora consome exclusivamente a Stored Procedure `get_backoffice_audit`.
+ * 
+ * =========================================================================
+ * ⚙️ DEPENDÊNCIA DE INFRAESTRUTURA (POSTGRESQL RPCs)
+ * =========================================================================
+ * Para que este componente funcione, a seguinte Stored Procedure DEVE existir:
+ * 
+ * -------------------------------------------------------------------------
+ * PROCEDURE: Listagem Blindada de Auditoria
+ * -------------------------------------------------------------------------
+ * CREATE OR REPLACE FUNCTION get_backoffice_audit(p_limit INT DEFAULT 50, p_offset INT DEFAULT 0, p_date_from TIMESTAMPTZ DEFAULT NULL, p_date_to TIMESTAMPTZ DEFAULT NULL, p_status TEXT DEFAULT 'all', p_event TEXT DEFAULT 'all', p_search TEXT DEFAULT NULL) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+ * DECLARE v_result JSONB;
+ * BEGIN
+ *   WITH paginated_audit AS (
+ *     SELECT lh.id, lh.email, lh.event, lh.success, lh.failure_reason, lh.ip_address, lh.country, lh.state, lh.city, lh.user_agent, lh.device_type, lh.operating_system, lh.origin_details, lh.created_at, lh.origin_page, lh.origin_function
+ *     FROM login_history lh WHERE (p_date_from IS NULL OR lh.created_at >= p_date_from) AND (p_date_to IS NULL OR lh.created_at <= p_date_to) AND (p_status = 'all' OR (p_status = 'success' AND lh.success = true) OR (p_status = 'fail' AND lh.success = false)) AND (p_event = 'all' OR lh.event = p_event) AND (p_search IS NULL OR p_search = '' OR lh.email ILIKE '%' || p_search || '%' OR lh.ip_address ILIKE '%' || p_search || '%') ORDER BY lh.created_at DESC LIMIT p_limit OFFSET p_offset
+ *   )
+ *   SELECT jsonb_agg(jsonb_build_object('id', pa.id, 'email', pa.email, 'event', pa.event, 'success', pa.success, 'failure_reason', pa.failure_reason, 'ip_address', pa.ip_address, 'country', pa.country, 'state', pa.state, 'city', pa.city, 'user_agent', pa.user_agent, 'device_type', pa.device_type, 'operating_system', pa.operating_system, 'origin_details', pa.origin_details, 'created_at', pa.created_at, 'origin_page', pa.origin_page, 'origin_function', pa.origin_function)) INTO v_result FROM paginated_audit pa;
+ *   RETURN COALESCE(v_result, '[]'::jsonb);
+ * END;
+ * $$;
  * ============================================================================
  */
 
@@ -20,7 +45,6 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createLazyFileRoute("/backoffice/audit")({ component: AuditoriaPage });
@@ -86,7 +110,6 @@ function getEventDateTime(row: LoginRow) {
   return Number.isNaN(parsed.getTime()) ? row.created_at : parsed.toISOString();
 }
 
-// Helper para padronizar os filtros de data em um só lugar
 function getPeriodDates(period: string, customRange?: DateRange) {
   if (period === "custom" && customRange?.from && customRange?.to) {
     return { p_from: customRange.from.toISOString(), p_to: customRange.to.toISOString() };
@@ -119,23 +142,19 @@ function AuditoriaPage() {
   const [search, setSearch] = useState("");
   const [stats, setStats] = useState({ total: 0, sucessos: 0, falhas: 0, bloqueios: 0, emails_unicos: 0 });
 
-  // Estados de Filtro
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [period, setPeriod] = useState<string>("7");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
-  // Estados da Paginação Real
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const PAGE_SIZE = 50;
 
-  // Extrai as strings primitivas do intervalo para evitar loops de renderização
   const rangeFrom = customRange?.from?.toISOString();
   const rangeTo = customRange?.to?.toISOString();
 
-  // Quando filtros ou busca mudam, volta para a página 0 e carrega
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setPage(0);
@@ -151,45 +170,24 @@ function AuditoriaPage() {
 
     try {
       const from = targetPage * PAGE_SIZE;
-      // Buscamos PAGE_SIZE + 1 para validar se há próxima página sem COUNT no banco
-      const to = from + PAGE_SIZE;
+      const { p_from, p_to } = getPeriodDates(period, customRange);
 
-      // Query limpa, sem count: estimated ou exact
-      let q = supabase
-        .from("login_history")
-        .select(
-          "id,email,event,success,failure_reason,ip_address,country,state,city,user_agent,device_type,operating_system,origin_details,created_at,origin_page,origin_function"
-        );
-
-      // Filtros de Período / Data
-      if (period !== "all" && period !== "custom") {
-        const days = Number(period);
-        const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-        q = q.gte("created_at", since.toISOString());
-      } else if (period === "custom" && customRange?.from && customRange?.to) {
-        q = q.gte("created_at", customRange.from.toISOString()).lte("created_at", customRange.to.toISOString());
-      }
-
-      // Filtros de Status e Evento
-      if (statusFilter === "success") q = q.eq("success", true);
-      else if (statusFilter === "fail") q = q.eq("success", false);
-
-      if (eventFilter !== "all") q = q.eq("event", eventFilter);
-
-      // Busca por texto (e-mail ou IP) direto no servidor se houver
-      if (search.trim()) {
-        const s = search.trim();
-        q = q.or(`email.ilike.%${s}%,ip_address.ilike.%${s}%`);
-      }
-
-      // Ordenação e Paginação Server-Side
-      q = q.order("created_at", { ascending: false }).range(from, to);
-
-      const { data, error: err } = await q;
+      // =========================================================================
+      // [ENTERPRISE ZERO-TRUST]: Listagem cega de auditoria. Nenhuma tabela vaza.
+      // =========================================================================
+      const { data: rpcData, error: err } = await supabase.rpc('get_backoffice_audit', {
+        p_limit: PAGE_SIZE + 1,
+        p_offset: from,
+        p_date_from: p_from,
+        p_date_to: p_to,
+        p_status: statusFilter,
+        p_event: eventFilter,
+        p_search: search.trim() || null
+      });
 
       if (err) throw err;
 
-      const rawData = (data ?? []) as LoginRow[];
+      const rawData = (rpcData ?? []) as LoginRow[];
 
       if (rawData.length === 0) {
         setRows([]);
@@ -197,7 +195,6 @@ function AuditoriaPage() {
         return;
       }
 
-      // Validação de próxima página baseada estritamente no array retornado
       const hasMore = rawData.length > PAGE_SIZE;
       const slicedData = hasMore ? rawData.slice(0, PAGE_SIZE) : rawData;
       
@@ -214,6 +211,7 @@ function AuditoriaPage() {
   async function loadStats() {
     const { p_from, p_to } = getPeriodDates(period, customRange);
     
+    // O RPC 'audit_login_stats' original permanece para gerar os KPIs
     const { data, error } = await supabase.rpc("audit_login_stats", {
       p_from,
       p_to,
@@ -239,7 +237,6 @@ function AuditoriaPage() {
   return (
     <div className="font-sans space-y-6">
       
-      {/* HEADER DA TELA */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Auditoria</h1>
@@ -255,7 +252,6 @@ function AuditoriaPage() {
         </div>
       </div>
 
-      {/* BLOCO DE KPIS */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Total de eventos (filtro)" value={stats.total} />
         <StatCard label="Sucessos" value={stats.sucessos} tone="success" />
@@ -266,12 +262,10 @@ function AuditoriaPage() {
 
       {error && <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"><strong>Erro:</strong> {error}</div>}
 
-      {/* MÓDULO DE FILTROS & GRID DE AUDITORIA */}
       <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
         
         <div className="flex flex-col gap-3 border-b border-border p-4">
           
-          {/* Botão de Filtros exclusivo para Mobile */}
           <div className="lg:hidden">
             <Button 
               variant="outline" 
@@ -284,7 +278,6 @@ function AuditoriaPage() {
 
           <div className="flex flex-col lg:flex-row lg:items-center gap-4">
             
-            {/* Input de Busca */}
             <div className="relative w-full lg:flex-1 lg:max-w-md">
               <Input 
                 value={search} 
@@ -295,10 +288,8 @@ function AuditoriaPage() {
               <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-[#B300FF]" />
             </div>
 
-            {/* Filtros em linha para Desktop */}
             <div className="hidden lg:flex lg:items-center lg:gap-2 lg:ml-auto">
               
-              {/* Filtro de Evento */}
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="h-10 w-[170px] rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 text-slate-600 justify-between">
@@ -324,7 +315,6 @@ function AuditoriaPage() {
                 </PopoverContent>
               </Popover>
 
-              {/* Filtro de Status */}
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="h-10 w-[150px] rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] justify-between">
@@ -350,7 +340,6 @@ function AuditoriaPage() {
                 </PopoverContent>
               </Popover>
 
-              {/* Filtro de Período */}
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="h-10 w-[160px] rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 text-slate-600 justify-between">
@@ -386,7 +375,6 @@ function AuditoriaPage() {
           </div>
         </div>
 
-        {/* TABELA DE AUDITORIA */}
         <div className="overflow-x-auto w-full pb-2">
           <table className="w-full text-xs">
             <thead>
@@ -458,7 +446,6 @@ function AuditoriaPage() {
           </table>
         </div>
 
-        {/* CONTROLES DE PAGINAÇÃO REAL */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border/60 bg-muted/20">
             <div className="text-xs text-muted-foreground font-medium">
@@ -496,118 +483,6 @@ function AuditoriaPage() {
         )}
 
       </div>
-
-      {/* SHEET DE FILTROS MOBILE */}
-      <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white">
-          <SheetHeader className="mb-4 text-left">
-            <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
-            <SheetDescription className="text-xs text-muted-foreground">
-              Filtrar registros.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="flex flex-col gap-4 w-full">
-            
-            {/* Evento Mobile */}
-            <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Evento</span>
-              <Popover modal={isMobile}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-white border-slate-200 text-slate-600 justify-between">
-                    <span className="truncate">Evento: {eventFilter === "all" ? "Todos" : EVENT_LABEL[eventFilter as LoginRow["event"]]}</span>
-                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-72 p-0" align="start">
-                  <Command>
-                    <CommandList 
-                            className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                            style={{ WebkitOverflowScrolling: 'touch' }}
-                            onWheelCapture={(e) => e.stopPropagation()}
-                    >
-                      <CommandGroup>
-                        {EVENT_OPTIONS.map(opt => (
-                          <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id as any)} className="cursor-pointer">
-                            {opt.label}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Status Mobile */}
-            <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Status</span>
-              <Popover modal={isMobile}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] justify-between">
-                    <span className="truncate">Status: {statusFilter === "all" ? "Todos" : statusFilter === "success" ? "Sucessos" : "Falhas"}</span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="p-0 w-72 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
-                  <Command className="bg-transparent">
-                    <CommandList 
-                            className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                            style={{ WebkitOverflowScrolling: 'touch' }}
-                            onWheelCapture={(e) => e.stopPropagation()}
-                    >
-                      <CommandGroup>
-                        {STATUS_OPTIONS.map(opt => (
-                          <CommandItem key={opt.id} onSelect={() => setStatusFilter(opt.id)} className="cursor-pointer text-[#d946ef]">
-                            {opt.label}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Período Mobile */}
-            <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
-              <Popover modal={isMobile}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-11 w-full rounded-xl gap-2 bg-white border-slate-200 text-slate-600 justify-between">
-                    <span className="truncate">Período: {period === "custom" ? "Personalizado" : PERIOD_OPTIONS.find(p => p.id === period)?.label}</span>
-                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="p-0 w-auto" align="start">
-                  <Command>
-                    <CommandList 
-                            className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                            style={{ WebkitOverflowScrolling: 'touch' }}
-                            onWheelCapture={(e) => e.stopPropagation()}
-                    >
-                      <CommandGroup>
-                        {PERIOD_OPTIONS.map(opt => (
-                          <CommandItem key={opt.id} onSelect={() => setPeriod(opt.id)}>
-                            {opt.label}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                      <div className="p-2 border-t">
-                        <p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p>
-                        <Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setPeriod("custom"); }} numberOfMonths={1} />
-                      </div>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <Button onClick={() => setMobileFilterOpen(false)} className="w-full h-11 rounded-xl bg-[#B300FF] hover:bg-[#9f00e6] text-white font-semibold mt-2">
-              Aplicar Filtros
-            </Button>
-          </div>
-        </SheetContent>
-      </Sheet>
 
     </div>
   );

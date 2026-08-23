@@ -9,13 +9,16 @@
  * da vertical de seguros. Garante o resgate tático do token efêmero (#xt=)
  * caso o usuário aterrissie diretamente em uma sub-rota cross-domain.
  * 
- * [FLUXO DE SEGURANÇA E EXECUÇÃO]:
- * 1. {Sniper Tático}: Inspeciona o fragmento da URL em prioridade máxima. 
+ * [FLUXO DE SEGURANÇA E EXECUÇÃO V2]:
+ * 1. {Provider Delegation}: O `FinancialAuthProvider` subiu para a raiz 
+ *    (`__root.tsx`). Este arquivo agora atua apenas como consumidor do contexto,
+ *    eliminando dupla montagem de sessão.
+ * 2. {Sniper Tático}: Inspeciona o fragmento da URL em prioridade máxima. 
  *    Se detectar o token `#xt=`, intercepta o ciclo, executa o redeem via AJAX
  *    e hidrata o sessionStorage antes de qualquer decisão do Guard.
- * 2. {Zero-Trust Guard}: Valida a presença do session_token ou respeita a flag 
+ * 3. {Zero-Trust Guard}: Valida a presença do session_token ou respeita a flag 
  *    `USE_COOKIE` para evitar falsos positivos.
- * 3. {State Rehydration}: Gerencia o ciclo de expiração via Handoff Token (Backend).
+ * 4. {State Rehydration}: Gerencia o ciclo de expiração via Handoff Token (Backend).
  * 
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
@@ -24,7 +27,9 @@
 import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
 import { useEffect, useState } from "react";
 import { FinancialHubLayout } from "@/features/financial-hub/components/layout/FinancialHubLayout";
-import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
+
+// ✨ NOTA: Importamos apenas o Hook. O Provider global está no __root.tsx
+import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext"; 
 import { USE_COOKIE, getTokenForPayload } from "@/services/session"; 
 import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoffRedeem";
 
@@ -34,6 +39,14 @@ import { PanelProductOfferSkeleton } from "@/features/financial-hub/components/l
 import { PanelStepSkeleton } from "@/features/financial-hub/components/layout/PanelStepSkeleton";
 import { PanelFAQSkeleton } from "@/features/financial-hub/components/layout/PanelFAQSkeleton";
 import { PanelFooterSkeleton } from "@/features/financial-hub/components/layout/PanelFooterSkeleton";
+
+// ============================================================================
+// [REGISTRO DA ROTA TANSTACK ROUTER]
+// ============================================================================
+// O Wrapper redundante foi removido. A rota aponta direto para o Guardião.
+export const Route = createLazyFileRoute('/seguros')({
+  component: SegurosGuard, 
+});
 
 // =========================================================================
 // [ANTI-RACE CONDITION]: Skeleton Puro Desacoplado do Orquestrador
@@ -58,7 +71,7 @@ function RouteSkeleton() {
   );
 }
 
-const SegurosGuard = () => {
+function SegurosGuard() {
   const { sessionToken: contextToken, isLoading } = useFinancialAuth();
   const sessionToken = contextToken || getTokenForPayload();
 
@@ -125,8 +138,4 @@ const SegurosGuard = () => {
       <Outlet />
     </FinancialHubLayout>
   );
-};
-
-export const Route = createLazyFileRoute('/seguros')({
-  component: SegurosGuard,
-});
+}

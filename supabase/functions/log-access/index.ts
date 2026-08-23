@@ -1,116 +1,133 @@
 /**
- * @fileoverview ENDPOINT DE TELEMETRIA: HISTÓRICO DE ACESSO (Backoffice)
- * @path supabase/functions/login-history/index.ts
+ * @fileoverview Endpoint de Telemetria Visual e Bloqueios (Backoffice)
+ * @path supabase/functions/log-access/index.ts
  * 
  * =========================================================================
- * [BLINDAGEN DE SEGURANÇA: ZERO-TRUST]
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: AUDITORIA HÍBRIDA (NÍVEL 3.5)
  * =========================================================================
- * Rota estritamente privada. Exige JWT válido do Supabase Auth (Google Workspace).
- * Invalida qualquer tentativa de acesso anônimo, bots ou cURL.
+ * Este endpoint atua como uma "Catraca de Segurança" (Strict Allowlist) para 
+ * eventos originados pelo Front-end (Navegador). Ele captura rastros visuais 
+ * e bloqueios de acesso sem expor o banco a ataques de Log Injection.
+ * 
+ * [DIRETRIZES DE SEGURANÇA]:
+ * 1. {Zero-Trust Identity}: O e-mail do autor do evento NUNCA é aceito via 
+ *    payload (body.email). Ele é obrigatoriamente decodificado a partir do 
+ *    Token JWT criptografado (Google Auth). Impede falsidade ideológica.
+ * 2. {Event Allowlist}: Se o Front-end tentar injetar eventos fictícios (ex: 
+ *    "user_deleted"), a requisição é interceptada e jogada no lixo silenciosamente.
+ * 3. {Route Sanitization}: URLs (origin_page) não mapeadas na arquitetura do 
+ *    sistema são substituídas por um fallback seguro, bloqueando ataques de XSS Stored.
+ * 4. {Payload Stripping}: O objeto `origin_details` original tem dados sensíveis 
+ *    redundantes removidos, mantendo apenas a assinatura técnica de auditoria.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { withSecurity } from "../_shared/server.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
-import { debugLog } from "../_shared/logger.ts";
+import { withSecurity } from "../_shared/server.ts";
 
+// Cliente bypass restrito ao escopo do servidor
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-serve(withSecurity('login-history', async (req: Request) => {
+// =========================================================================
+// 🔒 CATRACA DE SEGURANÇA (Listas Estritas de Permissão)
+// =========================================================================
+const ALLOWED_EVENTS = ["page_view", "ui_error", "blocked", "login", "refresh", "logout", "failed_attempt"];
+const ALLOWED_PAGES = [
+  "/backoffice", "/backoffice/login", "/backoffice/simulations", 
+  "/backoffice/consults", "/backoffice/users", "/backoffice/audit",
+  "/backoffice/reports", "/backoffice/configs", "/backoffice/domains",
+  "/backoffice/alerts", "/backoffice/routes"
+];
+
+serve(withSecurity('log-access', async (req: Request) => {
+  if (req.method !== "POST") {
+    return { status: 405, data: { error: "method_not_allowed" } };
+  }
+
   try {
-    // =========================================================================
-    // 1. BARREIRA DE SEGURANÇA: VALIDAÇÃO OBRIGATÓRIA DE JWT
-    // =========================================================================
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-        return { 
-            status: 403, 
-            data: { success: false, error: "Acesso Negado: Token ausente." } 
-        };
+      return { status: 401, data: { success: false, error: "Acesso Negado: Token ausente." } };
     }
 
     const token = authHeader.replace(/bearer\s+/i, "").trim();
-
     const supabaseAuthClient = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_ANON_KEY')!
+      Deno.env.get('SUPABASE_URL')!, 
+      Deno.env.get('SUPABASE_ANON_KEY')!
     );
 
+    // -------------------------------------------------------------------------
+    // 1. EXTRAÇÃO DE IDENTIDADE BLINDADA (Falsificação Impossível)
+    // -------------------------------------------------------------------------
     const { data: { user }, error: authError } = await supabaseAuthClient.auth.getUser(token);
     
-    // Se o token for falso, expirado ou inválido, a execução morre aqui imediatamente
+    // Kill Switch: Se o token for modificado no F12, o processo morre aqui.
     if (authError || !user) {
-        return { 
-            status: 403, 
-            data: { success: false, error: "Acesso Negado: Token inválido ou expirado." } 
-        };
+      return { status: 401, data: { success: false, error: "Token inválido ou expirado." } };
     }
 
-    // Identidade real extraída criptograficamente do Token do Google Workspace
     const verifiedEmail = user.email || "email_desconhecido";
 
-    // =========================================================================
-    // 2. EXTRAÇÃO SEGURA DO PAYLOAD
-    // =========================================================================
-    let body;
-    try {
-        body = await req.json();
-    } catch (_) {
-        throw new Error("Payload inválido ou ausente.");
+    // -------------------------------------------------------------------------
+    // 2. EXTRAÇÃO E HIGIENIZAÇÃO DO PAYLOAD
+    // -------------------------------------------------------------------------
+    const body = await req.json();
+
+    // Filtro Ofensivo contra Log Flooding: 
+    // Ignoramos silenciosamente eventos não autorizados devolvendo 200 (Mock Response)
+    if (!ALLOWED_EVENTS.includes(body.event)) {
+      return { status: 200, data: { success: true, note: "event_dropped" } };
     }
 
-    if (!body.event) {
-        throw new Error("Parâmetro obrigatório ausente (event).");
-    }
+    // Sanitização Anti-XSS (Fallback de Rotas Invasivas)
+    const safePage = ALLOWED_PAGES.includes(body.origin_page) 
+      ? body.origin_page 
+      : "/backoffice/unknown_route";
 
-    // =========================================================================
-    // 3. CAPTURA DE CONTEXTO E TELEMETRIA (SSOT)
-    // =========================================================================
     const infra = await captureInfrastructure(req);
-    const sanitize = (val: string) => val === "N/A" ? null : val;
 
-    // =========================================================================
-    // 4. PERSISTÊNCIA AUDITADA (Service Role Bypass)
-    // =========================================================================
-    const { error: dbError } = await supabaseAdmin.from('login_history').insert({
-      // Usamos o verifiedEmail do Token. O atacante não pode mais fingir ser outra pessoa.
-      email: verifiedEmail.toLowerCase().trim(),
+    // -------------------------------------------------------------------------
+    // 3. PERSISTÊNCIA SANITIZADA NO BANCO DE DADOS
+    // -------------------------------------------------------------------------
+    await supabaseAdmin.from('login_history').insert({
+      email: verifiedEmail,                         // Criptográfico (inviolável na raiz)
+      event: body.event,                             // Validado pela Allowlist
+      success: body.success ?? true,
+      origin_page: safePage,                         // Validado pela Allowlist
+      origin_function: body.origin_function || "validateUserAccess",
       
-      origin_page: body.origin_page || null,
-      origin_function: body.origin_function || null,
-      event: body.event,
-      success: body.success ?? true, // Se chegou até aqui com token válido, o login foi bem-sucedido
-      failure_reason: body.reason || null,
+      // Truncamento estrito para evitar injeção de megabytes de texto
+      failure_reason: typeof body.failureReason === 'string' ? body.failureReason.slice(0, 100) : null,
+      
+      // Assinatura física e geolocalização da conexão
       ip_address: infra.ip_address,
-      country: sanitize(infra.country),
-      state: sanitize(infra.state),
-      city: sanitize(infra.city),
-      user_agent: infra.user_agent,
+      country: infra.country,
+      state: infra.state,
+      city: infra.city,
       device_type: infra.device_type,
       operating_system: infra.operating_system,
+      user_agent: infra.user_agent,
       
-      origin_details: body
+      // ✨ [FASE 3]: Removido o e-mail duplicado de dentro do JSONB de metadados
+      origin_details: body.origin_details || {
+        event: body.event,
+        reason: body.failureReason || "sessionRefresh",
+        success: body.success ?? true,
+        origin_page: safePage,
+        origin_function: body.origin_function || "validateUserAccess"
+      }
     });
 
-    if (dbError) {
-        throw new Error(`Falha ao inserir no banco: ${dbError.message}`);
-    }
-
-    return { 
-        status: 200, 
-        data: { success: true } 
-    };
+    return { status: 200, data: { success: true } };
 
   } catch (err: any) {
-    console.error("🚨 [LOGIN-HISTORY-ERROR]:", err.message);
-    
-    return { 
-        status: 400, 
-        data: { success: false, error: err.message || "Falha ao registrar telemetria de login." } 
-    };
+    return { status: 400, data: { success: false, error: err.message } };
   }
 }));

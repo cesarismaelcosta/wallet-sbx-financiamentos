@@ -1,4 +1,5 @@
 /**
+ * ============================================================================
  * @fileoverview Monitor de Destinatários de Alertas (Backoffice)
  * @path src/routes/backoffice/alerts.lazy.tsx
  * 
@@ -9,9 +10,67 @@
  * do sistema (Outbox/System Message).
  * 
  * @architecture
- * - Data Fetching: Direto via Supabase Client (protegido por RLS no banco).
+ * - Data Fetching: 100% ofuscado via RPCs (Zero-Trust).
  * - Access Control: Apenas usuários com role 'admin' conseguem inserir/alterar.
  * - State Management: Gerenciamento local reativo para otimizar UX (Loading/Saving).
+ * 
+ * [ENTERPRISE ZERO-TRUST - OBFUSCATION V3]:
+ * - Para garantir a consistência absoluta da arquitetura, até mesmo operações 
+ *   simples de CRUD administrativo foram blindadas em RPCs (`get_backoffice_alerts`, 
+ *   `create_backoffice_alert`, `toggle_backoffice_alert`, `delete_backoffice_alert`).
+ *   Nenhuma tabela física é exposta na API.
+ * 
+ * =========================================================================
+ * ⚙️ DEPENDÊNCIA DE INFRAESTRUTURA (POSTGRESQL RPCs)
+ * =========================================================================
+ * Para ofuscar este CRUD, as seguintes Procedures DEVEM existir:
+ * 
+ * -------------------------------------------------------------------------
+ * PROCEDURE 1: Listagem
+ * -------------------------------------------------------------------------
+ * CREATE OR REPLACE FUNCTION get_backoffice_alerts() 
+ * RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$ 
+ * BEGIN 
+ *   RETURN COALESCE(
+ *     (SELECT jsonb_agg(row_to_json(a)) 
+ *      FROM (SELECT * FROM notification_alert_recipients ORDER BY created_at DESC) a), 
+ *     '[]'::jsonb
+ *   ); 
+ * END; 
+ * $$;
+ * 
+ * -------------------------------------------------------------------------
+ * PROCEDURE 2: Criação
+ * -------------------------------------------------------------------------
+ * CREATE OR REPLACE FUNCTION create_backoffice_alert(p_name TEXT, p_email TEXT) 
+ * RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$ 
+ * BEGIN 
+ *   INSERT INTO notification_alert_recipients (name, email, alert_category, is_active) 
+ *   VALUES (p_name, p_email, 'ALL', true); 
+ * END; 
+ * $$;
+ * 
+ * -------------------------------------------------------------------------
+ * PROCEDURE 3: Ativação/Desativação
+ * -------------------------------------------------------------------------
+ * CREATE OR REPLACE FUNCTION toggle_backoffice_alert(p_id UUID, p_active BOOLEAN) 
+ * RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$ 
+ * BEGIN 
+ *   UPDATE notification_alert_recipients 
+ *   SET is_active = p_active 
+ *   WHERE id = p_id; 
+ * END; 
+ * $$;
+ * 
+ * -------------------------------------------------------------------------
+ * PROCEDURE 4: Deleção
+ * -------------------------------------------------------------------------
+ * CREATE OR REPLACE FUNCTION delete_backoffice_alert(p_id UUID) 
+ * RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$ 
+ * BEGIN 
+ *   DELETE FROM notification_alert_recipients WHERE id = p_id; 
+ * END; 
+ * $$;
  * ============================================================================
  * 
  * @author César Ismael Pereira da Costa
@@ -39,18 +98,10 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/integrations/auth/AuthContext";
 
-/**
- * [REGISTRO DA ROTA TANSTACK ROUTER]
- */
 export const Route = createLazyFileRoute("/backoffice/alerts")({ 
   component: AlertsPage 
 });
 
-/**
- * ============================================================================
- * [TIPAGENS]
- * ============================================================================
- */
 type AlertRecipientRow = {
   id: string;
   name: string;
@@ -60,15 +111,9 @@ type AlertRecipientRow = {
   created_at: string;
 };
 
-/**
- * ============================================================================
- * [COMPONENTE PRINCIPAL]
- * ============================================================================
- */
 function AlertsPage() {
   const { backofficeUser } = useAuth();
   
-  // --- [STATE MANAGEMENT] ---
   const [recipients, setRecipients] = useState<AlertRecipientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -81,32 +126,20 @@ function AlertsPage() {
 
   const isAdmin = backofficeUser?.role === "admin";
 
-  /**
-   * @function load
-   * @description Extração primária dos destinatários diretamente da tabela
-   * `notification_alert_recipients`. Os dados são ordenados pelos mais recentes.
-   */
   async function load() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("notification_alert_recipients")
-      .select("*")
-      .order("created_at", { ascending: false });
+    // ✨ [ZERO-TRUST]: Leitura via RPC
+    const { data, error } = await supabase.rpc('get_backoffice_alerts');
 
     if (error) {
       console.error("Erro ao carregar destinatários:", error);
       toast.error("Não foi possível carregar a lista de alertas.");
     } else {
-      setRecipients(data as AlertRecipientRow[]);
+      setRecipients((data || []) as AlertRecipientRow[]);
     }
     setLoading(false);
   }
 
-  /**
-   * @function handleRegister
-   * @description Persiste um novo destinatário forçando a regra padrão 'ALL'. 
-   * Executa higienização e validação de Regex no e-mail.
-   */
   async function handleRegister() {
     if (!registerData.name || !registerData.email) {
       toast.error("Preencha o nome e o e-mail.");
@@ -121,14 +154,11 @@ function AlertsPage() {
 
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from("notification_alert_recipients")
-        .insert([{
-          name: registerData.name,
-          email: registerData.email.toLowerCase().trim(),
-          alert_category: "ALL", // Força 'ALL' conforme regra acordada
-          is_active: true
-        }]);
+      // ✨ [ZERO-TRUST]: Criação via RPC
+      const { error } = await supabase.rpc('create_backoffice_alert', {
+        p_name: registerData.name,
+        p_email: registerData.email.toLowerCase().trim()
+      });
 
       if (error) throw error;
 
@@ -137,7 +167,7 @@ function AlertsPage() {
       setRegisterData({ name: "", email: "" });
       load();
     } catch (e: any) {
-      if (e.code === '23505') {
+      if (e.message?.includes('duplicate key') || e.code === '23505') {
         toast.error("Este e-mail já está cadastrado.");
       } else {
         toast.error(e.message || "Erro ao cadastrar destinatário.");
@@ -147,17 +177,13 @@ function AlertsPage() {
     }
   }
 
-  /**
-   * @function toggleActive
-   * @description Altera o status (is_active) de um destinatário, interrompendo
-   * ou retomando o recebimento de e-mails de alerta.
-   */
   async function toggleActive(r: AlertRecipientRow) {
     try {
-      const { error } = await supabase
-        .from("notification_alert_recipients")
-        .update({ is_active: !r.is_active })
-        .eq("id", r.id);
+      // ✨ [ZERO-TRUST]: Atualização via RPC
+      const { error } = await supabase.rpc('toggle_backoffice_alert', {
+        p_id: r.id,
+        p_active: !r.is_active
+      });
 
       if (error) throw error;
       
@@ -168,18 +194,14 @@ function AlertsPage() {
     }
   }
 
-  /**
-   * @function handleDelete
-   * @description Remove permanentemente (Hard Delete) o usuário da base de notificações.
-   */
   async function handleDelete(id: string) {
     if (!confirm("Tem certeza que deseja excluir este destinatário?")) return;
     
     try {
-      const { error } = await supabase
-        .from("notification_alert_recipients")
-        .delete()
-        .eq("id", id);
+      // ✨ [ZERO-TRUST]: Deleção via RPC
+      const { error } = await supabase.rpc('delete_backoffice_alert', {
+        p_id: id
+      });
 
       if (error) throw error;
       
@@ -190,7 +212,6 @@ function AlertsPage() {
     }
   }
 
-  // --- [LIFECYCLE] ---
   useEffect(() => {
     load();
   }, []);
@@ -198,7 +219,6 @@ function AlertsPage() {
   return (
     <div className="space-y-6">
       
-      {/* HEADER DA TELA */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Alertas do Sistema</h1>
@@ -259,7 +279,6 @@ function AlertsPage() {
         </div>
       </div>
 
-      {/* TABELA DE DADOS */}
       <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
         <div className="overflow-x-auto w-full pb-2">
           <table className="w-full text-sm">

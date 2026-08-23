@@ -30,6 +30,7 @@ import { WalletLogo } from "@/components/brand/WalletLogo";
 import { LogOut, LogIn, Loader2 } from "lucide-react";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import { getDefaultSbxEnvironment, getTokenForPayload } from "@/services/session";
+import type { BFFUserProfile } from "@/routes/sbxpay.lazy";
 
 export interface HeaderLink {
   href: string;
@@ -41,6 +42,7 @@ interface PanelHeaderProps {
   showAuth?: boolean;
   links?: HeaderLink[];
   sessionToken?: string | null;
+  userData?: BFFUserProfile | null;
   onLogout?: () => void;
   onNavigate?: (path: string) => void;
   showEnvironmentLinks?: boolean;

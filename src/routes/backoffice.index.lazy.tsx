@@ -18,6 +18,107 @@
  * A consulta de Visitas (Topo de Funil) foi migrada para ler os IDs de Produto
  * e Parceiro da tabela `visit_updates` (Eventos), uma vez que o modelo 1:N
  * do banco removeu essas colunas da raiz (carrinho).
+ * 
+ * [ENTERPRISE ZERO-TRUST - OBFUSCATION V3]:
+ * - As queries pesadas que puxavam 5k~10k registros brutos via PostgREST 
+ *   foram blindadas. O Dashboard consome os dados apenas via RPCs (`get_dashboard_simulations_raw`, 
+ *   `get_dashboard_visits_raw`, `get_dashboard_contact_count`). A lógica de KPI
+ *   em memória (redução client-side) foi 100% mantida, mas a estrutura
+ *   do banco está protegida contra engenharia reversa via F12.
+ * - RBAC SERVER-SIDE: O frontend não injeta mais os escopos (p_allowed_*). O próprio
+ *   banco valida o JWT e restringe o acesso tanto para Simulações, Visitas e KPIs (Contatos).
+ * 
+ * =========================================================================
+ * ⚙️ DEPENDÊNCIA DE INFRAESTRUTURA (POSTGRESQL RPCs)
+ * =========================================================================
+ * Para que o Dashboard funcione blindado, estas 3 Procedures DEVEM existir:
+ * 
+ * -------------------------------------------------------------------------
+ * PROCEDURE 1: Busca Segura de Simulações para Agregação
+ * -------------------------------------------------------------------------
+ * CREATE OR REPLACE FUNCTION get_dashboard_simulations_raw(
+ *   p_start TIMESTAMPTZ, p_end TIMESTAMPTZ, p_partner_ids INT[] DEFAULT NULL, p_product_ids INT[] DEFAULT NULL
+ * ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+ * DECLARE 
+ *   v_result JSONB;
+ *   v_caller_email TEXT := auth.jwt() ->> 'email';
+ *   v_role TEXT;
+ *   v_allowed_partners JSONB;
+ *   v_allowed_products JSONB;
+ * BEGIN
+ *   SELECT role, allowed_partners, allowed_products INTO v_role, v_allowed_partners, v_allowed_products FROM backoffice_users WHERE LOWER(email) = LOWER(v_caller_email) AND is_active = true;
+ *   IF v_role IS NULL THEN RETURN '[]'::jsonb; END IF;
+ *   IF v_role IN ('admin', 'manager') THEN v_allowed_partners := '["*"]'::jsonb; v_allowed_products := '["*"]'::jsonb; END IF;
+ * 
+ *   SELECT jsonb_agg(jsonb_build_object(
+ *       'id', s.id, 'financed_amount', s.financed_amount, 'document', s.document, 'created_at', s.created_at,
+ *       'partner_id', s.partner_id, 'product_id', s.product_id,
+ *       'status_types', CASE WHEN stt.id IS NOT NULL THEN jsonb_build_object('name', stt.name) ELSE NULL END,
+ *       'partners', CASE WHEN p.id IS NOT NULL THEN jsonb_build_object('name', p.name) ELSE NULL END,
+ *       'product_types', CASE WHEN pt.id IS NOT NULL THEN jsonb_build_object('name', pt.name) ELSE NULL END
+ *   )) INTO v_result FROM simulations s
+ *   LEFT JOIN status_types stt ON s.status_id = stt.id LEFT JOIN partners p ON s.partner_id = p.id LEFT JOIN product_types pt ON s.product_id = pt.id
+ *   WHERE s.created_at >= p_start AND s.created_at <= p_end
+ *     AND (p_partner_ids IS NULL OR s.partner_id = ANY(p_partner_ids)) AND (p_product_ids IS NULL OR s.product_id = ANY(p_product_ids))
+ *     AND (v_allowed_partners IS NULL OR v_allowed_partners ? '*' OR v_allowed_partners ? s.partner_id::TEXT)
+ *     AND (v_allowed_products IS NULL OR v_allowed_products ? '*' OR v_allowed_products ? s.product_id::TEXT)
+ *   LIMIT 5000;
+ *   RETURN COALESCE(v_result, '[]'::jsonb);
+ * END;
+ * $$;
+ * 
+ * -------------------------------------------------------------------------
+ * PROCEDURE 2: Busca Segura de Visitas para Agregação
+ * -------------------------------------------------------------------------
+ * CREATE OR REPLACE FUNCTION get_dashboard_visits_raw(p_start TIMESTAMPTZ, p_end TIMESTAMPTZ) 
+ * RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+ * DECLARE 
+ *   v_result JSONB;
+ *   v_caller_email TEXT := auth.jwt() ->> 'email';
+ *   v_role TEXT;
+ *   v_allowed_partners JSONB;
+ *   v_allowed_products JSONB;
+ * BEGIN
+ *   SELECT role, allowed_partners, allowed_products INTO v_role, v_allowed_partners, v_allowed_products FROM backoffice_users WHERE LOWER(email) = LOWER(v_caller_email) AND is_active = true;
+ *   IF v_role IS NULL THEN RETURN '[]'::jsonb; END IF;
+ *   IF v_role IN ('admin', 'manager') THEN v_allowed_partners := '["*"]'::jsonb; v_allowed_products := '["*"]'::jsonb; END IF;
+ * 
+ *   SELECT jsonb_agg(jsonb_build_object(
+ *       'id', v.id, 'action', v.action, 'utm_source', v.utm_source, 'created_at', v.created_at, 'ip_address', v.ip_address,
+ *       'visit_entities', (SELECT jsonb_agg(jsonb_build_object('document', ve.document)) FROM visit_entities ve WHERE ve.visit_id = v.id),
+ *       'visit_updates', (SELECT jsonb_agg(jsonb_build_object('id', vu.id, 'partner_id', vu.partner_id, 'product_id', vu.product_id, 'action', vu.action)) FROM visit_updates vu WHERE vu.visit_id = v.id)
+ *   )) INTO v_result FROM visits v 
+ *   WHERE v.created_at >= p_start AND v.created_at <= p_end
+ *   AND (v_allowed_partners IS NULL OR v_allowed_partners ? '*' OR EXISTS (SELECT 1 FROM visit_updates vu2 WHERE vu2.visit_id = v.id AND v_allowed_partners ? vu2.partner_id::TEXT))
+ *   AND (v_allowed_products IS NULL OR v_allowed_products ? '*' OR EXISTS (SELECT 1 FROM visit_updates vu3 WHERE vu3.visit_id = v.id AND v_allowed_products ? vu3.product_id::TEXT))
+ *   LIMIT 10000;
+ *   RETURN COALESCE(v_result, '[]'::jsonb);
+ * END;
+ * $$;
+ * 
+ * -------------------------------------------------------------------------
+ * PROCEDURE 3: Contagem Otimizada de Contatos (BLINDADA)
+ * -------------------------------------------------------------------------
+ * CREATE OR REPLACE FUNCTION get_dashboard_contact_count(p_start TIMESTAMPTZ, p_end TIMESTAMPTZ) 
+ * RETURNS INT LANGUAGE plpgsql SECURITY DEFINER AS $$
+ * DECLARE 
+ *   v_count INT;
+ *   v_caller_email TEXT := auth.jwt() ->> 'email';
+ *   v_role TEXT;
+ *   v_allowed_partners JSONB;
+ *   v_allowed_products JSONB;
+ * BEGIN
+ *   SELECT role, allowed_partners, allowed_products INTO v_role, v_allowed_partners, v_allowed_products FROM backoffice_users WHERE LOWER(email) = LOWER(v_caller_email) AND is_active = true;
+ *   IF v_role IS NULL THEN RETURN 0; END IF;
+ *   IF v_role IN ('admin', 'manager') THEN v_allowed_partners := '["*"]'::jsonb; v_allowed_products := '["*"]'::jsonb; END IF;
+ * 
+ *   SELECT COUNT(DISTINCT v.id) INTO v_count FROM visits v JOIN visit_updates vu ON v.id = vu.visit_id
+ *   WHERE vu.action = 'CONTACT' AND v.created_at >= p_start AND v.created_at <= p_end
+ *     AND (v_allowed_partners IS NULL OR v_allowed_partners ? '*' OR v_allowed_partners ? vu.partner_id::TEXT)
+ *     AND (v_allowed_products IS NULL OR v_allowed_products ? '*' OR v_allowed_products ? vu.product_id::TEXT);
+ *   RETURN COALESCE(v_count, 0);
+ * END;
+ * $$;
  * ============================================================================
  */
 
@@ -31,7 +132,6 @@ import {
   ArrowUpRight,
   CircleDollarSign,
   ClipboardList,
-  Loader2,
   TrendingUp,
   Users,
   Calendar as CalendarIcon,
@@ -96,6 +196,44 @@ function startOfDay(d: Date) {
 // DEFINIÇÃO DE TIPAGENS (TYPES)
 // ============================================================================
 
+export type DropdownItem = {
+  id: number | string;
+  name: string;
+};
+
+export type DashboardSimulationRow = {
+  id: string;
+  financed_amount: number | null;
+  document: string | null;
+  created_at: string | null;
+  partner_id: number | null;
+  product_id: number | null;
+  status_types?: { name: string } | null;
+  partners?: { name: string } | null;
+  product_types?: { name: string } | null;
+};
+
+export type DashboardVisitUpdate = {
+  id: string;
+  partner_id: number | null;
+  product_id: number | null;
+  action: string | null;
+};
+
+export type DashboardVisitEntity = {
+  document: string | null;
+};
+
+export type DashboardVisitRow = {
+  id: string;
+  action: string | null;
+  utm_source: string | null;
+  created_at: string | null;
+  ip_address: string | null;
+  visit_entities: DashboardVisitEntity[] | DashboardVisitEntity | null;
+  visit_updates: DashboardVisitUpdate[] | DashboardVisitUpdate | null;
+};
+
 type SimKpis = {
   today: number;
   week: number;
@@ -123,19 +261,15 @@ type VisitKpis = {
   byDay: Array<{ day: string; count: number }>;
 };
 
-// Função para buscar apenas o count de contatos
+// ✨ [ENTERPRISE ZERO-TRUST]: Chamada cega via RPC para contar contatos
 async function getUniqueContactCount(start: Date, end: Date) {
-  const { count, error } = await supabase
-    .from("visits")
-    .select("id, visit_updates!inner(id)", { count: "exact", head: true })
-    .eq("visit_updates.action", "CONTACT")
-    .gte("created_at", start.toISOString())
-    .lte("created_at", end.toISOString());
+  const { data, error } = await supabase.rpc('get_dashboard_contact_count', {
+    p_start: start.toISOString(),
+    p_end: end.toISOString()
+  });
 
-  if (error) {
-    return 0;
-  }
-  return count || 0;
+  if (error) return 0;
+  return data || 0;
 }
 
 // Skeleton para exibição enquanto os gráficos carregam via Lazy Load
@@ -171,42 +305,40 @@ function DashboardPage() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
-  const [partnersList, setPartnersList] = useState<Array<{ id: string | number; name: string }>>([]);
-  const [productsList, setProductsList] = useState<Array<{ id: string | number; name: string }>>([]);
+  const [partnersList, setPartnersList] = useState<DropdownItem[]>([]);
+  const [productsList, setProductsList] = useState<DropdownItem[]>([]);
 
   useEffect(() => {
     async function loadDropdowns() {
       if (!backofficeUser) return;
 
-      // 1. Carregar Parceiros filtrados pelo escopo do usuário
       const { data: pData } = await supabase.from("partners").select("id, name").eq("is_active", true).order("name");
       if (pData) {
         if (backofficeUser.role === "viewer") {
           const allowedPartners = backofficeUser.allowed_partners || [];
           if (allowedPartners.includes("*")) {
-            setPartnersList(pData);
+            setPartnersList(pData as DropdownItem[]);
           } else {
             const filteredPartners = pData.filter((p) => allowedPartners.includes(String(p.id)));
-            setPartnersList(filteredPartners);
+            setPartnersList(filteredPartners as DropdownItem[]);
           }
         } else {
-          setPartnersList(pData);
+          setPartnersList(pData as DropdownItem[]);
         }
       }
 
-      // 2. Carregar Produtos filtrados pelo escopo do usuário
       const { data: prData } = await supabase.from("product_types").select("id, name").order("name");
       if (prData) {
         if (backofficeUser.role === "viewer") {
           const allowedProducts = backofficeUser.allowed_products || [];
           if (allowedProducts.includes("*")) {
-            setProductsList(prData);
+            setProductsList(prData as DropdownItem[]);
           } else {
             const filteredProducts = prData.filter((pr) => allowedProducts.includes(String(pr.id)));
-            setProductsList(filteredProducts);
+            setProductsList(filteredProducts as DropdownItem[]);
           }
         } else {
-          setProductsList(prData);
+          setProductsList(prData as DropdownItem[]);
         }
       }
     }
@@ -214,7 +346,7 @@ function DashboardPage() {
   }, [backofficeUser]);
 
   useEffect(() => {
-    if (!backofficeUser) return; // Só dispara se o usuário estiver carregado
+    if (!backofficeUser) return; 
 
     const timeoutId = setTimeout(() => {
       load();
@@ -235,10 +367,9 @@ function DashboardPage() {
     let currentProducts = productsList;
     if (currentProducts.length === 0) {
       const { data } = await supabase.from("product_types").select("id, name");
-      if (data) currentProducts = data;
+      if (data) currentProducts = data as DropdownItem[];
     }
 
-    // 1) Janela Temporal
     let start = new Date();
     if (dateRange === "custom" && customRange?.from) {
       start = customRange.from;
@@ -255,112 +386,23 @@ function DashboardPage() {
       end.setHours(23, 59, 59, 999);
     }
 
-    // 2) Converte IDs para Número (Segurança)
     const cleanPartners = selectedPartners.map((id) => Number(id)).filter((n: number) => !isNaN(n));
     const cleanProducts = selectedProducts.map((id) => Number(id)).filter((n: number) => !isNaN(n));
 
-    // 3) Query de Simulações (Filtros aplicados direto no banco)
-    let querySim = supabase
-      .from("simulations")
-      .select(
-        `id, financed_amount, document, created_at, partner_id, product_id, status_types(name), partners(name), product_types(name)`,
-      )
-      .gte("created_at", start.toISOString())
-      .lte("created_at", end.toISOString())
-      .limit(5000);
-
-    // 4) Query de Visitas (Busca limpa por período, filtramos o 1:N no Javascript)
-    let queryVis = supabase
-      .from("visits")
-      .select(
-        `
-        id, action, utm_source, created_at, ip_address,
-        visit_entities ( document ),
-        visit_updates ( id, partner_id, product_id, action )
-      `,
-      )
-      .gte("created_at", start.toISOString())
-      .lte("created_at", end.toISOString())
-      .limit(10000);
-
     // ============================================================================
-    // APLICANDO RESTRIÇÕES NO BANCO APENAS PARA SIMULAÇÕES
+    // ✨ [ENTERPRISE ZERO-TRUST]: Disparo das RPCs Cegas
     // ============================================================================
-    if (backofficeUser.role === "viewer") {
-      const allowedPartners = backofficeUser.allowed_partners || [];
-      const allowedProducts = backofficeUser.allowed_products || [];
+    const querySim = supabase.rpc('get_dashboard_simulations_raw', {
+      p_start: start.toISOString(),
+      p_end: end.toISOString(),
+      p_partner_ids: cleanPartners.length > 0 ? cleanPartners : null,
+      p_product_ids: cleanProducts.length > 0 ? cleanProducts : null
+    });
 
-      if (!allowedPartners.includes("*")) {
-        if (allowedPartners.length === 0) {
-          setSimKpis({
-            today: 0,
-            week: 0,
-            month: 0,
-            monthVolume: 0,
-            ticket: 0,
-            uniqueClients: 0,
-            byStatus: [],
-            byProduct: [],
-            byPartner: [],
-            byDay: [],
-          });
-          setVisitKpis({
-            total: 0,
-            unique: 0,
-            redirects: 0,
-            simulates: 0,
-            consultas: 0,
-            contacts: 0,
-            conversionRate: 0,
-            bySource: [],
-            byAction: [],
-            byProduct: [],
-            byDay: [],
-          });
-          setLoading(false);
-          return;
-        }
-        const partnerQueryIds = allowedPartners.map((id: string) => Number(id)).filter((n: number) => !isNaN(n));
-        querySim = querySim.in("partner_id", partnerQueryIds);
-      }
-
-      if (!allowedProducts.includes("*")) {
-        if (allowedProducts.length === 0) {
-          setSimKpis({
-            today: 0,
-            week: 0,
-            month: 0,
-            monthVolume: 0,
-            ticket: 0,
-            uniqueClients: 0,
-            byStatus: [],
-            byProduct: [],
-            byPartner: [],
-            byDay: [],
-          });
-          setVisitKpis({
-            total: 0,
-            unique: 0,
-            redirects: 0,
-            simulates: 0,
-            consultas: 0,
-            contacts: 0,
-            conversionRate: 0,
-            bySource: [],
-            byAction: [],
-            byProduct: [],
-            byDay: [],
-          });
-          setLoading(false);
-          return;
-        }
-        const productQueryIds = allowedProducts.map((id: string) => Number(id)).filter((n: number) => !isNaN(n));
-        querySim = querySim.in("product_id", productQueryIds);
-      }
-    }
-
-    if (cleanPartners.length > 0) querySim = querySim.in("partner_id", cleanPartners);
-    if (cleanProducts.length > 0) querySim = querySim.in("product_id", cleanProducts);
+    const queryVis = supabase.rpc('get_dashboard_visits_raw', {
+      p_start: start.toISOString(),
+      p_end: end.toISOString()
+    });
 
     const [resSim, resVis] = await Promise.all([querySim, queryVis]);
 
@@ -370,45 +412,22 @@ function DashboardPage() {
       return;
     }
 
-    const simRows = resSim.data ?? [];
-    let visRows = resVis.data ?? [];
-
-    // ============================================================================
-    // FILTRAGEM DE VISITAS EM MEMÓRIA (Compatível com Modelo 1:N)
-    // ============================================================================
-    if (backofficeUser.role === "viewer") {
-      const allowedPartners = backofficeUser.allowed_partners || [];
-      const allowedProducts = backofficeUser.allowed_products || [];
-
-      if (!allowedPartners.includes("*")) {
-        const pIds = allowedPartners.map((id: string | number) => String(id));
-        visRows = visRows.filter((v: any) => {
-          const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [v.visit_updates].filter(Boolean);
-          return updates.some((u: any) => pIds.includes(String(u.partner_id)));
-        });
-      }
-      if (!allowedProducts.includes("*")) {
-        const prIds = allowedProducts.map((id: string | number) => String(id));
-        visRows = visRows.filter((v: any) => {
-          const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [v.visit_updates].filter(Boolean);
-          return updates.some((u: any) => prIds.includes(String(u.product_id)));
-        });
-      }
-    }
+    const simRows: DashboardSimulationRow[] = (resSim.data as DashboardSimulationRow[]) ?? [];
+    let visRows: DashboardVisitRow[] = (resVis.data as DashboardVisitRow[]) ?? [];
 
     if (cleanPartners.length > 0) {
-      const pIds = cleanPartners.map((id: string | number) => String(id));
-      visRows = visRows.filter((v: any) => {
-        const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [v.visit_updates].filter(Boolean);
-        return updates.some((u: any) => pIds.includes(String(u.partner_id)));
+      const pIds = cleanPartners.map((id) => String(id));
+      visRows = visRows.filter((v) => {
+        const updates = Array.isArray(v.visit_updates) ? v.visit_updates : v.visit_updates ? [v.visit_updates] : [];
+        return updates.some((u) => pIds.includes(String(u.partner_id)));
       });
     }
 
     if (cleanProducts.length > 0) {
-      const prIds = cleanProducts.map((id: string | number) => String(id));
-      visRows = visRows.filter((v: any) => {
-        const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [v.visit_updates].filter(Boolean);
-        return updates.some((u: any) => prIds.includes(String(u.product_id)));
+      const prIds = cleanProducts.map((id) => String(id));
+      visRows = visRows.filter((v) => {
+        const updates = Array.isArray(v.visit_updates) ? v.visit_updates : v.visit_updates ? [v.visit_updates] : [];
+        return updates.some((u) => prIds.includes(String(u.product_id)));
       });
     }
 
@@ -433,15 +452,15 @@ function DashboardPage() {
 
     for (const r of simRows) {
       const amount = Number(r.financed_amount) || 0;
-      const statusName = (r.status_types as any)?.name ?? "Indefinido";
+      const statusName = r.status_types?.name ?? "Indefinido";
       const currentS = statusMap.get(statusName) ?? { count: 0, volume: 0 };
       statusMap.set(statusName, { count: currentS.count + 1, volume: currentS.volume + amount });
 
-      const prodName = (r.product_types as any)?.name ?? "Não Informado";
+      const prodName = r.product_types?.name ?? "Não Informado";
       const currentProd = productMap.get(prodName) ?? { count: 0, volume: 0 };
       productMap.set(prodName, { count: currentProd.count + 1, volume: currentProd.volume + amount });
 
-      const partName = (r.partners as any)?.name ?? "Venda Direta";
+      const partName = r.partners?.name ?? "Venda Direta";
       const currentPart = partnerMap.get(partName) ?? { count: 0, volume: 0 };
       partnerMap.set(partName, { count: currentPart.count + 1, volume: currentPart.volume + amount });
     }
@@ -459,7 +478,6 @@ function DashboardPage() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
-    // ✨ CORREÇÃO DOS GRÁFICOS DE DIAS
     const simDayMap = new Map<string, number>();
     const visDayMap = new Map<string, number>();
 
@@ -479,7 +497,7 @@ function DashboardPage() {
       visDayMap.set(key, 0);
     }
 
-    simRows.forEach((r: any) => {
+    simRows.forEach((r) => {
       if (r.created_at) {
         const key = r.created_at.slice(0, 10);
         if (simDayMap.has(key)) simDayMap.set(key, (simDayMap.get(key) || 0) + 1);
@@ -504,7 +522,7 @@ function DashboardPage() {
     const totalVisits = visRows.length;
     const uniqueDocs = new Set(
       visRows
-        .map((v: any) => {
+        .map((v) => {
           const entity = Array.isArray(v.visit_entities) ? v.visit_entities[0] : v.visit_entities;
           return entity?.document ? String(entity.document).replace(/\D/g, "") : null;
         })
@@ -520,14 +538,14 @@ function DashboardPage() {
     let totalRedirects = 0;
     let totalVisitsWithSimulate = 0;
 
-    visRows.forEach((v: any) => {
+    visRows.forEach((v) => {
       const source = v.utm_source || "Orgânico";
       sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
 
-      const updates = Array.isArray(v.visit_updates) ? v.visit_updates : [v.visit_updates].filter(Boolean);
+      const updates = Array.isArray(v.visit_updates) ? v.visit_updates : v.visit_updates ? [v.visit_updates] : [];
       let hasSimulateInThisVisit = false;
 
-      updates.forEach((u: any) => {
+      updates.forEach((u) => {
         const act = (u.action || v.action || "").toUpperCase();
         if (act && act !== "VISIT") actionMap.set(act, (actionMap.get(act) || 0) + 1);
         if (act === "CONSULT") totalConsultas++;
@@ -554,7 +572,7 @@ function DashboardPage() {
     if (contactsCount > 0) {
       actionMap.set("CONTACT", contactsCount);
     } else {
-      actionMap.delete("CONTACT"); // Garante que não vai renderizar barra com 0
+      actionMap.delete("CONTACT");
     }
 
     const visByDay = Array.from(visDayMap.entries()).map(([day, count]) => ({ day, count }));
@@ -576,6 +594,11 @@ function DashboardPage() {
     setLoading(false);
   }
 
+  function resetKpis() {
+    setSimKpis({ today: 0, week: 0, month: 0, monthVolume: 0, ticket: 0, uniqueClients: 0, byStatus: [], byProduct: [], byPartner: [], byDay: [] });
+    setVisitKpis({ total: 0, unique: 0, redirects: 0, simulates: 0, consultas: 0, contacts: 0, conversionRate: 0, bySource: [], byAction: [], byProduct: [], byDay: [] });
+  }
+
   // -------------------------------------------------------------------------
   // FORMATAÇÃO VISUAL
   // -------------------------------------------------------------------------
@@ -594,67 +617,19 @@ function DashboardPage() {
 
   const simCards = simKpis
     ? [
-        {
-          label: "Simulações",
-          subLabel: periodLabel,
-          value: simKpis.month.toLocaleString("pt-BR"),
-          hint: `${simKpis.today} hoje`,
-          icon: ClipboardList,
-        },
-        {
-          label: "Volume simulado",
-          subLabel: periodLabel,
-          value: BRL(simKpis.monthVolume),
-          hint: `${simKpis.month} simulações`,
-          icon: CircleDollarSign,
-        },
-        {
-          label: "Ticket médio",
-          subLabel: periodLabel,
-          value: BRL(simKpis.ticket),
-          hint: "valor médio",
-          icon: TrendingUp,
-        },
-        {
-          label: "Clientes únicos",
-          subLabel: periodLabel,
-          value: simKpis.uniqueClients.toLocaleString("pt-BR"),
-          hint: "CPFs distintos",
-          icon: Users,
-        },
+        { label: "Simulações", subLabel: periodLabel, value: simKpis.month.toLocaleString("pt-BR"), hint: `${simKpis.today} hoje`, icon: ClipboardList },
+        { label: "Volume simulado", subLabel: periodLabel, value: BRL(simKpis.monthVolume), hint: `${simKpis.month} simulações`, icon: CircleDollarSign },
+        { label: "Ticket médio", subLabel: periodLabel, value: BRL(simKpis.ticket), hint: "valor médio", icon: TrendingUp },
+        { label: "Clientes únicos", subLabel: periodLabel, value: simKpis.uniqueClients.toLocaleString("pt-BR"), hint: "CPFs distintos", icon: Users },
       ]
     : [];
 
   const visitCards = visitKpis
     ? [
-        {
-          label: "Consultas + Simulações",
-          subLabel: periodLabel,
-          value: `${(visitKpis.consultas + visitKpis.simulates).toLocaleString("pt-BR")} / ${visitKpis.total.toLocaleString("pt-BR")}`,
-          hint: "consultas + simulações / visitas",
-          icon: MousePointerClick,
-        },
-        {
-          label: "Taxa de Início",
-          subLabel: periodLabel,
-          value: PERCENT(visitKpis.conversionRate),
-          hint: "visitas que viraram simulação",
-          icon: Activity,
-        },
-        {
-          label: "Redirecionamentos",
-          subLabel: periodLabel,
-          value: visitKpis.redirects.toLocaleString("pt-BR"),
-          hint: "saídas para parceiros",
-          icon: ArrowUpRight,
-        },
-        {
-          label: "Simulações Iniciadas",
-          subLabel: periodLabel,
-          value: visitKpis.simulates.toLocaleString("pt-BR"),
-          hint: "cliques no simulador",
-          icon: Filter,
-        },
+        { label: "Consultas + Simulações", subLabel: periodLabel, value: `${(visitKpis.consultas + visitKpis.simulates).toLocaleString("pt-BR")} / ${visitKpis.total.toLocaleString("pt-BR")}`, hint: "consultas + simulações / visitas", icon: MousePointerClick },
+        { label: "Taxa de Início", subLabel: periodLabel, value: PERCENT(visitKpis.conversionRate), hint: "visitas que viraram simulação", icon: Activity },
+        { label: "Redirecionamentos", subLabel: periodLabel, value: visitKpis.redirects.toLocaleString("pt-BR"), hint: "saídas para parceiros", icon: ArrowUpRight },
+        { label: "Simulações Iniciadas", subLabel: periodLabel, value: visitKpis.simulates.toLocaleString("pt-BR"), hint: "cliques no simulador", icon: Filter },
       ]
     : [];
 
@@ -674,9 +649,6 @@ function DashboardPage() {
   // =========================================================================
   return (
     <div className="p-6 space-y-10">
-      {/* ===================================================================
-          CABEÇALHO E MÓDULO DE FILTROS GLOBAIS
-      =================================================================== */}
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -686,7 +658,6 @@ function DashboardPage() {
         </div>
 
         <div className="flex flex-col gap-3 bg-muted/30 p-3 rounded-2xl border">
-          {/* Botão de Filtros exclusivo para Mobile */}
           <div className="lg:hidden">
             <Button
               variant="outline"
@@ -697,9 +668,7 @@ function DashboardPage() {
             </Button>
           </div>
 
-          {/* Filtros em linha para Desktop */}
           <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:gap-2">
-            {/* Filtro de Período */}
             <Popover modal={isMobile}>
               <PopoverTrigger asChild>
                 <Button
@@ -769,7 +738,6 @@ function DashboardPage() {
               </PopoverContent>
             </Popover>
 
-            {/* Filtro de Parceiro (Múltipla Escolha) */}
             <Popover modal={isMobile}>
               <PopoverTrigger asChild>
                 <Button
@@ -830,7 +798,6 @@ function DashboardPage() {
               </PopoverContent>
             </Popover>
 
-            {/* Filtro de Produto (Múltipla Escolha) */}
             <Popover modal={isMobile}>
               <PopoverTrigger asChild>
                 <Button
@@ -900,9 +867,7 @@ function DashboardPage() {
         )}
       </div>
 
-      {/* ===================================================================
-          BLOCO 1: FUNDO DE FUNIL (SIMULAÇÕES E NEGÓCIOS)
-      =================================================================== */}
+      {/* BLOCO 1: FUNDO DE FUNIL */}
       <div className="space-y-6">
         <div className="border-b pb-2">
           <div className="flex items-center gap-2">
@@ -941,7 +906,6 @@ function DashboardPage() {
               ))}
         </div>
 
-        {/* GRÁFICOS DO BLOCO 1 (LAZY LOADED) */}
         <Suspense fallback={<ChartsSkeleton />}>
           <ChartsSimulationModule
             loading={loading}
@@ -952,9 +916,7 @@ function DashboardPage() {
         </Suspense>
       </div>
 
-      {/* ===================================================================
-          BLOCO 2: TOPO DE FUNIL (VISITAS E ACESSOS)
-      =================================================================== */}
+      {/* BLOCO 2: TOPO DE FUNIL */}
       <div className="space-y-6 pt-6">
         <div className="border-b pb-2">
           <div className="flex items-center gap-2">
@@ -993,7 +955,6 @@ function DashboardPage() {
               ))}
         </div>
 
-        {/* GRÁFICOS DO BLOCO 2 (LAZY LOADED) */}
         <Suspense fallback={<ChartsSkeleton />}>
           <ChartsTrafficModule
             loading={loading}
@@ -1004,14 +965,13 @@ function DashboardPage() {
         </Suspense>
       </div>
 
-      {/* SHEET DE FILTROS MOBILE (CORRIGIDO COM CALENDÁRIO E OPÇÕES) */}
+      {/* SHEET DE FILTROS MOBILE */}
       <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
         <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white z-50">
           <SheetHeader className="mb-4 text-left">
             <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-4 w-full">
-            {/* Período Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
               <Popover modal={isMobile}>
@@ -1084,7 +1044,6 @@ function DashboardPage() {
               </Popover>
             </div>
 
-            {/* Parceiro Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Parceiro</span>
               <Popover modal={isMobile}>
@@ -1150,7 +1109,6 @@ function DashboardPage() {
               </Popover>
             </div>
 
-            {/* Produto Mobile */}
             <div className="w-full">
               <span className="text-xs font-medium text-muted-foreground mb-1 block">Produto</span>
               <Popover modal={isMobile}>

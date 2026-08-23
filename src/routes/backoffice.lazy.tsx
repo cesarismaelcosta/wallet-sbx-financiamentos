@@ -10,8 +10,8 @@
  *    permissões administrativas estritas antes de renderizar sub-rotas (`Outlet`).
  * 2. Blindagem contra Loops: Previne redirecionamentos cíclicos caso a rota 
  *    ativa seja a página de autenticação (`/backoffice/login`).
- * 3. Layout Adaptativo: Suporta barra de navegação lateral persistente em desktop 
- *    e gaveta lateral deslizante (*Sheet*) para dispositivos móveis.
+ * 3. Scope Isolation: O `AuthProvider` agora está injetado DIRETAMENTE no topo 
+ *    desta rota, não poluindo mais o `__root.tsx`.
  * ============================================================================
  * 
  * @author César Ismael Pereira da Costa
@@ -36,14 +36,29 @@ import {
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { useAuth } from "@/integrations/auth/AuthContext";
+import { AuthProvider, useAuth } from "@/integrations/auth/AuthContext"; // ✨ Importe o AuthProvider aqui
 import { logLoginHistoryEvent } from "@/lib/login-history";
+
+/**
+ * ============================================================================
+ * [COMPONENTE GUARDIÃO: Auth Provider Wrapper]
+ * ============================================================================
+ * Este Wrapper injeta o contexto de Auth EXCLUSIVAMENTE para a árvore do Backoffice.
+ * Impede que a Wallet de clientes carregue essa lógica.
+ */
+function BackofficeGuard() {
+  return (
+    <AuthProvider>
+      <BackofficeLayout />
+    </AuthProvider>
+  );
+}
 
 /**
  * [REGISTRO DA ROTA TANSTACK ROUTER]
  */
 export const Route = createLazyFileRoute("/backoffice")({
-  component: BackofficeLayout,
+  component: BackofficeGuard, // Aponta para o Guardião, não para o Layout diretamente
 });
 
 /**
@@ -75,9 +90,9 @@ const CONFIG_NAV = [
  * ============================================================================
  */
 function BackofficeLayout() {
-  // 1. TODOS OS HOOKS DEVEM FICAR NO TOPO, SEM NENHUM RETORNO ANTES DELES
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  // Este hook agora funciona porque o Provider está renderizado "acima" dele
   const { authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, signOut, session } = useAuth();
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -120,13 +135,9 @@ function BackofficeLayout() {
     }
   }, [backofficeUser, isBackofficeAllowed]);
 
-  // 2. VARIÁVEIS DERIVADAS APÓS TODOS OS HOOKS
   const isAdmin = backofficeUser?.role?.toLowerCase() === "admin";
   const hasInitialized = typeof window !== "undefined" && sessionStorage.getItem("sb_backoffice_initialized") === "true";
 
-  // 3. AGORA SIM, PODEMOS DAR OS RETORNOS CONDICIONAIS (POIS TODOS OS HOOKS JÁ RODARAM)
-  
-  // Loader de carregamento com Spinner Roxo
   if (!isMounted || authLoading || authorizationLoading || (!hasInitialized && !backofficeUser && !pathname.includes("/backoffice/login"))) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
@@ -157,10 +168,7 @@ function BackofficeLayout() {
     .join("")
     .toUpperCase();
 
-  /**
-   * Helper de renderização de links da barra lateral
-   */
-  const renderNavItem = (item: { to: string; label: string; icon: any }) => {
+  const renderNavItem = (item: { to: string; label: string; icon: React.ComponentType<{ className?: string }> }) => {
     const active = pathname === item.to;
     const Icon = item.icon;
     return (
@@ -178,9 +186,6 @@ function BackofficeLayout() {
     );
   };
 
-  /**
-   * Template unificado do conteúdo da barra lateral (Sidebar / Drawer Mobile)
-   */
   const sidebarContent = (
     <div className="flex h-full flex-col bg-card">
       <div className="flex h-16 items-center border-b border-border px-5">
@@ -195,7 +200,6 @@ function BackofficeLayout() {
           {OPERACAO_NAV.map(renderNavItem)}
         </div>
 
-        {/* Exibe Segurança apenas se for Administrador */}
         {isAdmin && (
           <div>
             <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -205,7 +209,6 @@ function BackofficeLayout() {
           </div>
         )}
 
-        {/* Exibe Configuração apenas se for Administrador */}
         {isAdmin && (
           <div>
             <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -216,7 +219,6 @@ function BackofficeLayout() {
         )}
       </nav>
 
-      {/* Perfil e Rodapé da Sidebar */}
       <div className="border-t border-border p-3">
         {backofficeUser ? (
           <div className="mt-2 flex items-center gap-3 rounded-lg bg-accent/40 px-3 py-2.5">

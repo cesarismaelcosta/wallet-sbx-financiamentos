@@ -4,25 +4,22 @@
  * @path src/routes/sbxpay.lazy.tsx
  * 
  * =========================================================================
- * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-TRUST & THIN PAYLOAD COMPLIANCE
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-TRUST & SCOPE DELEGATION
  * =========================================================================
- * Este módulo atua como o Guardião de Rotas e Inicializador de Sessão Global (OLAP).
- * Ele envelopa as rotas filhas, garantindo que usuários não autenticados sejam 
- * ejetados e que o funil de telemetria seja iniciado corretamente.
+ * Este módulo atua como o Inicializador de Sessão Global (OLAP) e Funil de 
+ * Telemetria para a carteira de pagamentos (sbX Pay).
  * 
- * [MECÂNICA ARQUITETURAL]:
- * 1. {Zero-Trust Auth}: Intercepta renderizações sem token válido e redireciona 
- *    para o Sign-in. O perfil básico do usuário consumido pela UI (Avatar, Nome)
- *    é derivado exclusivamente do cache da sessão, eliminando requests duplicados.
- * 2. {Phantom Visit (Thin Payload)}: Quando o usuário aterrissa na raiz sem cursor 
- *    temporal (ex: URL limpa), este componente dispara um POST estéril (VISIT). A
+ * [MECÂNICA ARQUITETURAL V2]:
+ * 1. {Provider Delegation}: O `FinancialAuthProvider` foi promovido para a 
+ *    raiz da aplicação (`__root.tsx`). Este arquivo não envelopa mais o 
+ *    provedor, ele apenas o consome. Isso garante uma persistência SPA 
+ *    (Single Page App) fluida, impedindo a perda de estado durante a navegação.
+ * 2. {Zero-Trust Auth}: Intercepta renderizações sem token válido e redireciona 
+ *    para o Sign-in. O perfil básico do usuário é derivado do cache da sessão.
+ * 3. {Phantom Visit}: Dispara um POST estéril (VISIT) na aterrissagem. A
  *    responsabilidade de hidratar a PII é do Orquestrador via JWT.
- * 3. {Idempotency Lock}: Utiliza `hasRunPhantomVisit` (useRef) para garantir a 
- *    geração de um único Pageview por ciclo de vida, blindando o backend contra 
- *    re-renders do React (StrictMode).
- * 4. {Secure Handoff Enforcement}: Redirecionamentos de fallback por expiração de
- *    sessão dependem estritamente da URL assinada (Handoff Token) retornada pelo
- *    backend. Parâmetros abertos e redirecionamentos cegos estão proibidos.
+ * 4. {Secure Handoff Enforcement}: Redirecionamentos dependem estritamente da 
+ *    URL assinada (Handoff Token) retornada pelo backend.
  *
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
@@ -30,15 +27,22 @@
 
 import { createContext, useState, useEffect, useRef } from "react";
 import { createLazyFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
+
+// ✨ NOTA: Importamos apenas o Hook. O Componente Provider agora mora no __root.tsx
+import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext"; 
 import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHeader";
 import { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload } from "@/services/session";
 import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoffRedeem";
 
+// ============================================================================
+// [REGISTRO DA ROTA TANSTACK ROUTER]
+// ============================================================================
+// O Guardião redundante (SbXPAYGuard) foi removido.
+// A rota agora aponta direto para a função principal de Layout.
 export const Route = createLazyFileRoute("/sbxpay")({
-  component: sbXPAYLayOut, 
+  component: SbXPAYLayOut,
 });
 
 /**
@@ -145,7 +149,10 @@ function HomeSkeleton() {
   );
 }
 
-export function sbXPAYLayOut() {
+// ============================================================================
+// [LAYOUT PRINCIPAL E GATEKEEPER]
+// ============================================================================
+export function SbXPAYLayOut() {
   const authContext = useFinancialAuth();
   const { sessionToken: contextToken, userProfile: contextProfile, isLoading, logout } = authContext;
 
