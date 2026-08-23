@@ -7,8 +7,8 @@
  * [EVOLUÇÃO v3.1.0 - SIGNED STATE HANDOFF]:
  * 1. O frontend não confia mais em `redirect_uri` via query string.
  * 2. Ele captura o `handoff_token` (se existir) e envia ao serviço HTTP.
- * 3. O redirecionamento pós-login agora é ditado 100% pelo Backend 
- *    (via `response.initial_visit.final_redirect_url`), fechando o vetor 
+ * 3. O redirecionamento pós-login agora é ditado 100% pelo Backend
+ *    (via `response.initial_visit.final_redirect_url`), fechando o vetor
  *    de Open Redirect.
  *
  * @author Cesar Ismael Pereira da Costa
@@ -167,6 +167,9 @@ export function CustomLogin() {
       const response = await autenticateWalletsbX(login, password, ambienteAtivo, search.handoff_token);
 
       if (response?.success) {
+        // 🔒 ZERO PII NO STORAGE: o perfil é entregue ao contexto apenas em memória
+        // (FinancialAuthContext v2 não persiste `user_profile`). Nada de PII em
+        // sessionStorage/localStorage. Após um F5 o backend reidrata via JWT (/me).
         const rawP = response.user_profile || {};
         const safeProfile = {
           entity_id: rawP.entity_id || response.userId || "",
@@ -184,12 +187,13 @@ export function CustomLogin() {
           metadata: rawP.metadata || {},
         };
 
+
         setSession(response.session_token, response.userId, safeProfile);
         setIsLoading(false);
 
         // ✨ O OBEDIENTE Cego: O destino agora vem do backend hidratado.
         const serverRedirectUrl = response.initial_visit?.final_redirect_url || "/sbxpay";
-        
+
         window.location.href = serverRedirectUrl.startsWith("http")
           ? serverRedirectUrl
           : `${window.location.origin}${serverRedirectUrl.startsWith("/") ? "" : "/"}${serverRedirectUrl}`;

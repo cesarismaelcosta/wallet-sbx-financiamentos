@@ -2,23 +2,23 @@
  * @fileoverview 🛡️ Componente Mestre: sbXPAYLayOut (Gatekeeper de Acesso e Sessão)
  * @module features/financial-hub/core/layout
  * @path src/routes/sbxpay.lazy.tsx
- * 
+ *
  * =========================================================================
  * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-TRUST & SCOPE DELEGATION
  * =========================================================================
- * Este módulo atua como o Inicializador de Sessão Global (OLAP) e Funil de 
+ * Este módulo atua como o Inicializador de Sessão Global (OLAP) e Funil de
  * Telemetria para a carteira de pagamentos (sbX Pay).
- * 
+ *
  * [MECÂNICA ARQUITETURAL V2]:
- * 1. {Provider Delegation}: O `FinancialAuthProvider` foi promovido para a 
- *    raiz da aplicação (`__root.tsx`). Este arquivo não envelopa mais o 
- *    provedor, ele apenas o consome. Isso garante uma persistência SPA 
+ * 1. {Provider Delegation}: O `FinancialAuthProvider` foi promovido para a
+ *    raiz da aplicação (`__root.tsx`). Este arquivo não envelopa mais o
+ *    provedor, ele apenas o consome. Isso garante uma persistência SPA
  *    (Single Page App) fluida, impedindo a perda de estado durante a navegação.
- * 2. {Zero-Trust Auth}: Intercepta renderizações sem token válido e redireciona 
+ * 2. {Zero-Trust Auth}: Intercepta renderizações sem token válido e redireciona
  *    para o Sign-in. O perfil básico do usuário é derivado do cache da sessão.
  * 3. {Phantom Visit}: Dispara um POST estéril (VISIT) na aterrissagem. A
  *    responsabilidade de hidratar a PII é do Orquestrador via JWT.
- * 4. {Secure Handoff Enforcement}: Redirecionamentos dependem estritamente da 
+ * 4. {Secure Handoff Enforcement}: Redirecionamentos dependem estritamente da
  *    URL assinada (Handoff Token) retornada pelo backend.
  *
  * @author César Ismael Pereira da Costa
@@ -29,7 +29,7 @@ import { createContext, useState, useEffect, useRef } from "react";
 import { createLazyFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 
 // ✨ NOTA: Importamos apenas o Hook. O Componente Provider agora mora no __root.tsx
-import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext"; 
+import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHeader";
 import { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
@@ -48,9 +48,9 @@ export const Route = createLazyFileRoute("/sbxpay")({
 /**
  * 🔐 [CONTRATO DE CONTEXTO]
  */
-export const UserDataContext = createContext<{ 
-  userData: BFFUserProfile | null; 
-  performLogout: () => void; 
+export const UserDataContext = createContext<{
+  userData: BFFUserProfile | null;
+  performLogout: () => void;
   isVerifying: boolean;
 }>({
   userData: null,
@@ -82,7 +82,7 @@ function HomeSkeleton() {
             }`}
           >
             <div className="max-w-7xl mx-auto px-6 relative z-10 animate-pulse">
-              <div 
+              <div
                 className={`flex flex-col ${
                   section.isReverse ? "lg:flex-row-reverse" : "lg:flex-row"
                 } items-center justify-between gap-8 lg:gap-12`}
@@ -107,11 +107,11 @@ function HomeSkeleton() {
 
                   {section.isHero ? (
                     <div className="border-t border-gray-100 pt-5 space-y-4">
-                       <div className="h-12 w-full bg-slate-50 rounded-lg"></div>
-                       <div className="h-12 w-full bg-slate-50 rounded-lg"></div>
-                       <div className="pt-2">
-                         <div className="h-10 w-full md:w-40 bg-slate-100 rounded-lg"></div>
-                       </div>
+                      <div className="h-12 w-full bg-slate-50 rounded-lg"></div>
+                      <div className="h-12 w-full bg-slate-50 rounded-lg"></div>
+                      <div className="pt-2">
+                        <div className="h-10 w-full md:w-40 bg-slate-100 rounded-lg"></div>
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -129,7 +129,7 @@ function HomeSkeleton() {
 
                 <div className="hidden sm:flex w-full lg:w-5/12 justify-center mt-8 lg:mt-0">
                   <div className="w-full max-w-sm aspect-square bg-slate-50/50 rounded-full flex items-center justify-center">
-                     <div className="w-3/4 h-3/4 bg-slate-100 rounded-2xl rotate-3"></div>
+                    <div className="w-3/4 h-3/4 bg-slate-100 rounded-2xl rotate-3"></div>
                   </div>
                 </div>
               </div>
@@ -165,8 +165,8 @@ export function SbXPAYLayOut() {
   // 🔒 [IDEMPOTENCY LOCK]
   const hasRunPhantomVisit = useRef(false);
 
-  useEffect(() => { 
-    logoutRef.current = logout; 
+  useEffect(() => {
+    logoutRef.current = logout;
   }, [logout]);
 
   const [userData, setUserData] = useState<BFFUserProfile | null>(contextProfile || null);
@@ -181,7 +181,9 @@ export function SbXPAYLayOut() {
 
   useEffect(() => {
     if (status === "error") {
-      console.error(`[AUTH GATEKEEPER] Falha Crítica no Resgate Tático: ${reason}. O Zero-Trust Guard abortará a rota.`);
+      console.error(
+        `[AUTH GATEKEEPER] Falha Crítica no Resgate Tático: ${reason}. O Zero-Trust Guard abortará a rota.`,
+      );
     }
   }, [status, reason]);
 
@@ -193,32 +195,33 @@ export function SbXPAYLayOut() {
   useEffect(() => {
     let isMounted = true;
 
-    if (isLoading || isExchanging) return; 
+    if (isLoading || isExchanging) return;
 
     // ⛔ [STEP 1]: ZERO-TRUST GUARD & REDIRECIONAMENTO PROATIVO
     if (!USE_COOKIE && !sessionToken) {
-      if (isMounted) setIsVerifying(false); 
+      if (isMounted) setIsVerifying(false);
 
       // 🛡️ Segurança: Queda limpa. Redirecionamentos parametrizados (Open Redirect)
       // só são válidos mediante assinatura prévia do Orquestrador (Handoff Token).
-      navigate({ 
-        to: '/accounts/signin', 
-        replace: true
+      navigate({
+        to: "/accounts/signin",
+        replace: true,
       });
       return;
     }
 
-    if (isMounted) setIsVerifying(true); 
+    if (isMounted) setIsVerifying(true);
 
     async function initializeHubSession() {
       try {
-        const storedProfileStr = sessionStorage.getItem("user_profile");
-        const fallbackProfile = storedProfileStr ? JSON.parse(storedProfileStr) : null;
-        let userProfile = (contextProfile || fallbackProfile) as BFFUserProfile | null;
+        // 🔒 ZERO PII: nenhum fallback de perfil vindo do sessionStorage.
+        // O perfil só existe em memória (contexto) ou é reidratado pelo backend via JWT.
+        let userProfile = contextProfile as BFFUserProfile | null;
+
 
         const searchParams = new URLSearchParams(window.location.search);
-        let vId = searchParams.get('visit_id');
-        let vUpId = searchParams.get('visit_update_id');
+        let vId = searchParams.get("visit_id");
+        let vUpId = searchParams.get("visit_update_id");
 
         // =====================================================================
         // 👻 [STEP 2]: GERAÇÃO DE PAGEVIEW (PHANTOM VISIT POST)
@@ -238,29 +241,29 @@ export function SbXPAYLayOut() {
               environment: getDefaultSbxEnvironment(),
               target_url: window.location.pathname,
               origin_url: currentHref,
-              ...(vId ? { visit_id: vId } : {}), 
+              ...(vId ? { visit_id: vId } : {}),
               interaction_context: {
                 origin_url: currentHref,
                 utm_source: "sbxpay_direct",
                 utm_medium: "organic",
-                utm_campaign: "hub_layout_visit_init"
-              }
+                utm_campaign: "hub_layout_visit_init",
+              },
             };
 
             try {
               const postData = await callOrchestrator(visitPayload, "POST");
-              
+
               if (postData?.url) {
                 // 🛡️ Sucesso: Aplica a nova âncora temporal
                 const responseUrlObj = new URL(postData.url, window.location.origin);
                 const originalParams = new URLSearchParams(window.location.search);
-                
+
                 responseUrlObj.searchParams.forEach((val, key) => originalParams.set(key, val));
 
                 navigate({
                   to: responseUrlObj.pathname,
                   search: Object.fromEntries(originalParams.entries()) as any,
-                  replace: true
+                  replace: true,
                 });
               } else if (postData?.fallback_url) {
                 // 🛡️ Handoff Token: O Backend exigiu reautenticação
@@ -269,7 +272,7 @@ export function SbXPAYLayOut() {
               }
             } catch (postErr) {
               hasRunPhantomVisit.current = false;
-              throw postErr; 
+              throw postErr;
             }
           }
         }
@@ -278,46 +281,42 @@ export function SbXPAYLayOut() {
         // 🚑 [STEP 3]: FAILSAFE RESILIENTE & MONTAGEM DA UI
         // =====================================================================
         if (!userProfile && sessionToken) {
-           console.warn("⚠️ [Home] Perfil Ausente no Contexto Local. Backend fará o handoff via JWT.");
-           userProfile = {
-             entity_id: "anonymous",
-             entity_type: "F",
-             name: "Visitante Logado",
-             document: "",
-             email: "",
-             phone: "",
-             birth_date: "",
-             gender: "",
-             login: "",
-             mothers_name: "",
-             address: null,
-           };
+          console.warn("⚠️ [Home] Perfil Ausente no Contexto Local. Backend fará o handoff via JWT.");
+          userProfile = {
+            entity_id: "anonymous",
+            entity_type: "F",
+            name: "Visitante Logado",
+            document: "",
+            email: "",
+            phone: "",
+            birth_date: "",
+            gender: "",
+            login: "",
+            mothers_name: "",
+            address: null,
+          };
         } else if (!userProfile && !sessionToken) {
-           throw { code: 'SESSION_EXPIRED', fallback_url: '/accounts/signin' };
+          throw { code: "SESSION_EXPIRED", fallback_url: "/accounts/signin" };
         }
 
         if (isMounted) {
           setUserData(userProfile);
-          setIsVerifying(false); 
+          setIsVerifying(false);
         }
-
       } catch (err: any) {
         if (isRedirecting.current) return;
         isRedirecting.current = true;
-        
+
         if (isMounted) {
-          performLogout(); 
-          
+          performLogout();
+
           // 🛡️ Previne Open Redirect: Apenas rotas assinadas pelo Orquestrador são válidas.
-          const fallbackUrl = 
-             err?.fallback_url || 
-             err?.response?.data?.fallback_url || 
-             err?.data?.fallback_url;
+          const fallbackUrl = err?.fallback_url || err?.response?.data?.fallback_url || err?.data?.fallback_url;
 
           if (fallbackUrl) {
-             navigate({ to: fallbackUrl as any, replace: true });
+            navigate({ to: fallbackUrl as any, replace: true });
           } else {
-             navigate({ to: '/accounts/signin', replace: true });
+            navigate({ to: "/accounts/signin", replace: true });
           }
         }
       }
@@ -325,22 +324,24 @@ export function SbXPAYLayOut() {
 
     initializeHubSession();
 
-    return () => { 
-      isMounted = false; 
-    }; 
+    return () => {
+      isMounted = false;
+    };
   }, [isLoading, isExchanging, sessionToken, contextProfile, navigate, reason]);
 
   if (!isClientMounted || isExchanging) {
     return <HomeSkeleton />;
   }
 
-  const hasLocalSession = Boolean(sessionToken || (typeof window !== "undefined" && sessionStorage.getItem("user_profile")));
-  
+  // 🔒 ZERO PII: a presença de sessão é decidida apenas pelo token (storage em DEV / cookie em PROD).
+  const hasLocalSession = Boolean(sessionToken);
+
+
   if (isLoading && !hasLocalSession) {
-    return <HomeSkeleton />; 
+    return <HomeSkeleton />;
   }
 
-  if (!USE_COOKIE && !sessionToken) return null; 
+  if (!USE_COOKIE && !sessionToken) return null;
 
   return (
     <div className="sbxpay-shell min-h-screen bg-white">

@@ -81,14 +81,19 @@ export function FinancialHubDataInjector({ children }: { children: React.ReactNo
         const hasValidContext = Boolean(contextData?.entity?.entity_id || contextData?.offer?.offer_id);
 
         if (hasValidContext) {
-          console.log("⚡ [DataInjector] Fast-Path: Hidratando via Contexto Pai (Zero Network)");
+          // 🔇 Log de diagnóstico apenas em DEV (evita ruído em produção)
+          if (import.meta.env.DEV) {
+            console.log("⚡ [DataInjector] Fast-Path: Hidratando via Contexto Pai (Zero Network)");
+          }
           updateData({
             ...contextData,
             entity: contextData?.entity ?? {},
           });
         } else {
           // 📡 2. FALLBACK PATH: Só chega aqui se a hidratação global não trouxer dados
-          console.log("📡 [DataInjector] Fallback: Buscando Orchestrator via API");
+          if (import.meta.env.DEV) {
+            console.log("📡 [DataInjector] Fallback: Buscando Orchestrator via API");
+          }
           const orchestratorData = await callOrchestrator(
             {
               visit_id: visitId,
