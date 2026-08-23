@@ -1,60 +1,54 @@
 /**
  * @fileoverview Rota: /financiamentos/auto-equity
- * @path src/routes/financiamentos/auto-equity.tsx
- * * * ESTRUTURA DO PROJETO:
- * --------------------------------------------------------------------------------
- * src/
- * ├── api/
- * │   ├── gateway.ts            # O "Transportador" (lógica de rede)
- * ├── components/
- * │   ├── auto-equity/          # [Domínio] Componentes exclusivos do Auto-Equity
- * │   │   ├── WizardLayout.tsx  # O "Financial Layout" (Engine de renderização)
- * │   │   └── HowItWorks.tsx    # Componente informativo
- * │   └── common/
- * │       ├── StepLayout.tsx    # O "Palco" (Container estável)
- * │       └── FinancialHubDataInjector.tsx # Injetor de estado
- * ├── hooks/
- * │   └── useOrchestratorHydration.ts    # A "Lógica de API"
- * └── routes/                   # Páginas (Auto-Equity, Veículos, Simulação, etc)
- * --------------------------------------------------------------------------------
- * * * PROPÓSITO:
- * Ponto de entrada para a jornada de Auto-Equity.
- * * * ARQUITETURA E FLUXO (ATUALIZADA):
- * 1. SimulaçãoContext:    [Global] Dados hidratados pelo SimulationLayout pai.
- * 2. WizardProvider:      [Estado] Gerencia o fluxo da jornada local.
- * 3. FinancialHubDataInjector:  [Injeção] Popula o Wizard com o simData do contexto.
- * 4. StepLayout:          [Palco] Container estável que elimina Layout Shift.
- * 5. WizardLayout:        [Engine] Renderiza os passos dentro do StepLayout.
+ * @path src/routes/financiamentos/auto-equity.lazy.tsx
+ * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: STATELESS WIZARD & DATA INJECTION
+ * =========================================================================
+ * Ponto de entrada estrutural para a jornada de Auto-Equity (Refinanciamento).
+ * Este componente atua como um "Palco Oco" (Dumb Component), delegando
+ * toda a regra de negócio para a injeção do Orquestrador via Contexto.
+ * 
+ * [MECÂNICA ARQUITETURAL]:
+ * 1. {Global State Hydration}: Consome `simData` hidratado pelo Guardião 
+ *    Pai (`financiamentos.lazy.tsx`), garantindo zero roundtrips na API local.
+ * 2. {Engine Ignition}: Envolve o contexto no `WizardProvider` injetando
+ *    `initialData` como base imutável da jornada.
+ * 3. {Dynamic Rendering}: Utiliza o `BaseWizardLayout` pareado com o 
+ *    `AutoEquityManifest` (JSON-driven UX) para montar as telas dinamicamente,
+ *    eliminando a necessidade de dezenas de componentes específicos no DOM.
+ * 4. {Anti-Shift Container}: O `StepLayout` isola a renderização em um palco
+ *    estável, prevenindo Cumulative Layout Shift (CLS) durante a navegação.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
-import { createLazyFileRoute, useSearch } from "@tanstack/react-router";
-import React from "react";
+import { createLazyFileRoute } from "@tanstack/react-router";
 
 // Motor Genérico (Infraestrutura)
-import { FinancialHubDataInjector } from "@/features/financial-hub/components/layout/FinancialHubDataInjector";
-
-// Domínio (Específico da jornada Auto-Equity)
-import { BaseWizardLayout } from "@/features/financial-hub/components/layout/BaseWizardLayout";
-import { HowItWorks } from "@/features/financial-hub/components/products/credit/auto-equity/HowItWorks";
-import { AutoEquityManifest } from "@/features/financial-hub/components/products/credit/auto-equity/auto-equity.manifest";
 import { WizardProvider } from "@/features/financial-hub/components/shared/WizardProvider";
 import { StepLayout } from "@/features/financial-hub/components/shared/StepLayout";
+import { FinancialHubDataInjector } from "@/features/financial-hub/components/layout/FinancialHubDataInjector";
+import { BaseWizardLayout } from "@/features/financial-hub/components/layout/BaseWizardLayout";
 
-// Hook de Contexto (Nova Arquitetura de Dados)
+// Domínio (Específico da jornada Auto-Equity)
+import { HowItWorks } from "@/features/financial-hub/components/products/credit/auto-equity/HowItWorks";
+import { AutoEquityManifest } from "@/features/financial-hub/components/products/credit/auto-equity/auto-equity.manifest";
+
+// Hook de Contexto (Motor de Dados)
 import { useProductConsult } from "@/features/financial-hub/core/contexts/FinancialHubContext";
 
 export const Route = createLazyFileRoute("/financiamentos/auto-equity")({
-  component: AutoEquityPage,
+  component: AutoEquityConsultPage,
 });
 
-function AutoEquityPage() {
-  const search = useSearch({ strict: false });
-  
-  // 1. RESGATE: Consome os dados já hidratados pelo SimulationLayout (Pai).
-  // Removemos o OrchestratorWrapper local para evitar chamadas duplicadas e alinhar ao padrão global.
+function AutoEquityConsultPage() {
+  // 1. [RESGATE]: Consome os dados PII e do Carrinho providos pelo Guardião Pai
   const simData = useProductConsult();
 
-  if (!simData?.entity) return null; // Guard simplificado
+  // Guard Clause Estrito: Se a entidade não foi hidratada, aborta a montagem
+  if (!simData?.entity) return null; 
   
   return (
     <>
@@ -62,13 +56,13 @@ function AutoEquityPage() {
         <div className="absolute inset-0 z-0 bg-white" />
         
         <main className="relative z-10 w-full max-w-6xl">
-          {/* 2. MOTOR: Injeta o estado global (initialData) necessário para o Wizard */}
+          {/* 2. [MOTOR]: Inicializa a máquina de estados local do formulário */}
           <WizardProvider initialData={simData?.entity || {}}>
             
-            {/* 3. INJEÇÃO: Popula o Wizard com dados da API e ID da simulação atual */}
+            {/* 3. [INJEÇÃO]: Anexa o contexto temporal (visit_update_id) ao Wizard */}
             <FinancialHubDataInjector>
             
-              {/* 4. PALCO ESTÁVEL: Container consistente para evitar Layout Shift */}
+              {/* 4. [RENDERIZAÇÃO]: Palco anti-CLS com Engine JSON-driven */}
               <StepLayout>
                 <BaseWizardLayout manifest={AutoEquityManifest} />
               </StepLayout>
@@ -76,12 +70,10 @@ function AutoEquityPage() {
             </FinancialHubDataInjector>
 
           </WizardProvider>
-
         </main>
-
       </section>
 
-      {/* Seções complementares (Contexto da Jornada) */}
+      {/* 5. [SUPORTE]: Seção estática de educação do consumidor */}
       <HowItWorks />
     </>
   );

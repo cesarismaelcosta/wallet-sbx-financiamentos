@@ -6,7 +6,7 @@
  * 🤖 GEMINI ARCHITECTURE SPECIFICATION: SEGUROS STATELESS HANDOFF
  * =========================================================================
  * Este módulo atua como o Guardião e Layout Pai para todas as sub-rotas 
- * de seguros. Garante o resgate tático do token efêmero (#xt=)
+ * da vertical de seguros. Garante o resgate tático do token efêmero (#xt=)
  * caso o usuário aterrissie diretamente em uma sub-rota cross-domain.
  * 
  * [FLUXO DE SEGURANÇA E EXECUÇÃO]:
@@ -15,18 +15,17 @@
  *    e hidrata o sessionStorage antes de qualquer decisão do Guard.
  * 2. {Zero-Trust Guard}: Valida a presença do session_token ou respeita a flag 
  *    `USE_COOKIE` para evitar falsos positivos.
- * 3. {State Rehydration}: Gerencia o ciclo de expiração via JWT e relógio sincronizado.
+ * 3. {State Rehydration}: Gerencia o ciclo de expiração via Handoff Token (Backend).
  * 
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
  */
 
 import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
+import { useEffect, useState } from "react";
 import { FinancialHubLayout } from "@/features/financial-hub/components/layout/FinancialHubLayout";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { useEffect, useState } from "react";
-import { jwtDecode } from "jwt-decode"; 
-import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session"; 
+import { USE_COOKIE, getTokenForPayload } from "@/services/session"; 
 import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoffRedeem";
 
 // Importando os componentes visuais para replicar o Layout Pixel-Perfect
@@ -39,6 +38,8 @@ import { PanelFooterSkeleton } from "@/features/financial-hub/components/layout/
 // =========================================================================
 // [ANTI-RACE CONDITION]: Skeleton Puro Desacoplado do Orquestrador
 // =========================================================================
+// Esta marcação usa os mesmos sub-componentes do FinancialHubLayout.
+// O usuário NÃO sente a transição de montagem, pois os pixels são idênticos.
 function RouteSkeleton() {
   return (
     <div className="min-h-screen bg-white text-foreground flex flex-col transition-colors duration-300 relative">
@@ -57,39 +58,33 @@ function RouteSkeleton() {
   );
 }
 
-/**
- * SegurosGuard
- * Componente responsável por proteger o acesso às rotas de seguro.
- * Interrompe a renderização caso o usuário não esteja autenticado ou a sessão tenha expirado.
- */
 const SegurosGuard = () => {
-  // [ARQUITETURA]: sessionToken do contexto global
   const { sessionToken: contextToken, isLoading } = useFinancialAuth();
-  
-  // 🔑 [SECURITY GATE]: Resgate encapsulado e seguro
   const sessionToken = contextToken || getTokenForPayload();
 
   const navigate = useNavigate();
   const location = useLocation();
-
+  
+  // 1. Extraímos o status e reason do hook para log e UX
   const { isExchanging, status, reason } = useHandoffRedeem();
 
-  // ✨ FIX: Log de segurança simétrico para rastreabilidade
+  // ✨ FIX: Log de segurança simétrico ao do sbxpay (rastreabilidade no Datadog/Sentry)
   useEffect(() => {
     if (status === "error") {
       console.error(`[AUTH GATEKEEPER - Seguros] Falha Crítica no Resgate Tático: ${reason}. Redirecionando para login.`);
     }
   }, [status, reason]);
 
+  // 2. Estado de montagem para mitigar Hydration Mismatch entre SSR e Cliente
   const [isClientMounted, setIsClientMounted] = useState(false);
   useEffect(() => {
     setIsClientMounted(true);
   }, []);
 
   useEffect(() => {
-    // 🛡️ Previne vazamento de estado SSR antes da validação do Sniper
+    // 🛡️ Previne vazamento de estado e bloqueia o Guard até o Sniper resolver
     if (!isClientMounted || isLoading || isExchanging) return;
-
+    
     // =========================================================================
     // 🛡️ [STEP 1]: ZERO-TRUST GUARD & REDIRECIONAMENTO PROATIVO
     // =========================================================================
@@ -103,40 +98,18 @@ const SegurosGuard = () => {
         to: '/accounts/signin',
         search: { 
           redirect_uri: currentPath,
-          env: undefined,
+          // 3. Injeta a causa do erro de resgate se houver
           handoff_error: reason 
         } as any,
-        replace: true // ✨ FIX: Higiene de Histórico (Impede reentrada inválida via botão "Voltar")
+        // ✨ FIX: Previne que o botão "Voltar" do navegador reentre numa URL desprotegida
+        replace: true
       });
       return;
-    }
-
-    // =========================================================================
-    // ⏱️ [STEP 2]: VALIDAÇÃO PASSIVA DE EXPIRAÇÃO (UX Guard)
-    // =========================================================================
-    if (sessionToken && typeof sessionToken === "string") {
-      try {
-        const decoded = jwtDecode<{ exp?: number }>(sessionToken);
-        const timeDelta = getTimeDelta();
-        
-        // Sincroniza a hora local do usuário com o relógio do servidor
-        const syncedCurrentTimeInSeconds = Math.floor((Date.now() + timeDelta) / 1000);
-
-        if (decoded.exp && decoded.exp < syncedCurrentTimeInSeconds) {
-          console.warn("🚨 [UX Guard - Seguros] sessionToken expirado localmente. Acionando Amnésia.");
-          window.dispatchEvent(new CustomEvent('session_expired'));
-          return;
-        }
-      } catch (error) {
-        console.error("⚠️ [UX Guard - Seguros] Erro crítico na validação (não é necessariamente o token):", error);
-        window.dispatchEvent(new CustomEvent('session_expired'));
-        return;
-      }
     }
   }, [isClientMounted, sessionToken, isLoading, navigate, location.pathname, isExchanging, reason]);
 
   // =========================================================================
-  // [UX REFINEMENT & ANTI-RACE CONDITION]: Renderização do Skeleton
+  // [OUTPUT]: RENDERIZAÇÃO DE SKELETON OU ROTA FILHA
   // =========================================================================
   
   // ✨ FIX: Montagem isolada. O Orquestrador só "nasce" depois dessa barreira visual.
@@ -144,7 +117,7 @@ const SegurosGuard = () => {
     return <RouteSkeleton />;
   }
 
-  // [COMPLIANCE]: Fail-safe de renderização (Apenas em DEV).
+  // [COMPLIANCE]: Fail-safe de renderização
   if (!USE_COOKIE && !sessionToken) return null;
 
   return (

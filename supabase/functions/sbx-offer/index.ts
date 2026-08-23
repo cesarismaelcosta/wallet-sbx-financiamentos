@@ -43,15 +43,65 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
   try {
     auth = await validateRequest(req);
   } catch (err: any) {
-    const authUrl = req.headers.get("x-auth-fallback-url") || "/accounts/signin";
-    debugLog(`[sbx-offer] Falha de autenticação na borda: ${err.message}`);
+    const originPath = req.headers.get("x-original-url") || "/";
+    const authPath = req.headers.get("x-auth-fallback-url") || "/accounts/signin";
+
+    let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
+    let errorCode = "UNAUTHORIZED";
+    let fallbackUrl = authPath;
+    let statusCode = 401;
+
+    // ✨ [HANDOFF TOKEN / SIGNED STATE]: A Sessão Expirou. Lacramos o cofre.
+    if (err.message.includes("SESSION_EXPIRED")) {
+      userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+      errorCode = "SESSION_EXPIRED";
+
+      let intentVisitId = null;
+      let intentUpdateId = null;
+      let intentTargetUrl = originPath;
+
+      // Sendo um GET estrito, tentamos catar o visit_id da URL de origem se o front mandou
+      try {
+        const [path, query = ""] = originPath.split("?");
+        const qParams = new URLSearchParams(query);
+        
+        intentVisitId = qParams.get("visit_id") || null;
+        intentUpdateId = qParams.get("visit_update_id") || null;
+      } catch (e) {}
+
+      try {
+        // Importação em runtime para evitar bloqueios de escopo no Edge
+        const { signSigninParameters } = await import("../_shared/s2s.ts");
+        
+        const handoffToken = await signSigninParameters({
+          visit_id: intentVisitId,
+          visit_update_id: intentUpdateId,
+          target_url: intentTargetUrl,
+          origin_url: originPath
+        });
+        
+        const cleanAuthPath = authPath.split('?')[0] || "/accounts/signin";
+        fallbackUrl = `${cleanAuthPath}?handoff_token=${handoffToken}`;
+        
+        debugLog("[sbx-offer] Handoff Token emitido na interceptação de borda.");
+      } catch (jwtErr) {
+        debugLog("[sbx-offer] Erro ao assinar Handoff Token.", jwtErr);
+        fallbackUrl = authPath.split('?')[0] || "/accounts/signin";
+      }
+    } else if (err.message.includes("FORBIDDEN")) {
+      userMessage = "Você não tem permissão para acessar este recurso.";
+      errorCode = "FORBIDDEN";
+      fallbackUrl = originPath;
+      statusCode = 403;
+    }
+
     return {
-      status: 401,
+      status: statusCode,
       data: { 
         success: false, 
-        code: "UNAUTHORIZED", 
-        message: "Sessão inválida ou expirada. Por favor, faça login novamente.", 
-        fallback_url: authUrl 
+        code: errorCode, 
+        message: userMessage, 
+        fallback_url: fallbackUrl 
       }
     };
   }

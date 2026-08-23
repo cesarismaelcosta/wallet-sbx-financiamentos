@@ -1,68 +1,77 @@
 /**
  * @fileoverview Rota: /seguros/auto
- * @path src/routes/seguros/auto.tsx
- *
- * * ÁRVORE DE DEPENDÊNCIAS (ROTA):
- * --------------------------------------------------------------------------------
- * src/
- * ├── routes/
- * │   └── seguros/auto.tsx                        # [AQUI] Ponto de entrada
- * ├── contexts/
- * │   └── FinancialHubContext.tsx                   # Contexto Global (Loading/Status)
- * ├── components/
- * │   ├── engine/WizardProvider.tsx               # Gerenciador de Estado Local
- * │   ├── simulacao/FinancialHubDataInjector.tsx        # A "Cortina de Hidratação" (API)
- * │   └── insurance-auto/SeguroAutoLayout.tsx     # O Layout principal da página
- * --------------------------------------------------------------------------------
- *
- * * PROPÓSITO:
- * Inicializar a página de Seguros envelopada pelo motor de estado.
- * O FinancialHubDataInjector fará o fetch no Orquestrador usando o `visit_id` da URL,
- * e só baixará a cortina de loading quando os dados estiverem prontos.
+ * @path src/routes/seguros/auto.lazy.tsx
+ * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: STATELESS WIZARD & DATA INJECTION
+ * =========================================================================
+ * Ponto de entrada estrutural para a jornada de Seguro Auto.
+ * Este componente atua como um "Palco Oco" (Dumb Component), delegando
+ * toda a regra de negócio para a injeção do Orquestrador via Contexto.
+ * 
+ * [MECÂNICA ARQUITETURAL]:
+ * 1. {Global State Hydration}: Consome `simData` hidratado pelo Guardião 
+ *    Pai (`seguros.lazy.tsx`), garantindo zero roundtrips na API local.
+ * 2. {Engine Ignition}: Envolve o contexto no `WizardProvider` injetando
+ *    `initialData` como base imutável da jornada.
+ * 3. {Dynamic Rendering}: Utiliza o `BaseWizardLayout` pareado com o 
+ *    `SeguroAutoManifest` (JSON-driven UX) para montar as telas dinamicamente,
+ *    eliminando a necessidade de dezenas de componentes específicos no DOM.
+ * 4. {Anti-Shift Container}: O `StepLayout` isola a renderização em um palco
+ *    estável, prevenindo Cumulative Layout Shift (CLS) durante a navegação.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
-import { createLazyFileRoute, useSearch } from "@tanstack/react-router";
+import { createLazyFileRoute } from "@tanstack/react-router";
+
+// Motor Genérico (Infraestrutura)
 import { WizardProvider } from "@/features/financial-hub/components/shared/WizardProvider";
 import { StepLayout } from "@/features/financial-hub/components/shared/StepLayout";
-
-// Importações do Domínio de Seguros
 import { FinancialHubDataInjector } from "@/features/financial-hub/components/layout/FinancialHubDataInjector";
-import { HowItWorks } from "@/features/financial-hub/components/products/insurance/auto/HowItWorks";
 import { BaseWizardLayout } from "@/features/financial-hub/components/layout/BaseWizardLayout";
+
+// Domínio (Específico da jornada Seguro Auto)
+import { HowItWorks } from "@/features/financial-hub/components/products/insurance/auto/HowItWorks";
 import { SeguroAutoManifest } from "@/features/financial-hub/components/products/insurance/auto/seguro-auto.manifest";
 
-// Importação do Contexto (O MESMO DA JORNADA QUE FUNCIONA)
+// Hook de Contexto (Motor de Dados)
 import { useProductConsult } from "@/features/financial-hub/core/contexts/FinancialHubContext";
 
 export const Route = createLazyFileRoute("/seguros/auto")({
-  component: ProductConsultPage,
+  component: SeguroAutoConsultPage,
 });
 
-function ProductConsultPage() {
-  // Extrai o visit_id da URL
-  const search = useSearch({ strict: false });
-
-  // 1. RESGATE: Consome os dados já hidratados pelo SimulationLayout (Pai).
+function SeguroAutoConsultPage() {
+  // 1. [RESGATE]: Consome os dados PII e do Carrinho providos pelo Guardião Pai
   const simData = useProductConsult();
+
+  // Guard Clause Estrito: Se a entidade não foi hidratada, aborta a montagem
+  if (!simData?.entity) return null; 
 
   return (
     <>
       <section className="relative -mt-8 pb-12 px-4 w-full flex justify-center overflow-hidden">
         <main className="relative z-10 w-full max-w-6xl">
-          {/* 2. MOTOR: Injeta o estado global (initialData) necessário para o Wizard */}
+          {/* 2. [MOTOR]: Inicializa a máquina de estados local do formulário */}
           <WizardProvider initialData={simData?.entity || {}}>
-            {/* 3. INJEÇÃO: Popula o Wizard com dados da API e ID da simulação atual */}
+            
+            {/* 3. [INJEÇÃO]: Anexa o contexto temporal (visit_update_id) ao Wizard */}
             <FinancialHubDataInjector>
-              {/* 4. PALCO ESTÁVEL: Container consistente para evitar Layout Shift */}
+            
+              {/* 4. [RENDERIZAÇÃO]: Palco anti-CLS com Engine JSON-driven */}
               <StepLayout>
                 <BaseWizardLayout manifest={SeguroAutoManifest} />
               </StepLayout>
+
             </FinancialHubDataInjector>
+            
           </WizardProvider>
         </main>
       </section>
 
-      {/* Seções complementares (Contexto da Jornada) */}
+      {/* 5. [SUPORTE]: Seção estática de educação do consumidor */}
       <HowItWorks />
     </>
   );

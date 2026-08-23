@@ -123,9 +123,48 @@ serve(withSecurity('orchestrator-configs', async (req: Request) => {
       let fallbackUrl = authPath;
       let statusCode = 401;
 
+      // ✨ [HANDOFF TOKEN / SIGNED STATE]: A Sessão Expirou. Lacramos o cofre.
       if (err.message.includes("SESSION_EXPIRED")) {
         userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
         errorCode = "SESSION_EXPIRED";
+        
+        let intentVisitId = null;
+        let intentUpdateId = null;
+        let intentTargetUrl = originPath; // Default para a origem
+
+        // Como o orchestrator-configs é exclusivamente GET, extraímos do Header a origem real (Front-End)
+        // e tentamos remontar os parâmetros (visit_id) caso a origem os possua.
+        try {
+          const [path, query = ""] = originPath.split("?");
+          const qParams = new URLSearchParams(query);
+          
+          intentVisitId = qParams.get("visit_id") || null;
+          intentUpdateId = qParams.get("visit_update_id") || null;
+          
+          intentTargetUrl = originPath;
+        } catch (e) {}
+
+        try {
+          // Importação em tempo de execução para evitar ciclos no topo, caso o s2s não esteja carregado
+          const { signSigninParameters } = await import("../_shared/s2s.ts");
+          
+          const handoffToken = await signSigninParameters({
+            visit_id: intentVisitId,
+            visit_update_id: intentUpdateId,
+            target_url: intentTargetUrl,
+            origin_url: originPath
+          });
+          
+          // ✨ Isola apenas o path base
+          const cleanAuthPath = authPath.split('?')[0] || "/accounts/signin";
+          fallbackUrl = `${cleanAuthPath}?handoff_token=${handoffToken}`;
+          
+          debugLog("[Orchestrator Configs] Handoff Token emitido com sucesso na interceptação passiva.");
+        } catch (jwtErr) {
+          debugLog("[Orchestrator Configs] Erro ao assinar Handoff Token. Roteando limpo.", jwtErr);
+          fallbackUrl = authPath.split('?')[0] || "/accounts/signin";
+        }
+
       } else if (err.message.includes("FORBIDDEN")) {
         userMessage = "Você não tem permissão para acessar este recurso.";
         errorCode = "FORBIDDEN";

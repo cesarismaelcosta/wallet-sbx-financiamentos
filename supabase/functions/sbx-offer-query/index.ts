@@ -71,11 +71,14 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
   // =========================================================================
   // FASE 1: GATEKEEPER DE BORDA (Validação Stateless do JWT & Headers)
   // =========================================================================
+  const originPath = req.headers.get("x-original-url") || "/";
+  const authPath = req.headers.get("x-auth-fallback-url") || "/accounts/signin";
+
   const incomingHeaders = {
     auth: req.headers.get("authorization") ? "Presente" : "Ausente",
     sessionToken: req.headers.get("x-session-token") ? "Presente" : "Ausente",
-    originalUrl: req.headers.get("x-original-url"),
-    fallbackUrl: req.headers.get("x-auth-fallback-url"),
+    originalUrl: originPath,
+    fallbackUrl: authPath,
   };
   debugLog(`[DEBUG] 📥 Headers recebidos: ${JSON.stringify(incomingHeaders)}`);
 
@@ -84,15 +87,63 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
     auth = await validateRequest(req);
     debugLog(`[DEBUG] ✅ Autenticação validada com sucesso. Ambiente: ${auth?.environment || 'staging'}`);
   } catch (err: any) {
-    const authUrl = req.headers.get("x-auth-fallback-url") || "/accounts/signin";
+    let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
+    let errorCode = "UNAUTHORIZED";
+    let fallbackUrl = authPath;
+    let statusCode = 401;
+
     debugLog(`[DEBUG] ❌ Falha de autenticação na borda: ${err.message}`);
+
+    // ✨ [HANDOFF TOKEN / SIGNED STATE]: A Sessão Expirou. Lacramos o cofre.
+    if (err.message.includes("SESSION_EXPIRED")) {
+      userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+      errorCode = "SESSION_EXPIRED";
+
+      let intentVisitId = null;
+      let intentUpdateId = null;
+      let intentTargetUrl = originPath;
+
+      // Sendo uma query, tentamos extrair da origem (URL onde a vitrine está)
+      try {
+        const [path, query = ""] = originPath.split("?");
+        const qParams = new URLSearchParams(query);
+        
+        intentVisitId = qParams.get("visit_id") || null;
+        intentUpdateId = qParams.get("visit_update_id") || null;
+      } catch (e) {}
+
+      try {
+        const { signSigninParameters } = await import("../_shared/s2s.ts");
+        
+        const handoffToken = await signSigninParameters({
+          visit_id: intentVisitId,
+          visit_update_id: intentUpdateId,
+          target_url: intentTargetUrl,
+          origin_url: originPath
+        });
+        
+        const cleanAuthPath = authPath.split('?')[0] || "/accounts/signin";
+        fallbackUrl = `${cleanAuthPath}?handoff_token=${handoffToken}`;
+        
+        debugLog("[sbx-offer-query] Handoff Token emitido na interceptação de borda.");
+      } catch (jwtErr) {
+        debugLog("[sbx-offer-query] Erro ao assinar Handoff Token.", jwtErr);
+        fallbackUrl = authPath.split('?')[0] || "/accounts/signin";
+      }
+    } else if (err.message.includes("FORBIDDEN")) {
+      userMessage = "Você não tem permissão para acessar este recurso.";
+      errorCode = "FORBIDDEN";
+      fallbackUrl = originPath;
+      statusCode = 403;
+    }
+
     return {
-      status: 401,
+      status: statusCode,
       data: {
         success: false, 
-        code: "UNAUTHORIZED", 
-        message: "Sessão inválida ou expirada. Por favor, faça login novamente.", 
-        fallback_url: authUrl 
+        code: errorCode, 
+        message: userMessage, 
+        fallback_url: fallbackUrl 
       }
     };
   }

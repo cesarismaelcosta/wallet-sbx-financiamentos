@@ -13,18 +13,19 @@
  * [MECÂNICA ARQUITETURAL]:
  * 1. {Zero-Trust Auth}: Intercepta renderizações sem token válido e redireciona 
  *    para o Sign-in. O perfil básico do usuário consumido pela UI (Avatar, Nome)
- *    é derivado exclusivamente do cache da sessão (contextProfile), eliminando a
- *    necessidade de requisições GET adicionais ao backend.
- * 2. {Phantom Visit (Thin Payload)}: Quando o usuário aterrissa na raiz sem um cursor 
- *    temporal (ex: digitou a URL direto ou clicou na logo), este componente dispara 
- *    um POST estéril informando apenas a intenção (VISIT) e a origem. A responsabilidade 
- *    de cruzar essa visita com a Identidade (PII) é delegada 100% ao Orquestrador via JWT.
- * 3. {Idempotency Lock}: Utiliza `hasRunPhantomVisit` (useRef) para garantir que a 
- *    geração do Pageview ocorra estritamente 1 vez por ciclo de vida, blindando o 
- *    backend contra floods de rede causados por re-renders do React (StrictMode).
+ *    é derivado exclusivamente do cache da sessão, eliminando requests duplicados.
+ * 2. {Phantom Visit (Thin Payload)}: Quando o usuário aterrissa na raiz sem cursor 
+ *    temporal (ex: URL limpa), este componente dispara um POST estéril (VISIT). A
+ *    responsabilidade de hidratar a PII é do Orquestrador via JWT.
+ * 3. {Idempotency Lock}: Utiliza `hasRunPhantomVisit` (useRef) para garantir a 
+ *    geração de um único Pageview por ciclo de vida, blindando o backend contra 
+ *    re-renders do React (StrictMode).
+ * 4. {Secure Handoff Enforcement}: Redirecionamentos de fallback por expiração de
+ *    sessão dependem estritamente da URL assinada (Handoff Token) retornada pelo
+ *    backend. Parâmetros abertos e redirecionamentos cegos estão proibidos.
  *
  * @author César Ismael Pereira da Costa
- * @author Gemini Pro (Architectural Mechanics)
+ * @author Gemini Pro
  */
 
 import { createContext, useState, useEffect, useRef } from "react";
@@ -187,17 +188,14 @@ export function sbXPAYLayOut() {
 
     if (isLoading || isExchanging) return; 
 
-    // ⛔ [FALLBACK DE SEGURANÇA]
+    // ⛔ [STEP 1]: ZERO-TRUST GUARD & REDIRECIONAMENTO PROATIVO
     if (!USE_COOKIE && !sessionToken) {
       if (isMounted) setIsVerifying(false); 
 
-      const currentPath = typeof window !== "undefined" 
-        ? `${window.location.pathname}${window.location.search}` 
-        : "/sbxpay";
-
+      // 🛡️ Segurança: Queda limpa. Redirecionamentos parametrizados (Open Redirect)
+      // só são válidos mediante assinatura prévia do Orquestrador (Handoff Token).
       navigate({ 
         to: '/accounts/signin', 
-        search: { redirect_uri: currentPath, handoff_error: reason } as any,
         replace: true
       });
       return;
@@ -216,7 +214,7 @@ export function sbXPAYLayOut() {
         let vUpId = searchParams.get('visit_update_id');
 
         // =====================================================================
-        // 👻 GERAÇÃO DE PAGEVIEW (PHANTOM VISIT POST)
+        // 👻 [STEP 2]: GERAÇÃO DE PAGEVIEW (PHANTOM VISIT POST)
         // =====================================================================
         const hasValidVisit = Boolean(vId && vUpId);
 
@@ -228,14 +226,12 @@ export function sbXPAYLayOut() {
             console.log("👻 [Home] Iniciando Phantom Visit Estéril...");
             const currentHref = window.location.href;
 
-            // ✨ [THIN PAYLOAD ZERO-TRUST]
-            // Front-end despacha a intenção burra. Backend hidrata PII via JWT.
             const visitPayload = {
               action: "VISIT",
               environment: getDefaultSbxEnvironment(),
               target_url: window.location.pathname,
               origin_url: currentHref,
-              ...(vId ? { visit_id: vId } : {}), // Cart Preservation
+              ...(vId ? { visit_id: vId } : {}), 
               interaction_context: {
                 origin_url: currentHref,
                 utm_source: "sbxpay_direct",
@@ -247,7 +243,8 @@ export function sbXPAYLayOut() {
             try {
               const postData = await callOrchestrator(visitPayload, "POST");
               
-              if (postData?.visit_id && postData?.url) {
+              if (postData?.url) {
+                // 🛡️ Sucesso: Aplica a nova âncora temporal
                 const responseUrlObj = new URL(postData.url, window.location.origin);
                 const originalParams = new URLSearchParams(window.location.search);
                 
@@ -258,16 +255,20 @@ export function sbXPAYLayOut() {
                   search: Object.fromEntries(originalParams.entries()) as any,
                   replace: true
                 });
+              } else if (postData?.fallback_url) {
+                // 🛡️ Handoff Token: O Backend exigiu reautenticação
+                navigate({ to: postData.fallback_url as any, replace: true });
+                return;
               }
             } catch (postErr) {
               hasRunPhantomVisit.current = false;
-              throw postErr;
+              throw postErr; 
             }
           }
         }
 
         // =====================================================================
-        // 🚑 FAILSAFE RESILIENTE & MONTAGEM DA UI
+        // 🚑 [STEP 3]: FAILSAFE RESILIENTE & MONTAGEM DA UI
         // =====================================================================
         if (!userProfile && sessionToken) {
            console.warn("⚠️ [Home] Perfil Ausente no Contexto Local. Backend fará o handoff via JWT.");
@@ -296,10 +297,21 @@ export function sbXPAYLayOut() {
       } catch (err: any) {
         if (isRedirecting.current) return;
         isRedirecting.current = true;
+        
         if (isMounted) {
           performLogout(); 
-          const currentPath = typeof window !== "undefined" ? window.location.pathname : "/sbxpay";
-          window.location.href = err?.fallback_url || `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
+          
+          // 🛡️ Previne Open Redirect: Apenas rotas assinadas pelo Orquestrador são válidas.
+          const fallbackUrl = 
+             err?.fallback_url || 
+             err?.response?.data?.fallback_url || 
+             err?.data?.fallback_url;
+
+          if (fallbackUrl) {
+             navigate({ to: fallbackUrl as any, replace: true });
+          } else {
+             navigate({ to: '/accounts/signin', replace: true });
+          }
         }
       }
     }

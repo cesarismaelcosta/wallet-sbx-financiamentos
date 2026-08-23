@@ -6,7 +6,7 @@
  * 🤖 GEMINI ARCHITECTURE SPECIFICATION: FINANCIAMENTOS STATELESS HANDOFF
  * =========================================================================
  * Este módulo atua como o Guardião e Layout Pai para todas as sub-rotas 
- * de crédito e financiamentos. Garante o resgate tático do token efêmero (#xt=)
+ * da vertical de financiamentos. Garante o resgate tático do token efêmero (#xt=)
  * caso o usuário aterrissie diretamente em uma sub-rota cross-domain.
  * 
  * [FLUXO DE SEGURANÇA E EXECUÇÃO]:
@@ -15,18 +15,17 @@
  *    e hidrata o sessionStorage antes de qualquer decisão do Guard.
  * 2. {Zero-Trust Guard}: Valida a presença do session_token ou respeita a flag 
  *    `USE_COOKIE` para evitar falsos positivos.
- * 3. {State Rehydration}: Gerencia o ciclo de expiração via JWT e relógio sincronizado.
+ * 3. {State Rehydration}: Gerencia o ciclo de expiração via Handoff Token (Backend).
  * 
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
  */
 
 import { createLazyFileRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
+import { useEffect, useState } from "react";
 import { FinancialHubLayout } from "@/features/financial-hub/components/layout/FinancialHubLayout";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { useEffect, useState } from "react";
-import { jwtDecode } from "jwt-decode"; 
-import { USE_COOKIE, getTokenForPayload, getTimeDelta } from "@/services/session"; 
+import { USE_COOKIE, getTokenForPayload } from "@/services/session"; 
 import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoffRedeem";
 
 // Importando os componentes visuais para replicar o Layout Pixel-Perfect
