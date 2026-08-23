@@ -6,7 +6,7 @@
  * * INTEGRAÇÃO:
  * - Utiliza `useWizard<any>()` para interagir com o Motor Genérico.
  * - Lê valores de `state.data` (presets de simulação).
- * - Após submissão, injeta o resultado (proposalId/status) em `state.data`, 
+ * - Após submissão, injeta o resultado (proposalId/status) em `state.data`,
  * que será consumido pelo Step 5 (Confirmação).
  */
 
@@ -15,13 +15,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider"; // Motor Genérico
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
@@ -46,7 +40,7 @@ export function Step4Simulation() {
    */
   const handleSimular = async () => {
     if (loading || isSimulating.current) return;
-    
+
     isSimulating.current = true;
     setLoading(true);
 
@@ -64,28 +58,28 @@ export function Step4Simulation() {
           requested_value: amount, // O backend puxa isso na linha 72 e 101
           purpose: purpose, // Vem da tela do Step 4
           personalIncome: state.data.personalIncome, // Vem da tela do Step 2
-          vehicle: state.data.vehicle // Vem da tela do Step 3
-        }
+          vehicle: state.data.vehicle, // Vem da tela do Step 3
+        },
       };
-      
-      console.log("step4 payload:", payload);
+
+      // 🔒 LGPD: log removido — payload contém renda, veículo e consentimentos.
+
 
       // Chamada via Gateway
-      const result = await execute(() => callSimulation(payload, 'EXECUTE_SIMULATION'));
+      const result = await execute(() => callSimulation(payload, "EXECUTE_SIMULATION"));
 
       if (result.success) {
         // Atualiza estado global para o próximo step (Resultados)
         update({
-          data: { ...state.data, simulationResult: result }
+          data: { ...state.data, simulationResult: result },
         });
-        next(); 
+        next();
       } else {
         console.error("Erro na simulação:", result.message);
       }
-      
     } catch (error: any) {
       // Aqui acontece a mágica: dispara o evento global que o Layout ouve
-      window.dispatchEvent(new CustomEvent('app-error', { detail: error }));
+      window.dispatchEvent(new CustomEvent("app-error", { detail: error }));
     } finally {
       setLoading(false);
       isSimulating.current = false;
@@ -100,11 +94,8 @@ export function Step4Simulation() {
       <div className="rounded-xl border border-border p-6 bg-muted/20">
         <Label>Valor desejado</Label>
         <div className="text-3xl font-bold text-foreground mt-2">{BRL(amount)}</div>
- 
-        <div 
-          className="mt-4"
-          style={{ '--primary': 'var(--brand-primary)' } as React.CSSProperties}
-        >
+
+        <div className="mt-4" style={{ "--primary": "var(--brand-primary)" } as React.CSSProperties}>
           {/* Estilo scoped para o Slider do Shadcn */}
           <style>{`
             .slider-fix [role="slider"]:focus-visible {
@@ -114,11 +105,13 @@ export function Step4Simulation() {
           `}</style>
 
           <div className="slider-fix">
-            <Slider 
-              value={[amount]} 
+            <Slider
+              value={[amount]}
               disabled={loading}
-              min={5000} max={100000} step={1000} 
-              onValueChange={([v]) => setAmount(v)} 
+              min={5000}
+              max={100000}
+              step={1000}
+              onValueChange={([v]) => setAmount(v)}
             />
           </div>
         </div>
@@ -127,15 +120,11 @@ export function Step4Simulation() {
       <div className="space-y-2">
         <Label>Motivo do empréstimo</Label>
         <Select value={purpose} onValueChange={setPurpose} disabled={loading}>
-          <SelectTrigger 
+          <SelectTrigger
             className={`transition-all duration-300 
-              ${purpose 
-                ? "bg-[var(--brand-primary)]/1 border-[var(--brand-primary)]/10" 
-                : "border-input"
-              }
+              ${purpose ? "bg-[var(--brand-primary)]/1 border-[var(--brand-primary)]/10" : "border-input"}
               focus:ring-[var(--brand-primary)] 
-              focus:border-[var(--brand-primary)]`
-            }
+              focus:border-[var(--brand-primary)]`}
           >
             <SelectValue placeholder="Escolher..." />
           </SelectTrigger>
@@ -146,15 +135,15 @@ export function Step4Simulation() {
               { value: "DEBTS_REFINANCING", label: "Refinanciamento de dívidas" },
               { value: "REAL_ESTATE_RENOVATION", label: "Reforma de casa" },
               { value: "GOODS_ACQUISITION", label: "Aquisição de Bens" },
-              { value: "OTHERS", label: "Outros" }
+              { value: "OTHERS", label: "Outros" },
             ].map((item) => (
-               <SelectItem 
-                 key={item.value} 
-                 value={item.value}
-                 className="data-[highlighted]:!bg-[var(--brand-primary)]/10 data-[highlighted]:!text-[var(--brand-primary)] cursor-pointer"
-               >
-                 {item.label}
-               </SelectItem>
+              <SelectItem
+                key={item.value}
+                value={item.value}
+                className="data-[highlighted]:!bg-[var(--brand-primary)]/10 data-[highlighted]:!text-[var(--brand-primary)] cursor-pointer"
+              >
+                {item.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -162,24 +151,26 @@ export function Step4Simulation() {
 
       {/* Botões de Navegação */}
       <div className="flex items-center justify-between gap-3">
-        <Button 
-          type="button" 
-          variant="ghost" 
+        <Button
+          type="button"
+          variant="ghost"
           onClick={back}
           disabled={loading} // Bloqueia o "Voltar" durante o loading
           className="..."
         >
-          <ArrowLeft className="mr-2 h-4 w-4" /> 
+          <ArrowLeft className="mr-2 h-4 w-4" />
           Voltar
         </Button>
-        <Button 
-          size="lg" 
-          className="h-12 flex-1 rounded-xl bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2" 
-          disabled={!purpose || loading} 
+        <Button
+          size="lg"
+          className="h-12 flex-1 rounded-xl bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+          disabled={!purpose || loading}
           onClick={handleSimular}
         >
           {loading ? (
-            <><Loader2 className="animate-spin mr-2"/> Confirmando...</>
+            <>
+              <Loader2 className="animate-spin mr-2" /> Confirmando...
+            </>
           ) : (
             "Confirmar Proposta"
           )}

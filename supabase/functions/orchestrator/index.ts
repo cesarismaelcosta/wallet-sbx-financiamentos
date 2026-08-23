@@ -8,12 +8,12 @@
  * ============================================================================
  *
  * [EVOLUÇÃO v3.1.0 - SIGNED STATE & S2S TRUST]:
- * 1. {Handoff Token / Signed State}: Emissão de token criptografado na interceptação 
- *    do erro 401 (SESSION_EXPIRED). Preserva `visit_id`, `visit_update_id` e 
+ * 1. {Handoff Token / Signed State}: Emissão de token criptografado na interceptação
+ *    do erro 401 (SESSION_EXPIRED). Preserva `visit_id`, `visit_update_id` e
  *    `target_url` para blindar o login contra manipulação manual de URL (Open Redirect).
- * 2. {S2S Bypass Validation}: O pipeline de POST agora intercepta e valida a 
+ * 2. {S2S Bypass Validation}: O pipeline de POST agora intercepta e valida a
  *    chancela `s2s_signed_entity` enviada de servidor para servidor pelo `sbx-auth`.
- *    Isso garante que a identidade PII repassada é confiável, eliminando falsos 
+ *    Isso garante que a identidade PII repassada é confiável, eliminando falsos
  *    positivos de `PROFILE_UNAVAILABLE` durante a hidratação da jornada.
  *
  * @author Cesar Ismael Pereira da Costa
@@ -27,7 +27,7 @@ import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { sql } from "../_shared/db.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { validateOfferAccess } from "../_shared/gateKeeper.ts";
-import { hydrateVisitContext } from "../_shared/hydrate-data.ts";
+import { hydrateVisitContext, pickThin } from "../_shared/hydrate-data.ts";
 import { resolveOrchestratorConfigs } from "../_shared/orchestrator-configs.ts";
 import { persistVisitData } from "./persist-data.ts";
 import { debugLog } from "../_shared/logger.ts";
@@ -121,8 +121,13 @@ function toUiError(err: any, fallbacks: { origin: string; auth: string }) {
 
 // ✨ FIX: Chaves criptográficas não podem ir pro banco de dados em logs
 const SECRET_KEYS = new Set([
-  "auth_token", "session_token", "access_token", "refresh_token", 
-  "password", "s2s_signed_entity", "handoff_token"
+  "auth_token",
+  "session_token",
+  "access_token",
+  "refresh_token",
+  "password",
+  "s2s_signed_entity",
+  "handoff_token",
 ]);
 
 const sanitizePayload = (obj: any): any => {
@@ -160,7 +165,11 @@ serve(
       // Leitura direta do body sem clonar a stream para evitar travamento de I/O na borda
       let rawBodyText = "";
       if (req.method === "POST") {
-        try { rawBodyText = await req.text(); } catch { rawBodyText = ""; }
+        try {
+          rawBodyText = await req.text();
+        } catch {
+          rawBodyText = "";
+        }
       }
 
       let auth;
@@ -177,7 +186,7 @@ serve(
         if (raw.includes("SESSION_EXPIRED")) {
           userMessage = "Sua sessao expirou. Por favor, faca login novamente.";
           errorCode = "SESSION_EXPIRED";
-          
+
           let intentVisitId = null;
           let intentUpdateId = null;
           let intentTargetUrl = originPath; // Default para a origem
@@ -187,32 +196,31 @@ serve(
             const url = new URL(req.url); // A URL aqui é a da API (ex: /orchestrator)
             intentVisitId = url.searchParams.get("visit_id");
             intentUpdateId = url.searchParams.get("visit_update_id");
-            
-            // ✨ CORREÇÃO DO BUG: Ignora o url.pathname da API. 
+
+            // ✨ CORREÇÃO DO BUG: Ignora o url.pathname da API.
             // Usa o originPath (header x-original-url com a rota do Front-end).
             const [path] = originPath.split("?");
             const qParams = new URLSearchParams(url.search);
-            
+
             if (intentVisitId) qParams.set("visit_id", intentVisitId);
             if (intentUpdateId) qParams.set("visit_update_id", intentUpdateId);
-            
+
             const queryStr = qParams.toString();
             intentTargetUrl = queryStr ? `${path}?${queryStr}` : path;
-
           } else if (req.method === "POST" && rawBodyText) {
             try {
               const thin = JSON.parse(rawBodyText);
               intentVisitId = thin.visit_id || null;
               intentUpdateId = thin.visit_update_id || thin.origin_visit_update_id || null;
-              
+
               // ✨ O POST já estava perfeito: retorna para a página donde partiu o clique.
               const rawOrigin = thin.origin_url || originPath;
               const [path, query = ""] = rawOrigin.split("?");
               const qParams = new URLSearchParams(query);
-              
+
               if (intentVisitId) qParams.set("visit_id", intentVisitId);
               if (intentUpdateId) qParams.set("visit_update_id", intentUpdateId);
-              
+
               const queryStr = qParams.toString();
               intentTargetUrl = queryStr ? `${path}?${queryStr}` : path;
             } catch (e) {}
@@ -223,11 +231,11 @@ serve(
               visit_id: intentVisitId,
               visit_update_id: intentUpdateId,
               target_url: intentTargetUrl, // Agora aponta para a origem segura com os IDs
-              origin_url: originPath
+              origin_url: originPath,
             });
             fallbackUrl = `/accounts/signin?handoff_token=${handoffToken}`;
             debugLog(`[Orquestrador] Sessao Expirada. Handoff Token emitido com sucesso.`);
-          } catch(e) {
+          } catch (e) {
             debugLog(`[Orquestrador] Erro ao assinar Handoff Token. Roteando limpo.`);
             fallbackUrl = `/accounts/signin`;
           }
@@ -282,9 +290,9 @@ serve(
           if (!isHomeRoute && ctx.trustedOffer) {
             debugLog("[GET] Validando integridade da jornada Upstream (Oferta)...");
             validateOfferAccess({
-                trustedEntity: ctx.trustedEntity,
-                trustedOffer: ctx.trustedOffer,
-                sessionUserId: sessionUserId,
+              trustedEntity: ctx.trustedEntity,
+              trustedOffer: ctx.trustedOffer,
+              sessionUserId: sessionUserId,
             });
           }
 
@@ -305,9 +313,7 @@ serve(
             );
           }
 
-          const offerValue = ctx.trustedOffer?.offer_value
-            ? parseFloat(String(ctx.trustedOffer.offer_value))
-            : null;
+          const offerValue = ctx.trustedOffer?.offer_value ? parseFloat(String(ctx.trustedOffer.offer_value)) : null;
           const minDown = config.rules?.min_down_payment_percentage ?? null;
 
           // 3. Montagem do payload usando diretamente o ctx (Zero queries extras)
@@ -325,17 +331,19 @@ serve(
               utm_campaign: ctx.utmCampaign || "",
               origin_url: ctx.originUrl || "",
             },
-            entity: ctx.trustedEntity ? {
-              ...ctx.trustedEntity.entity_details,
-              entity_id: ctx.trustedEntity.entity_id,
-              entity_type: ctx.trustedEntity.entity_type,
-              name: ctx.trustedEntity.name,
-              document: ctx.trustedEntity.document,
-              phone: ctx.trustedEntity.phone,
-              email: ctx.trustedEntity.email,
-              birth_date: ctx.trustedEntity.birth_date,
-              gender: ctx.trustedEntity.gender,
-            } : {},
+            entity: ctx.trustedEntity
+              ? {
+                  ...ctx.trustedEntity.entity_details,
+                  entity_id: ctx.trustedEntity.entity_id,
+                  entity_type: ctx.trustedEntity.entity_type,
+                  name: ctx.trustedEntity.name,
+                  document: ctx.trustedEntity.document,
+                  phone: ctx.trustedEntity.phone,
+                  email: ctx.trustedEntity.email,
+                  birth_date: ctx.trustedEntity.birth_date,
+                  gender: ctx.trustedEntity.gender,
+                }
+              : {},
             manager: isHomeRoute ? {} : ctx.trustedManager || {},
             seller: isHomeRoute ? {} : ctx.trustedSeller || {},
             event: isHomeRoute ? {} : ctx.trustedEvent || {},
@@ -351,15 +359,15 @@ serve(
             config_matched_by: config.matched_by ?? null,
             orchestrator_config_id: config.orchestrator_config_id ?? null,
             simulation_details: isHomeRoute
-                ? null
-                : {
-                    requested_value: offerValue,
-                    installments: null,
-                    down_payment_percentage: minDown,
-                    down_payment_amount: offerValue && minDown ? offerValue * (minDown / 100) : null,
-                  },
+              ? null
+              : {
+                  requested_value: offerValue,
+                  installments: null,
+                  down_payment_percentage: minDown,
+                  down_payment_amount: offerValue && minDown ? offerValue * (minDown / 100) : null,
+                },
           };
-          
+
           debugLog("Payload construído: ", hydratedPayload);
           return { status: 200, data: hydratedPayload };
         } catch (error: any) {
@@ -385,7 +393,9 @@ serve(
         try {
           debugLog("[POST STEP 1] Iniciando parsing do body...");
           const rawPayload = JSON.parse(rawBodyText || "{}");
-          const thin: ThinPayload = sanitizePayload(rawPayload);
+          // 🔒 ZERO-TRUST: 1º allowlist (descarta chaves fora do contrato),
+          // 2º normalização (undefined -> null) e remoção de segredos.
+          const thin: ThinPayload = sanitizePayload(pickThin(rawPayload));
 
           thin.interaction_context = thin.interaction_context || {};
           const { action } = validateThinPayload(thin);
@@ -426,9 +436,9 @@ serve(
             try {
               debugLog(`[POST STEP 3] Validando ownership da oferta...`);
               validateOfferAccess({
-                  trustedEntity: ctx.trustedEntity,
-                  trustedOffer: ctx.trustedOffer,
-                  sessionUserId: sessionUserId,
+                trustedEntity: ctx.trustedEntity,
+                trustedOffer: ctx.trustedOffer,
+                sessionUserId: sessionUserId,
               });
               debugLog("[POST STEP 3] Ownership validado.");
             } catch (err: any) {
@@ -441,17 +451,19 @@ serve(
             ...thin,
             action,
             visit_id: targetVisitId,
-            entity: ctx.trustedEntity ? {
-              ...ctx.trustedEntity.entity_details,
-              entity_id: ctx.trustedEntity.entity_id,
-              entity_type: ctx.trustedEntity.entity_type,
-              name: ctx.trustedEntity.name,
-              document: ctx.trustedEntity.document,
-              phone: ctx.trustedEntity.phone,
-              email: ctx.trustedEntity.email,
-              birth_date: ctx.trustedEntity.birth_date,
-              gender: ctx.trustedEntity.gender,
-            } : {},
+            entity: ctx.trustedEntity
+              ? {
+                  ...ctx.trustedEntity.entity_details,
+                  entity_id: ctx.trustedEntity.entity_id,
+                  entity_type: ctx.trustedEntity.entity_type,
+                  name: ctx.trustedEntity.name,
+                  document: ctx.trustedEntity.document,
+                  phone: ctx.trustedEntity.phone,
+                  email: ctx.trustedEntity.email,
+                  birth_date: ctx.trustedEntity.birth_date,
+                  gender: ctx.trustedEntity.gender,
+                }
+              : {},
             manager: ctx.trustedManager || {},
             seller: ctx.trustedSeller || {},
             event: ctx.trustedEvent || {},
@@ -509,7 +521,7 @@ serve(
 
           if (isNavigationAction) {
             debugLog("[POST STEP 5A] Executando fluxo Fast Path (Navigation Action)...");
-            
+
             // ✨ CORREÇÃO: Respeita os IDs do Payload (Handoff) antes de gerar novos
             const effectiveVisitId = payload.visit_id || crypto.randomUUID();
             // ✨ O visit_id continua o mesmo, mas cada clique gera um novo snapshot temporal (update_id)
@@ -526,10 +538,17 @@ serve(
             let finalUrl = `${cleanPath}?${queryParams.toString()}`;
 
             const persistPromise = persistVisitData(
-              sql, payload, infra, categoryId ?? undefined,
-              payload.action, payload.origin_url, payload.target_url,
-              payload.visit_id || null, orchestratorConfigId,
-              effectiveVisitId, effectiveUpdateId, // ✨ Passa o ID correto pro banco
+              sql,
+              payload,
+              infra,
+              categoryId ?? undefined,
+              payload.action,
+              payload.origin_url,
+              payload.target_url,
+              payload.visit_id || null,
+              orchestratorConfigId,
+              effectiveVisitId,
+              effectiveUpdateId, // ✨ Passa o ID correto pro banco
             );
 
             const rt = (globalThis as any).EdgeRuntime;
@@ -538,7 +557,7 @@ serve(
                 persistPromise.catch((err: any) => console.error("[Background Persist Error]:", err?.message || err)),
               );
             } else {
-              await persistPromise; 
+              await persistPromise;
             }
 
             debugLog("[POST STEP 5A] Fast Path concluído. Retornando resposta...");
@@ -571,13 +590,13 @@ serve(
           );
 
           debugLog("[POST STEP 5B] Persistência síncrona finalizada:", { visitId, visitUpdateId });
-        
+
           // Extrai os parâmetros da URL destino para injetar as âncoras de sessão preservadas
           const targetUrlStr = payload?.target_url || "/";
           const [cleanPath, queryStr] = targetUrlStr.split("?");
           const queryParams = new URLSearchParams(queryStr || "");
 
-          // ✨ O BANCO tem prioridade máxima no update temporal. 
+          // ✨ O BANCO tem prioridade máxima no update temporal.
           // Se o banco gerou/retornou um ID, ele é o novo cursor.
           const anchorVisitId = visitId;
           const anchorUpdateId = visitUpdateId;

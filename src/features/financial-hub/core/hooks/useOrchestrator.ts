@@ -158,7 +158,14 @@ export const orchestrateNavigation = async (
     },
   };
 
-  console.log("🚀 [useOrchestrator] ThinPayload enviado:", JSON.stringify(thinPayload, null, 2));
+  // 🔒 LGPD: nunca logar o payload completo (consents / simulation_details).
+  if (import.meta.env.DEV) {
+    console.debug("🚀 [useOrchestrator] intenção:", {
+      action: thinPayload.action,
+      visit_id: thinPayload.visit_id,
+      offer_id: thinPayload.offer_id,
+    });
+  }
 
   try {
     const data = await callOrchestrator(thinPayload, "POST");

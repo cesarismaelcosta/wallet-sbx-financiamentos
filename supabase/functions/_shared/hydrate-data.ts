@@ -15,9 +15,9 @@
  *
  * [FLUXO DE RESOLUÇÃO DA OFERTA (v3.3.0)]:
  * 1. Prioridade Payload (POST): Usa o `offer_id` que vem explícito na requisição (ex: Handoff).
- * 2. Prioridade Cursor (GET): Se não houver payload, busca o último `offer_id` salvo na 
+ * 2. Prioridade Cursor (GET): Se não houver payload, busca o último `offer_id` salvo na
  *    tabela `visit_offers` usando o cursor da URL (`visit_update_id`).
- * 3. Jornadas Estéreis: Se nenhum ID for encontrado, assume jornada sem oferta 
+ * 3. Jornadas Estéreis: Se nenhum ID for encontrado, assume jornada sem oferta
  *    (ex: Dashboard/Seguros) e retorna contexto estéril, guiado pela `target_url`.
  *
  * @author Cesar Ismael Pereira da Costa
@@ -91,7 +91,7 @@ export interface HydratedContext {
   trustedEvent: TrustedOfferBundle["event"] | null;
   trustedSeller: TrustedOfferBundle["seller"] | null;
   resolvedOfferId: string | null;
-  source: "payload_offer_id" | "db_last_offer" | null; 
+  source: "payload_offer_id" | "db_last_offer" | null;
   mode: HydrationMode;
 }
 
@@ -122,7 +122,7 @@ export async function hydrateVisitContext(args: {
   visitId: string;
   visitUpdateId: string;
   offerId?: string | null;
-  userId?: string | null; 
+  userId?: string | null;
   environment: "staging" | "production";
   mode?: HydrationMode;
   trustedS2SEntity?: any | null; // ✨ INJEÇÃO S2S (Zero-Trust Bypass)
@@ -215,7 +215,7 @@ export async function hydrateVisitContext(args: {
   // =====================================================================
   const targetOfferId = offerId || dbOfferId || "";
   let resolvedOfferId = targetOfferId ? String(targetOfferId).replace(/[^0-9]/g, "") : "";
-  let source: HydratedContext["source"] = offerId ? "payload_offer_id" : (dbOfferId ? "db_last_offer" : null);
+  let source: HydratedContext["source"] = offerId ? "payload_offer_id" : dbOfferId ? "db_last_offer" : null;
 
   // ✨ sa targetMode claro.
   const sterile = (targetMode: HydrationMode): HydratedContext => ({
@@ -295,9 +295,8 @@ export async function fetchOfferUpstream(
   }
 
   const doFetch = async (): Promise<TrustedOfferBundle> => {
-    const baseUrl = environment === "production"
-      ? "https://offer-query.superbid.net"
-      : "https://offer-query.stage.superbid.net";
+    const baseUrl =
+      environment === "production" ? "https://offer-query.superbid.net" : "https://offer-query.stage.superbid.net";
 
     const params = new URLSearchParams({
       portalId: "[2,15]",
@@ -418,11 +417,19 @@ export async function fetchOfferUpstream(
 
 /**
  * @description O Leão de Chácara (Thin Payload Enforcer).
+ *
+ * CONTRATO ÚNICO (espelhado por THIN_KEYS em
+ * src/features/financial-hub/core/services/gateway.ts):
+ * - Cursores / intenção / escolhas do usuário: aceitos do cliente.
+ * - Contexto de negócio (entity_id, offer/seller/event/category): NUNCA aceito
+ *   do cliente. É sempre derivado de ctx.trusted* em hydrateVisitContext().
+ * Qualquer chave fora desta allowlist é descartada silenciosamente.
  */
 export function pickThin(raw: any): Record<string, any> {
   const allowed = [
     "visit_id",
     "visit_update_id",
+    "origin_visit_update_id", // cursor de encadeamento de visita (não é dado de negócio)
     "offer_id",
     "action",
     "action_description",

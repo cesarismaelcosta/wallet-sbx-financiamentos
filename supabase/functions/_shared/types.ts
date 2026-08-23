@@ -517,11 +517,11 @@ export interface BFFAuthExchangeResponse {
  * =========================================================================
  * 🤖 GEMINI ARCHITECTURE SPECIFICATION: ZERO-TRUST PAYLOAD CONTRACTS
  * =========================================================================
- * Contratos complementares adicionados para suportar o modelo Zero-Trust sem 
+ * Contratos complementares adicionados para suportar o modelo Zero-Trust sem
  * quebrar a base de código legada (React Frontend).
- * 
+ *
  * [MUDANÇAS ARQUITETURAIS]:
- * 1. {ThinPayload}: O único contrato aceitável no Frontend. Garante a dieta 
+ * 1. {ThinPayload}: O único contrato aceitável no Frontend. Garante a dieta
  *    de rede e impede Mass Assignment.
  * 2. {EnrichedPayload}: O contrato restrito do Backend. Representa a junção
  *    perfeita entre o pedido do usuário e a verdade irrefutável do servidor.
@@ -536,10 +536,18 @@ export interface BFFAuthExchangeResponse {
  * @description O ÚNICO formato que o cliente tem permissão de enviar.
  * Só intenção, ponteiros e escolhas do usuário. Zero PII, zero valor de oferta.
  * É exatamente a superfície que `pickThin` deixa passar.
+ *
+ * FONTE ÚNICA DO CONTRATO: `pickThin` em `_shared/hydrate-data.ts`. O front
+ * (THIN_KEYS em src/features/financial-hub/core/services/gateway.ts) apenas
+ * espelha esta lista. Chaves de contexto de negócio (`entity_id`,
+ * `category_id`, `event_id`, `seller_id`) NÃO fazem parte do contrato: são
+ * derivadas server-side de `ctx.trusted*` e ignoradas se enviadas.
  */
 export interface ThinPayload {
   visit_id: string;
   visit_update_id: string;
+  /** Cursor da página anterior; usado para encadear visit_updates na auditoria. */
+  origin_visit_update_id?: string | null;
   offer_id?: string | number | null;
   action?: "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT";
   action_description?: string;

@@ -56,16 +56,19 @@ export const Route = createLazyFileRoute("/sbxpay/")({
 });
 
 type ShowcaseConfig = {
-  isDirect?: false;
+  isDirect: false;
   route: string;
   flowKey: string;
   disabled: boolean;
+  productId?: never;
 };
 
 type DirectConfig = {
   isDirect: true;
   productId: string;
   disabled: boolean;
+  route?: never;
+  flowKey?: never;
 };
 
 type FlowConfig = ShowcaseConfig | DirectConfig;

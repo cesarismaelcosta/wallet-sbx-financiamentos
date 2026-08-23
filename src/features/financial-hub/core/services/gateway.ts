@@ -9,14 +9,14 @@
  * orchestrator-configs).
  *
  * [MUDANÇAS ARQUITETURAIS - ALINHAMENTO DE CONTRATO v3.0.1]:
- * 1. {Thin Payload Sync}: Sincronização exata das THIN_KEYS com o `pickThin` 
- *    do backend (`hydrate-data.ts`). Inclusão crítica de `simulation_details` 
- *    e `consents` para impedir a morte por inanição do motor de crédito e da 
+ * 1. {Thin Payload Sync}: Sincronização exata das THIN_KEYS com o `pickThin`
+ *    do backend (`hydrate-data.ts`). Inclusão crítica de `simulation_details`
+ *    e `consents` para impedir a morte por inanição do motor de crédito e da
  *    auditoria LGPD.
  * 2. {Retrocompatibilidade de UI (Bridge)}: `toThinPayload` agora intercepta
- *    campos soltos antigos do Front-end (`installments`, `down_payment`) e os 
+ *    campos soltos antigos do Front-end (`installments`, `down_payment`) e os
  *    envelopa em `simulation_details`, evitando quebrar os componentes do React.
- * 3. {Timeouts e Resiliência}: Failsafe ativo de 8s/20s. A Borda corta a 
+ * 3. {Timeouts e Resiliência}: Failsafe ativo de 8s/20s. A Borda corta a
  *    requisição para impedir a "tela infinita" no navegador.
  *
  * @version 3.0.1 (Zero-Trust Sync & UI Bridge)
@@ -45,7 +45,12 @@ const TIMEOUT_SIMULATION = 20000; // motor de crédito / upstream externo
 
 /**
  * Chaves permitidas no corpo enviado ao Edge (Zero-Trust).
- * 🚨 ALINHAMENTO CRÍTICO: Deve espelhar perfeitamente o pickThin() do Back-end.
+ * 🚨 ALINHAMENTO CRÍTICO: espelho EXATO do pickThin() em
+ * supabase/functions/_shared/hydrate-data.ts (fonte única do contrato).
+ *
+ * ❌ Removidos de propósito: category_id, event_id, seller_id, entity_id.
+ * Esses IDs são contexto de negócio e o Edge os deriva de ctx.trusted*
+ * (hidratação server-side). Enviá-los seria ruído descartado pela borda.
  */
 const THIN_KEYS = [
   "action",
@@ -53,11 +58,7 @@ const THIN_KEYS = [
   "step",
   "product_id",
   "partner_id",
-  "category_id",
   "offer_id",
-  "event_id",
-  "seller_id",
-  "entity_id",
   "visit_id",
   "visit_update_id",
   "origin_visit_update_id",
@@ -66,7 +67,7 @@ const THIN_KEYS = [
   "origin_url",
   "target_url",
   "simulation_details", // 🚨 OBRIGATÓRIO PARA O MOTOR DE CRÉDITO
-  "consents",           // 🚨 OBRIGATÓRIO PARA AUDITORIA LGPD
+  "consents", // 🚨 OBRIGATÓRIO PARA AUDITORIA LGPD
 ] as const;
 
 /**
@@ -83,13 +84,9 @@ export function toThinPayload(payload: Record<string, any> = {}): Record<string,
     if (value !== undefined && value !== null && value !== "") thin[key] = value;
   }
 
-  // Compatibilidade: colapsa objetos gordos em seus IDs.
-  const nested: Array<[string, string]> = [
-    ["offer", "offer_id"],
-    ["event", "event_id"],
-    ["seller", "seller_id"],
-    ["entity", "entity_id"],
-  ];
+  // Compatibilidade: colapsa o objeto gordo de oferta em seu ID.
+  // (entity/seller/event não são mais enviados — vêm do contexto confiável.)
+  const nested: Array<[string, string]> = [["offer", "offer_id"]];
   for (const [obj, idKey] of nested) {
     const id = payload?.[obj]?.[idKey];
     if (thin[idKey] === undefined && id !== undefined && id !== null && id !== "") {
