@@ -20,6 +20,10 @@
  * 3. {Zero-Trust Thin Payload}: O Front-end não manipula e nem envia dados 
  *    pessoais (PII) do usuário na transição. A validação de identidade é delegada 
  *    ao Orquestrador (Edge) através do JWT.
+ * 4. {Zero-Latency Fast Path}: Ao confirmar a intenção de simulação, o Orquestrador
+ *    devolve as regras financeiras e a entidade (`state`). O componente intercepta
+ *    esse pacote e o injeta no Cofre da RAM antes da mudança de rota, permitindo que 
+ *    o Wizard da próxima tela nasça em 0ms.
  * 
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro (Architectural Mechanics)
@@ -33,11 +37,12 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHeader";
 
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-// Removida a importação inútil do UserDataContext
 import { fetchOffersQuery } from "@/services/offer";
 import { logSystemError } from "@/services/systemNotification";
-import { getDefaultSbxEnvironment, clearSession } from "@/services/session";
+import { clearSession } from "@/services/session";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
+// ✨ INJEÇÃO: Importação do Cofre Epêmero da RAM
+import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { CardOfferV } from "@/features/financial-hub/components/shared/renderes/CardOfferV";
 import { CardOfferVSkeleton } from "@/features/financial-hub/components/shared/renderes/CardOfferVSkeleton";
 
@@ -175,7 +180,7 @@ function OfferSkeletonLoader() {
 // [COMPONENTE PRINCIPAL]: OfferDetailsSBXPAY
 // =========================================================================
 export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
-  const { userId, sessionToken } = useFinancialAuth();
+  const { userId, sessionToken, userProfile, logout } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = Route.useSearch() as any;
 
@@ -200,7 +205,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
   const [currentSort, setCurrentSort] = useState<string>("relevancia");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [ambiente] = useState<"staging" | "production">(() => getDefaultSbxEnvironment());
 
   // Mobile Menu States
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
@@ -301,7 +305,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
     loadOffers();
     return () => controller.abort();
-  }, [currentFlow.product_id, currentSort, pageNumber, sessionToken, ambiente, flowKey, selectedCategory]);
+  }, [currentFlow.product_id, currentSort, pageNumber, sessionToken, flowKey, selectedCategory]);
 
   // Fallback e Auto-Redirect em caso de erro crítico
   useEffect(() => {
@@ -348,7 +352,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       // 2. Montagem do payload seguro (THIN PAYLOAD)
       const payload = {
         action: "CONSULT",
-        environment: ambiente,
         ...(currentFlow.product_id && { product_id: String(currentFlow.product_id) }),
         
         // ✨ [CART PRESERVATION]: Mantém a mesma visita e update ao trocar de oferta.
@@ -358,10 +361,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         // ✨ CORREÇÃO: Garante que o offer_id vá na raiz para o ThinPayload do Orquestrador
         ...(targetOfferId ? { offer_id: String(targetOfferId) } : {}),
         
-        offer: rawOffer,
-        seller: offerItem?.seller || {},
-        event: offerItem?.event || {},
-        manager: offerItem?.manager || {},
+        // ✨ [ZERO-TRUST]: o Edge hidrata offer/seller/event/manager a partir do
+        // offer_id (ctx.trusted*). Objetos completos não são montados aqui.
         origin_url: currentHref,
         
         // ✨ Remoção Arquitetural: `entity` não é mais enviada. Zero-Trust no Edge!
@@ -376,15 +377,29 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       const response = await callOrchestrator(payload, "POST");
 
       if (response?.url) {
-        if (response.url.startsWith("http")) {
-          window.location.href = response.url;
-        } else {
-          // Extraindo parâmetros da URL gerada pelo orquestrador para injetar via state do TanStack Router
-          const urlObj = new URL(response.url, window.location.origin);
+        
+        // =====================================================================
+        // ✨ THE ZERO-LATENCY FAST PATH (Cofre da RAM)
+        // =====================================================================
+        // Contrato Estrito: Só injeta na RAM se o Orquestrador mandou a árvore 
+        // de estado completa. Se não mandou, o cofre fica vazio e a próxima 
+        // tela fará o GET por segurança (Fallback).
+        if (response.state) {
+          setFastPathState(response.state);
+        }
+
+        // Transformamos a string da URL em um objeto real
+        const urlObj = new URL(response.url, window.location.origin);
+
+        // Se o domínio de destino for idêntico ao nosso (SPA)
+        if (urlObj.origin === window.location.origin) {
           navigate({ 
             to: urlObj.pathname as any,
             search: Object.fromEntries(urlObj.searchParams.entries()) as any,
           });
+        } else {
+          // Navegação externa (ex: Banco parceiro)
+          window.location.href = response.url;
         }
       } else {
         throw new Error("URL de redirecionamento ausente.");
@@ -424,7 +439,14 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     <div className="min-h-screen bg-slate-50 font-['Inter'] pb-20 relative">
 
       {/* 1. HEADER */}
-      <PanelHeader showNav={false} showAuth={false} />
+      <PanelHeader 
+        showNav={false} 
+        showAuth={true} 
+        sessionToken={sessionToken}
+        userData={userProfile}
+        onLogout={() => logout({ purgeEnv: true })}
+        onNavigate={(path) => navigate({ to: path as any })}
+      />
 
       {/* 2. BARRA FLUTUANTE MOBILE FIXA (Sempre visível) */}
       <div

@@ -15,9 +15,10 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { useSearch } from "@tanstack/react-router";
+import { useSearch, useNavigate } from "@tanstack/react-router"; 
 import { ArrowLeft } from "lucide-react";
 import { OrchestratorWrapper } from "@/features/financial-hub/components/shared/OrchestratorWrapper";
+import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext"; 
 import { PanelHeader } from "./PanelHeader";
 import { PanelFAQ } from "./PanelFAQ";
 import { PanelFooter } from "./PanelFooter";
@@ -26,6 +27,7 @@ import { PanelStepSkeleton } from "./PanelStepSkeleton";
 import { PanelFAQSkeleton } from "./PanelFAQSkeleton";
 import { PanelFooterSkeleton } from "./PanelFooterSkeleton";
 import { FinancialHubContext } from "@/features/financial-hub/core/contexts/FinancialHubContext";
+import { useOrchestratorHistorySync } from "@/features/financial-hub/core/hooks/useOrchestratorHistorySync";
 
 interface FinancialHubLayoutProps {
   children: React.ReactNode;
@@ -69,6 +71,9 @@ function ErrorCountdown({ fallbackUrl, message, title }: { fallbackUrl: string; 
 
 export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
   const search = useSearch({ strict: false }) as { visit_id?: string; visit_update_id?: string };
+  
+  const navigate = useNavigate(); // ✨ Instanciando roteador
+  const { sessionToken, logout, userProfile } = useFinancialAuth(); // ✨ Puxando os dados do Fat JWT
 
   const [isOrchestratorHydrating, setIsOrchestratorHydrating] = useState(true);
   const [runtimeError, setRuntimeError] = useState<any>(null);
@@ -95,6 +100,9 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
     window.addEventListener("app-error", handleError);
     return () => window.removeEventListener("app-error", handleError);
   }, []);
+
+  // 🛡️ Ativa a blindagem e sincronização de histórico em todo o ecossistema
+  useOrchestratorHistorySync();
 
   return (
     <OrchestratorWrapper visitId={search.visit_id ?? ""} visitUpdateId={search.visit_update_id}>
@@ -150,8 +158,21 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
         return (
           <FinancialHubContext.Provider value={contextPayload}>
             <div className="min-h-screen bg-white text-foreground transition-colors duration-300 relative flex flex-col">
+              {/* Header Padronizado */}
               {/* Header Padronizado Estático (64px) */}
-              <PanelHeader />
+              <PanelHeader 
+                showNav={true}
+                links={[
+                  { href: "simulacao", label: "Simulação" },
+                  { href: "como-funciona", label: "Como funciona" },
+                  { href: "duvidas", label: "Dúvidas" }
+                ]}
+                showAuth={true} 
+                sessionToken={sessionToken}
+                userData={userProfile} 
+                onLogout={() => logout({ purgeEnv: true })}
+                onNavigate={(path) => navigate({ to: path as any })}
+              />
 
               {/* =========================================================================
                 * SKELETONS ESTRUTURAIS DE HIDRATAÇÃO (Substitui o spinner antigo)

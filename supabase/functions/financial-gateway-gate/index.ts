@@ -1,25 +1,29 @@
 /**
  * @fileoverview EDGE GATEWAY DE ENTRADA (Autenticação Exclusiva SBX & Roteamento Stateless)
  * @path supabase/functions/financial-gateway-gate/index.ts
+ * @version 6.1.0
  *
  * ============================================================================
- * [ARQUITETURA BFF & CONTRATO DE ENTRADA]
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: ZERO-TRUST & STATELESS HANDOFF
  * ============================================================================
  * Atua como a porta de entrada (Front Door) unificada para o ecossistema.
  * Respeita estritamente a premissa de que a borda recebe obrigatoriamente o
  * token bruto da Superbid (`sbx_access_token`) enviado por sistemas externos ou pelo Sandbox.
  *
+ * [EVOLUÇÃO v6.1.0 - OTIMIZAÇÃO EDGE & CORREÇÃO eTLD+1]:
+ * 1. {Single Parse}: Eliminação de parse redundante do body para economizar CPU/RAM.
+ * 2. {Apex Domain Resolution}: Novo algoritmo de `eTLD+1` para suportar TLDs duplos
+ *    brasileiros (ex: .com.br, .net.br), garantindo o correto isolamento de SameSite cookies.
+ *
  * [FLUXO OPERACIONAL DA BORDA]:
- * 1. Entrada Exclusiva SBX: O `auth_token` recebido é tratado sempre como o token bruto/opaco
- *    ou objeto OAuth da Superbid.
- * 2. Validação Upstream: A borda valida o token diretamente no endpoint `/account/v2/user/me`
- *    da Superbid para autenticar o usuário e extrair o seu ID.
- * 3. Emissão Stateless: Gera o nosso JWT interno assinado via `generateSessionToken` (que retorna
- *    o objeto `SessionData`) e extrai `session_token` para injetar no cabeçalho `x-session-token`
- *    do Orquestrador.
- * ============================================================================
+ * 1. Entrada Exclusiva SBX: O `auth_token` recebido é tratado sempre como o token bruto/opaco.
+ * 2. Validação Upstream: Valida o token no `/account/v2/user/me` da Superbid.
+ * 3. Hidratação PII: Monta o perfil do usuário e assina (S2S Bypass).
+ * 4. Roteamento Rápido: Repassa o ID da oferta para o Orquestrador (que fará a busca condicional).
+ * 5. Emissão Stateless: Handoff seguro via fragmento da URL (Zero-Trust).
+ *
  * @author César Ismael Pereira da Costa
- * @version 5.2.0 (Acesso correto à propriedade .session_token do objeto SessionData)
+ * @author Gemini Pro
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -27,18 +31,15 @@ import { generateSessionToken, generateExchangeToken, hashUserAgent } from "../_
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
 import { getSafeRedirectUrl, getSafeCorsOrigin } from "../_shared/security.ts";
-import { BFFUserProfile, BFFOfferDetails } from "../_shared/types.ts";
+import { BFFUserProfile } from "../_shared/types.ts";
+import { signS2SEntity } from "../_shared/s2s.ts";
 
 const ENV_URLS = {
   production: {
     api: "https://api.s4bdigital.net",
-    offer: "https://offer-query.superbid.net",
-    event: "https://event-query.superbid.net",
   },
   staging: {
     api: "https://stgapi.s4bdigital.net",
-    offer: "https://offer-query.stage.superbid.net",
-    event: "https://event-query.stage.superbid.net",
   },
 };
 
@@ -51,31 +52,29 @@ const originFromUrl = (candidate?: string): string => {
   }
 };
 
+// ✨ [FIX 3]: Resolve o domínio principal considerando extensões duplas (.com.br, .net.br)
+const getApexDomain = (hostname: string): string => {
+  const parts = hostname.split(".");
+  if (parts.length <= 2) return hostname;
+  const secondToLast = parts[parts.length - 2];
+  if (["com", "net", "org", "co", "gov", "edu", "mil", "jus"].includes(secondToLast)) {
+    return parts.slice(-3).join(".");
+  }
+  return parts.slice(-2).join(".");
+};
+
 serve(
   withSecurity("financial-gateway-gate", async (req: Request) => {
     const originPath = req.headers.get("origin") || req.headers.get("referer") || "/";
 
-    // =====================================================================
-    // [TELEMETRIA] Inspeção de Entrada na Borda (Segura e Sanitizada)
-    // =====================================================================
     debugLog("[GATEWAY-INSPECT] Requisição recebida (Exclusive SBX Gateway)", {
       method: req.method,
       url: req.url,
       contentType: req.headers.get("content-type"),
     });
 
-    try {
-      const cloned = req.clone();
-      const jsonBody = await cloned.json();
-      if (jsonBody) {
-        debugLog("[GATEWAY-INSPECT] Payload sanitizado", jsonBody);
-      }
-    } catch (e) {
-      debugLog("[GATEWAY-INSPECT] Payload não é JSON (ignorado na inspeção de borda)", { error: String(e) });
-    }
-
     // =====================================================================
-    // [STEP 1] NEGOCIAÇÃO DE CONTEÚDO (Content Negotiation)
+    // [STEP 1] NEGOCIAÇÃO DE CONTEÚDO E SINGLE PARSE
     // =====================================================================
     const contentType = req.headers.get("content-type") || "";
     const accept = req.headers.get("accept") || "";
@@ -89,7 +88,14 @@ serve(
         const formData = await req.formData();
         payload = Object.fromEntries(formData.entries());
       } else {
+        // ✨ [FIX 1]: Parse do JSON acontece uma vez só
         payload = await req.json();
+      }
+      
+      if (payload) {
+        debugLog("[GATEWAY-INSPECT] Payload parseado e sanitizado", {
+          keys: Object.keys(payload).filter(k => k !== "auth_token") // Não loga o token bruto
+        });
       }
     } catch (e) {
       return respondWithError(
@@ -103,7 +109,6 @@ serve(
       );
     }
 
-    // Extração inicial dos parâmetros enviados no payload
     let {
       environment,
       auth_token,
@@ -119,18 +124,13 @@ serve(
     // =====================================================================
     // [STEP 2] RESOLUÇÃO DE CREDENCIAL SBX (Header Custom > Payload)
     // =====================================================================
-    let inputToken = "";
+    let inputToken = req.headers.get("x-access-token") || "";
 
-    // 1. Prioridade Máxima: Header Customizado
-    inputToken = req.headers.get("x-access-token") || "";
-
-    // 2. Fallback: Payload Body (Exclusivo para <form method="POST"> do Sandbox/Sistemas Externos)
     if (!inputToken && payload?.auth_token) {
       inputToken = String(payload.auth_token).trim();
     }
 
-    // 🔒 [SECURITY PATCH]: Purga o token do payload IMEDIATAMENTE após a extração
-    // Impede o vazamento da credencial e a passagem indevida para o Orquestrador
+    // 🔒 [SECURITY PATCH]: Purga o token do payload IMEDIATAMENTE
     if (payload?.auth_token) {
       delete payload.auth_token;
     }
@@ -159,7 +159,6 @@ serve(
 
       let sanitizedInputToken = String(inputToken).trim();
 
-      // Interceptação caso venha o objeto JSON completo do OAuth da Superbid
       if (sanitizedInputToken.startsWith("{") && sanitizedInputToken.endsWith("}")) {
         try {
           const parsedTokenJson = JSON.parse(sanitizedInputToken);
@@ -168,17 +167,13 @@ serve(
             debugLog("[GATEWAY-AUTH] JSON do OAuth detectado. access_token extraído com sucesso.");
           }
         } catch (e) {
-          debugLog("[GATEWAY-AUTH] Falha ao parsear JSON no auth_token, mantendo string original.", {
-            error: String(e),
-          });
+          debugLog("[GATEWAY-AUTH] Falha ao parsear JSON, mantendo string original.", { error: String(e) });
         }
       }
 
       sbx_access_token = sanitizedInputToken;
-
       debugLog("[GATEWAY-AUTH] Validando token bruto da Superbid no endpoint /me...");
 
-      // Validação upstream diretamente no endpoint de usuário da Superbid
       const userCheckRes = await fetch(`${urls.api}/account/v2/user/me`, {
         method: "GET",
         headers: { Authorization: `Bearer ${sbx_access_token}` },
@@ -194,17 +189,20 @@ serve(
       const upstreamUserData = await userCheckRes.json();
       const account = upstreamUserData.userAccounts?.[0];
       userId = String(account?.id || "");
+      
+      // Extraindo as variáveis do Fat Token Handoff direto do upstream
+      const userName = account?.basicInfo?.fullName || "";
+      const login = account?.credentials?.login || "";
 
       if (!userId) {
         throw new Error("USER_NOT_FOUND: Não foi possível identificar o ID do usuário através do login Superbid.");
       }
 
-      // Emite o nosso JWT interno stateless e extrai a string JWS de dentro do objeto SessionData retornado por jwt.ts
-      const newTokenData = await generateSessionToken(userId, activeEnvironment);
+      // Assinatura com environment, userId, userName, login
+      const newTokenData = await generateSessionToken(activeEnvironment, userId, userName, login);
+      
       finalJwt = newTokenData.session_token;
-      debugLog(
-        "[GATEWAY-AUTH] Token da Superbid validado no /me. Nosso JWT interno emitido com sucesso para o orquestrador.",
-      );
+      debugLog("[GATEWAY-AUTH] JWT interno emitido com sucesso para o orquestrador.");
 
       // =====================================================================
       // [STEP 4] HIDRATAÇÃO DE PERFIL (BFF Mapping - Suporte PF / PJ)
@@ -272,125 +270,11 @@ serve(
       }
 
       // =====================================================================
-      // [STEP 5] BUSCA E MAPEAMENTO DE OFERTA (Catálogo Upstream)
-      // =====================================================================
-      let offerPayload: BFFOfferDetails | null = null;
-
-      if (offer_id) {
-        const cleanOfferId = String(offer_id).replace(/[^0-9]/g, "");
-        const offerUrl = `${urls.offer}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${cleanOfferId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
-
-        const offerHeaders: Record<string, string> = {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Origin: "https://www.superbid.net",
-          Referer: "https://www.superbid.net/",
-          Authorization: `Bearer ${sbx_access_token}`,
-        };
-
-        const offerRes = await fetch(offerUrl, {
-          method: "GET",
-          headers: offerHeaders,
-        });
-
-        if (offerRes.status === 401)
-          throw new Error("SESSION_UPSTREAM_EXPIRED: Token Superbid expirado durante busca de ofertas.");
-        if (!offerRes.ok) throw new Error(`UPSTREAM_OFFER_ERROR (${offerRes.status}):${await offerRes.text()}`);
-
-        const offerData = await offerRes.json();
-        const rawOffer = offerData.offers?.[0];
-
-        if (!rawOffer) throw new Error("OFFER_NOT_FOUND: Oferta não localizada no catálogo.");
-
-        const eventUrl = `${urls.event}/events/v2/?portalId=[2,15]&locale=pt_BR&timeZoneId=America\%2FSao_Paulo&filter=id:${rawOffer.auction?.id || ""}&pageSize=1`;
-        const eventRes = await fetch(eventUrl, {
-          method: "GET",
-          headers: offerHeaders,
-        });
-
-        const eventData = eventRes.ok ? (await eventRes.json()).events?.[0] : {};
-
-        const productTypeId = rawOffer.product?.productType?.id;
-        const isVehicleCategory = [10, 11].includes(productTypeId);
-        let vehicleData: any = undefined;
-
-        if (isVehicleCategory) {
-          const groups = rawOffer.product?.template?.groups || [];
-          const getGroupProp = (groupId: string, propId: string) =>
-            groups.find((g: any) => g.id === groupId)?.properties.find((p: any) => p.id === propId)?.value;
-
-          vehicleData = {
-            manufacture_year: Number(getGroupProp("identificacao", "anofabricacao")) || 0,
-            model_year: Number(getGroupProp("identificacao", "anomodelo")) || 0,
-            fipe_code: getGroupProp("financiamento", "codigofipe") || "",
-          };
-        }
-
-        offerPayload = {
-          offer: {
-            offer_id: String(rawOffer.id),
-            lot_number: rawOffer.lotNumber || 1,
-            offer_description: rawOffer.product?.shortDesc || rawOffer.offerDescription?.offerDescription || "",
-            offer_detailed_description: rawOffer.offerDescription?.offerDescription || "",
-            offer_value: rawOffer.price || rawOffer.offerDetail?.referenceValue || 0,
-            price_formatted: rawOffer.priceFormatted || rawOffer.offerDetail?.referenceValueFormatted || "",
-            system_metric: rawOffer.systemMetric || null, // 👈 INSERIDO
-            category_id: rawOffer.product?.productType?.id || 0,
-            category: rawOffer.product?.productType?.description || "",
-            subcategory_id: rawOffer.product?.subCategory?.id || "",
-            subcategory: rawOffer.product?.subCategory?.description || "",
-            offer_status: rawOffer.offerStatus || "",
-            sale_status: rawOffer.saleStatus || "",
-            end_date: rawOffer.endDate || "",
-            is_shopping: rawOffer.isShopping || false,    // 👈 INSERIDO
-            offer_type_id: rawOffer.offerTypeId ?? null,  // 👈 INSERIDO
-            location: {
-              neighborhood: rawOffer.product?.location?.neighborhood || "Não informado",
-              city: rawOffer.product?.location?.city || "Não informado",
-              state: rawOffer.product?.location?.state || "Não informado",
-              country: rawOffer.product?.location?.country || "Brasil",
-            },
-            ...(vehicleData && { vehicle_details: vehicleData }),
-            photos:
-              rawOffer.product?.galleryJson?.map((p: any) => ({
-                highlight: p.highlight || false,
-                link: p.link,
-                thumbnail: p.thumbnailUrl,
-                file_name: p.originalFileName,
-                type: p.type || "photo",
-                content_type: p.contentType || "image/jpeg",
-              })) || [],
-          },
-          manager: {
-            manager_id: rawOffer.manager?.id || 0,
-            manager_name: rawOffer.manager?.name || "N/A",
-          },
-          event: {
-            event_id: String(rawOffer.auction?.id || ""),
-            event_description:
-              `${rawOffer.auction?.desc || ""}${rawOffer.auction?.desc && eventData.fullDescription ? " - " : ""}${eventData.fullDescription || ""}`.trim(),
-            event_start_date: rawOffer.auction?.beginDate || "",
-            event_end_date: rawOffer.auction?.endDate || "",
-            modality_id: eventData.modalityId ?? null,
-            modality_desc: eventData.modalityDesc || rawOffer.auction?.modalityDesc || "", // 👈 INSERIDO
-            status_id: eventData.statusId ?? null,
-            event_short_description: rawOffer.auction?.desc || "",
-            event_full_description: eventData.fullDescription || "",
-            event_image_url: eventData.imageURL || "",
-          },
-          seller: {
-            seller_id: String(rawOffer.seller?.id || ""),
-            legal_name: rawOffer.seller?.name || "N/A",
-            trade_name: rawOffer.seller?.company?.[0]?.fantasyName || "N/A",
-            economic_group: rawOffer.seller?.company?.[0]?.fantasyName || "N/A",
-          },
-        };
-      }
-
-      // =====================================================================
-      // [STEP 6] ORQUESTRAÇÃO DE ROTAS (Target Discovery & Direct Navigation)
+      // [STEP 5] ORQUESTRAÇÃO DE ROTAS (Target Discovery & Direct Navigation)
       // =====================================================================
       const isDirectVisit = !!target_url;
+
+      const s2sToken = await signS2SEntity(userProfile);
 
       const rehydratedPayload = {
         action: isDirectVisit ? "VISIT" : "CONSULT",
@@ -398,12 +282,9 @@ serve(
         timestamp: new Date().toISOString(),
         origin_url: return_uri,
         environment: activeEnvironment,
-        entity: userProfile,
+        s2s_signed_entity: s2sToken,
+        offer_id: offer_id || null,
         product_id: product_id ? Number(product_id) : null,
-        offer: offerPayload?.offer || {},
-        seller: offerPayload?.seller || {},
-        event: offerPayload?.event || {},
-        manager: offerPayload?.manager || {},
         interaction_context: { utm_source, utm_medium, utm_campaign, origin_url: return_uri },
       };
 
@@ -413,7 +294,6 @@ serve(
       const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "0.0.0.0";
       const clientUa = req.headers.get("user-agent") || "";
 
-      // Envia o nosso JWT interno assinado no cabeçalho x-session-token extraído de newTokenData.session_token
       const orchestratorResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/orchestrator`, {
         method: "POST",
         headers: {
@@ -433,28 +313,13 @@ serve(
 
       let targetUrl = orchestratorData.url;
 
-      // ==================================================================
-      // RESOLUÇÃO DA ORIGEM DO APP DE DESTINO
-      // NUNCA usar Origin/Referer: no form POST cross-domain eles apontam
-      // para o REMETENTE (Superbid), o que absolutizaria o targetUrl para
-      // o domínio errado e selaria o `aud` do Exchange JWT na origem errada.
-      // ==================================================================
-      const originFromUrl = (candidate?: string): string => {
-        if (!candidate || !/^https?:\/\//i.test(candidate)) return "";
-        try {
-          return new URL(candidate).origin;
-        } catch (_) {
-          return "";
-        }
-      };
-
+      // ✨ [FIX 2]: Uso da originFromUrl global (removida a local redundante)
       let frontendOrigin =
         originFromUrl(orchestratorData.url) ||
         originFromUrl(target_url) ||
         originFromUrl(return_uri) ||
         "";
 
-      // Allowlist final: a origem resolvida precisa ser reconhecida pela allowlist da borda.
       frontendOrigin = getSafeCorsOrigin(frontendOrigin) || "";
 
       if (targetUrl && targetUrl.startsWith("/") && frontendOrigin) {
@@ -462,31 +327,13 @@ serve(
       }
 
       // =====================================================================
-      // [STEP 7] SMART DELIVERY (Handoff Stateless via Fragmento)
+      // [STEP 6] SMART DELIVERY (Handoff Stateless via Fragmento)
       // =====================================================================
-      // CONCEITO:
-      // - Ramo AJAX (mesma origem: Sandbox/app chamando por fetch): continua
-      //   recebendo o Session JWT de 6h no corpo/cookie. Nada muda para as
-      //   telas atuais.
-      // - Ramo NAVEGAÇÃO (<form method="POST"> cross-domain da Superbid):
-      //   o HTML antigo gravava `sessionStorage` na ORIGEM DO SUPABASE, então
-      //   a sessão nunca chegava ao app (storage é isolado por origem, e o
-      //   cookie HttpOnly é bloqueado pelo ITP em contexto cross-site).
-      //   Passa a emitir um Exchange JWT de 60s, SEM PII, amarrado à origem
-      //   do app (`aud`) e ao dispositivo (`uah`), transportado no FRAGMENTO
-      //   da URL — que nunca é enviado ao servidor, logo não entra em log de
-      //   acesso, proxy ou CDN. O app troca esse token pela sessão definitiva
-      //   já na sua própria origem (modo `redeem`).
-      //
-      // O que sai e o que entra
-      // Antes: HTML com <script> gravando sessionStorage / Session JWT 6h interpolado / window.location.replace
-      // Depois: Exchange JWT 60s no fragmento / 302 Location direto / Cookie emitido pelo redeem
-      
       const apiHost = new URL(Deno.env.get("SUPABASE_URL") || "").hostname;
       const frontendHost = frontendOrigin ? new URL(frontendOrigin).hostname : "";
-      const eTLDplus1 = (h: string) => h.split(".").slice(-2).join(".");
-
-      const isSameSite = frontendHost && apiHost ? eTLDplus1(frontendHost) === eTLDplus1(apiHost) : false;
+      
+      // ✨ [FIX 3]: Usa o getApexDomain para resolver eTLD+1 seguro
+      const isSameSite = frontendHost && apiHost ? getApexDomain(frontendHost) === getApexDomain(apiHost) : false;
       const safeTokenToReturn = isSameSite ? "" : finalJwt;
 
       const responseHeaders = new Headers();
@@ -496,7 +343,6 @@ serve(
       );
 
       if (isAjax) {
-        // ---- CAMINHO MESMA ORIGEM: comportamento atual preservado ----
         responseHeaders.set("Content-Type", "application/json");
         responseHeaders.set("Set-Cookie", `session_token=${finalJwt}; Path=/; HttpOnly; Secure; SameSite=Lax`);
 
@@ -511,31 +357,24 @@ serve(
         );
       }
 
-      // ---- CAMINHO CROSS-DOMAIN: handoff por fragmento ----
       if (!frontendOrigin) {
-        // Sem origem confiável não há como selar o `aud` do Exchange JWT.
         throw new Error("BAD_REQUEST: Origem do aplicativo de destino não pôde ser resolvida para o handoff.");
       }
 
       const exchangeToken = await generateExchangeToken({
-        userId,
         environment: activeEnvironment as "staging" | "production",
-        aud: frontendOrigin, // origem única autorizada a resgatar (Plano Final)
-        uah: hashUserAgent(clientUa), // mesmo navegador dos dois lados (Plano Final)
+        userId,
+        userName: userProfile.name,
+        login: userProfile.login,
+        aud: frontendOrigin,
+        uah: hashUserAgent(clientUa),
       });
 
-      // Em vez de bater de volta no próprio Gateway, joga direto para a URL destino final do App.
-      // O App no front-end pegará a variável #xt e fará o Redeem.
       const handoffUrl =
         `${targetUrl}` +
         (targetUrl.includes("?") ? "&" : "?") +
         `#xt=${encodeURIComponent(exchangeToken)}`;
 
-      // O Session JWT de 6h emitido acima NÃO sai da borda neste ramo: ele já
-      // cumpriu seu papel autenticando a chamada ao orquestrador (STEP 6). A
-      // sessão que o usuário vai usar é emitida no `redeem`, na origem do app.
-      // 302 puro: nenhum HTML, nenhum script inline, nenhum sessionStorage
-      // gravado na origem errada. O fragmento sobrevive ao redirect no browser.
       responseHeaders.set("Location", handoffUrl);
       responseHeaders.set("Cache-Control", "no-store, no-cache, must-revalidate");
       return new Response(null, { status: 302, headers: responseHeaders });
@@ -600,10 +439,8 @@ function respondWithError(
     getSafeCorsOrigin(req.headers.get("origin") || req.headers.get("referer")),
   );
 
-  // 1. Tratamento para requisições AJAX: retorna JSON estruturado com os dados preservados
   if (isAjax) {
     headers.set("Content-Type", "application/json");
-
     const extraData: Record<string, any> = {};
     if (originalPayload && typeof originalPayload === "object") {
       for (const [key, value] of Object.entries(originalPayload)) {
@@ -612,19 +449,12 @@ function respondWithError(
         }
       }
     }
-
     return new Response(
-      JSON.stringify({
-        success: false,
-        code,
-        message,
-        ...extraData,
-      }),
+      JSON.stringify({ success: false, code, message, ...extraData }),
       { status: statusCode, headers },
     );
   }
 
-  // 2. Resolução da origem do front-end (prioriza safeReturnUri, depois headers, depois fallback)
   let frontendOrigin =
     originFromUrl(safeReturnUri) ||
     originFromUrl(req.headers.get("origin") || req.headers.get("referer") || "");
@@ -633,7 +463,6 @@ function respondWithError(
     frontendOrigin = Deno.env.get("FRONTEND_URL") || "";
   }
 
-  // 3. Validação crítica: se a origem não puder ser resolvida, aborta com erro 500
   if (!frontendOrigin) {
     return new Response(
       JSON.stringify({ success: false, code: "CONFIG_ERROR", message: "Origem do front-end não identificada." }),
@@ -641,7 +470,6 @@ function respondWithError(
     );
   }
 
-  // 4. Montagem dos parâmetros de erro para a query string do redirecionamento
   const urlParams = new URLSearchParams({
     status: "error",
     code: code,
@@ -657,9 +485,7 @@ function respondWithError(
     }
   }
 
-  // 5. Redirecionamento HTTP 302 para a rota de erro do front-end
   const errorUrl = `${frontendOrigin}/financialGatewayGate?${urlParams.toString()}`;
-
   headers.set("Location", errorUrl);
   return new Response(null, { status: 302, headers });
 }

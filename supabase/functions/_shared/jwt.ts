@@ -14,13 +14,13 @@
  *    ("staging" ou "production") é lacrado dentro do Payload do JWT. Isso impede
  *    absolutamente que um cliente forje requisições alterando parâmetros na URL.
  * 2. Contrato Estrito de Saída: O frontend nunca vê os dados internos do payload.
- *    A interface `SessionData` garante que apenas os 4 atributos homologados
- *    (session_token, issue_at, expires_in, userId) trafeguem pela rede.
+ *    A interface `SessionData` garante que apenas os atributos homologados
+ *    (session_token, issue_at, expires_in, userId, userName, login) trafeguem pela rede.
  * 3. Fail-Fast Validation: Qualquer adulteração de bit no token dispara
  *    rejeição criptográfica imediata antes de alocar recursos da Edge Function.
  *
  * @author César Ismael Pereira da Costa
- * @version 4.1.0 (Otimização para Arquitetura 100% Stateless + Handoff Exchange JWT)
+ * @version 4.2.0 (Otimização para Arquitetura 100% Stateless + Fat Token Handoff)
  */
 
 import { jwtVerify, SignJWT } from "https://deno.land/x/jose@v4.14.4/index.ts";
@@ -36,6 +36,8 @@ export interface SessionData {
   issue_at: string;
   expires_in: number;
   userId: string;
+  userName: string;
+  login: string;
 }
 
 /**
@@ -67,24 +69,30 @@ const getJwtSecret = (): Uint8Array => {
 /**
  * @function generateSessionToken
  * @description Gera um Token de Sessão (JWS) aplicando o algoritmo HS256.
- * Lacra o ID do usuário e o ambiente original de login dentro da assinatura.
+ * Lacra o ID do usuário, ambiente original, nome e login dentro da assinatura.
  *
  * @param {string} userId - Identificador único extraído com sucesso da Superbid.
  * @param {string} environment - O ambiente base da requisição ("production" | "staging").
+ * @param {string} userName - Nome do usuário embutido para hidratação stateless.
+ * @param {string} login - Credencial do usuário embutida para hidratação stateless.
  * @param {number} [expiresInSeconds=7200] - Tempo de vida do token (Padrão: 6 horas).
- * @returns {Promise<SessionData>} Objeto limpo restrito aos 4 campos públicos.
+ * @returns {Promise<SessionData>} Objeto limpo restrito aos campos públicos.
  */
 export async function generateSessionToken(
-  userId: string,
   environment: string,
+  userId: string,
+  userName: string,
+  login: string,
   expiresInSeconds: number = 7200,
 ): Promise<SessionData> {
-  // [PLANO 1a]: O payload interno sela a identidade, o ambiente e a tipagem.
+  // [PLANO 1a]: O payload interno sela a identidade, o ambiente, tipagem e dados do usuário.
   // Qualquer tentativa de mudar o environment no Client invalidará a assinatura.
   const internalPayload = {
     typ: "session",
+    environment,    
     userId,
-    environment,
+    userName,
+    login,
   };
 
   const session_token = await new SignJWT(internalPayload)
@@ -98,6 +106,8 @@ export async function generateSessionToken(
     issue_at: new Date().toISOString(),
     expires_in: expiresInSeconds,
     userId,
+    userName,
+    login,
   };
 }
 
@@ -139,6 +149,8 @@ export async function verifySessionToken(token: string): Promise<SessionValidati
         issue_at: payload.iat ? new Date(Number(payload.iat) * 1000).toISOString() : new Date().toISOString(),
         expires_in: 7200,
         userId: String(payload.userId || ""),
+        userName: String(payload.userName || ""),
+        login: String(payload.login || ""),
       },
       environment: safeEnv,
     };
@@ -178,10 +190,12 @@ export const EXCHANGE_TTL_SECONDS = 60;
 export interface ExchangeClaims {
   /** OBRIGATÓRIO: Força a tipagem do token para evitar uso cruzado */
   typ: "exchange";
-  /** Identificador sistêmico do usuário (sem PII) */
-  userId: string;
   /** Ambiente (staging ou production) */
-  environment: "staging" | "production";
+  environment: "staging" | "production";  
+  /** Identificador sistêmico do usuário */
+  userId: string;
+  userName: string;
+  login: string;
   /** Audience: Domínio rigoroso de quem pode consumir o token */
   aud: string;
   /** User Agent Hash: Blindagem contra roubo/interceptação do token */
@@ -192,20 +206,26 @@ export interface ExchangeClaims {
  * Gera um Exchange JWT de transporte de curto prazo com claims estritos.
  */
 export async function generateExchangeToken({
-  userId,
   environment,
+  userId,
+  userName,
+  login,
   aud,
   uah,
 }: {
-  userId: string;
   environment: "staging" | "production";
+  userId: string;
+  userName: string;
+  login: string;
   aud: string;
   uah: string;
 }): Promise<string> {
   const payload: ExchangeClaims = {
     typ: "exchange",
-    userId,
     environment,
+    userId,
+    userName,
+    login,
     aud,
     uah,
   };
@@ -230,8 +250,10 @@ export function hashUserAgent(ua: string): string {
 
 export interface ExchangeValidationResult {
   valid: boolean;
-  userId?: string;
   environment?: "staging" | "production";
+  userId?: string;
+  userName?: string;
+  login?: string;
   errorCode?: "EXCHANGE_INVALID_SIGNATURE" | "EXCHANGE_INVALID_TYPE" | "EXCHANGE_HIJACK_DETECTED" | "EXCHANGE_EXPIRED";
   errorMessage?: string;
 }
@@ -279,7 +301,9 @@ export async function verifyExchangeToken(
 
   return {
     valid: true,
-    userId: String(payload.userId || ""),
     environment: payload.environment === "production" ? "production" : "staging",
+    userId: String(payload.userId || ""),
+    userName: String(payload.userName || ""),
+    login: String(payload.login || ""),
   };
 }

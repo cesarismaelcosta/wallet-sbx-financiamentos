@@ -37,7 +37,7 @@ export interface GatewayErrorResponse {
 
 /** Timeouts por natureza da chamada (ms). */
 const TIMEOUT_FAST = 8000; // orquestração e configs
-const TIMEOUT_SIMULATION = 20000; // motor de crédito / upstream externo
+const TIMEOUT_SIMULATION = 40000; // motor de crédito / upstream externo
 
 // =========================================================================
 // [1] DEFINIÇÃO E ENFORCEMENT DO THIN PAYLOAD
@@ -239,7 +239,7 @@ export async function callOrchestrator(
     // ✨ Decisão cirúrgica baseada na intenção (action)
     const action = String(thin.action || "").toUpperCase();
     if (["CONSULT", "SIMULATE"].includes(action)) {
-      timeoutToUse = TIMEOUT_SIMULATION; // 20s para transações pesadas
+      timeoutToUse = TIMEOUT_SIMULATION; // 40s para transações pesadas
     }
   } else {
     const p = payload as Record<string, any>;

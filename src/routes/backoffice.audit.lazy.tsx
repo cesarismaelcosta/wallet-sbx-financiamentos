@@ -45,6 +45,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createLazyFileRoute("/backoffice/audit")({ component: AuditoriaPage });
@@ -478,11 +479,112 @@ function AuditoriaPage() {
               >
                 Próxima
               </Button>
-            </div>
+           </div>
           </div>
         )}
 
       </div>
+
+      {/* =========================================================
+          GAVETA DE FILTROS MOBILE (AUDITORIA)
+          ========================================================= */}
+      <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+        <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white z-50">
+          <SheetHeader className="mb-4 text-left">
+            <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
+          </SheetHeader>
+
+          <div className="flex flex-col gap-4 w-full">
+
+            {/* Filtro de Evento */}
+            <div className="w-full">
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">Evento</span>
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-white border-slate-200 text-slate-600">
+                    <span className="truncate">Evento: {eventFilter === "all" ? "Todos" : EVENT_LABEL[eventFilter as LoginRow["event"]]}</span>
+                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0" align="start">
+                  <Command>
+                    <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
+                      <CommandGroup>
+                        {EVENT_OPTIONS.map(opt => (
+                          <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id as any)} className="cursor-pointer">
+                            {opt.label}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Filtro de Status */}
+            <div className="w-full">
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">Status</span>
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
+                    <span className="truncate">Status: {statusFilter === "all" ? "Todos" : statusFilter === "success" ? "Sucessos" : "Falhas"}</span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                  <Command className="bg-transparent">
+                    <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
+                      <CommandGroup>
+                        {STATUS_OPTIONS.map(opt => (
+                          <CommandItem key={opt.id} onSelect={() => setStatusFilter(opt.id)} className="cursor-pointer text-[#d946ef]">
+                            {opt.label}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Filtro de Período */}
+            <div className="w-full">
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-white border-slate-200 text-slate-600">
+                    <span className="truncate">Período: {period === "custom" ? "Personalizado" : PERIOD_OPTIONS.find(p => p.id === period)?.label}</span>
+                    <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0" align="start">
+                  <Command>
+                    <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
+                      <CommandGroup>
+                        {PERIOD_OPTIONS.map(opt => (
+                          <CommandItem key={opt.id} onSelect={() => setPeriod(opt.id)}>
+                            {opt.label}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                      <div className="p-2 border-t">
+                        <p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p>
+                        <Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setPeriod("custom"); }} numberOfMonths={1} />
+                      </div>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <Button onClick={() => setMobileFilterOpen(false)} className="w-full h-11 rounded-xl bg-[#B300FF] hover:bg-[#9f00e6] text-white font-semibold mt-2">
+              Aplicar Filtros
+            </Button>
+
+          </div>
+        </SheetContent>
+      </Sheet>
 
     </div>
   );

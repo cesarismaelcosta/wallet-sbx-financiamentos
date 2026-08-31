@@ -1,8 +1,20 @@
 /**
- * @fileoverview Step: Simulação (Simulação - Portado de Veículos)
+ * @fileoverview Componente: Step1Simulation (Simulação - Portado de Veículos)
  * @path src/components/simulacao/steps/Step1Simulation.tsx
- * * RESPONSABILIDADE:
- * Centralizar captura de dados e disparar simulação via callOrchestrator com paridade total.
+ * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO: STRICT THIN PAYLOAD & ARCHITECTURAL MECHANICS
+ * =========================================================================
+ * [MECÂNICA ARQUITETURAL]:
+ * Este módulo implementa o padrão Zero-Trust / Strict Thin Payload. 
+ * O envio de objetos inteiros de estado (`...state.data`) foi abolido para 
+ * blindar a camada de rede contra poluição de UI. O componente extrai 
+ * explicitamente os cursores de navegação da URL (`visit_id`, `visit_update_id`), 
+ * gerencia o controle de concorrência com referências (`useRef`), e alimenta 
+ * o Fast Path Cache em RAM de forma otimizada.
+ *
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro (Architectural Mechanics)
  */
 
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -15,12 +27,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
-import { callOrchestrator, callSimulation } from "@/features/financial-hub/core/services/gateway";
+import { callSimulation } from "@/features/financial-hub/core/services/gateway";
+import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { SimulacaoWizardData } from "../simulacao.types";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 
 // =========================================================================
-// Link para oferta na plataforma sbX
+// 🤖 [UTILITY ARCHITECTURE]: Slugificação Segura para Ofertas sbX
 // =========================================================================
 const getSuperbidUrl = (offerData: any) => {
   if (!offerData?.offer_id) return "#";
@@ -34,23 +47,37 @@ const getSuperbidUrl = (offerData: any) => {
 };
 
 export function Step1Simulation() {
+  // =========================================================================
+  // 🤖 [LOCAL STATE ARCHITECTURE]: Gerenciamento de Inputs e Ciclo de Vida
+  // =========================================================================
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const { state, updateData, update } = useWizard<SimulacaoWizardData>();
 
-  // Estados locais para controle fluido do Slider
+  // Estados locais desacoplados para garantir fluidez total nos Sliders e Inputs
   const [localValorOferta, setlocalValorOferta] = useState(0);
   const [localPercentualEntrada, setLocalPercentualEntrada] = useState(0);
   const [localParcelas, setLocalParcelas] = useState<number | null>(null);
 
+  // =========================================================================
+  // 🤖 [RENDER GUARD ARCHITECTURE]: Proteção contra Regressões de Ciclo
+  // =========================================================================
+  const initializedOfferIdRef = useRef<any>(null);
+
   useEffect(() => {
-    if (state?.data?.offer) {
+    const currentOfferId = state?.data?.offer?.offer_id;
+    
+    if (currentOfferId && initializedOfferIdRef.current !== currentOfferId) {
+      initializedOfferIdRef.current = currentOfferId;
       setlocalValorOferta(state.data.offer.offer_value ?? 0);
       setLocalPercentualEntrada(state.data.rules?.min_down_payment_percentage ?? 0);
       setLocalParcelas(state.data.rules?.default_installments ?? null);
     }
   }, [state?.data?.offer, state?.data?.rules]);
 
+  // =========================================================================
+  // 🤖 [COMPLIANCE ARCHITECTURE]: Validação Otimizada de Consentimentos
+  // =========================================================================
   const areConsentsValid = useMemo(() => {
     const configs = state.data?.consent_configs || [];
     return configs
@@ -61,6 +88,9 @@ export function Step1Simulation() {
   const isSimulating = useRef(false);
   const { execute } = useSafeCall();
 
+  // =========================================================================
+  // 🤖 [ZERO-TRUST HANDLER ARCHITECTURE]: Execução de Rede e Thin Payload
+  // =========================================================================
   const handleSimular = async () => {
     if (loading || isSimulating.current) return;
     
@@ -68,15 +98,18 @@ export function Step1Simulation() {
     setLoading(true);
 
     try {
+      // Extração cirúrgica de parâmetros temporais direto da URL (Zero-Trust)
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlVisitId = urlParams.get("visit_id");
+      const urlVisitUpdateId = urlParams.get("visit_update_id");
+
+      // Montagem do Payload Estritamente "Thin" (Abolido spread de state.data)
       const payload = {
-        // 1. Identificadores Estritos (Thin)
         action: "SIMULATE",
-        visit_id: state.data.visit_id,
-        visit_update_id: state.data.visit_update_id,
+        visit_id: urlVisitId || state.data.visit_id,
+        visit_update_id: urlVisitUpdateId || state.data.visit_update_id,
         offer_id: state.data.offer?.offer_id,
         product_id: state.data.product_id,
-
-        // 2. O que o usuário efetivamente alterou/escolheu na tela
         simulation_details: {
           requested_value: localValorOferta,
           installments: localParcelas,
@@ -84,8 +117,6 @@ export function Step1Simulation() {
           down_payment_percentage: localPercentualEntrada,
           cet_rate: state.data.taxa || 0,
         },
-
-        // 3. Consentimentos assinados
         consents: state.data.consent_configs
           ?.filter((c: any) => acceptedConsents[c.id])
           .map((c: any) => ({
@@ -96,19 +127,36 @@ export function Step1Simulation() {
           }))
       };
 
-      // Chamada via Gateway centralizado e captura do resultado
+      // Chamada segura via transportador de rede centralizado
       const result = await execute(() => callSimulation(payload));
       
+      // Alimentação síncrona do Cache de RAM Fast Path
+      if (result.state) {
+        setFastPathState(result.state);
+      }
+      
+      // Injeção da verdade absoluta do servidor e avanço de wizard step
       update({
-        meta: { ...state.meta, step: 2 },
-        data: { ...state.data, simulationResult: result, simulation_id: result.simulation_id, simulation_update_id: result.simulation_update_id  }
+        meta: {
+          ...state.meta,
+          step: 2,
+        },
+        data: {
+          ...state.data,
+          simulationResult: result,
+          simulation_id: result.simulation_id,
+          simulation_update_id: result.simulation_update_id,
+          ...(result.state && {
+            offer: result.state.offer,
+            rules: result.state.rules,
+            entity: result.state.entity,
+          }),
+        },
       });
-      
     } catch (error: any) {
-      console.error("[Erro na Simulação Card]:", error);
+      console.error("[Erro na Simulação Veículos]:", error);
       
-      // DISPARA O EVENTO GLOBAL PARA O LAYOUT OUVIR
-      // O Layout vai capturar esse erro e exibir o ErrorCountdown automaticamente.
+      // Disparo de evento global estruturado para o ErrorCountdown do layout
       window.dispatchEvent(new CustomEvent('app-error', { detail: error }));
     } finally {
       setLoading(false);
@@ -116,41 +164,47 @@ export function Step1Simulation() {
     }
   };
 
+  // =========================================================================
+  // 🤖 [GUARD RAIL ARCHITECTURE]: Bailout de Estado Nulo / Vazio
+  // =========================================================================
   if (!state?.data || Object.keys(state.data).length === 0) {
-    return <div className="flex items-center justify-center h-64"><span className="text-slate-400">Carregando...</span></div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <span className="text-slate-400">Carregando...</span>
+      </div>
+    );
   }
 
   const { rules, consent_configs, offer } = state.data;
-  // Atributos extraídos com segurança e fallback para evitar NaN no cálculo do teto
+  
+  // Cálculo seguro do teto máximo de financiamento com fallback defensivo
   const tetoMaximo = 
     offer?.vehicle_details?.fipe_value ?? 
     ((offer?.offer_value || 0) * (1 + (rules?.max_offer_cap_percent ?? 20) / 100));
 
-  // Atributos extraídos com segurança idênticos aos de Veículos
   const loteSubIndex = offer?.lote_index || offer?.lote_numero || "1";
   const offerDescText = offer?.offer_description ? offer.offer_description.replace(/[.,]+$/, "") : "";
 
   return (
     <div className="space-y-5 max-w-xl mx-auto lg:mx-0">
       
-      {/* HEADER EXATO COM 2 LINHAS (Paridade com Veículos) */}
+      {/* =========================================================================
+       * 🤖 [PROGRESSIVE DISCLOSURE ARCHITECTURE]: Header Síncrono da Oferta
+       * ========================================================================= */}
       <div className="flex items-start gap-4 mb-6">
         <div className="bg-primary/10 p-2.5 rounded-full shrink-0 hidden sm:flex">
           <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
         </div>
         
         <div className="space-y-0.5 flex-1 w-0 min-w-0">
-          {/* Título Principal (Fonte fluida 14px a 20px) */}
           <h3 className="text-[clamp(14px,4vw,20px)] sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full block">
-            Simule seu financiamento*!
+            Simule seu financiamento!
           </h3>
 
-          {/* Linha 1: Descrição do item em cinza claro (Fonte fluida 10px a 12px) */}
           <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-slate-600 truncate pt-0.5 w-full block">
             {offerDescText}
           </p>
 
-          {/* Linha 2: Substituiu apenas o <p> original por esta div com o link */}
           <div className="flex items-center pt-0.5">
             <p className="text-sm text-slate-600 truncate">
               Lote {loteSubIndex} • <strong className="text-slate-900 font-bold mr-2">{BRL(localValorOferta)}</strong>
@@ -171,13 +225,13 @@ export function Step1Simulation() {
         </div>
       </div>
 
-      {/* Container adaptativo p-4 (mobile) / p-7 (desktop) */}
+      {/* =========================================================================
+       * 🤖 [ZERO-TRUST INPUTS & SLIDER CONTROLS]: Container de Simulação
+       * ========================================================================= */}
       <div className="bg-slate-50 border border-border rounded-lg p-4 sm:p-7 space-y-4">
-
-        {/* Grid com espaçamento responsivo */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4">
 
-          {/* Valor do lance */}
+          {/* Controle do Valor do Lance */}
           <div className="space-y-1">
             <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Valor do lance</Label>
             <Input 
@@ -211,7 +265,7 @@ export function Step1Simulation() {
             </div>
           </div>
 
-          {/* Entrada */}
+          {/* Controle da Entrada */}
           <div className="space-y-1">
             <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Entrada</Label>
             <Input 
@@ -246,7 +300,7 @@ export function Step1Simulation() {
           </div>
         </div>
 
-        {/* Parcelas */}
+        {/* Seleção de Parcelas */}
         <div className="space-y-3">
           <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Parcelas</Label>
           <RadioGroup
@@ -271,6 +325,9 @@ export function Step1Simulation() {
         </div>
       </div>
       
+      {/* =========================================================================
+       * 🤖 [CONSENTS ARCHITECTURE]: Módulo Dinâmico de Termos Legais
+       * ========================================================================= */}
       <div className={`transition-opacity duration-200 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}>
         <DynamicConsents 
           configs={consent_configs} 
@@ -279,6 +336,9 @@ export function Step1Simulation() {
         />
       </div>
 
+      {/* =========================================================================
+       * 🤖 [ACTION ARCHITECTURE]: Botão de Disparo com Estados de Loading
+       * ========================================================================= */}
       <Button 
         type="button"
         onClick={handleSimular} 

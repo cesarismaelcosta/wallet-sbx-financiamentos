@@ -1,16 +1,26 @@
 /**
  * @fileoverview Passo 1: Elegibilidade (Jornada Auto Equity)
  * @path src/features/financial-hub/components/products/credit/auto-equity/steps/Step1Eligibility.tsx
- * * PROPÓSITO:
- * Realiza a triagem inicial do cliente. Valida CPF, e-mail e celular, 
- * gerencia o aceite dos termos (LGPD) e consulta a elegibilidade no gateway.
- * * LÓGICA DE NEGÓCIO:
- * - Aprovado: status_id === 1 (Avança para o próximo passo)
- * - Negado: status_id === 2 (Bloqueia o fluxo e exibe mensagem de erro)
- * - Erro técnico: success === false (Exibe erro de sistema)
+ * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO: STRICT THIN PAYLOAD & ARCHITECTURAL MECHANICS
+ * =========================================================================
+ * [MECÂNICA ARQUITETURAL]:
+ * - Engine: Renderizado pela WizardEngine.
+ * - Estado: Consome WizardProvider.
+ * - Transportador: callSimulation (centralizado em lib/api/gateway.ts).
+ * 
+ * O payload de rede foi purificado. O uso do `...state.data` foi abolido para
+ * evitar o envio de lixo de UI (estado interno, objetos aninhados) para a 
+ * camada de rede. O componente monta um payload estritamente "Thin", extraindo 
+ * os cursores temporais (`visit_id`, `visit_update_id`) da URL e enviando 
+ * APENAS os IDs identificadores, paridade de steps e consents exigidos pelo Gateway.
+ *
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro (Architectural Mechanics)
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
@@ -19,29 +29,40 @@ import { eligibilitySchema, type EligibilityData } from "../schemas";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider"; 
 import { DynamicConsents } from "@/features/financial-hub/components/layout/DynamicConsents";
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
+import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 
-// Função utilitária para formatar de YYYY-MM-DD para DD/MM/YYYY
+// =========================================================================
+// 🤖 [UTILITY ARCHITECTURE]: Formatação Segura de Data de Nascimento (UTC)
+// =========================================================================
 const formatBirthDateBR = (dateStr?: string) => {
   if (!dateStr) return "";
-  const clean = dateStr.split("T")[0]; // Remove hora caso venha em ISO
-  const parts = clean.split("-");
-  if (parts.length === 3) {
-    const [year, month, day] = parts;
-    return `${day}/${month}/${year}`;
+  try {
+    const dateObj = new Date(dateStr);
+    
+    if (isNaN(dateObj.getTime())) return dateStr;
+
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "UTC",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    }).format(dateObj);
+  } catch (error) {
+    return dateStr;
   }
-  return dateStr;
 };
 
 export function Step1Eligibility() {
-  // Acesso ao estado global do Wizard para navegação e dados
+  // =========================================================================
+  // 🤖 [LOCAL STATE ARCHITECTURE]: Gerenciamento de Formulário e UI
+  // =========================================================================
   const { state, next, update } = useWizard<any>();
   const { execute } = useSafeCall();
 
   const entity = state.data; 
   const consentConfigs = state.data?.consent_configs || [];
   
-  // Estado local para controle da UI
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
@@ -52,14 +73,17 @@ export function Step1Eligibility() {
     defaultValues: { fullName: "", cpf: "", birthDate: "", phone: "", email: "" },
   });
 
-  // Preenchimento automático dos dados recebidos do orquestrador
+  const initializedEntityRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (entity) {
+    const currentEntityId = entity?.document || entity?.id;
+    
+    if (currentEntityId && initializedEntityRef.current !== currentEntityId) {
+      initializedEntityRef.current = currentEntityId;
       const cpfFormatado = (entity.document || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
       const phoneFormatado = (entity.phone || "").replace(/(\d{2})(\d{2})(\d+)/, '($1) $2 $3');
       const birthDateFormatted = formatBirthDateBR(entity.birth_date);
 
-      // Usa setValue para injetar o valor diretamente no campo
       form.setValue("fullName", entity.name || "", { shouldValidate: true });
       form.setValue("cpf", cpfFormatado, { shouldValidate: true });
       form.setValue("phone", phoneFormatado, { shouldValidate: true });
@@ -68,7 +92,9 @@ export function Step1Eligibility() {
     }
   }, [entity, form]);
 
-  // Validação de obrigatoriedade dos consentimentos (LGPD)
+  // =========================================================================
+  // 🤖 [COMPLIANCE ARCHITECTURE]: Validação Otimizada de Consentimentos
+  // =========================================================================
   const areConsentsValid = useMemo(() => {
     const configs = state.data?.consent_configs || [];
     return configs
@@ -76,64 +102,79 @@ export function Step1Eligibility() {
       .every((opt: any) => acceptedConsents[opt.id] === true);
   }, [state.data?.consent_configs, acceptedConsents]);
 
-  /**
-   * Dispara a consulta de elegibilidade
-   */
+  // =========================================================================
+  // 🤖 [ZERO-TRUST HANDLER ARCHITECTURE]: Execução de Rede e Thin Payload
+  // =========================================================================
   const onSubmit = async (data: EligibilityData) => {
     setLoading(true);
     setErrorMsg(null);
 
     try {
-      // Monta Payload Magro (Thin Payload / Zero-Trust)
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlVisitId = urlParams.get("visit_id");
+      const urlVisitUpdateId = urlParams.get("visit_update_id");
+
+      // Montagem do Payload Estritamente "Thin" (Abolido spread de state.data)
       const payload = {
         action: "SIMULATE",
-        visit_id: state.data.visit_id,
-        visit_update_id: state.data.visit_update_id,
-        product_id: state.data.product_id, // Ex: 7 (Auto Equity)
-        partner_id: state.data.partner_id, // OBRIGATÓRIO: O Gateway usa no 'switch (payload.partner_id)'
-        step: "CHECK_ELIGIBILITY", // OBRIGATÓRIO: Passar o step no corpo ou no wrapper do Orchestrator
+        visit_id: urlVisitId || state.data.visit_id,
+        visit_update_id: urlVisitUpdateId || state.data.visit_update_id,
+        product_id: state.data.product_id,
+        partner_id: state.data.partner_id,
+        step: "CHECK_ELIGIBILITY",
         consents: state.data.consent_configs
           ?.filter((c: any) => acceptedConsents[c.id])
           .map((c: any) => ({
             consent_id: c.id,
-            acceptedConsents: true, // Use a chave exata exigida pelo seu contrato de consents
+            acceptedConsents: true,
             acceptedConsents_at: new Date().toISOString(),
             legal_text_snapshot: { template_text: c.template_text, links: c.links }
           }))
       };
 
-      // Chamada via Gateway centralizado e captura do resultado
       const result = await execute(() => callSimulation(payload, 'CHECK_ELIGIBILITY'));
       const statusId = result.consults?.[0]?.status_id;
 
-      // Validação do retorno do backend
+      // Alimentação síncrona do Cache de RAM Fast Path se houver estado
+      if (result.state) {
+        setFastPathState(result.state);
+      }
+
       if (!result.success) {
         setErrorMsg("Erro técnico na consulta. Tente novamente.");
       } else if (statusId === 1) {
-        // SUCCESSO: 1 é aprovado
         update({ 
           meta: { ...state.meta, blocked: undefined },
-          data: { ...state.data, eligibility: data, simulationResult: result, simulation_id: result.simulation_id, simulation_update_id: result.simulation__update_id } 
+          data: { 
+            ...state.data, 
+            eligibility: data, 
+            simulationResult: result, 
+            simulation_id: result.simulation_id, 
+            simulation_update_id: result.simulation_update_id || result.simulation__update_id,
+            ...(result.state && {
+              offer: result.state.offer,
+              rules: result.state.rules,
+              entity: result.state.entity,
+            })
+          } 
         });
         next();
       } else if (statusId === 2) {
-        // NEGADO: 2 é reprovado
         setErrorMsg("Não encontramos ofertas disponíveis para este perfil.");
       } else {
         setErrorMsg("Status de retorno inválido.");
       }
     } catch (error) {
       console.error("[Elegibilidade Error]:", error);
-      
-      // DISPARA O EVENTO GLOBAL PARA O LAYOUT OUVIR
-      // O layout vai mostrar o ErrorCountdown automaticamente
       window.dispatchEvent(new CustomEvent('app-error', { detail: error }));
     } finally {
       setLoading(false);
     }
   };
 
-  // Renderização de Estado de Erro
+  // =========================================================================
+  // 🤖 [GUARD RAIL ARCHITECTURE]: Renderização de Estado de Erro
+  // =========================================================================
   if (errorMsg) {
     return (
       <div className="flex flex-col items-center justify-center text-center animate-in fade-in zoom-in duration-300">
@@ -151,7 +192,9 @@ export function Step1Eligibility() {
     );
   }
   
-  // Renderização do Formulário Principal
+  // =========================================================================
+  // 🤖 [FORM ARCHITECTURE]: Renderização do Formulário Principal
+  // =========================================================================
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6"> 
       {/* Exibição dos dados do cliente (Read-only) */}
@@ -168,7 +211,6 @@ export function Step1Eligibility() {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Data de nascimento</p>
-            {/* Agora exibe a data formatada corretamente em DD/MM/AAAA */}
             <p className="text-sm font-medium text-foreground">{form.watch("birthDate") || formatBirthDateBR(entity?.birth_date)}</p>
           </div>
         </div>
@@ -185,7 +227,9 @@ export function Step1Eligibility() {
         </div>
       </div>
 
-      {/* Consentimentos dinâmicos */}
+      {/* =========================================================================
+       * 🤖 [CONSENTS ARCHITECTURE]: Módulo Dinâmico de Termos Legais
+       * ========================================================================= */}
       <div className={`transition-opacity duration-200 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}>
         <DynamicConsents 
           configs={consentConfigs} 
@@ -194,7 +238,9 @@ export function Step1Eligibility() {
         />
       </div>      
 
-      {/* Botão de Submissão */}
+      {/* =========================================================================
+       * 🤖 [ACTION ARCHITECTURE]: Botão de Submissão com Estados de Loading
+       * ========================================================================= */}
       <Button 
         type="submit" 
         size="lg" 

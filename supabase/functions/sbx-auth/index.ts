@@ -114,7 +114,10 @@ serve(
       // =======================================================================
       const details = new URLSearchParams();
       details.append("username", String(username).trim());
-      details.append("password", String(password));
+      
+      // ✨ O SEGREDO DO SUCESSO: Força o corte em 20 caracteres igual ao portal oficial
+      details.append("password", String(password).slice(0, 20)); 
+      
       details.append("grant_type", "password");
       details.append("client_id", "dzqC3VodSoXukD45BQKg3NQU6-faststore");
       details.append("portalid", "2");
@@ -229,7 +232,14 @@ serve(
       // =======================================================================
       // FASE 5: EMISSÃO DO JWT INTERNO STATELESS
       // =======================================================================
-      const tokenData = await generateSessionToken(userId, environment);
+      // ✨ FAT JWT: Repassa nome e login obrigatórios para a assinatura do token.
+      // O tempo de expiração é omitido e assumirá o default definido no jwt.ts.
+      const tokenData = await generateSessionToken(
+        environment, 
+        userId, 
+        userProfile.name, 
+        userProfile.login
+      );
 
       // =======================================================================
       // FASE 6: DELEGAÇÃO S2S / HANDOFF (Proteção contra criação de lixo)
@@ -306,6 +316,8 @@ serve(
           issue_at: tokenData.issue_at,
           expires_in: tokenData.expires_in,
           userId: userId,
+          userName: tokenData.userName, 
+          login: tokenData.login,       
           environment: environment,
           user_profile: userProfile,
           initial_visit: {

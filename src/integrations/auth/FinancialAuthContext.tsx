@@ -121,6 +121,30 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
 
     if (storedToken) {
       setSessionTokenState(storedToken);
+
+      // ✨ EXTRAÇÃO FAT JWT: Abre o token em memória (0ms) e resgata as PIIs visuais
+      try {
+        const base64Url = storedToken.split('.')[1];
+        if (base64Url) {
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(
+            window.atob(base64).split('').map(function(c) {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join('')
+          );
+          const decodedToken = JSON.parse(jsonPayload);
+          
+          // Restaura o perfil na memória do React para o Header consumir
+          if (decodedToken.userName || decodedToken.login) {
+            setUserProfile({
+              name: decodedToken.userName || "",
+              login: decodedToken.login || ""
+            });
+          }
+        }
+      } catch (e) {
+        console.error("💧 [AuthContext] Falha ao decodificar Fat JWT no F5", e);
+      }
     }
 
     if (storedUserId) {

@@ -47,10 +47,9 @@ export function validateOfferAccess(args: {
     return;
   }
 
-  const isAvailable = Boolean(trustedOffer.offer_status_available);
   const isSold = Boolean(trustedOffer.offer_status_sold);
 
-  if (!isAvailable || isSold) {
+  if (isSold) {
     debugLog(`🚨 [Gatekeeper] Oferta ${trustedOffer.offer_id} indisponível para negócio (Available: ${isAvailable} | Sold: ${isSold}).`);
     throw new Error("OFFER_NOT_AVAILABLE");
   }

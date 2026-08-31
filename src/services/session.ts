@@ -4,7 +4,7 @@
  * Implementa o padrão "Híbrido Consciente" para garantir segurança máxima em produção
  * e fluidez no desenvolvimento local/Lovable, operando estritamente sob o princípio
  * de **Zero LocalStorage** para evitar persistência indelével de dados sensíveis ou de sessão.
- * 
+ *
  * [RESPONSABILIDADES]:
  * 1. Detecção de Ambiente: Avalia se o contexto permite Cookies (Same-Site) ou exige fallback.
  * 2. Segurança (PROD): Bloqueia o acesso do JS ao token (Mitigação de XSS), delegando ao Cookie HttpOnly.
@@ -22,20 +22,20 @@
  * Exemplo: 'wallet.superbid.net' e 'api.superbid.net' -> true
  */
 function isSameSite(frontendHost: string, apiHost: string) {
-  const eTLDplus1 = (h: string) => h.split('.').slice(-2).join('.');
+  const eTLDplus1 = (h: string) => h.split(".").slice(-2).join(".");
   return eTLDplus1(frontendHost) === eTLDplus1(apiHost);
 }
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const apiHost = supabaseUrl ? new URL(supabaseUrl).hostname : '';
-const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+const apiHost = supabaseUrl ? new URL(supabaseUrl).hostname : "";
+const currentHostname = typeof window !== "undefined" ? window.location.hostname : "";
 
 // [STATE]: Flag global que dita o comportamento de toda a camada de rede.
 // Ativa o modo seguro (Cookie) APENAS se for build de Produção E estiver no mesmo domínio pai.
 export const USE_COOKIE = import.meta.env.PROD && currentHostname ? isSameSite(currentHostname, apiHost) : false;
 
 // Padronizado estritamente como 'session_token' para bater com o cookie e a tabela do banco
-const TOKEN_KEY = 'session_token';
+const TOKEN_KEY = "session_token";
 
 // =========================================================================
 // [STORAGE]: GERENCIAMENTO DO TOKEN (TRANSPORTE)
@@ -47,7 +47,7 @@ const TOKEN_KEY = 'session_token';
  */
 export function setSessionToken(token: string) {
   // [SECURITY]: Em PROD, ignoramos o token pois a Edge Function já enviou via 'Set-Cookie'.
-  if (USE_COOKIE || typeof window === 'undefined') return; 
+  if (USE_COOKIE || typeof window === "undefined") return;
   sessionStorage.setItem(TOKEN_KEY, token);
 }
 
@@ -57,36 +57,52 @@ export function setSessionToken(token: string) {
 
 /**
  * Salva os metadados temporais necessários para o frontend fazer logoff proativo.
- * @description Dados inofensivos salvos estritamente no sessionStorage (eliminando o localStorage) 
+ * @description Dados inofensivos salvos estritamente no sessionStorage (eliminando o localStorage)
  * para informar os Guards da UI sobre a validade da sessão durante o ciclo de vida da aba.
  * @param expiresAt Timestamp absoluto de expiração da sessão no servidor.
  * @param timeDelta Diferença em milissegundos entre o servidor e o cliente (Clock Drift).
  */
 export function setSessionMetadata(expiresAt: number, timeDelta: number) {
-  if (typeof window === 'undefined') return;
-  sessionStorage.setItem('session_expires_at', expiresAt.toString());
-  sessionStorage.setItem('time_delta', timeDelta.toString());
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem("session_expires_at", expiresAt.toString());
+  sessionStorage.setItem("time_delta", timeDelta.toString());
 }
 
 /**
  * Purgador universal de sessão (Usado no Logoff ou Expiração).
  * @description Garante a limpeza atômica de todas as chaves de sessão e preferências
  * associadas no sessionStorage, cumprindo o escopo estrito de Zero LocalStorage.
+ *
+ * [ZERO RESÍDUO]: além do transporte da sessão, purga todo o rastro do usuário
+ * anterior na mesma aba (identificador, hash de throttle, fila de telemetria e
+ * snapshot de proponente legado). Sem isso, um resíduo sobrevive à troca de conta.
  */
 export function clearSession() {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
+
+  // Transporte e metadados temporais da sessão
   sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem('session_expires_at');
-  sessionStorage.removeItem('time_delta');
+  sessionStorage.removeItem("session_expires_at");
+  sessionStorage.removeItem("time_delta");
+
+  // Rastro do usuário anterior (identificador e telemetria local)
+  sessionStorage.removeItem("user_id");
+  sessionStorage.removeItem("sbx.login.last");
+  sessionStorage.removeItem("sbx.login.queue");
+
+  // Resíduos legados de PII (jornadas antigas) — purga defensiva
+  sessionStorage.removeItem("sbx.proponent");
+  sessionStorage.removeItem("user_profile");
+  sessionStorage.removeItem("access_token_sbx");
 }
 
 /**
  * @fileoverview Purgador completo para Logout Manual intencional (Limpa tudo, incluindo o ambiente).
  */
 export function manualLogout() {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
   clearSession();
-  sessionStorage.removeItem('sbx_env_pref'); // 👈 Só apaga a preferência no clique do botão de sair
+  sessionStorage.removeItem("sbx_env_pref"); // 👈 Só apaga a preferência no clique do botão de sair
 }
 
 // =========================================================================
@@ -98,10 +114,10 @@ export function manualLogout() {
  * @returns Headers contendo o token (DEV) ou um objeto vazio (PROD, onde o browser age sozinho).
  */
 export function authHeaders(): HeadersInit {
-  if (USE_COOKIE || typeof window === 'undefined') return {}; // O navegador anexa o cookie automaticamente
-  
+  if (USE_COOKIE || typeof window === "undefined") return {}; // O navegador anexa o cookie automaticamente
+
   const token = sessionStorage.getItem(TOKEN_KEY);
-  return token ? { 'x-session-token': token } : {};
+  return token ? { "x-session-token": token } : {};
 }
 
 /**
@@ -109,7 +125,7 @@ export function authHeaders(): HeadersInit {
  * @description Garante que requisições de Produção levem a flag 'credentials: include'.
  */
 export const fetchOptions: RequestInit = {
-  credentials: USE_COOKIE ? 'include' : 'omit',
+  credentials: USE_COOKIE ? "include" : "omit",
 };
 
 // =========================================================================
@@ -130,12 +146,12 @@ export function getDefaultSbxEnvironment(): "staging" | "production" {
     return envConfig;
   }
 
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return "production";
   }
 
   // [SECURITY & DX]: Lido do sessionStorage para evitar persistência em disco (Zero LocalStorage)
-  const savedPref = sessionStorage.getItem('sbx_env_pref');
+  const savedPref = sessionStorage.getItem("sbx_env_pref");
   if (savedPref === "production" || savedPref === "staging") {
     return savedPref;
   }
@@ -161,8 +177,8 @@ export function isEnvironmentLocked(): boolean {
  * @param env {"staging" | "production"}
  */
 export function setSbxEnvironmentPreference(env: "staging" | "production") {
-  if (typeof window === 'undefined') return;
-  sessionStorage.setItem('sbx_env_pref', env);
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem("sbx_env_pref", env);
 }
 
 /**
@@ -170,13 +186,13 @@ export function setSbxEnvironmentPreference(env: "staging" | "production") {
  * @returns {string} O token em DEV/Lovable, ou vazio em PROD (onde o Cookie age sozinho).
  */
 export function getTokenForPayload(): string {
-  if (USE_COOKIE || typeof window === 'undefined') return ""; // Bloqueio de segurança: deixa o Cookie fazer o trabalho.
+  if (USE_COOKIE || typeof window === "undefined") return ""; // Bloqueio de segurança: deixa o Cookie fazer o trabalho.
   return sessionStorage.getItem(TOKEN_KEY) || "";
 }
 
 /**
  * Recupera o ambiente
- * @returns {boolean} 
+ * @returns {boolean}
  */
 export const hasSbxEnvironmentPreference = (): boolean => {
   if (typeof window === "undefined") return false; // Proteção contra SSR
@@ -188,6 +204,6 @@ export const hasSbxEnvironmentPreference = (): boolean => {
  * @returns {number} O delta em milissegundos.
  */
 export function getTimeDelta(): number {
-  if (typeof window === 'undefined') return 0;
-  return parseInt(sessionStorage.getItem('time_delta') || '0', 10);
+  if (typeof window === "undefined") return 0;
+  return parseInt(sessionStorage.getItem("time_delta") || "0", 10);
 }

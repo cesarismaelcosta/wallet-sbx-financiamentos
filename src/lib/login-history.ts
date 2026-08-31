@@ -5,7 +5,7 @@
 // Configuração central do Storage (Session, para evaporar ao fechar a aba)
 const STORAGE = typeof window !== "undefined" ? sessionStorage : null;
 const LAST_LOG_KEY = "sbx.login.last";
-const QUEUE_KEY = "sbx.login.queue";
+
 
 export type LoginHistoryEvent = "login" | "refresh" | "logout" | "failed_attempt" | "blocked";
 
@@ -57,13 +57,12 @@ function shouldLogEvent(emailHash: string, event: LoginHistoryEvent): boolean {
   return true;
 }
 
-// Fila de retry segura (Zero Tokens)
-function enqueue(payload: any) {
-  if (!STORAGE) return;
-  const queue = JSON.parse(STORAGE.getItem(QUEUE_KEY) || "[]");
-  queue.push(payload);
-  STORAGE.setItem(QUEUE_KEY, JSON.stringify(queue));
-}
+// =========================================================================
+// [ZERO STORAGE ÓRFÃO]: a antiga fila `sbx.login.queue` foi removida — nenhum
+// consumidor a drenava, então só acumulava dados no sessionStorage. Falhas de
+// telemetria agora são descartadas (visíveis apenas em DEV).
+// =========================================================================
+
 
 /**
  * Envia o evento mapeando EXATAMENTE para o que a Edge Function espera
@@ -126,16 +125,11 @@ export async function logLoginHistoryEvent(
     }
   }
 
-  if (!ok) {
-    // 4. A Fila de Retry recebe APENAS metadata higienizado. Zero Tokens. Zero E-mail.
-    enqueue({
-      event: input.event,
-      success: input.success,
-      failureReason: input.failureReason,
-      queuedAt: Date.now(),
-      attempts: 1,
-    });
+  if (!ok && import.meta.env.DEV) {
+    // 4. Sem fila persistida: apenas sinaliza a falha em desenvolvimento.
+    console.warn("[login-history] falha ao registrar evento:", input.event);
   }
+
 
   return { success: ok };
 }

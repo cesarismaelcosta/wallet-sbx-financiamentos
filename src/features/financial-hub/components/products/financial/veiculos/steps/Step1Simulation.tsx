@@ -1,22 +1,23 @@
 /**
  * @fileoverview Step: Simulação (Veículos)
  * @path src/components/veiculos/steps/Step1Simulation.tsx
- * * * * ÁRVORE DE DEPENDÊNCIAS:
- * --------------------------------------------------------------------------------
- * src/components/veiculos/steps/
- * └── Step1Simulation.tsx              # [FIX] Integração consolidada via callOrchestrator
- * --------------------------------------------------------------------------------
- * * * * INTEGRAÇÃO:
+ * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO: STRICT THIN PAYLOAD & ARCHITECTURAL MECHANICS
+ * =========================================================================
+ * [MECÂNICA ARQUITETURAL]:
  * - Engine: Renderizado pela WizardEngine.
  * - Estado: Consome WizardProvider.
- * - Transportador: callOrchestrator (centralizado em lib/api/gateway.ts).
- * --------------------------------------------------------------------------------
- * * * * RESPONSABILIDADE:
- * Centralizar a captura de dados e disparar a simulação financeira via Gateway,
- * garantindo paridade total com a estrutura do veiculos-old.
+ * - Transportador: callSimulation (centralizado em lib/api/gateway.ts).
+ * 
+ * O payload de rede foi purificado. O uso do `...state.data` foi abolido para
+ * evitar o envio de lixo de UI (estado interno, objetos aninhados) para a 
+ * camada de rede. O componente monta um payload estritamente "Thin", extraindo 
+ * os cursores temporais (`visit_id`, `visit_update_id`) da URL e enviando 
+ * APENAS os IDs identificadores e os inputs financeiros necessários que o Gateway exige.
  *
  * @author César Ismael Pereira da Costa
- * @author Gemini Pro
+ * @author Gemini Pro (Architectural Mechanics)
  */
 
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -30,10 +31,11 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
+import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 
 // =========================================================================
-// Link para oferta na plataforma sbX
+// 🤖 [UTILITY ARCHITECTURE]: Slugificação Segura para Ofertas sbX
 // =========================================================================
 const getSuperbidUrl = (offerData: any) => {
   if (!offerData?.offer_id) return "#";
@@ -47,6 +49,9 @@ const getSuperbidUrl = (offerData: any) => {
 };
 
 export function Step1Simulation() {
+  // =========================================================================
+  // 🤖 [LOCAL STATE ARCHITECTURE]: Gerenciamento de Inputs e Ciclo de Vida
+  // =========================================================================
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const { state, updateData, update } = useWizard<any>();
@@ -56,27 +61,41 @@ export function Step1Simulation() {
   const [localPercentualEntrada, setLocalPercentualEntrada] = useState(0);
   const [localParcelas, setLocalParcelas] = useState<number | null>(null);
 
-  // Inicialização sob demanda: apenas quando a API retornar os dados
+  // =========================================================================
+  // 🤖 [RENDER GUARD ARCHITECTURE]: Proteção contra Regressões de Ciclo
+  // =========================================================================
+  const initializedOfferIdRef = useRef<any>(null);
+
+  // Inicialização controlada: só carrega os valores padrão 1 vez por oferta
   useEffect(() => {
-    if (state?.data?.offer) {
+    const currentOfferId = state?.data?.offer?.offer_id || state?.data?.offer?.id;
+    
+    if (currentOfferId && initializedOfferIdRef.current !== currentOfferId) {
+      initializedOfferIdRef.current = currentOfferId;
       setLocalValorVeiculo(state.data.offer.offer_value ?? 0);
       setLocalPercentualEntrada(state.data.rules?.min_down_payment_percentage ?? 0);
       setLocalParcelas(state.data.rules?.default_installments ?? null);
     }
   }, [state?.data?.offer, state?.data?.rules]);
 
+  // =========================================================================
+  // 🤖 [COMPLIANCE ARCHITECTURE]: Validação Otimizada de Consentimentos
+  // =========================================================================
   const areConsentsValid = useMemo(() => {
     const configs = state.data?.consent_configs || [];
     return configs.filter((opt: any) => opt.is_required).every((opt: any) => acceptedConsents[opt.id] === true);
   }, [state.data?.consent_configs, acceptedConsents]);
 
-  /**
-   * handleSimular: Integração consolidada via callOrchestrator.
-   * Sintaxe validada e isolada para garantir que o compilador reconheça o 'async'.
-   */
   const isSimulating = useRef(false);
   const { execute } = useSafeCall();
 
+  // =========================================================================
+  // 🤖 [ZERO-TRUST HANDLER ARCHITECTURE]: Execução de Rede e Thin Payload
+  // =========================================================================
+  /**
+   * handleSimular: Integração consolidada via callSimulation.
+   * Sintaxe validada e isolada para garantir que o compilador reconheça o 'async'.
+   */
   const handleSimular = async () => {
     // 1. Prevenção de cliques múltiplos
     if (loading || isSimulating.current) return;
@@ -85,11 +104,15 @@ export function Step1Simulation() {
     setLoading(true);
 
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlVisitId = urlParams.get("visit_id");
+      const urlVisitUpdateId = urlParams.get("visit_update_id");
+
       // 2. Montagem do Payload Magro (Thin Payload / Zero-Trust)
       const payload = {
         action: "SIMULATE",
-        visit_id: state.data.visit_id,
-        visit_update_id: state.data.visit_update_id,
+        visit_id: urlVisitId || state.data.visit_id,
+        visit_update_id: urlVisitUpdateId || state.data.visit_update_id,
         offer_id: state.data.offer?.offer_id,
         product_id: state.data.product_id,
         simulation_details: {
@@ -112,6 +135,10 @@ export function Step1Simulation() {
       // 3. Chamada via Gateway centralizado e captura do resultado
       const result = await execute(() => callSimulation(payload));
 
+      if (result.state) {
+        setFastPathState(result.state);
+      }
+
       // 4. Atualização de estado e avanço correto para o Step 2
       update({
         meta: { ...state.meta, step: 2 },
@@ -120,10 +147,15 @@ export function Step1Simulation() {
           simulationResult: result,
           simulation_id: result.simulation_id,
           simulation_update_id: result.simulation_update_id,
+          ...(result.state && {
+            offer: result.state.offer,
+            rules: result.state.rules,
+            entity: result.state.entity,
+          }),
         },
       });
     } catch (error: any) {
-      console.error("[Erro na Simulação Card]:", error);
+      console.error("[Erro na Simulação Veículos]:", error);
 
       // DISPARA O EVENTO GLOBAL PARA O LAYOUT OUVIR
       // O Layout vai capturar esse erro e exibir o ErrorCountdown automaticamente.
@@ -134,6 +166,9 @@ export function Step1Simulation() {
     }
   };
 
+  // =========================================================================
+  // 🤖 [GUARD RAIL ARCHITECTURE]: Bailout de Estado Nulo / Vazio
+  // =========================================================================
   if (!state?.data || Object.keys(state.data).length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -156,7 +191,10 @@ export function Step1Simulation() {
 
   return (
     <div className="space-y-4 max-w-xl mx-auto lg:mx-0">
-      {/* HEADER RESPONSIVO COM A ILUSTRAÇÃO DE VEÍCULOS NO PADRÃO EXATO - mb-4 enxuto */}
+      
+      {/* =========================================================================
+       * 🤖 [PROGRESSIVE DISCLOSURE ARCHITECTURE]: Header Síncrono da Oferta
+       * ========================================================================= */}
       <div className="flex items-center gap-4 mb-4">
         <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
           <img
@@ -169,7 +207,7 @@ export function Step1Simulation() {
         <div className="space-y-0.5 flex-1 w-0 min-w-0">
           {/* Título Principal (Fonte fluida 14px a 20px) */}
           <h3 className="text-[clamp(14px,4vw,20px)] sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full block">
-            Simule seu financiamento*!
+            Simule seu financiamento!
           </h3>
 
           {/* Linha 1: Descrição do veículo em cinza claro (Fonte fluida 10px a 12px) */}
@@ -198,10 +236,13 @@ export function Step1Simulation() {
         </div>
       </div>
 
-      {/* Container: p-4 (mobile) / p-7 (desktop) e gap-x-4 (mobile) / gap-x-8 (desktop) */}
+      {/* =========================================================================
+       * 🤖 [ZERO-TRUST INPUTS & SLIDER CONTROLS]: Container de Simulação
+       * ========================================================================= */}
       <div className="bg-slate-50 border border-border rounded-lg p-4 sm:p-7 space-y-4">
         {/* Grid: gap-x-4 (mobile) / gap-x-8 (desktop) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4">
+          
           {/* Valor do lance */}
           <div className="space-y-1">
             <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">
@@ -300,13 +341,18 @@ export function Step1Simulation() {
         </div>
       </div>
 
-      {/* Espaçamento interno reduzido via space-y-4 geral e margem controlada */}
+      {/* =========================================================================
+       * 🤖 [CONSENTS ARCHITECTURE]: Módulo Dinâmico de Termos Legais
+       * ========================================================================= */}
       <div
         className={`transition-opacity duration-200 pt-1 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}
       >
         <DynamicConsents configs={consent_configs} value={acceptedConsents} onChange={setAcceptedConsents} />
       </div>
 
+      {/* =========================================================================
+       * 🤖 [ACTION ARCHITECTURE]: Botão de Disparo com Estados de Loading
+       * ========================================================================= */}
       <Button
         type="button"
         onClick={handleSimular}

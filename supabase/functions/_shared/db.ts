@@ -11,5 +11,8 @@ if (!dbUrl) {
 // Inicializa o cliente uma única vez
 // O export permite que você use a conexão em qualquer arquivo
 export const sql = postgres(dbUrl, {
-  prepare: false, // Recomendado para evitar problemas de cache em serverless
+  prepare: false,      // Mantém false (Obrigatório para o Pooler)
+  max: 1,              // 🚀 CRÍTICO: Força a Edge Function a usar 1 única conexão otimizada
+  idle_timeout: 10,    // 🚀 CRÍTICO: Fecha conexões ociosas rápido para não engasgar o banco
+  connect_timeout: 10  // Derruba rápido se o banco não responder
 });

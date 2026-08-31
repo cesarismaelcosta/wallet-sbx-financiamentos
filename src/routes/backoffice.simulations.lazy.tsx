@@ -735,11 +735,11 @@ function SimulationsPage() {
         <div ref={printRef} className="w-full text-slate-900 bg-white p-8">
           {activeSimulation &&
             (() => {
-          const sim = activeSimulation;
-          const rawOffers = safeArray<Record<string, unknown>>(sim.simulation_offers);
-          const baseOffer = rawOffers[0] || {};
-          const offerRow: OfferView = { ...baseOffer, category_types: safeArray(baseOffer.category_types)[0] as any || null };
-              
+              const sim = activeSimulation;
+              const rawOffers = safeArray<Record<string, unknown>>(sim.simulation_offers);
+              const baseOffer = rawOffers[0] || {};
+              const offerRow: OfferView = { ...baseOffer, category_types: safeArray(baseOffer.category_types)[0] as any || null };
+
               const bank = sim.financial_institutions || {};
               const ed = sim.entity_details || {};
               const firstUpdate = safeArray(sim.simulation_updates)[0] || {};
@@ -768,12 +768,12 @@ function SimulationsPage() {
 
                   <PanelVisit visitData={sim as any} updateData={firstUpdate} />
                   <PanelEntity entity={sim as any} entityDetails={ed} />
-                  
+
                   {Object.keys(offerRow).length > 0 && <PanelOffer offer={offerRow} />}
                   {Object.keys(offerRow).length > 0 && <PanelSeller offer={offerRow} />}
                   {validConsents.length > 0 && <PanelAcceptedConsents consents={validConsents} />}
                   <PanelSimulation simulation={sim as any} bank={bank} />
-                  
+
                   {pageConfigs && <PanelProduct config={pageConfigs} />}
                   {extractedConsentConfigs.length > 0 && <PanelConsents configs={extractedConsentConfigs} />}
                   {pageFaqs.length > 0 && <PanelFAQ faqs={pageFaqs} isPrint={true} />}
@@ -783,6 +783,171 @@ function SimulationsPage() {
             })()}
         </div>
       </div>
+
+      {/* =========================================================
+          GAVETA DE FILTROS MOBILE (AGORA USANDO O ÍCONE FILTER)
+          ========================================================= */}
+      <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+        <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white z-50">
+          <SheetHeader className="mb-4 text-left">
+            <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
+          </SheetHeader>
+          
+          <div className="flex flex-col gap-4 w-full">
+            
+            <div className="w-full">
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
+                    <span className="flex items-center gap-2 truncate">
+                      <Filter className="h-4 w-4 shrink-0" />
+                      Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}
+                    </span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                  <Command className="bg-transparent">
+                    <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setDateRange("30")} className="text-[#d946ef] cursor-pointer">Últimos 30 dias</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("90")} className="text-[#d946ef] cursor-pointer">Últimos 90 dias</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("all")} className="text-[#d946ef] cursor-pointer">Todo o período</CommandItem>
+                      </CommandGroup>
+                      <div className="border-t p-3">
+                        <p className="text-xs text-muted-foreground mb-2">Personalizado:</p>
+                        <Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} />
+                      </div>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="w-full">
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">Parceiro</span>
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
+                    <span className="truncate">
+                      {selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}
+                    </span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                  <Command className="bg-transparent">
+                    <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setSelectedPartners([])} className="text-[#d946ef] cursor-pointer">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                            {selectedPartners.length === 0 && "✓"}
+                          </div>
+                          Todos Parceiros
+                        </CommandItem>
+                        {partnersList.map((p) => {
+                          const isSelected = selectedPartners.includes(String(p.id));
+                          return (
+                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter((id) => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="text-[#d946ef] cursor-pointer">
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {p.name}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="w-full">
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">Produto</span>
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
+                    <span className="truncate">
+                      {selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}
+                    </span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                  <Command className="bg-transparent">
+                    <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
+                      <CommandGroup>
+                        <CommandItem onSelect={() => setSelectedProducts([])} className="text-[#d946ef] cursor-pointer">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                            {selectedProducts.length === 0 && "✓"}
+                          </div>
+                          Todos Produtos
+                        </CommandItem>
+                        {productsList.map((p) => {
+                          const isSelected = selectedProducts.includes(String(p.id));
+                          return (
+                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter((id) => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className="text-[#d946ef] cursor-pointer">
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {p.name}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="w-full">
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">Situação</span>
+              <Popover modal={isMobile}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
+                    <span className="truncate">
+                      {selectedStatus.length === 0 ? "Todas" : `${selectedStatus.length} selecionada(s)`}
+                    </span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                  <Command className="bg-transparent">
+                    <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
+                      <CommandGroup>
+                        <CommandItem onSelect={() => handleSelectStatus("Todas")} className="text-[#d946ef] cursor-pointer">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                            {selectedStatus.length === 0 && "✓"}
+                          </div>
+                          Todas
+                        </CommandItem>
+                        {statusOptions.filter((s) => s !== "Qualificadas").map((s) => {
+                          const isSelected = selectedStatus.includes(s);
+                          return (
+                            <CommandItem key={s} onSelect={() => handleSelectStatus(s)} className="text-[#d946ef] cursor-pointer">
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {s}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <Button onClick={() => setMobileFilterOpen(false)} className="w-full h-11 rounded-xl bg-[#B300FF] hover:bg-[#9f00e6] text-white font-semibold mt-2">
+              Aplicar Filtros
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

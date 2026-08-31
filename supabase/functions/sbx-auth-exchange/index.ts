@@ -75,13 +75,13 @@ serve(
           };
         }
 
-        const { userId, environment } = check;
-        const tokenData = await generateSessionToken(userId!, environment!);
+        const { userId, environment, userName, login } = check;
+        
+        // Repassando os dados do usuário extraídos da maleta para gerar o Fat Token
+        const tokenData = await generateSessionToken(environment!, userId!, userName, login);
 
         debugLog(`[sbx-auth-exchange][redeem] Sessão emitida para o usuário ${userId} em ${environment}.`);
 
-        // Contrato mínimo: apenas sessão e ambiente. Perfil é responsabilidade
-        // de uma chamada autenticada subsequente do front-end.
         return {
           status: 200,
           data: {
@@ -91,6 +91,8 @@ serve(
             issue_at: tokenData.issue_at,
             expires_in: tokenData.expires_in,
             userId: tokenData.userId,
+            userName: tokenData.userName,
+            login: tokenData.login,
             environment,
           },
           headers: {

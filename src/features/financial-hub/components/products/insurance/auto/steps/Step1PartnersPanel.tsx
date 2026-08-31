@@ -1,9 +1,19 @@
 /**
  * @fileoverview Painel de parceiros (Step 1 - Seguros Auto).
- * Cores: Primary #B300FF | Fonte: Inter (font-sans)
+ * @path src/features/financial-hub/components/products/seguros/steps/Step1PartnersPanel.tsx
  * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO: STRICT THIN PAYLOAD & ARCHITECTURAL MECHANICS
+ * =========================================================================
+ * [MECÂNICA ARQUITETURAL]:
+ * - Engine: Consome WizardProvider para gerenciamento de estado.
+ * - Navegação: Integração direta com `useNavigation` para intents de redirecionamento de parceiros.
+ * - Conformidade: Validação estrita de consentimentos (LGPD) e envio síncrono de dados validados.
+ *
+ * Cores: Primary #B300FF | Fonte: Inter (font-sans)
+ *
  * @author César Ismael Pereira da Costa
- * @author Gemini Pro
+ * @author Gemini Pro (Architectural Mechanics)
  */
 
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
@@ -16,6 +26,9 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function Step1PartnersPanel() {
+  // =========================================================================
+  // 🤖 [INSURERS DATA ARCHITECTURE]: Mapeamento de Seguradoras Parceiras
+  // =========================================================================
   const insurers = [
     { name: "Porto", logo: "/assets/insurers/porto_seguro_logo_700_158.png" },
     { name: "HDI", logo: "/assets/insurers/HDI_Seguros_Logo_700_461.png" },
@@ -28,12 +41,18 @@ export function Step1PartnersPanel() {
     { name: "Azul", logo: "/assets/insurers/azul_seguros_logo_700_429.png" },
   ];
 
+  // =========================================================================
+  // 🤖 [LOCAL STATE ARCHITECTURE]: Gerenciamento de Wizard e Consentimentos
+  // =========================================================================
   const { state } = useWizard<any>();
   const config = state.data?.integration_details;
 
   const { consent_configs } = state.data || {};
   const [acceptedConsents, setacceptedConsents] = useState<Record<string, boolean>>({});
 
+  // =========================================================================
+  // 🤖 [COMPLIANCE ARCHITECTURE]: Validação Otimizada de Consentimentos LGPD
+  // =========================================================================
   const areConsentsValid = useMemo(() => {
     const configs = consent_configs || [];
     return configs
@@ -53,6 +72,9 @@ export function Step1PartnersPanel() {
   const { handleRedirect, loading: navLoading } = useNavigation();
   const { execute, loading } = useSafeCall();
   
+  // =========================================================================
+  // 🤖 [ZERO-TRUST HANDLER ARCHITECTURE]: Execução Segura de Redirecionamento
+  // =========================================================================
   const handleProceed = async () => {
     try {
       await execute(() => handleRedirect(NAVIGATION_INTENTS.REDIRECT_PARTNER_PAGE, config?.urlRedirect, consents));
@@ -64,7 +86,10 @@ export function Step1PartnersPanel() {
   return (
     // Removi as classes de box aqui: bg-white border border-slate-100 rounded-3xl p-8
     <div className="font-sans max-w-xl mx-auto lg:mx-0 w-full">
-      {/* Cabeçalho do Card de Seguros */}
+      
+      {/* =========================================================================
+       * 🤖 [PROGRESSIVE DISCLOSURE ARCHITECTURE]: Cabeçalho do Card de Seguros
+       * ========================================================================= */}
       <div className="flex items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <div className="shrink-0 w-16 h-16 overflow-hidden flex items-center justify-center">
@@ -90,7 +115,9 @@ export function Step1PartnersPanel() {
         </div>
       </div>
       
-      {/* Grid de Seguradoras */}
+      {/* =========================================================================
+       * 🤖 [GRID ARCHITECTURE]: Exibição Dinâmica do Grid de Seguradoras
+       * ========================================================================= */}
       <div className="grid grid-cols-3 gap-3 mb-8">
         {insurers.map((insurer) => (
           <div 
@@ -107,12 +134,18 @@ export function Step1PartnersPanel() {
       </div>
 
       <div className="flex flex-col gap-y-2">
+        {/* =========================================================================
+         * 🤖 [CONSENTS ARCHITECTURE]: Módulo Dinâmico de Termos Legais
+         * ========================================================================= */}
         <div
           className={`mb-1 transition-opacity duration-200 ${loading || navLoading ? "pointer-events-none opacity-50" : "opacity-100"}`}
         >
           <DynamicConsents configs={consent_configs} value={acceptedConsents} onChange={setacceptedConsents} />
         </div>
 
+        {/* =========================================================================
+         * 🤖 [ACTION ARCHITECTURE]: Botão de Direcionamento com Estados de Loading
+         * ========================================================================= */}
         <Button
           type="button"
           disabled={loading || navLoading || !areConsentsValid}

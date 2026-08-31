@@ -274,7 +274,23 @@ export async function processSimulation(
     simulation_id: payload.simulation_id,
     simulation_update_id: payload.simulation_update_id,
     mensagem: gatewayResult?.message,
-    consults: gatewayResult?.consults || []
+    consults: gatewayResult?.consults || [],
+    // ✨ INCLUSÃO DA HIDRATEÇÃO SERVER-SIDE (O .state que o Front-end precisa)
+    state: {
+      entity: payload.entity,
+      offer: payload.offer,
+      seller: payload.seller,
+      event: payload.event,
+      manager: payload.manager,
+      rules: payload.rules,
+      page_configs: payload.page_configs,
+      consent_configs: payload.consent_configs,
+      simulationResult: {
+        consults: gatewayResult?.consults || [],
+        simulation_id: payload.simulation_id,
+        simulation_update_id: payload.simulation_update_id,
+      }
+    }
   };
 
   debugLog("📡 [Motor Simulação] JSON FINAL DESPACHADO PARA O GATEWAY HTTP:", JSON.stringify(payloadFinal));

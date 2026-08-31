@@ -8,17 +8,39 @@
  * [MUDANÇAS ARQUITETURAIS - ZERO-TRUST & OLAP]:
  * 1. {Trusted Snapshots}: As colunas `entity_details`, `offer_details`, etc.,
  *    recebem os dados 100% validados e hidratados pelo `hydrate-data.ts`.
- * 2. {Raw Payload Enriched}: A coluna `raw_payload` recebe o objeto `payload`
- *    completo e REIDRATADO. Isso garante total compatibilidade com a 
- *    desserialização do Backoffice, exibindo dados reais e imunes a fraude,
- *    já que a origem desses dados agora é o próprio servidor (S2S).
- * 3. {Auditoria Uniforme}: Correção estrutural onde o payload mestre enriquecido 
- *    é gravado de forma consistente em TODAS as tabelas filhas (consults, 
- *    updates, consents), evitando objetos soltos e quebra de relatórios no BI.
- * 
+ * 2. {Auditoria Uniforme}: O payload mestre de auditoria é gravado de forma
+ *    consistente em TODAS as tabelas filhas (consults, updates, offers),
+ *    evitando objetos soltos e quebra de relatórios no BI.
+ *
+ * [MUDANÇAS v2.2.0 - AUDIT PAYLOAD SEM DUPLICAÇÃO DE PII]:
+ * 3. {Audit Payload}: `raw_payload` deixa de receber o payload reidratado
+ *    INTEIRO e passa a receber `buildAuditPayload(payload)`:
+ *      - o THIN original do cliente (IDs, step, simulation_details, consents);
+ *      - os blocos de configuração que o Backoffice LÊ de fato do raw_payload:
+ *        `page_configs`, `consent_configs`, `page_faqs`, `rules`;
+ *      - metadados de proveniência (`hydration_source`, `config_matched_by`).
+ *    A PII (nome, CPF, telefone, e-mail, nascimento) e os dados da oferta NÃO
+ *    entram: já estão normalizados em `document`/`name`/`phone`/`email`/
+ *    `entity_details` e em `simulation_offers.*_details`.
+ *    ⚠️ SECURITY REVIEW: gravar o payload enriquecido aqui replicava a PII em
+ *    4 tabelas, ampliando a superfície LGPD sem ganho informacional.
+ * 4. {Compat Backoffice verificada}: `backoffice.simulations.lazy.tsx` e
+ *    `backoffice.consults.lazy.tsx` consomem de `raw_payload` apenas
+ *    `page_configs`, `consent_configs` e `page_faqs` — todos preservados na raiz.
+ * 5. {BUGFIX}: no UPDATE, `simulations.raw_payload` era sobrescrito por
+ *    `{ request, response }`, aninhando `page_configs` sob `request` e
+ *    esvaziando as abas de Branding/FAQ/Consentimentos do Backoffice. Agora o
+ *    audit payload fica na raiz e a resposta do parceiro em `gateway_response`.
+ * 6. {Type Fix}: `insertSimulationData` declarava `{ simulationId,
+ *    simulationUpdateId }` mas retorna `{ simulation_id, simulation_update_id }`
+ *    (formato consumido pelo `simulation-handler.ts`). Assinatura corrigida.
+ * 7. {Exceções deliberadas}: `simulation_consents` mantém PII (prova legal) e
+ *    `notification_outbox` mantém o payload cheio no fallback, senão os e-mails
+ *    do parceiro renderizariam sem dados do proponente.
+ *
  * @author Cesar Ismael Pereira da Costa
  * @author Gemini Pro
- * @version 2.0.1 (Zero-Trust Persistency with Backoffice Compat)
+ * @version 2.2.0 (Zero-Trust Persistency, PII-lean Audit, Backoffice Compat + Performance)
  */
 
 import { sql } from './../_shared/db.ts';
@@ -37,6 +59,57 @@ import {
 } from "../_shared/types.ts";
 
 import { debugLog } from "../_shared/logger.ts";
+
+/**
+ * BUILD AUDIT PAYLOAD
+ * @description Monta o objeto gravado nas colunas `raw_payload`.
+ *
+ * REGRA: reflete o REQUISITO HTTP (thin, já sanitizado) somado ao CONTEXTO DE
+ * RENDERIZAÇÃO que o Backoffice precisa reexibir. Nunca PII.
+ *
+ * Contrato consumido pelo Backoffice (NÃO remover estas chaves da raiz):
+ *   - `page_configs`    -> aba de Branding da simulação
+ *   - `consent_configs` -> aba de Consentimentos renderizados
+ *   - `page_faqs`       -> aba de FAQ
+ */
+function buildAuditPayload(payload: SimulationPayload): Record<string, any> {
+  const thin = (payload as any).raw_client_payload ?? {
+    // Fallback defensivo: se o Gateway não anexou o thin (invocação por job,
+    // reprocessamento ou teste), reconstruímos a superfície mínima de IDs.
+    visit_id: payload.visit_id ?? null,
+    visit_update_id: payload.visit_update_id ?? null,
+    offer_id: (payload.offer as Offer)?.offer_id ?? null,
+    simulation_id: payload.simulation_id ?? null,
+    product_id: payload.product_id ?? null,
+    partner_id: payload.partner_id ?? null,
+    action: (payload as any).action ?? null,
+    action_description: (payload as any).action_description ?? null,
+    step: (payload as any).step ?? null,
+    target_url: payload.target_url ?? null,
+    interaction_context: payload.interaction_context ?? null,
+    simulation_details: payload.simulation_details ?? null,
+    consents: payload.consents ?? null,
+  };
+
+  return {
+    ...thin,
+
+    // Contexto de renderização — lido pelo Backoffice a partir do raw_payload.
+    page_configs: payload.page_configs ?? {},
+    consent_configs: payload.consent_configs ?? [],
+    page_faqs: payload.page_faqs ?? [],
+    rules: payload.rules ?? {},
+
+    // Roteamento resolvido server-side (sem PII).
+    is_integrated: payload.is_integrated ?? false,
+    integration_method: payload.integration_method ?? null,
+
+    // Proveniência forense: de onde veio a oferta e qual config casou.
+    hydration_source: (payload as any).hydration_source ?? null,
+    config_matched_by: (payload as any).config_matched_by ?? null,
+    orchestrator_config_id: (payload as any).orchestrator_config_id ?? null,
+  };
+}
 
 /**
  * RESOLVE PARTNER RESULT
@@ -104,7 +177,7 @@ export async function insertSimulationData(
   action_description: string,
   step: 'CHECK_ELIGIBILITY' | 'EXECUTE_SIMULATION' = 'EXECUTE_SIMULATION',
   syncVisit: boolean = true 
-): Promise<{ simulationId: string, simulationUpdateId: string }> {
+): Promise<{ simulation_id: string, simulation_update_id: string }> {
 
   try {
     return await sql.begin(async (t: any) => {
@@ -116,6 +189,8 @@ export async function insertSimulationData(
       const offer = (payload.offer as Offer) ?? {};
       const simulation = (payload.simulation_details as SimulationFinancials) ?? {};
       const consents = payload.consents ?? [];
+
+      const auditPayload = buildAuditPayload(payload);
       
       const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
       const stageId = stageMap[step];
@@ -143,8 +218,6 @@ export async function insertSimulationData(
       }
 
       // INSERT MESTRE: Salva a proposta na tabela 'simulations'.
-      // O `payload` aqui é o objeto reidratado (Enriched) pelo Backend. 
-      // Garante que o Backoffice consiga ler o raw_payload.entity e raw_payload.offer com dados verdadeiros.
       const [sim] = await t`
         INSERT INTO simulations (
           id, visit_id, is_integrated, integration_method, partner_id, product_id,
@@ -157,28 +230,13 @@ export async function insertSimulationData(
           ${entity.entity_id}, ${entity.entity_type}, ${entity.document}, ${entity.name}, ${entity.phone}, ${entity.email}, ${entity.birth_date}, ${entity.gender}, ${entity}::jsonb,
           ${bestConsult.financial_institution_id}, ${bestConsult.requested_value}, ${bestConsult.down_payment_amount}, ${bestConsult.down_payment_percentage},
           ${bestConsult.financed_amount}, ${bestConsult.installments}, ${bestConsult.cet_rate}, ${bestConsult.installment_value}, ${bestConsult}::jsonb,
-          ${stageId}, ${bestConsult.status_id}, ${mainResultPartnerId}, ${bestConsult.external_operation_id}, ${payload}::jsonb
+          ${stageId}, ${bestConsult.status_id}, ${mainResultPartnerId}, ${bestConsult.external_operation_id}, ${auditPayload}::jsonb
         )
         RETURNING id
       `;
       const simulationId = sim.id;
 
-      // INSERT OFERTA
-      await t`
-        INSERT INTO simulation_offers (
-          simulation_id, category_id, subcategory_id, subcategory, manager_name, manager_details, seller_id, legal_name, 
-          trade_name, economic_group, seller_details, event_id, event_description, 
-          event_start_date, event_end_date, event_details, offer_id, offer_description, 
-          offer_value, offer_details, raw_payload
-        ) VALUES (
-          ${simulationId}, ${offer.category_id || null}, ${offer.subcategory_id ? Number(offer.subcategory_id) : null}, ${offer.subcategory || null}, ${manager.manager_name || null}, ${manager}::jsonb, ${seller.seller_id || null}, ${seller.legal_name || null},
-          ${seller.trade_name || null}, ${seller.economic_group || null}, ${seller}::jsonb, ${event.event_id || null}, ${event.event_description || null},
-          ${event.event_start_date || null}, ${event.event_end_date || null}, ${event}::jsonb, ${offer.offer_id || null}, ${offer.offer_description || null},
-          ${offer.offer_value || null}, ${offer}::jsonb, ${payload}::jsonb
-        )
-      `;
-
-      // INSERT UPDATES
+      // INSERT UPDATES (Precisa rodar antes do promise.all por causa do simulationUpdateId)
       const [update] = await t`
         INSERT INTO simulation_updates (
           simulation_id, operation, stage_id, status_id, result_partner_id,
@@ -187,208 +245,215 @@ export async function insertSimulationData(
         ) VALUES (
           ${simulationId}, 'INSERT', ${stageId}, ${bestConsult.status_id}, ${mainResultPartnerId},
           ${infra.ip_address}, ${infra.country}, ${infra.state}, ${infra.city}, ${infra.user_agent},
-          ${infra.device_type}, ${infra.operating_system}, ${infra}::jsonb, ${bestConsult}::jsonb, ${payload}::jsonb
+          ${infra.device_type}, ${infra.operating_system}, ${infra}::jsonb, ${bestConsult}::jsonb, ${auditPayload}::jsonb
         )
         RETURNING id
       `;
       const simulationUpdateId = update.id;
 
-      // PERSISTE CONSULTAS: O raw_payload aqui recebe o payload mestre enriquecido, e não o objeto isolado.
-      for (const consult of (gatewayResult.consults || [])) {
-        await t`
-            INSERT INTO simulation_consults (
-            simulation_id, financial_institution_id, status_id, 
-            requested_value, down_payment_amount, down_payment_percentage, 
-            financed_amount, installments, cet_rate, installment_value, 
-            external_operation_id, simulation_details, raw_payload
-            ) VALUES (
-            ${simulationId}, 
-            ${consult.financial_institution_id?.toString() ?? null}, 
-            ${consult.status_id ?? null}, 
-            ${consult.requested_value ?? null},
-            ${consult.down_payment_amount ?? null},
-            ${consult.down_payment_percentage ?? null},
-            ${consult.financed_amount ?? null},
-            ${consult.installments ?? null},
-            ${consult.cet_rate ?? null},
-            ${consult.installment_value ?? null},
-            ${consult.external_operation_id ?? null},
-            ${consult ?? {}}::jsonb, 
-            ${payload}::jsonb
-            )
-        `;
+      // =========================================================================
+      // 🚀 EXECUÇÃO PARALELA DE I/O (PIPELINING DA REDE)
+      // =========================================================================
+      const parallelTasks = [];
+
+      // 📦 PERSISTÊNCIA DA OFERTA COM O SEU ON CONFLICT INTACTO
+      if (offer && Object.keys(offer).length > 0) {
+        parallelTasks.push(t`
+          INSERT INTO simulation_offers (
+            simulation_id, category_id, subcategory_id, subcategory, manager_name, manager_details, seller_id, legal_name, 
+            trade_name, economic_group, seller_details, event_id, event_description, 
+            event_start_date, event_end_date, event_details, offer_id, offer_description, 
+            offer_value, offer_details, raw_payload
+          ) VALUES (
+            ${simulationId}, ${offer.category_id || null}, ${offer.subcategory_id ? Number(offer.subcategory_id) : null}, ${offer.subcategory || null}, ${manager.manager_name || null}, ${manager}::jsonb, ${seller.seller_id || null}, ${seller.legal_name || null},
+            ${seller.trade_name || null}, ${seller.economic_group || null}, ${seller}::jsonb, ${event.event_id || null}, ${event.event_description || null},
+            ${event.event_start_date || null}, ${event.event_end_date || null}, ${event}::jsonb, ${offer.offer_id || null}, ${offer.offer_description || null},
+            ${offer.offer_value || null}, ${offer}::jsonb, ${auditPayload}::jsonb
+          )
+          ON CONFLICT (simulation_id, offer_id) DO UPDATE SET
+            category_id = EXCLUDED.category_id,
+            subcategory_id = EXCLUDED.subcategory_id,
+            subcategory = EXCLUDED.subcategory,
+            manager_name = EXCLUDED.manager_name,
+            manager_details = EXCLUDED.manager_details,
+            seller_id = EXCLUDED.seller_id,
+            legal_name = EXCLUDED.legal_name,
+            trade_name = EXCLUDED.trade_name,
+            economic_group = EXCLUDED.economic_group,
+            seller_details = EXCLUDED.seller_details,
+            event_id = EXCLUDED.event_id,
+            event_description = EXCLUDED.event_description,
+            event_start_date = EXCLUDED.event_start_date,
+            event_end_date = EXCLUDED.event_end_date,
+            event_details = EXCLUDED.event_details,
+            offer_description = EXCLUDED.offer_description,
+            offer_value = EXCLUDED.offer_value,
+            offer_details = EXCLUDED.offer_details
+        `);
       }
 
-      // PERSISTE CONSENTIMENTOS
+      // 📦 PERSISTE CONSULTAS (BULK INSERT)
+      if (gatewayResult.consults && gatewayResult.consults.length > 0) {
+        const consultsRows = gatewayResult.consults.map(consult => ({
+            simulation_id: simulationId, 
+            financial_institution_id: consult.financial_institution_id?.toString() ?? null, 
+            status_id: consult.status_id ?? null, 
+            requested_value: consult.requested_value ?? null,
+            down_payment_amount: consult.down_payment_amount ?? null,
+            down_payment_percentage: consult.down_payment_percentage ?? null,
+            financed_amount: consult.financed_amount ?? null,
+            installments: consult.installments ?? null,
+            cet_rate: consult.cet_rate ?? null,
+            installment_value: consult.installment_value ?? null,
+            external_operation_id: consult.external_operation_id ?? null,
+            simulation_details: t.json(consult ?? {}), 
+            raw_payload: t.json(auditPayload)
+        }));
+        parallelTasks.push(t`INSERT INTO simulation_consults ${t(consultsRows)}`);
+      }
+
+      // 📦 PERSISTE CONSENTIMENTOS (BULK INSERT)
       if (consents && consents.length > 0) {
-        for (const c of consents) {
+        const consentRows = consents.map(c => {
           const isAccepted = c.accepted === true || c.acceptedConsents === true;
           const acceptedAt = c.accepted_at || c.acceptedConsents_at || new Date().toISOString();
-
-          await t`
-            INSERT INTO simulation_consents (
-                simulation_id, consent_id, accepted, accepted_at, partner_id, product_id,
-                entity_id, document, name, email, phone, birth_date, gender, entity_details,
-                ip_address, country, state, city, user_agent, device_type, operating_system,
-                origin_details, manager_details, seller_details, event_details, offer_details, 
-                page_snapshot, raw_payload
-            ) 
-            VALUES (
-                ${simulationId}, 
-                ${c.consent_id ?? null}, 
-                ${isAccepted},       
-                ${acceptedAt},       
-                ${payload.partner_id ?? null}, ${payload.product_id},
-                ${entity.entity_id ?? null}, ${entity.document ?? null}, ${entity.name ?? null}, ${entity.email ?? null}, ${entity.phone ?? null}, ${entity.birth_date ?? null}, ${entity.gender ?? null}, ${entity ?? {}}::jsonb,
-                ${infra.ip_address ?? null}, ${infra.country ?? null}, ${infra.state ?? null}, ${infra.city ?? null}, ${infra.user_agent ?? null}, ${infra.device_type ?? null}, ${infra.operating_system ?? null},
-                ${infra ?? {}}::jsonb, ${manager ?? {}}::jsonb, ${seller ?? {}}::jsonb, ${event ?? {}}::jsonb, ${offer ?? {}}::jsonb,
-                ${{ 
-                    branding: payload.page_configs || {}, 
-                    rules: payload.rules || {}, 
-                    faq: payload.page_faqs || [], 
-                    consents_rendered: payload.consent_configs || [], 
-                    legal_text: c.legal_text_snapshot || {} 
-                }}::jsonb, 
-                ${payload}::jsonb
-            )
-          `;
-        }
+          return {
+            simulation_id: simulationId, consent_id: c.consent_id ?? null, accepted: isAccepted, accepted_at: acceptedAt, 
+            partner_id: payload.partner_id ?? null, product_id: payload.product_id,
+            entity_id: entity.entity_id ?? null, document: entity.document ?? null, name: entity.name ?? null, 
+            email: entity.email ?? null, phone: entity.phone ?? null, birth_date: entity.birth_date ?? null, gender: entity.gender ?? null, 
+            entity_details: t.json(entity ?? {}), ip_address: infra.ip_address ?? null, country: infra.country ?? null, 
+            state: infra.state ?? null, city: infra.city ?? null, user_agent: infra.user_agent ?? null, 
+            device_type: infra.device_type ?? null, operating_system: infra.operating_system ?? null,
+            origin_details: t.json(infra ?? {}), manager_details: t.json(manager ?? {}), seller_details: t.json(seller ?? {}), 
+            event_details: t.json(event ?? {}), offer_details: t.json(offer ?? {}),
+            page_snapshot: t.json({ 
+                branding: payload.page_configs || {}, rules: payload.rules || {}, faq: payload.page_faqs || [], 
+                consents_rendered: payload.consent_configs || [], legal_text: c.legal_text_snapshot || {} 
+            }), 
+            raw_payload: t.json(payload)
+          };
+        });
+        parallelTasks.push(t`INSERT INTO simulation_consents ${t(consentRows)}`);
       }
 
-      // PERSISTE NOTIFICAÇÕES NA OUTBOX
+      // 📦 PERSISTE NOTIFICAÇÕES (BULK INSERT)
       const notifications = (gatewayResult as any).raw?.notifications;
-      if (Array.isArray(notifications)) {
-        for (const n of notifications) {
-          await t`
-            INSERT INTO public.notification_outbox (
-              context_type, visit_id, visit_update_id, simulation_id, simulation_update_id, 
-              channel, template_slug, recipient_type, recipient, subject, rendered_content, attachments, raw_payload
-            ) VALUES (
-              'SIMULATION', ${payload.visit_id || null}, ${payload.visit_update_id || null}, ${simulationId}, ${simulationUpdateId || null},
-              ${n.channel}, ${n.template_slug}, ${n.recipient_type}, ${n.recipient}, 
-              ${n.subject || null}, ${n.email_body}, ${n.attachments ?? null}::jsonb, ${n.raw_payload || payload}::jsonb
-            )
-          `;
-        }
+      if (Array.isArray(notifications) && notifications.length > 0) {
+        const notifRows = notifications.map(n => ({
+          context_type: 'SIMULATION', visit_id: payload.visit_id || null, visit_update_id: payload.visit_update_id || null,
+          simulation_id: simulationId, simulation_update_id: simulationUpdateId || null, channel: n.channel,
+          template_slug: n.template_slug, recipient_type: n.recipient_type, recipient: n.recipient,
+          subject: n.subject || null, rendered_content: n.email_body, attachments: n.attachments ? t.json(n.attachments) : null,
+          raw_payload: t.json(n.raw_payload || payload)
+        }));
+        parallelTasks.push(t`INSERT INTO public.notification_outbox ${t(notifRows)}`);
       }
 
-      // ATUALIZAÇÃO DO FUNIL DE VISITAS
+      // 📦 ATUALIZAÇÃO DO FUNIL DE VISITAS
       if (syncVisit && payload.visit_id) {
-        
-        await t`
-          UPDATE visits 
-          SET action = ${action}, 
-              action_description = ${action_description ?? null}, 
-              updated_at = NOW() 
-          WHERE id = ${payload.visit_id}
-        `;
-
-        let targetUpdateId = payload.visit_update_id;
-        let existingUpdate = null;
-
-        if (targetUpdateId) {
-          const [found] = await t`
-            SELECT id, action FROM visit_updates 
-            WHERE id = ${targetUpdateId} AND visit_id = ${payload.visit_id}
-            LIMIT 1
-          `;
-          existingUpdate = found;
-        }
-
-        let finalVisitUpdateId: string;
-        const canUpdateConsult = existingUpdate && 
-                                 existingUpdate.action === 'CONSULT' && 
-                                 (action === 'SIMULATE' || action === 'REDIRECT');
-
-        if (canUpdateConsult) {
+        parallelTasks.push((async () => {
           await t`
-            UPDATE visit_updates 
-            SET action = ${action}, 
-                action_description = ${action_description ?? null},
-                ip_address = ${infra.ip_address ?? null},
-                country = ${infra.country ?? null},
-                state = ${infra.state ?? null},
-                city = ${infra.city ?? null},
-                user_agent = ${infra.user_agent ?? null},
-                device_type = ${infra.device_type ?? null},
-                operating_system = ${infra.operating_system ?? null},
-                origin_details = ${infra}::jsonb,
-                raw_payload = ${payload}::jsonb
-            WHERE id = ${existingUpdate.id}
-          `;
-          finalVisitUpdateId = existingUpdate.id;
-        } else {
-          finalVisitUpdateId = crypto.randomUUID();
-          
-          await t`
-            INSERT INTO visit_updates (
-              id, visit_id, partner_id, product_id, utm_source, utm_medium, utm_campaign, 
-              action, action_description, origin_url, target_url,
-              ip_address, country, state, city, user_agent, device_type, operating_system, origin_details,
-              raw_payload, created_at
-            )
-            VALUES (
-              ${finalVisitUpdateId},
-              ${payload.visit_id}, 
-              ${payload.partner_id ?? null}, 
-              ${payload.product_id ?? null}, 
-              ${payload.interaction_context?.utm_source || 'direct'},
-              ${payload.interaction_context?.utm_medium || null},
-              ${payload.interaction_context?.utm_campaign || null},
-              ${action}, 
-              ${action_description ?? null},
-              ${payload.interaction_context?.origin_url || null},
-              ${payload.target_url ? payload.target_url.split('?')[0] : null},
-              ${infra.ip_address ?? null},
-              ${infra.country ?? null},
-              ${infra.state ?? null},
-              ${infra.city ?? null},
-              ${infra.user_agent ?? null},
-              ${infra.device_type ?? null},
-              ${infra.operating_system ?? null},
-              ${infra}::jsonb,
-              ${payload}::jsonb,
-              NOW()
-            )
+            UPDATE visits SET action = ${action}, action_description = ${action_description ?? null}, updated_at = NOW() 
+            WHERE id = ${payload.visit_id}
           `;
 
-          if (payload.offer && Object.keys(payload.offer).length > 0) {
+          let existingUpdate = null;
+          if (payload.visit_update_id) {
+            const [found] = await t`
+              SELECT id, action FROM visit_updates 
+              WHERE id = ${payload.visit_update_id} AND visit_id = ${payload.visit_id} LIMIT 1
+            `;
+            existingUpdate = found;
+          }
+
+          let finalVisitUpdateId: string;
+          const canUpdateConsult = existingUpdate && existingUpdate.action === 'CONSULT' && (action === 'SIMULATE' || action === 'REDIRECT');
+
+          if (canUpdateConsult) {
             await t`
-              INSERT INTO visit_offers (
-                visit_id, visit_update_id, manager_name, manager_details, seller_id, legal_name, 
-                economic_group, trade_name, seller_details, event_id, event_description, 
-                event_start_date, event_end_date, event_details, offer_id, offer_description, 
-                offer_value, category_id, subcategory_id, subcategory, offer_details, created_at
+              UPDATE visit_updates 
+              SET action = ${action}, action_description = ${action_description ?? null}, ip_address = ${infra.ip_address ?? null},
+                  country = ${infra.country ?? null}, state = ${infra.state ?? null}, city = ${infra.city ?? null},
+                  user_agent = ${infra.user_agent ?? null}, device_type = ${infra.device_type ?? null},
+                  operating_system = ${infra.operating_system ?? null}, origin_details = ${infra}::jsonb, raw_payload = ${auditPayload}::jsonb
+              WHERE id = ${existingUpdate.id}
+            `;
+
+            // SEU ON CONFLICT INTACTO NA VISITA
+            if (payload.offer && Object.keys(payload.offer).length > 0) {
+              await t`
+                INSERT INTO visit_offers (
+                  visit_id, visit_update_id, manager_name, manager_details, seller_id, legal_name, 
+                  economic_group, trade_name, seller_details, event_id, event_description, 
+                  event_start_date, event_end_date, event_details, offer_id, offer_description, 
+                  offer_value, category_id, subcategory_id, subcategory, offer_details, created_at
+                ) VALUES (
+                  ${payload.visit_id}, ${existingUpdate.id}, ${manager.manager_name ?? null}, ${manager}::jsonb, 
+                  ${seller.seller_id ?? null}, ${seller.legal_name ?? null}, ${seller.economic_group ?? null}, 
+                  ${seller.trade_name ?? null}, ${seller}::jsonb, ${event.event_id ?? null}, ${event.event_description ?? null}, 
+                  ${event.event_start_date ?? null}, ${event.event_end_date ?? null}, ${event}::jsonb, 
+                  ${offer.offer_id ?? null}, ${offer.offer_description ?? null}, ${offer.offer_value ?? null}, 
+                  ${offer.category_id ?? null}, ${offer.subcategory_id ? Number(offer.subcategory_id) : null}, 
+                  ${offer.subcategory ?? null}, ${offer}::jsonb, NOW()
+                )
+                ON CONFLICT (visit_id, visit_update_id, offer_id) DO UPDATE SET
+                  manager_name = EXCLUDED.manager_name, manager_details = EXCLUDED.manager_details, seller_id = EXCLUDED.seller_id,
+                  legal_name = EXCLUDED.legal_name, economic_group = EXCLUDED.economic_group, trade_name = EXCLUDED.trade_name,
+                  seller_details = EXCLUDED.seller_details, event_id = EXCLUDED.event_id, event_description = EXCLUDED.event_description,
+                  event_start_date = EXCLUDED.event_start_date, event_end_date = EXCLUDED.event_end_date, event_details = EXCLUDED.event_details,
+                  offer_description = EXCLUDED.offer_description, offer_value = EXCLUDED.offer_value, category_id = EXCLUDED.category_id,
+                  subcategory_id = EXCLUDED.subcategory_id, subcategory = EXCLUDED.subcategory, offer_details = EXCLUDED.offer_details
+              `;
+            }
+
+            finalVisitUpdateId = existingUpdate.id;
+          } else {
+            finalVisitUpdateId = crypto.randomUUID();
+            
+            await t`
+              INSERT INTO visit_updates (
+                id, visit_id, partner_id, product_id, utm_source, utm_medium, utm_campaign, 
+                action, action_description, origin_url, target_url,
+                ip_address, country, state, city, user_agent, device_type, operating_system, origin_details,
+                raw_payload, created_at
               ) VALUES (
-                ${payload.visit_id}, 
-                ${finalVisitUpdateId}, 
-                ${manager.manager_name ?? null}, 
-                ${manager}::jsonb, 
-                ${seller.seller_id ?? null}, 
-                ${seller.legal_name ?? null}, 
-                ${seller.economic_group ?? null}, 
-                ${seller.trade_name ?? null}, 
-                ${seller}::jsonb, 
-                ${event.event_id ?? null}, 
-                ${event.event_description ?? null}, 
-                ${event.event_start_date ?? null}, 
-                ${event.event_end_date ?? null}, 
-                ${event}::jsonb, 
-                ${offer.offer_id ?? null}, 
-                ${offer.offer_description ?? null}, 
-                ${offer.offer_value ?? null}, 
-                ${offer.category_id ?? null}, 
-                ${offer.subcategory_id ? Number(offer.subcategory_id) : null}, 
-                ${offer.subcategory ?? null}, 
-                ${offer}::jsonb,
-                NOW()
+                ${finalVisitUpdateId}, ${payload.visit_id}, ${payload.partner_id ?? null}, ${payload.product_id ?? null}, 
+                ${payload.interaction_context?.utm_source || 'direct'}, ${payload.interaction_context?.utm_medium || null},
+                ${payload.interaction_context?.utm_campaign || null}, ${action}, ${action_description ?? null},
+                ${payload.interaction_context?.origin_url || null}, ${payload.target_url ? payload.target_url.split('?')[0] : null},
+                ${infra.ip_address ?? null}, ${infra.country ?? null}, ${infra.state ?? null}, ${infra.city ?? null},
+                ${infra.user_agent ?? null}, ${infra.device_type ?? null}, ${infra.operating_system ?? null},
+                ${infra}::jsonb, ${auditPayload}::jsonb, NOW()
               )
             `;
-          }
-        }
 
-        payload.visit_update_id = finalVisitUpdateId;
+            if (payload.offer && Object.keys(payload.offer).length > 0) {
+              await t`
+                INSERT INTO visit_offers (
+                  visit_id, visit_update_id, manager_name, manager_details, seller_id, legal_name, 
+                  economic_group, trade_name, seller_details, event_id, event_description, 
+                  event_start_date, event_end_date, event_details, offer_id, offer_description, 
+                  offer_value, category_id, subcategory_id, subcategory, offer_details, created_at
+                ) VALUES (
+                  ${payload.visit_id}, ${finalVisitUpdateId}, ${manager.manager_name ?? null}, ${manager}::jsonb, 
+                  ${seller.seller_id ?? null}, ${seller.legal_name ?? null}, ${seller.economic_group ?? null}, 
+                  ${seller.trade_name ?? null}, ${seller}::jsonb, ${event.event_id ?? null}, ${event.event_description ?? null}, 
+                  ${event.event_start_date ?? null}, ${event.event_end_date ?? null}, ${event}::jsonb, 
+                  ${offer.offer_id ?? null}, ${offer.offer_description ?? null}, ${offer.offer_value ?? null}, 
+                  ${offer.category_id ?? null}, ${offer.subcategory_id ? Number(offer.subcategory_id) : null}, 
+                  ${offer.subcategory ?? null}, ${offer}::jsonb, NOW()
+                )
+              `;
+            }
+          }
+
+          payload.visit_update_id = finalVisitUpdateId;
+        })());
       }
+
+      // 🔥 Dispara TODAS as operações independentes juntas
+      await Promise.all(parallelTasks);
 
       return { 
         simulation_id: simulationId, 
@@ -404,7 +469,6 @@ export async function insertSimulationData(
 
 /**
  * ATUALIZA DADOS DA SIMULAÇÃO (UPDATE)
- * @description Modifica uma simulação existente após receber retornos assíncronos do gateway.
  */
 export async function updateSimulationData(
   sql: any,
@@ -419,6 +483,8 @@ export async function updateSimulationData(
   try {
     return await sql.begin(async (t: any) => {
 
+      const auditPayload = buildAuditPayload(payload);
+
       let bestConsult = gatewayResult.consults.find(c => c.is_selected === true) || gatewayResult.consults[0];
       if (!bestConsult.is_selected) bestConsult.is_selected = true;
 
@@ -427,20 +493,7 @@ export async function updateSimulationData(
       const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
       const stageId = stageMap[step];
 
-      for (const consult of gatewayResult.consults) {
-        await t`
-          INSERT INTO simulation_consults (
-            simulation_id, financial_institution_id, requested_value, down_payment_amount,
-            down_payment_percentage, financed_amount, installments, cet_rate,
-            installment_value, external_operation_id, status_id, simulation_details, raw_payload
-          ) VALUES (
-            ${simulationId}, ${consult.financial_institution_id?.toString()}, ${consult.requested_value}, ${consult.down_payment_amount},
-            ${consult.down_payment_percentage}, ${consult.financed_amount}, ${consult.installments}, ${consult.cet_rate},
-            ${consult.installment_value}, ${consult.external_operation_id}, ${consult.status_id}, ${consult}::jsonb, ${payload}::jsonb
-          )
-        `;
-      }
-
+      // Insert do Update primeiro para pegar o ID
       const [update] = await t`
         INSERT INTO simulation_updates (
           simulation_id, operation, stage_id, status_id, result_partner_id,
@@ -449,40 +502,61 @@ export async function updateSimulationData(
         ) VALUES (
           ${simulationId}, 'UPDATE', ${stageId}, ${bestConsult.status_id}, ${mainResultPartnerId},
           ${infra.ip_address}, ${infra.country}, ${infra.state}, ${infra.city}, ${infra.user_agent},
-          ${infra.device_type}, ${infra.operating_system}, ${infra}::jsonb, ${bestConsult}::jsonb, ${payload}::jsonb
+          ${infra.device_type}, ${infra.operating_system}, ${infra}::jsonb, ${bestConsult}::jsonb, ${auditPayload}::jsonb
         )
         RETURNING id
       `;
-
       const simulationUpdateId = update.id;
 
-      await t`
+      // =========================================================================
+      // 🚀 EXECUÇÃO PARALELA DE I/O (UPDATE)
+      // =========================================================================
+      const parallelTasks = [];
+
+      parallelTasks.push(t`
         UPDATE simulations SET
           status_id = ${bestConsult.status_id},
           stage_id = ${stageId},
           result_partner_id = ${mainResultPartnerId},
           external_operation_id = ${bestConsult.external_operation_id},
           simulation_details = ${gatewayResult}::jsonb,
-          raw_payload = ${ { request: payload, response: gatewayResult } }::jsonb,
+          raw_payload = ${ { ...auditPayload, gateway_response: gatewayResult } }::jsonb,
           updated_at = NOW()
         WHERE id = ${simulationId}
-      `;
+      `);
+
+      if (gatewayResult.consults && gatewayResult.consults.length > 0) {
+        const consultsRows = gatewayResult.consults.map(consult => ({
+          simulation_id: simulationId,
+          financial_institution_id: consult.financial_institution_id?.toString() ?? null,
+          status_id: consult.status_id ?? null,
+          requested_value: consult.requested_value ?? null,
+          down_payment_amount: consult.down_payment_amount ?? null,
+          down_payment_percentage: consult.down_payment_percentage ?? null,
+          financed_amount: consult.financed_amount ?? null,
+          installments: consult.installments ?? null,
+          cet_rate: consult.cet_rate ?? null,
+          installment_value: consult.installment_value ?? null,
+          external_operation_id: consult.external_operation_id ?? null,
+          simulation_details: t.json(consult ?? {}),
+          raw_payload: t.json(auditPayload)
+        }));
+        parallelTasks.push(t`INSERT INTO simulation_consults ${t(consultsRows)}`);
+      }
 
       const notifications = (gatewayResult as any).raw?.notifications;
-      if (Array.isArray(notifications)) {
-        for (const n of notifications) {
-          await t`
-            INSERT INTO public.notification_outbox (
-              context_type, visit_id, visit_update_id, simulation_id, simulation_update_id, 
-              channel, template_slug, recipient_type, recipient, subject, rendered_content, attachments, raw_payload
-            ) VALUES (
-              'SIMULATION', ${payload.visit_id || null}, ${payload.visit_update_id || null}, ${simulationId}, ${simulationUpdateId || null},
-              ${n.channel}, ${n.template_slug}, ${n.recipient_type}, ${n.recipient}, 
-              ${n.subject || null}, ${n.email_body}, ${n.attachments ?? null}::jsonb, ${n.raw_payload || payload}::jsonb
-            )
-          `;
-        }
+      if (Array.isArray(notifications) && notifications.length > 0) {
+        const notifRows = notifications.map(n => ({
+          context_type: 'SIMULATION', visit_id: payload.visit_id || null, visit_update_id: payload.visit_update_id || null,
+          simulation_id: simulationId, simulation_update_id: simulationUpdateId || null, channel: n.channel,
+          template_slug: n.template_slug, recipient_type: n.recipient_type, recipient: n.recipient,
+          subject: n.subject || null, rendered_content: n.email_body, attachments: n.attachments ? t.json(n.attachments) : null,
+          raw_payload: t.json(n.raw_payload || payload)
+        }));
+        parallelTasks.push(t`INSERT INTO public.notification_outbox ${t(notifRows)}`);
       }
+
+      await Promise.all(parallelTasks);
 
       return simulationUpdateId;
     });

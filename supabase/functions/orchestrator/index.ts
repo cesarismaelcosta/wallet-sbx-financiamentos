@@ -1,7 +1,7 @@
 /**
  * @fileoverview ORQUESTRADOR CENTRAL (Gateway de Roteamento Bilateral & Fast Path)
  * @path supabase/functions/orchestrator/index.ts
- * @version 3.1.0
+ * @version 3.1.1
  *
  * ============================================================================
  * 🤖 GEMINI ARCHITECTURE SPECIFICATION: ZERO-TRUST ROUTING & S2S BYPASS
@@ -16,6 +16,11 @@
  *    Isso garante que a identidade PII repassada é confiável, eliminando falsos
  *    positivos de `PROFILE_UNAVAILABLE` durante a hidratação da jornada.
  *
+ * [EVOLUÇÃO v3.1.1 - OLAP SYNC]:
+ * 1. {Background Sync}: O GET agora sincroniza alterações do Upstream (Superbid)
+ *    direto no banco via `syncHydratedOffer`, mantendo o OLAP 100% consistente
+ *    com o state entregue ao Front-end, sem onerar a latência.
+ *
  * @author Cesar Ismael Pereira da Costa
  * @author Gemini Pro
  */
@@ -29,7 +34,7 @@ import { withSecurity } from "../_shared/server.ts";
 import { validateOfferAccess } from "../_shared/gateKeeper.ts";
 import { hydrateVisitContext, pickThin } from "../_shared/hydrate-data.ts";
 import { resolveOrchestratorConfigs } from "../_shared/orchestrator-configs.ts";
-import { persistVisitData } from "./persist-data.ts";
+import { persistVisitData, syncHydratedOffer } from "./persist-data.ts";
 import { debugLog } from "../_shared/logger.ts";
 
 // ✨ [INJEÇÃO ZERO-TRUST]: Ferramentas do Cartório Criptográfico S2S
@@ -46,7 +51,7 @@ import type { OrchestratorPayload, ThinPayload } from "../_shared/types.ts";
 const ACTIONS = ["VISIT", "CONSULT", "REDIRECT", "SIMULATE", "CONTACT"] as const;
 type Action = (typeof ACTIONS)[number];
 
-const NAVIGATION_ACTIONS: Action[] = ["VISIT", "REDIRECT", "CONTACT"];
+const NAVIGATION_ACTIONS: Action[] = ["VISIT", "CONTACT"];
 const HOME_ROUTES = ["/", "/sbxpay"];
 
 const normalizeRoute = (raw?: string | null) => {
@@ -58,7 +63,7 @@ const normalizeRoute = (raw?: string | null) => {
   }
 };
 
-function validateThinPayload(payload: ThinPayload): { action: Action } {
+function validateThinPayload(payload: ThinPayload, isS2S: boolean = false): { action: Action } {
   const errors: string[] = [];
   const action = String(payload.action || "").toUpperCase() as Action;
 
@@ -74,7 +79,8 @@ function validateThinPayload(payload: ThinPayload): { action: Action } {
     errors.push(`target_url ausente. Obrigatoria para acoes do tipo ${action}.`);
   }
 
-  if (payload.offer_id && !payload.visit_id && !NAVIGATION_ACTIONS.includes(action)) {
+  // ✨ Bypass S2S: Servidores confiáveis podem iniciar consultas com oferta do zero
+  if (payload.offer_id && !payload.visit_id && !NAVIGATION_ACTIONS.includes(action) && !isS2S) {
     errors.push("visit_id ausente para uma acao com contexto de oferta.");
   }
 
@@ -287,6 +293,27 @@ serve(
 
           if (!ctx.visitExists) throw new Error("Visita nao encontrada ou expirada no banco de dados.");
 
+          // ✨ [ZERO-TRUST OLAP SYNC]: Delega a sincronização de Upstream para a camada de persistência
+          // de forma assíncrona para não onerar o TTI (Time to Interactive) da aplicação cliente.
+          if (!isHomeRoute && ctx.trustedOffer && visitId && visitUpdateId) {
+            const syncPromise = syncHydratedOffer(
+              sql, 
+              visitId, 
+              visitUpdateId, 
+              ctx.trustedOffer,
+              ctx.trustedEvent,
+              ctx.trustedManager,
+              ctx.trustedSeller
+            );
+            
+            const rt = (globalThis as any).EdgeRuntime;
+            if (rt && typeof rt.waitUntil === "function") {
+              rt.waitUntil(syncPromise);
+            } else {
+              await syncPromise;
+            }
+          }
+
           if (!isHomeRoute && ctx.trustedOffer) {
             debugLog("[GET] Validando integridade da jornada Upstream (Oferta)...");
             validateOfferAccess({
@@ -398,7 +425,11 @@ serve(
           const thin: ThinPayload = sanitizePayload(pickThin(rawPayload));
 
           thin.interaction_context = thin.interaction_context || {};
-          const { action } = validateThinPayload(thin);
+          
+          // ✨ INJEÇÃO: Passa a flag indicando se é uma requisição S2S confiável
+          const isS2S = Boolean(rawPayload.s2s_signed_entity);
+          const { action } = validateThinPayload(thin, isS2S);
+          
           thin.action = action;
 
           const infra = await captureInfrastructure(req);
@@ -478,11 +509,13 @@ serve(
 
           let orchestratorConfigId: number | null = null;
 
+          // Se for uma ação estritamente de navegação pura (como VISIT ou CONTACT)
           if (NAVIGATION_ACTIONS.includes(action)) {
             if (!payload.target_url) {
               throw new Error(`Para acoes de '${action}', a target_url e obrigatoria no payload.`);
             }
           } else {
+            // SIMULATE, CONSULT e agora também o REDIRECT caem aqui!
             debugLog("[POST STEP 4] Resolvendo orchestrator configs...");
             const resolved = await resolveOrchestratorConfigs({
               supabase,
@@ -495,9 +528,11 @@ serve(
             });
 
             if (!resolved.page_url) {
-              throw new Error("Nenhuma configuracao de destino ativa encontrada para esta simulacao.");
+              throw new Error("Nenhuma configuracao de destino ativa encontrada para esta acao.");
             }
 
+            // O REDIRECT herda a URL de destino da configuração do parceiro/produto, 
+            // além de todas as FAQs, footer e regras de consentimento!
             payload.target_url = resolved.page_url;
             payload.is_integrated = resolved.is_integrated;
             payload.integration_method = resolved.integration_method;
@@ -512,7 +547,7 @@ serve(
 
             orchestratorConfigId = resolved.orchestrator_config_id ?? null;
             payload.orchestrator_config_id = orchestratorConfigId;
-            debugLog("[POST STEP 4] Configs resolvidas ID:", orchestratorConfigId);
+            debugLog("[POST STEP 4] Configs resolvidas ID para REDIRECT:", orchestratorConfigId);
           }
 
           const hasVisitAnchor = Boolean(payload.visit_id);
@@ -570,6 +605,7 @@ serve(
                 visit_update_id: effectiveUpdateId, // ✨ Devolve o ID correto pro Front
                 simulation_id: simulationId,
                 partner_id: payload.partner_id ?? null,
+                state: payload, // ✨ INJEÇÃO: Devolve o pacote inteiro pro SPA guardar no Cache
               },
             };
           }
@@ -617,6 +653,7 @@ serve(
               visit_update_id: anchorUpdateId,
               simulation_id: simulationId,
               partner_id: payload.partner_id ?? null,
+              state: payload, // ✨ INJEÇÃO: Devolve o pacote inteiro pro SPA guardar no Cache
             },
           };
         } catch (error: any) {

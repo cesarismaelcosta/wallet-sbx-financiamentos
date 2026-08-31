@@ -22,6 +22,10 @@
  * 3. {Roteamento Determinístico}: O componente nunca faz "hard redirect" por conta própria 
  *    para jornadas do ecossistema. Ele envia o POST e aguarda o Orquestrador devolver a 
  *    URL assinada oficial.
+ * 4. {Zero-Latency Fast Path}: Ao receber a resposta positiva do Orquestrador, o componente
+ *    intercepta o pacote `state` e o injeta na memória RAM (Cofre) antes de executar o 
+ *    `navigate`. Isso permite que a próxima tela (ex: Formulário de Seguros) abra em 0ms,
+ *    poupando um request GET redundante na inicialização.
  *
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro (Architectural Mechanics)
@@ -47,8 +51,9 @@ import {
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { PanelHeader, HeaderLink } from "@/features/financial-hub/components/layout/PanelHeader";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
-import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload } from "@/services/session";
+import { USE_COOKIE } from "@/services/session";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
+import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { UserDataContext } from "@/routes/sbxpay.lazy";
 
 export const Route = createLazyFileRoute("/sbxpay/")({
@@ -99,8 +104,8 @@ const homeLinks: AppJourney[] = [
 
 export function sbXPAYHome() {
   const navigate = useNavigate();
-  const { sessionToken, logout } = useFinancialAuth();
-  const { isVerifying } = useContext(UserDataContext) || {};
+  const { sessionToken, logout, userProfile } = useFinancialAuth(); // EXTRAÍDO O USERPROFILE DO JWT
+  const { userData, isVerifying } = useContext(UserDataContext) || {}; // EXTRAÍDO O USERDATA DO CONTEXTO DE REDE
 
   const [isMounted, setIsMounted] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -136,10 +141,25 @@ export function sbXPAYHome() {
   }, []);
 
   const performNavigation = (url: string) => {
-    if (url.startsWith('http')) {
-      window.location.href = url;
-    } else {
-      navigate({ to: url });
+    try {
+      const targetUrlObj = new URL(url, window.location.origin);
+
+      // Se for do mesmo domínio, mesmo com "https://", vai via SPA e PRESERVA A RAM
+      if (targetUrlObj.origin === window.location.origin) {
+        const originalParams = new URLSearchParams(window.location.search);
+        targetUrlObj.searchParams.forEach((val, key) => originalParams.set(key, val));
+
+        navigate({
+          to: targetUrlObj.pathname as any,
+          search: Object.fromEntries(originalParams.entries()) as any,
+        });
+      } else {
+        // Apenas se for domínio externo real
+        window.location.href = url;
+      }
+    } catch {
+      // Fallback caso venha uma URL relativa pura
+      navigate({ to: url as any });
     }
   };
 
@@ -156,55 +176,63 @@ export function sbXPAYHome() {
 
     try {
       const currentHref = window.location.href;
-      const ambiente = getDefaultSbxEnvironment();
-      const currentSessionToken = sessionToken || getTokenForPayload() || "";
-      
-      // Captura da Telemetria Atual (Onde o usuário está agora)
       const urlParams = new URLSearchParams(window.location.search);
       const existingVisitId = urlParams.get("visit_id");
       const existingVisitUpdateId = urlParams.get("visit_update_id");
 
+      // =========================================================================
+      // 🚀 FLUXO DIRETO (Ex: Seguros, Equity). Pula a vitrine, vai direto pro Form.
+      // =========================================================================
       if (config.isDirect) {
         const payload = {
           action: "CONSULT",
-          environment: ambiente,
           product_id: config.productId,
-          auth_token: currentSessionToken,
           origin_url: currentHref,
           ...(existingVisitId && { visit_id: existingVisitId }),
-          ...(existingVisitUpdateId && { visit_update_id: existingVisitUpdateId }), // Passagem de bastão OLAP
+          ...(existingVisitUpdateId && { visit_update_id: existingVisitUpdateId }), 
           interaction_context: { origin_url: currentHref, utm_source: "sbxpay_direct", utm_medium: "referral", utm_campaign: `flow_${configKey.toLowerCase()}` },
         };
 
         const consultResponse = await callOrchestrator(payload, "POST");
 
         if (consultResponse?.url) {
-          performNavigation(consultResponse.url); 
+          if (consultResponse.state) {
+            setFastPathState(consultResponse.state);
+          }
+          
+          // ✨ FIX APLICADO AQUI: Passamos a URL inteira para evitar quebrar parceiros
+          performNavigation(consultResponse.url);
           return;
         } else {
           throw new Error("URL de redirecionamento ausente na resposta do orquestrador.");
         }
       }
 
+      // =========================================================================
+      // 🛒 FLUXO INDIRETO (Ex: Carros). Vai para a Vitrine de Ofertas.
+      // =========================================================================
       const visitPayload = {
         action: "VISIT",
-        environment: ambiente,
         target_url: config.route,
         origin_url: currentHref,
-        auth_token: currentSessionToken,
         ...(existingVisitId && { visit_id: existingVisitId }),
-        ...(existingVisitUpdateId && { visit_update_id: existingVisitUpdateId }), // Passagem de bastão OLAP
+        ...(existingVisitUpdateId && { visit_update_id: existingVisitUpdateId }),
         interaction_context: { origin_url: currentHref, utm_source: "sbxpay_direct", utm_medium: "referral", utm_campaign: `flow_${configKey.toLowerCase()}` },
       };
 
       const visitResponse = await callOrchestrator(visitPayload, "POST");
 
       if (visitResponse?.url) {
+        if (visitResponse.state) {
+          setFastPathState(visitResponse.state);
+        }
+
         const targetUrlObj = new URL(visitResponse.url, window.location.origin);
         targetUrlObj.searchParams.set("flow", config.flowKey);
 
         setLoading(false);
-        performNavigation(targetUrlObj.pathname + targetUrlObj.search); 
+        // ✨ FIX APLICADO AQUI: Passamos a URL stringificada completa para o parser
+        performNavigation(targetUrlObj.toString()); 
         return;
       } else {
         throw new Error("URL de visita ausente na resposta do orquestrador.");
@@ -276,7 +304,8 @@ export function sbXPAYHome() {
         showNav={true} 
         showAuth={true} 
         links={linksAtivos}
-        sessionToken={isMounted ? sessionToken : undefined} 
+        sessionToken={isMounted ? sessionToken : undefined}
+        userData={userData || userProfile}
         onLogout={() => logout({ purgeEnv: true })}
         onNavigate={(path) => navigate({ to: path as any })}
       />
@@ -285,7 +314,7 @@ export function sbXPAYHome() {
         
         if (link.href === "seguranca") {
           return (
-            <section key="seguranca" id="seguranca" className="relative pt-28 pb-10 md:pt-32 md:pb-12 overflow-hidden bg-white border-b border-gray-100">
+            <section key="seguranca" id="seguranca" className="relative pt-28 pb-10 md:pt-32 md:pb-12 overflow-hidden bg-white border-b border-gray-100 scroll-mt-16">
               <div className="max-w-7xl mx-auto px-6 relative z-10">
                 <div className="flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-12">
                   <div className="w-full lg:w-6/12 space-y-5">
@@ -390,7 +419,7 @@ export function sbXPAYHome() {
 
         if (link.href === "cartao") {
           return (
-            <section key="cartao" id="cartao" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative">
+            <section key="cartao" id="cartao" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative scroll-mt-16">
               <div className="max-w-7xl mx-auto px-6 relative z-10">
                 <div className={`flex flex-col ${layoutDirecao} items-center justify-between gap-8 lg:gap-12`}>
                   <div className="w-full lg:w-6/12 space-y-5">
@@ -450,7 +479,7 @@ export function sbXPAYHome() {
 
         if (link.href === "veiculos") {
           return (
-            <section key="veiculos" id="veiculos" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative">
+            <section key="veiculos" id="veiculos" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative scroll-mt-16">
               <div className="max-w-7xl mx-auto px-6 relative z-10">
                 <div className={`flex flex-col ${layoutDirecao} items-center justify-between gap-8 lg:gap-12`}>
                   <div className="w-full lg:w-6/12 space-y-5">
@@ -513,7 +542,7 @@ export function sbXPAYHome() {
 
         if (link.href === "imoveis") {
           return (
-            <section key="imoveis" id="imoveis" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative">
+            <section key="imoveis" id="imoveis" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative scroll-mt-16">
               <div className="max-w-7xl mx-auto px-6 relative z-10">
                 <div className={`flex flex-col ${layoutDirecao} items-center justify-between gap-8 lg:gap-12`}>
                   <div className="w-full lg:w-6/12 space-y-5">
@@ -557,7 +586,7 @@ export function sbXPAYHome() {
 
         if (link.href === "investidores") {
           return (
-            <section key="investidores" id="investidores" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative">
+            <section key="investidores" id="investidores" className="py-10 md:py-12 bg-white border-b border-gray-100 overflow-hidden relative scroll-mt-16">
               <div className="max-w-7xl mx-auto px-6 relative z-10">
                 <div className={`flex flex-col ${layoutDirecao} items-center justify-between gap-8 lg:gap-12`}>
                   <div className="w-full lg:w-6/12 space-y-5">
@@ -648,7 +677,7 @@ export function sbXPAYHome() {
 
         if (link.href === "seguros") {
           return (
-            <section key="seguros" id="seguros" className="py-10 md:py-12 bg-white overflow-hidden relative">
+            <section key="seguros" id="seguros" className="py-10 md:py-12 bg-white overflow-hidden relative scroll-mt-16">
               <div className="max-w-7xl mx-auto px-6 relative z-10">
                 <div className={`flex flex-col ${layoutDirecao} items-center justify-between gap-8 lg:gap-12`}>
                   <div className="w-full lg:w-6/12 space-y-5">
@@ -704,7 +733,7 @@ export function sbXPAYHome() {
         return null; 
       })}
 
-      <footer className="w-full pt-10 pb-40 md:py-10 mt-auto bg-black border-t border-gray-800">
+      <footer className="w-full py-10 mt-auto bg-black border-t border-gray-800">
         <div className="container mx-auto px-6 flex flex-col items-center gap-4 text-center">
           <div className="h-20 w-20 rounded-md bg-black overflow-hidden flex items-center justify-center">
             <img src="/assets/home/sbxpay_p_sem_borda.png" alt="sbXPAY" loading="lazy" decoding="async" className="h-full w-full object-cover scale-100" />
@@ -715,39 +744,6 @@ export function sbXPAYHome() {
           </div>
         </div>
       </footer>
-
-      {/* MOBILE TAB BAR */}
-      <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-50 flex justify-around items-center pt-2 pb-4 md:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <a href="#" className="flex flex-col items-center justify-center text-purple-600 min-w-[60px] gap-1">
-          <Home className="w-5 h-5" strokeWidth={1.5} />
-          <span className="text-[10px] font-bold">Início</span>
-        </a>
-
-        <a href="/sandbox" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[60px] gap-1">
-          <Settings className="w-5 h-5" strokeWidth={1.5} />
-          <span className="text-[10px] font-medium">Sandbox</span>
-        </a>
-
-        <a href="/backoffice" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[60px] gap-1">
-          <AppWindow className="w-5 h-5" strokeWidth={1.5} />
-          <span className="text-[10px] font-medium">Backoffice</span>
-        </a>
-
-        {isMounted && sessionToken ? (
-          <button onClick={() => logout()} className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[60px] gap-1">
-            <LogOut className="w-5 h-5" strokeWidth={1.5} />
-            <span className="text-[10px] font-medium">Sair</span>
-          </button>
-        ) : (
-          <button
-            onClick={() => navigate({ to: "/accounts/signin" })}
-            className="flex flex-col items-center justify-center text-slate-400 hover:text-purple-600 transition-colors min-w-[60px] gap-1"
-          >
-            <LogIn className="w-5 h-5" strokeWidth={1.5} />
-            <span className="text-[10px] font-medium">Entrar</span>
-          </button>
-        )}
-      </div>
     </div>
   );
 }

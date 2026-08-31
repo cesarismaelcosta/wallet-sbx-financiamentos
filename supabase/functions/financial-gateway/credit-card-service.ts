@@ -43,10 +43,6 @@ function calculateRate(pv: number, pmt: number, n: number): number {
   const maxIterations = 100;
   const tolerance = 0.0000001;
 
-  debugLog("pv", pv)
-  debugLog("pmt", pmt)
-  debugLog("number", n)
-
   for (let i = 0; i < maxIterations; i++) {
     // Calcula o erro (VPL) para r0 e r1
     const f0 = pv + pmt_calc * ((1 - Math.pow(1 + r0, -n)) / r0);

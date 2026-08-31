@@ -3,7 +3,7 @@
  * @path src/features/financial-hub/core/hooks/useOrchestrator.ts
  *
  * ============================================================================
- * ARCHITECTURE SPECIFICATION: ZERO-TRUST + EVENTUAL CONSISTENCY
+ * ARCHITECTURE SPECIFICATION: ZERO-TRUST + EVENTUAL CONSISTENCY + ZERO LATENCY
  * ============================================================================
  * - Active Tracking: registro de intenção estritamente via interação do usuário.
  * - URL as Truth: o cursor da jornada (visit_id + visit_update_id) vive na URL.
@@ -12,14 +12,17 @@
  *   a partir do browser.
  * - Race Condition Shield: como a borda responde de forma assíncrona
  *   (waitUntil), a hidratação tolera atraso de commit com retry + backoff.
+ * - Zero Latency Fast Path: o hook intercepta o Cofre da RAM. Se a tela anterior
+ *   já gerou o estado (POST), o hook aborta a API e a tela acende em 0ms.
  *
  * @author Cesar Ismael Pereira da Costa
  * @author Gemini Pro
- * @version 8.0.0 (Zero-Trust / Thin Payload)
+ * @version 8.1.0 (Zero-Trust / Thin Payload / Zero-Latency)
  */
 
 import { useState, useEffect, useRef } from "react";
 import { callOrchestrator, GatewayErrorResponse } from "@/features/financial-hub/core/services/gateway";
+import { consumeFastPathState, setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 
 /** Backoff exponencial simples. */
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
@@ -60,10 +63,20 @@ export interface ThinInteractionPayload {
  * useOrchestratorHydration
  * Ciclo de vida da HIDRATAÇÃO (GET). Usa estritamente a URL como fonte:
  * exige visit_id e visit_update_id (cursor temporal obrigatório).
+ * Implementa o Fast Path 0ms para evitar chamadas de API se o cofre estiver cheio.
  */
 export function useOrchestratorHydration(visitId: string | null, visitUpdateId?: string | null) {
-  const [simData, setSimData] = useState<any | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // ✅ Lê direto da URL do browser instantaneamente no primeiro render, blindando contra o delay do roteador
+  const [initialCache] = useState(() => {
+    if (typeof window === "undefined") return null;
+    const nativeParams = new URLSearchParams(window.location.search);
+    const resolvedUpdateId = visitUpdateId || nativeParams.get("visit_update_id") || undefined;
+    
+    return consumeFastPathState(resolvedUpdateId) || consumeFastPathState(undefined);
+  });
+
+  const [simData, setSimData] = useState<any | null>(initialCache || null);
+  const [loading, setLoading] = useState<boolean>(!initialCache);
   const [error, setError] = useState<Partial<GatewayErrorResponse> | null>(null);
   const [retryCount, setRetryCount] = useState<number>(0);
 
@@ -83,6 +96,14 @@ export function useOrchestratorHydration(visitId: string | null, visitUpdateId?:
         );
       }
       setLoading(false);
+      return;
+    }
+
+    // ✨ A CATRACA DO 0ms: Abortando a API
+    if (initialCache) {
+      if (import.meta.env.DEV) {
+        console.log("⚡ [Orchestrator] Cache RAM Hit (0ms). Abortando GET.");
+      }
       return;
     }
 
@@ -113,7 +134,7 @@ export function useOrchestratorHydration(visitId: string | null, visitUpdateId?:
           setLoading(false);
         }
       });
-  }, [visitId, visitUpdateId, retryCount]);
+  }, [visitId, visitUpdateId, retryCount, initialCache]); // <-- initialCache adicionado nas deps para ser seguro
 
   return { simData, loading, error };
 }
@@ -171,6 +192,14 @@ export const orchestrateNavigation = async (
     const data = await callOrchestrator(thinPayload, "POST");
 
     if (data?.url) {
+      
+      // =====================================================================
+      // ✨ THE ZERO-LATENCY FAST PATH (APLICAÇÃO GLOBAL)
+      // =====================================================================
+      // Qualquer navegação orquestrada pela aplicação agora guarda o state
+      // na RAM. O próximo passo do funil nascerá em 0ms.
+      setFastPathState(data);
+
       const currentPath = window.location.href.split("?")[0];
       const targetPath = data.url.split("?")[0];
 

@@ -1,25 +1,15 @@
 /**
  * @fileoverview Componente: WalletLogo
  * @path src/components/common/WalletLogo.tsx
- * * ESTRUTURA DO PROJETO:
- * --------------------------------------------------------------------------------
- * src/
- * ├── assets/
- * │   └── wallet-sbx-logo.png   # [ASSET] Logo da marca
- * ├── components/
- * │   ├── auto-equity/          # Domínio de negócio
- * │   └── common/
- * │       └── WalletLogo.tsx    # [AQUI] Componente de Branding Global
- * └── ...
- * --------------------------------------------------------------------------------
- * * PROPÓSITO:
- * Renderizar o logo da marca "Wallet sbX" com suporte a tamanhos variáveis, 
- * tagline opcional e comportamento de navegação (Link).
- * * INTEGRAÇÃO:
- * - Utiliza `@tanstack/react-router` para navegação baseada em rotas.
- * - Utiliza `cn` (Tailwind Merge) para composição de estilos dinâmicos.
- * * INTERDEPENDÊNCIAS:
- * - UI: Shadcn.
+ * 
+ * =========================================================================
+ * 🤖 ESPECIFICAÇÃO DO COMPONENTE: BRANDING GLOBAL
+ * =========================================================================
+ * @description Renderiza o logo da marca "Wallet sbX" com suporte a tamanhos 
+ * variáveis, tagline opcional responsiva e comportamento de navegação (Link).
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import { Link } from "@tanstack/react-router";
@@ -27,15 +17,18 @@ import logoSrc from "@/assets/wallet-sbx-logo.png";
 import { cn } from "@/lib/utils";
 
 type WalletLogoProps = {
-  /** Width of the logo image in pixels. Height auto-scales. */
+  /** Largura base do logo. O eixo vertical auto-escala. */
   size?: "sm" | "md" | "lg";
-  /** Show the "Financiamentos & Seguros" tagline below the logo. */
+  /** Exibe a tagline "Financiamentos & Seguros" abaixo do logo. */
   withTagline?: boolean;
-  /** Wrap in a Link to "/". */
+  /** Envolve o componente em um Link para a rota raiz ("/"). */
   asLink?: boolean;
-  /** Center the logo + tagline horizontally. */
+  /** Centraliza horizontalmente o conjunto (logo + tagline). */
   centered?: boolean;
+  /** Classes CSS adicionais para o container raiz. */
   className?: string;
+  /** Classes CSS adicionais para customização pontual da tagline. */
+  taglineClassName?: string;
 };
 
 const SIZE_MAP: Record<NonNullable<WalletLogoProps["size"]>, string> = {
@@ -45,7 +38,7 @@ const SIZE_MAP: Record<NonNullable<WalletLogoProps["size"]>, string> = {
 };
 
 const TAGLINE_SIZE: Record<NonNullable<WalletLogoProps["size"]>, string> = {
-  sm: "text-[9px] tracking-[0.22em]",
+  sm: "text-[8px] sm:text-[9px] tracking-[0.18em]",
   md: "text-[10px] tracking-[0.24em]",
   lg: "text-xs tracking-[0.26em]",
 };
@@ -56,6 +49,7 @@ export function WalletLogo({
   asLink = false,
   centered = false,
   className,
+  taglineClassName,
 }: WalletLogoProps) {
   const content = (
     <span
@@ -76,6 +70,7 @@ export function WalletLogo({
           className={cn(
             "font-semibold uppercase text-muted-foreground",
             TAGLINE_SIZE[size],
+            taglineClassName,
           )}
         >
           Financiamentos &amp; Seguros

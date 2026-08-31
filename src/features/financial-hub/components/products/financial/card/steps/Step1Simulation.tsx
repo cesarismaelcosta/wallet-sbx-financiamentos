@@ -1,24 +1,15 @@
 /**
  * @fileoverview Componente: Step1Simulation (Cartão)
  * @path src/components/cartao/steps/Step1Simulation.tsx
- * * * * ÁRVORE DE DEPENDÊNCIAS:
- * --------------------------------------------------------------------------------
- * src/components/cartao/steps/
- * └── Step1Simulation.tsx
- * * * * INTEGRAÇÃO:
+ * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO: STRICT THIN PAYLOAD & ARCHITECTURAL MECHANICS
+ * =========================================================================
+ * [MECÂNICA ARQUITETURAL]:
  * - Engine: WizardProvider (consumo de estado e atualização de dados).
  * - API: callSimulation (transporte de dados para o simulador financeiro).
  * - Utils: BRL (formatador de moeda).
- * --------------------------------------------------------------------------------
- * * * * RESPONSABILIDADE:
- * 1. Simulação: Dispara a chamada para o gateway financeiro ao identificar uma oferta válida.
- * 2. Segurança: Implementa travas de fluxo (isSimulating/hasAttempted) para impedir chamadas duplicadas e loops de renderização.
- * 3. Renderização: Exibe as opções de parcelamento (consults) retornadas pela API, permitindo a escolha do usuário.
- *
- * =========================================================================
- * 🤖 PADRÃO GEMINI PRO: STRICT THIN PAYLOAD (ZERO-TRUST)
- * =========================================================================
- * [MECÂNICA ARQUITETURAL]:
+ * 
  * O payload de rede foi purificado. O uso do `...state.data` foi abolido para
  * evitar o envio de lixo de UI (estado interno, objetos aninhados) para a 
  * camada de rede. O componente monta um payload estritamente "Thin", extraindo 
@@ -34,12 +25,13 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, ExternalLink } from "lucide-react";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
+import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache"; 
 import { CardWizardData } from "../card.types";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 
 // =========================================================================
-// [UX ARCHITECTURE]: Hook de Distração Cognitiva para APIs de alta latência
+// 🤖 [UX ARCHITECTURE]: Hook de Distração Cognitiva para APIs de alta latência
 // =========================================================================
 function useLoadingMessages(isLoading: boolean) {
   const messages = [
@@ -68,7 +60,7 @@ function useLoadingMessages(isLoading: boolean) {
 }
 
 // =========================================================================
-// Link para oferta na plataforma sbX
+// 🤖 [UTILITY ARCHITECTURE]: Slugificação Segura para Ofertas sbX
 // =========================================================================
 const getSuperbidUrl = (offerData: any) => {
   if (!offerData?.offer_id) return "#";
@@ -82,6 +74,9 @@ const getSuperbidUrl = (offerData: any) => {
 };
 
 export function Step1Simulation() {
+  // =========================================================================
+  // 🤖 [LOCAL STATE ARCHITECTURE]: Gerenciamento de Ciclo de Vida e Estados
+  // =========================================================================
   const [loading, setLoading] = useState(false);
   const { state, update } = useWizard<CardWizardData>();
 
@@ -93,16 +88,37 @@ export function Step1Simulation() {
   const simResult = state?.data?.simulationResult;
   const offer = state?.data?.offer;
 
+  const prevOfferValueRef = useRef(offerValue);
+
   // [UX]: Inicializa o Tracker de Mensagens
   const isLoadingUI = loading || !state?.data?.simulationResult;
   const loadingMessage = useLoadingMessages(isLoadingUI);
 
+  // =========================================================================
+  // 🤖 [RENDER GUARD ARCHITECTURE]: Gatilho Automatizado de Simulação por Oferta
+  // =========================================================================
   useEffect(() => {
+    // Se o valor da oferta mudou, destrava e limpa o resultado anterior
+    if (offerValue !== prevOfferValueRef.current) {
+      prevOfferValueRef.current = offerValue;
+      hasAttempted.current = false;
+      update({
+        data: {
+          ...state.data,
+          simulationResult: null,
+        },
+      });
+      return;
+    }
+
     if (offerValue && !simResult && !isSimulating.current && !hasAttempted.current) {
       handleSimular();
     }
   }, [offerValue, simResult]);
 
+  // =========================================================================
+  // 🤖 [ZERO-TRUST HANDLER ARCHITECTURE]: Execução de Rede e Thin Payload
+  // =========================================================================
   const handleSimular = async () => {
     if (hasAttempted.current || !state?.data) return;
 
@@ -116,7 +132,7 @@ export function Step1Simulation() {
       const urlVisitUpdateId = urlParams.get("visit_update_id");
       
       const rawOffer = state.data.offer || {};
-      const targetOfferId = rawOffer.offer_id || rawOffer.id;
+      const targetOfferId = rawOffer.offer_id;
 
       // ✨ [STRICT THIN PAYLOAD]
       // Abolido o uso de `...state.data`! Montagem cirúrgica e explícita.
@@ -138,13 +154,25 @@ export function Step1Simulation() {
 
       const result = await execute(() => callSimulation(payload));
 
-      // Atualiza o estado da UI com o resultado, mantendo o histórico
+      // O QUE FAZER COM O RESULT.STATE: Alimenta o Fast Path (Cache de RAM para o próximo passo)
+      if (result.state) {
+        setFastPathState(result.state);
+      }
+
+      // O QUE FAZER COM O RESULT.STATE: Alimenta o estado reativo do Wizard (Tela atual)
       update({
         data: {
           ...state.data,
           simulationResult: result,
           simulation_id: result.simulation_id,
           simulation_update_id: result.simulation_update_id,
+          
+          // Verdade absoluta do servidor injetada no state local
+          ...(result.state && {
+            offer: result.state.offer,
+            rules: result.state.rules,
+            entity: result.state.entity,
+          })
         },
       });
     } catch (error: any) {
@@ -156,6 +184,9 @@ export function Step1Simulation() {
     }
   };
 
+  // =========================================================================
+  // 🤖 [GUARD RAIL ARCHITECTURE]: Bailout de Estado Nulo / Vazio
+  // =========================================================================
   if (!state || !state.data) {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
@@ -171,11 +202,10 @@ export function Step1Simulation() {
   return (
     <div className="w-full space-y-8 animate-in fade-in duration-500">
       <div className="bg-white space-y-6">
-        {/*
-         * [PROGRESSIVE DISCLOSURE]
-         * Rationale: Renderização imediata do contexto síncrono (Dados da Oferta).
-         */}
-        {/* [CABEÇALHO COM LINK] */}
+        
+        {/* =========================================================================
+         * 🤖 [PROGRESSIVE DISCLOSURE ARCHITECTURE]: Header Síncrono e Contexto da Oferta
+         * ========================================================================= */}
         <div className="flex items-start gap-4">
           <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
             <img src="/assets/home/cartao.webp" alt="Cartão" className="w-full h-full object-contain" />
@@ -211,9 +241,9 @@ export function Step1Simulation() {
           </div>
         </div>
 
-        {/*
-         * [SKELETON UI + COGNITIVE DISTRACTION]
-         */}
+        {/* =========================================================================
+         * 🤖 [COGNITIVE DISTRACTION & SKELETON UI ARCHITECTURE]: Renderização Condicional de Carga
+         * ========================================================================= */}
         <div className="py-2">
           {isLoadingUI ? (
             <div className="space-y-3 animate-in fade-in duration-300">

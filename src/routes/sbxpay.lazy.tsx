@@ -35,6 +35,8 @@ import { BFFUserProfile } from "@/features/financial-hub/components/shared/types
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload } from "@/services/session";
 import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoffRedeem";
+import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
+import { useOrchestratorHistorySync } from "@/features/financial-hub/core/hooks/useOrchestratorHistorySync"; // 👈 NOVO IMPORT
 
 // ============================================================================
 // [REGISTRO DA ROTA TANSTACK ROUTER]
@@ -153,6 +155,11 @@ function HomeSkeleton() {
 // [LAYOUT PRINCIPAL E GATEKEEPER]
 // ============================================================================
 export function SbXPAYLayOut() {
+  // 🛡️ [HISTORY SYNC GATEKEEPER]
+  // Protege a aterrissagem na vitrine contra o resgate de cursores obsoletos
+  // decorrentes do botão "Back" do navegador. (Cross-Layout Compatibility)
+  useOrchestratorHistorySync();
+
   const authContext = useFinancialAuth();
   const { sessionToken: contextToken, userProfile: contextProfile, isLoading, logout } = authContext;
 
@@ -218,7 +225,6 @@ export function SbXPAYLayOut() {
         // O perfil só existe em memória (contexto) ou é reidratado pelo backend via JWT.
         let userProfile = contextProfile as BFFUserProfile | null;
 
-
         const searchParams = new URLSearchParams(window.location.search);
         let vId = searchParams.get("visit_id");
         let vUpId = searchParams.get("visit_update_id");
@@ -254,6 +260,11 @@ export function SbXPAYLayOut() {
               const postData = await callOrchestrator(visitPayload, "POST");
 
               if (postData?.url) {
+                // ✨ A MÁGICA (GRAVAÇÃO): Salva o estado gordo na RAM antes de navegar
+                if (postData.state) {
+                  setFastPathState(postData.state);
+                }
+                
                 // 🛡️ Sucesso: Aplica a nova âncora temporal
                 const responseUrlObj = new URL(postData.url, window.location.origin);
                 const originalParams = new URLSearchParams(window.location.search);
@@ -335,7 +346,6 @@ export function SbXPAYLayOut() {
 
   // 🔒 ZERO PII: a presença de sessão é decidida apenas pelo token (storage em DEV / cookie em PROD).
   const hasLocalSession = Boolean(sessionToken);
-
 
   if (isLoading && !hasLocalSession) {
     return <HomeSkeleton />;

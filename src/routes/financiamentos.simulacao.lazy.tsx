@@ -52,7 +52,7 @@ function SimulacaoConsultPage() {
 
   return (
     <>
-      <section className="relative -mt-8 pb-12 px-4 w-full flex justify-center overflow-hidden">
+      <section id="simulacao" className="relative -mt-8 pb-12 px-4 w-full flex justify-center overflow-hidden">
         <main className="relative z-10 w-full max-w-6xl">
           {/* 2. [MOTOR]: Inicializa a máquina de estados local do formulário */}
           <WizardProvider initialData={simData?.entity || {}}>
@@ -72,7 +72,9 @@ function SimulacaoConsultPage() {
       </section>
 
       {/* 5. [SUPORTE]: Seção estática de educação do consumidor */}
-      <HowItWorks />
+      <div id="como-funciona">
+        <HowItWorks />
+      </div>
     </>
   );
 }

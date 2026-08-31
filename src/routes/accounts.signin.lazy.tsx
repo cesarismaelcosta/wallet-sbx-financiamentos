@@ -194,9 +194,24 @@ export function CustomLogin() {
         // ✨ O OBEDIENTE Cego: O destino agora vem do backend hidratado.
         const serverRedirectUrl = response.initial_visit?.final_redirect_url || "/sbxpay";
 
-        window.location.href = serverRedirectUrl.startsWith("http")
-          ? serverRedirectUrl
-          : `${window.location.origin}${serverRedirectUrl.startsWith("/") ? "" : "/"}${serverRedirectUrl}`;
+        try {
+          const isRelative = serverRedirectUrl.startsWith('/');
+          const isSameOrigin = serverRedirectUrl.startsWith(window.location.origin);
+
+          if (isRelative || isSameOrigin) {
+            const urlObj = new URL(serverRedirectUrl, window.location.origin);
+            
+            navigate({
+              to: urlObj.pathname as any,
+              search: Object.fromEntries(urlObj.searchParams.entries()) as any,
+              replace: true // Navega sem recarregar a tela, mantendo o profile na memória
+            });
+          } else {
+            window.location.href = serverRedirectUrl; // Parceiros externos continuam via href
+          }
+        } catch (e) {
+          window.location.href = serverRedirectUrl;   // Fallback de segurança
+        }
       } else {
         const action = response.action;
 
@@ -220,9 +235,9 @@ export function CustomLogin() {
   const loginLabelText = tipoPessoa === "F" ? "E-mail, login ou CPF" : "CNPJ ou login";
 
   return (
-    <div className="min-h-screen flex items-start justify-center pt-24 sm:pt-32 bg-gray-50 px-4 font-sans">
-      <div className="w-full max-w-[440px] bg-white rounded-xl shadow-sm border border-gray-100 p-8 sm:p-10">
-        <div className="flex justify-between items-center mb-6">
+    <div className="min-h-screen flex items-start sm:items-center justify-center pt-12 sm:pt-0 bg-gray-50 px-4 sm:px-6 font-sans">
+      <div className="w-full max-w-[440px] bg-white rounded-2xl sm:rounded-xl shadow-sm border border-gray-100 p-5 sm:p-10">
+        <div className="flex justify-between items-center mb-5 sm:mb-6">
           <WalletLogo size="md" withTagline />
           <span
             className={`text-[10px] uppercase font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200 transition-opacity duration-150 ${
@@ -236,7 +251,7 @@ export function CustomLogin() {
 
         {mounted && showEnvSelector && !securityRedirectUrl && (
           <div className="mb-4">
-            <p className="text-[11px] uppercase font-bold text-gray-500 mb-2 text-center tracking-wide">
+            <p className="text-[10px] sm:text-[11px] uppercase font-bold text-gray-500 mb-2 text-center tracking-wide">
               Selecione o ambiente de destino:
             </p>
             <div className="flex bg-gray-100 rounded-full p-1">
@@ -266,9 +281,9 @@ export function CustomLogin() {
           </div>
         )}
 
-        <form onSubmit={handleRealLogin} className="flex flex-col gap-5" noValidate>
+        <form onSubmit={handleRealLogin} className="flex flex-col gap-4 sm:gap-5" noValidate>
           {!securityRedirectUrl && (
-            <div className="flex w-full border-b border-gray-200 mb-2">
+            <div className="flex w-full border-b border-gray-200 mb-1">
               <button
                 type="button"
                 disabled={isLoading}
@@ -278,7 +293,7 @@ export function CustomLogin() {
                   setLoginError("");
                   setPasswordError("");
                 }}
-                className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none focus:outline-none ${
+                className={`flex-1 text-xs sm:text-sm font-semibold py-2.5 sm:py-3 transition-all border-b-2 outline-none focus:outline-none ${
                   tipoPessoa === "F"
                     ? "text-gray-900 border-gray-900"
                     : "text-gray-400 border-transparent hover:text-gray-600"
@@ -295,7 +310,7 @@ export function CustomLogin() {
                   setLoginError("");
                   setPasswordError("");
                 }}
-                className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none focus:outline-none ${
+                className={`flex-1 text-xs sm:text-sm font-semibold py-2.5 sm:py-3 transition-all border-b-2 outline-none focus:outline-none ${
                   tipoPessoa === "J"
                     ? "text-gray-900 border-gray-900"
                     : "text-gray-400 border-transparent hover:text-gray-600"
@@ -307,11 +322,11 @@ export function CustomLogin() {
           )}
 
           {generalError && (
-            <div className="flex items-center gap-4 bg-slate-50 text-slate-700 text-[13px] leading-relaxed p-4 rounded-xl border border-slate-200 shadow-sm font-medium animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 sm:gap-4 bg-slate-50 text-slate-700 text-xs sm:text-[13px] leading-relaxed p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-sm font-medium animate-in fade-in zoom-in-95 duration-200">
               <img
                 src="/assets/error/error.webp"
                 alt="Aviso"
-                className="w-11 h-11 object-contain shrink-0 drop-shadow-sm"
+                className="w-9 h-9 sm:w-11 sm:h-11 object-contain shrink-0 drop-shadow-sm"
               />
               <span className="text-left flex-1">{generalError}</span>
             </div>
@@ -334,7 +349,7 @@ export function CustomLogin() {
                     }
                     if (loginError) setLoginError("");
                   }}
-                  className={`w-full h-12 border rounded-full px-5 text-sm outline-none transition-all ${
+                  className={`w-full h-11 sm:h-12 border rounded-full px-4 sm:px-5 text-xs sm:text-sm outline-none transition-all ${
                     loginError
                       ? "border-gray-500 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
                       : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
@@ -354,7 +369,7 @@ export function CustomLogin() {
                       setPassword(e.target.value);
                       if (passwordError) setPasswordError("");
                     }}
-                    className={`w-full h-12 border rounded-full pl-5 pr-12 text-sm outline-none transition-all ${
+                    className={`w-full h-11 sm:h-12 border rounded-full pl-4 sm:pl-5 pr-12 text-xs sm:text-sm outline-none transition-all ${
                       passwordError
                         ? "border-gray-500 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
                         : "border-gray-300 focus:border-[#B400FF] focus:ring-1 focus:ring-[#B400FF]"
@@ -364,7 +379,7 @@ export function CustomLogin() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 outline-none focus:outline-none flex items-center justify-center"
+                    className="absolute right-4 sm:right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 outline-none focus:outline-none flex items-center justify-center"
                   >
                     {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                   </button>
@@ -379,7 +394,7 @@ export function CustomLogin() {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full h-12 bg-[#B400FF] text-white font-semibold rounded-full transition-all duration-300 flex items-center justify-center gap-2 ${
+            className={`w-full h-11 sm:h-12 bg-[#B400FF] text-white font-semibold text-sm rounded-full transition-all duration-300 flex items-center justify-center gap-2 ${
               isLoading ? "animate-pulse" : "hover:bg-[#9a00db]"
             }`}
           >

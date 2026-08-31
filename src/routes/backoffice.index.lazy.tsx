@@ -312,7 +312,15 @@ function DashboardPage() {
     async function loadDropdowns() {
       if (!backofficeUser) return;
 
-      const { data: pData } = await supabase.from("partners").select("id, name").eq("is_active", true).order("name");
+      // ✨ [PERFORMANCE]: Dispara as duas consultas ao mesmo tempo (Paralelismo)
+      const [partnersResult, productsResult] = await Promise.all([
+        supabase.from("partners").select("id, name").eq("is_active", true).order("name"),
+        supabase.from("product_types").select("id, name").order("name")
+      ]);
+
+      const pData = partnersResult.data;
+      const prData = productsResult.data;
+
       if (pData) {
         if (backofficeUser.role === "viewer") {
           const allowedPartners = backofficeUser.allowed_partners || [];
@@ -327,7 +335,6 @@ function DashboardPage() {
         }
       }
 
-      const { data: prData } = await supabase.from("product_types").select("id, name").order("name");
       if (prData) {
         if (backofficeUser.role === "viewer") {
           const allowedProducts = backofficeUser.allowed_products || [];
@@ -906,14 +913,17 @@ function DashboardPage() {
               ))}
         </div>
 
-        <Suspense fallback={<ChartsSkeleton />}>
-          <ChartsSimulationModule
-            loading={loading}
-            simKpis={simKpis}
-            simDailyData={simDailyData}
-            periodLabel={periodLabel}
-          />
-        </Suspense>
+        {/* ✨ [RECHARTS FIX]: Container com altura mínima para evitar erro width(-1) do ResizeObserver no primeiro render */}
+        <div className="w-full min-h-[350px]">
+          <Suspense fallback={<ChartsSkeleton />}>
+            <ChartsSimulationModule
+              loading={loading}
+              simKpis={simKpis}
+              simDailyData={simDailyData}
+              periodLabel={periodLabel}
+            />
+          </Suspense>
+        </div>
       </div>
 
       {/* BLOCO 2: TOPO DE FUNIL */}
@@ -955,14 +965,17 @@ function DashboardPage() {
               ))}
         </div>
 
-        <Suspense fallback={<ChartsSkeleton />}>
-          <ChartsTrafficModule
-            loading={loading}
-            visitKpis={visitKpis}
-            visDailyData={visDailyData}
-            periodLabel={periodLabel}
-          />
-        </Suspense>
+        {/* ✨ [RECHARTS FIX]: Container com altura mínima para evitar erro width(-1) do ResizeObserver no primeiro render */}
+        <div className="w-full min-h-[350px]">
+          <Suspense fallback={<ChartsSkeleton />}>
+            <ChartsTrafficModule
+              loading={loading}
+              visitKpis={visitKpis}
+              visDailyData={visDailyData}
+              periodLabel={periodLabel}
+            />
+          </Suspense>
+        </div>
       </div>
 
       {/* SHEET DE FILTROS MOBILE */}

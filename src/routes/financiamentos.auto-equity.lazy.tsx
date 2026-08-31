@@ -52,7 +52,7 @@ function AutoEquityConsultPage() {
   
   return (
     <>
-      <section className="relative -mt-8 pb-12 px-4 w-full flex justify-center overflow-hidden">
+      <section id="simulacao" className="relative -mt-8 pb-12 px-4 w-full flex justify-center overflow-hidden">
         <div className="absolute inset-0 z-0 bg-white" />
         
         <main className="relative z-10 w-full max-w-6xl">
@@ -74,7 +74,9 @@ function AutoEquityConsultPage() {
       </section>
 
       {/* 5. [SUPORTE]: Seção estática de educação do consumidor */}
-      <HowItWorks />
+      <div id="como-funciona">
+        <HowItWorks />
+      </div>
     </>
   );
 }
