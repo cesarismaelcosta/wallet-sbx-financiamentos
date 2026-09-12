@@ -192,6 +192,14 @@ function startOfDay(d: Date) {
   return x;
 }
 
+/**
+ * Normaliza qualquer dado (item único, array, null ou undefined) em um array seguro e tipado.
+ */
+const safeArray = <T,>(data: T | T[] | null | undefined): T[] => {
+  if (!data) return [];
+  return Array.isArray(data) ? data : [data];
+};
+
 // ============================================================================
 // DEFINIÇÃO DE TIPAGENS (TYPES)
 // ============================================================================
@@ -276,11 +284,11 @@ async function getUniqueContactCount(start: Date, end: Date) {
 function ChartsSkeleton() {
   return (
     <div className="space-y-4 animate-pulse">
-      <div className="rounded-2xl border bg-card p-5 h-[240px] bg-slate-100/50" />
+      <div className="rounded-none border border-neutral-200 bg-card p-5 h-[240px] bg-neutral-100/50" />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="rounded-2xl border bg-card p-5 h-[240px] bg-slate-100/50" />
-        <div className="rounded-2xl border bg-card p-5 h-[240px] bg-slate-100/50" />
-        <div className="rounded-2xl border bg-card p-5 h-[240px] bg-slate-100/50" />
+        <div className="rounded-none border border-neutral-200 bg-card p-5 h-[240px] bg-neutral-100/50" />
+        <div className="rounded-none border border-neutral-200 bg-card p-5 h-[240px] bg-neutral-100/50" />
+        <div className="rounded-none border border-neutral-200 bg-card p-5 h-[240px] bg-neutral-100/50" />
       </div>
     </div>
   );
@@ -425,7 +433,7 @@ function DashboardPage() {
     if (cleanPartners.length > 0) {
       const pIds = cleanPartners.map((id) => String(id));
       visRows = visRows.filter((v) => {
-        const updates = Array.isArray(v.visit_updates) ? v.visit_updates : v.visit_updates ? [v.visit_updates] : [];
+        const updates = safeArray(v.visit_updates);
         return updates.some((u) => pIds.includes(String(u.partner_id)));
       });
     }
@@ -433,7 +441,7 @@ function DashboardPage() {
     if (cleanProducts.length > 0) {
       const prIds = cleanProducts.map((id) => String(id));
       visRows = visRows.filter((v) => {
-        const updates = Array.isArray(v.visit_updates) ? v.visit_updates : v.visit_updates ? [v.visit_updates] : [];
+        const updates = safeArray(v.visit_updates);
         return updates.some((u) => prIds.includes(String(u.product_id)));
       });
     }
@@ -549,7 +557,7 @@ function DashboardPage() {
       const source = v.utm_source || "Orgânico";
       sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
 
-      const updates = Array.isArray(v.visit_updates) ? v.visit_updates : v.visit_updates ? [v.visit_updates] : [];
+      const updates = safeArray(v.visit_updates);
       let hasSimulateInThisVisit = false;
 
       updates.forEach((u) => {
@@ -624,19 +632,19 @@ function DashboardPage() {
 
   const simCards = simKpis
     ? [
-        { label: "Simulações", subLabel: periodLabel, value: simKpis.month.toLocaleString("pt-BR"), hint: `${simKpis.today} hoje`, icon: ClipboardList },
-        { label: "Volume simulado", subLabel: periodLabel, value: BRL(simKpis.monthVolume), hint: `${simKpis.month} simulações`, icon: CircleDollarSign },
-        { label: "Ticket médio", subLabel: periodLabel, value: BRL(simKpis.ticket), hint: "valor médio", icon: TrendingUp },
-        { label: "Clientes únicos", subLabel: periodLabel, value: simKpis.uniqueClients.toLocaleString("pt-BR"), hint: "CPFs distintos", icon: Users },
+        { label: "SIMULAÇÕES", subLabel: periodLabel, value: simKpis.month.toLocaleString("pt-BR"), hint: `${simKpis.today} hoje`, icon: ClipboardList },
+        { label: "VOLUME SIMULADO", subLabel: periodLabel, value: BRL(simKpis.monthVolume), hint: `${simKpis.month} simulações`, icon: CircleDollarSign },
+        { label: "TICKET MÉDIO", subLabel: periodLabel, value: BRL(simKpis.ticket), hint: "valor médio", icon: TrendingUp },
+        { label: "CLIENTES ÚNICOS", subLabel: periodLabel, value: simKpis.uniqueClients.toLocaleString("pt-BR"), hint: "CPFs distintos", icon: Users },
       ]
     : [];
 
   const visitCards = visitKpis
     ? [
-        { label: "Consultas + Simulações", subLabel: periodLabel, value: `${(visitKpis.consultas + visitKpis.simulates).toLocaleString("pt-BR")} / ${visitKpis.total.toLocaleString("pt-BR")}`, hint: "consultas + simulações / visitas", icon: MousePointerClick },
-        { label: "Taxa de Início", subLabel: periodLabel, value: PERCENT(visitKpis.conversionRate), hint: "visitas que viraram simulação", icon: Activity },
-        { label: "Redirecionamentos", subLabel: periodLabel, value: visitKpis.redirects.toLocaleString("pt-BR"), hint: "saídas para parceiros", icon: ArrowUpRight },
-        { label: "Simulações Iniciadas", subLabel: periodLabel, value: visitKpis.simulates.toLocaleString("pt-BR"), hint: "cliques no simulador", icon: Filter },
+        { label: "CONSULTAS", subLabel: periodLabel, value: `${(visitKpis.consultas + visitKpis.simulates).toLocaleString("pt-BR")} / ${visitKpis.total.toLocaleString("pt-BR")}`, hint: "consultas + simulações / visitas", icon: MousePointerClick },
+        { label: "TAXA DE INÍCIO", subLabel: periodLabel, value: PERCENT(visitKpis.conversionRate), hint: "visitas que viraram simulação", icon: Activity },
+        { label: "REDIRECIONAMENTOS", subLabel: periodLabel, value: visitKpis.redirects.toLocaleString("pt-BR"), hint: "saídas para parceiros", icon: ArrowUpRight },
+        { label: "SIMULAÇÕES INICIADAS", subLabel: periodLabel, value: visitKpis.simulates.toLocaleString("pt-BR"), hint: "cliques no simulador", icon: Filter },
       ]
     : [];
 
@@ -652,75 +660,71 @@ function DashboardPage() {
     })) ?? [];
 
   // =========================================================================
-  // RENDER (JSX)
+  // RENDER (JSX) — COM CARDS PADRÃO SEM FUNDO NOS ÍCONES
   // =========================================================================
   return (
     <div className="p-6 space-y-10">
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Visão geral</h1>
-            <p className="text-sm text-muted-foreground">Métricas integradas de acessos e concessão de crédito.</p>
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Visão geral</h1>
+            <p className="text-sm text-neutral-600">Métricas integradas de acessos e concessão de crédito.</p>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 bg-muted/30 p-3 rounded-2xl border">
-          <div className="lg:hidden">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border border-neutral-200 p-4 bg-neutral-50/50 shadow-xs">
+          <div className="lg:hidden w-full">
             <Button
               variant="outline"
               onClick={() => setMobileFilterOpen(true)}
-              className="w-full h-11 rounded-xl gap-2 justify-start bg-white border-slate-200 text-slate-700 shadow-sm"
+              className="w-full h-11 rounded-none gap-2 justify-start bg-white border-neutral-200 text-neutral-900 shadow-xs text-xs"
             >
-              <Filter className="h-4 w-4 text-[#B300FF]" /> Filtros
+              <Filter className="h-4 w-4 text-neutral-900" /> Filtros
             </Button>
           </div>
 
-          <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:gap-2">
+          <div className="hidden lg:flex lg:items-center lg:gap-2">
             <Popover modal={isMobile}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"
+                  size="sm"
+                  className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs text-xs"
                 >
                   <span className="flex items-center gap-2 truncate">
-                    <CalendarIcon className="h-4 w-4 shrink-0" />
-                    Período:{" "}
-                    {dateRange === "custom"
-                      ? "Personalizado"
-                      : dateRange === "30"
-                        ? "30 dias"
-                        : dateRange === "7"
-                          ? "7 dias"
-                          : dateRange === "15"
-                            ? "15 dias"
-                            : "Tudo"}
+                    <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                    <span className="truncate">
+                      Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "7" ? "7 dias" : dateRange === "15" ? "15 dias" : "Tudo"}
+                    </span>
                   </span>
-                  <ChevronDown className="h-3 w-3 shrink-0" />
+                  <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
-                className="w-[calc(100vw-2rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                className="w-auto p-0 rounded-none border-neutral-200 shadow-xs z-50 bg-white"
                 align="start"
               >
-                <Command className="bg-transparent">
+                <Command className="bg-white">
                   <CommandList
-                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y text-xs"
                     style={{ WebkitOverflowScrolling: "touch" }}
                     onWheelCapture={(e) => e.stopPropagation()}
                   >
                     <CommandGroup>
-                      <CommandItem onSelect={() => setDateRange("7")} className="text-[#d946ef] cursor-pointer">
+                      <CommandItem onSelect={() => setDateRange("7")} className="rounded-none text-neutral-900 cursor-pointer hover:bg-neutral-100">
                         Últimos 7 dias
                       </CommandItem>
-                      <CommandItem onSelect={() => setDateRange("15")} className="text-[#d946ef] cursor-pointer">
+                      <CommandItem onSelect={() => setDateRange("15")} className="rounded-none text-neutral-900 cursor-pointer hover:bg-neutral-100">
                         Últimos 15 dias
                       </CommandItem>
-                      <CommandItem onSelect={() => setDateRange("30")} className="text-[#d946ef] cursor-pointer">
+                      <CommandItem onSelect={() => setDateRange("30")} className="rounded-none text-neutral-900 cursor-pointer hover:bg-neutral-100">
                         Últimos 30 dias
                       </CommandItem>
+                      <CommandItem onSelect={() => setDateRange("all")} className="rounded-none text-neutral-900 cursor-pointer hover:bg-neutral-100">
+                        Todo o período
+                      </CommandItem>
                     </CommandGroup>
-                    <div className="border-t p-3">
-                      <p className="text-xs text-muted-foreground mb-2">Personalizado:</p>
+                    <div className="p-2 border-t border-neutral-200">
                       <Calendar
                         mode="range"
                         selected={customRange}
@@ -749,28 +753,32 @@ function DashboardPage() {
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"
+                  size="sm"
+                  className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs text-xs"
                 >
-                  <span className="truncate">
-                    {selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}
+                  <span className="flex items-center gap-2 truncate">
+                    <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                    <span className="truncate">
+                      Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}
+                    </span>
                   </span>
-                  <ChevronDown className="h-3 w-3 shrink-0" />
+                  <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
-                className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                className="w-56 p-0 rounded-none border-neutral-200 shadow-xs z-50 bg-white"
                 align="start"
               >
                 <Command className="bg-transparent">
                   <CommandList
-                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y text-xs"
                     style={{ WebkitOverflowScrolling: "touch" }}
                     onWheelCapture={(e) => e.stopPropagation()}
                   >
                     <CommandGroup>
-                      <CommandItem onSelect={() => setSelectedPartners([])} className="text-[#d946ef] cursor-pointer">
+                      <CommandItem onSelect={() => setSelectedPartners([])} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">
                         <div
-                          className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                          className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedPartners.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                         >
                           {selectedPartners.length === 0 && "✓"}
                         </div>
@@ -788,10 +796,10 @@ function DashboardPage() {
                                 setSelectedPartners([...selectedPartners, String(p.id)]);
                               }
                             }}
-                            className="text-[#d946ef] cursor-pointer"
+                            className={`text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}
                           >
                             <div
-                              className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                              className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                             >
                               {isSelected && "✓"}
                             </div>
@@ -809,28 +817,32 @@ function DashboardPage() {
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="h-10 rounded-xl justify-between sm:justify-start gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors"
+                  size="sm"
+                  className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs text-xs"
                 >
-                  <span className="truncate">
-                    {selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}
+                  <span className="flex items-center gap-2 truncate">
+                    <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                    <span className="truncate">
+                      Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}
+                    </span>
                   </span>
-                  <ChevronDown className="h-3 w-3 shrink-0" />
+                  <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
-                className="w-[calc(100vw-2rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                className="w-56 p-0 rounded-none border-neutral-200 shadow-xs z-50 bg-white"
                 align="start"
               >
                 <Command className="bg-transparent">
                   <CommandList
-                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y"
+                    className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y text-xs"
                     style={{ WebkitOverflowScrolling: "touch" }}
                     onWheelCapture={(e) => e.stopPropagation()}
                   >
                     <CommandGroup>
-                      <CommandItem onSelect={() => setSelectedProducts([])} className="text-[#d946ef] cursor-pointer">
+                      <CommandItem onSelect={() => setSelectedProducts([])} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">
                         <div
-                          className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                          className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedProducts.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                         >
                           {selectedProducts.length === 0 && "✓"}
                         </div>
@@ -848,10 +860,10 @@ function DashboardPage() {
                                 setSelectedProducts([...selectedProducts, String(p.id)]);
                               }
                             }}
-                            className="text-[#d946ef] cursor-pointer"
+                            className={`text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}
                           >
                             <div
-                              className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                              className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                             >
                               {isSelected && "✓"}
                             </div>
@@ -868,7 +880,7 @@ function DashboardPage() {
         </div>
 
         {error && (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="rounded-none border border-neutral-900 bg-neutral-900/5 p-3 text-sm text-neutral-900 font-medium">
             Erro ao carregar dados: {error}
           </div>
         )}
@@ -876,12 +888,12 @@ function DashboardPage() {
 
       {/* BLOCO 1: FUNDO DE FUNIL */}
       <div className="space-y-6">
-        <div className="border-b pb-2">
+        <div className="border-b border-neutral-200 pb-2">
           <div className="flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-[var(--brand-primary)]" />
-            <h2 className="text-xl font-bold tracking-tight text-slate-800">1. Simulações e Negócios</h2>
+            <Briefcase className="h-5 w-5 text-neutral-900" />
+            <h2 className="text-xl font-bold tracking-tight text-neutral-900">1. Simulações e Negócios</h2>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-neutral-600 mt-1">
             Volume financeiro, aprovações e segmentação do que foi originado.
           </p>
         </div>
@@ -889,31 +901,30 @@ function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {loading || !simKpis
             ? Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-32 rounded-2xl border bg-card animate-pulse" />
+                <div key={i} className="h-32 rounded-none border border-neutral-200 bg-card animate-pulse" />
               ))
             : simCards.map((k) => (
-                <div
-                  key={k.label}
-                  className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 hover:-translate-y-0.5 transition-all"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        {k.label}
-                      </span>
-                      <span className="text-[10px] font-medium text-muted-foreground/70">{k.subLabel}</span>
-                    </div>
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                      <k.icon className="h-4 w-4" />
-                    </div>
+              <div
+                key={k.label}
+                className="group relative overflow-hidden rounded-none border border-neutral-200 bg-card p-5 hover:border-neutral-900 transition-all shadow-xs flex flex-col justify-between"
+              >
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+                      {k.label}
+                    </span>
+                    <k.icon className="h-3.5 w-3.5 text-neutral-400" />
                   </div>
-                  <div className="mt-4 text-3xl font-bold tracking-tight">{k.value}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{k.hint}</div>
+                  <span className="text-[10px] font-normal text-neutral-400">{k.subLabel}</span>
                 </div>
-              ))}
+                <div className="mt-3">
+                  <div className="text-lg font-semibold tracking-tight text-neutral-900 whitespace-nowrap">{k.value}</div>
+                  <div className="mt-1 text-xs text-neutral-500">{k.hint}</div>
+                </div>
+              </div>
+            ))}
         </div>
 
-        {/* ✨ [RECHARTS FIX]: Container com altura mínima para evitar erro width(-1) do ResizeObserver no primeiro render */}
         <div className="w-full min-h-[350px]">
           <Suspense fallback={<ChartsSkeleton />}>
             <ChartsSimulationModule
@@ -928,12 +939,12 @@ function DashboardPage() {
 
       {/* BLOCO 2: TOPO DE FUNIL */}
       <div className="space-y-6 pt-6">
-        <div className="border-b pb-2">
+        <div className="border-b border-neutral-200 pb-2">
           <div className="flex items-center gap-2">
-            <Funnel className="h-5 w-5 text-[var(--brand-primary)]" />
-            <h2 className="text-xl font-bold tracking-tight text-slate-800">2. Tráfego e Topo de Funil</h2>
+            <Funnel className="h-5 w-5 text-neutral-900" />
+            <h2 className="text-xl font-bold tracking-tight text-neutral-900">2. Tráfego e Topo de Funil</h2>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-neutral-600 mt-1">
             Volume de acessos ao Gateway de Financiamentos e Seguros, fontes de origem e produtos visitados.
           </p>
         </div>
@@ -941,31 +952,30 @@ function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {loading || !visitKpis
             ? Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-32 rounded-2xl border bg-card animate-pulse" />
+                <div key={i} className="h-32 rounded-none border border-neutral-200 bg-card animate-pulse" />
               ))
             : visitCards.map((k) => (
                 <div
                   key={k.label}
-                  className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 hover:-translate-y-0.5 transition-all"
+                  className="group relative overflow-hidden rounded-none border border-neutral-200 bg-card p-5 hover:border-neutral-900 transition-all shadow-xs flex flex-col justify-between"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
                         {k.label}
                       </span>
-                      <span className="text-[10px] font-medium text-muted-foreground/70">{k.subLabel}</span>
+                      <k.icon className="h-3.5 w-3.5 text-neutral-400" />
                     </div>
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                      <k.icon className="h-4 w-4" />
-                    </div>
+                    <span className="text-[10px] font-normal text-neutral-400">{k.subLabel}</span>
                   </div>
-                  <div className="mt-4 text-3xl font-bold tracking-tight">{k.value}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{k.hint}</div>
+                  <div className="mt-3">
+                    <div className="text-lg font-semibold tracking-tight text-neutral-900 whitespace-nowrap">{k.value}</div>
+                    <div className="mt-1 text-xs text-neutral-500">{k.hint}</div>
+                  </div>
                 </div>
               ))}
         </div>
 
-        {/* ✨ [RECHARTS FIX]: Container com altura mínima para evitar erro width(-1) do ResizeObserver no primeiro render */}
         <div className="w-full min-h-[350px]">
           <Suspense fallback={<ChartsSkeleton />}>
             <ChartsTrafficModule
@@ -980,21 +990,21 @@ function DashboardPage() {
 
       {/* SHEET DE FILTROS MOBILE */}
       <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white z-50">
+        <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-white z-50 border-t border-neutral-200">
           <SheetHeader className="mb-4 text-left">
-            <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
+            <SheetTitle className="text-lg font-bold text-neutral-900">Filtros</SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-4 w-full">
             <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
+              <span className="text-xs font-medium text-neutral-500 mb-1 block">Período</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]"
+                    className="h-11 w-full rounded-none justify-between gap-2 bg-surface-alt text-neutral-900 border-neutral-200"
                   >
                     <span className="flex items-center gap-2 truncate">
-                      <CalendarIcon className="h-4 w-4 shrink-0" />
+                      <CalendarIcon className="h-4 w-4 shrink-0 text-neutral-600" />
                       Período:{" "}
                       {dateRange === "custom"
                         ? "Personalizado"
@@ -1006,11 +1016,11 @@ function DashboardPage() {
                               ? "15 dias"
                               : "Tudo"}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-600" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
-                  className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                  className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs"
                   align="start"
                 >
                   <Command className="bg-transparent">
@@ -1020,18 +1030,18 @@ function DashboardPage() {
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
-                        <CommandItem onSelect={() => setDateRange("7")} className="text-[#d946ef] cursor-pointer">
+                        <CommandItem onSelect={() => setDateRange("7")} className="text-neutral-900 cursor-pointer rounded-none">
                           Últimos 7 dias
                         </CommandItem>
-                        <CommandItem onSelect={() => setDateRange("15")} className="text-[#d946ef] cursor-pointer">
+                        <CommandItem onSelect={() => setDateRange("15")} className="text-neutral-900 cursor-pointer rounded-none">
                           Últimos 15 dias
                         </CommandItem>
-                        <CommandItem onSelect={() => setDateRange("30")} className="text-[#d946ef] cursor-pointer">
+                        <CommandItem onSelect={() => setDateRange("30")} className="text-neutral-900 cursor-pointer rounded-none">
                           Últimos 30 dias
                         </CommandItem>
                       </CommandGroup>
-                      <div className="border-t p-3">
-                        <p className="text-xs text-muted-foreground mb-2">Personalizado:</p>
+                      <div className="border-t border-neutral-200 p-3">
+                        <p className="text-xs text-neutral-500 mb-2 font-medium">Personalizado:</p>
                         <Calendar
                           mode="range"
                           selected={customRange}
@@ -1058,23 +1068,23 @@ function DashboardPage() {
             </div>
 
             <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Parceiro</span>
+              <span className="text-xs font-medium text-neutral-500 mb-1 block">Parceiro</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]"
+                    className="h-11 w-full rounded-none justify-between gap-2 bg-surface-alt text-neutral-900 border-neutral-200"
                   >
                     <span className="truncate">
                       {selectedPartners.length === 0
                         ? "Todos Parceiros"
                         : `${selectedPartners.length} parceiro(s) sel.`}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-600" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
-                  className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                  className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs"
                   align="start"
                 >
                   <Command className="bg-transparent">
@@ -1084,9 +1094,9 @@ function DashboardPage() {
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
-                        <CommandItem onSelect={() => setSelectedPartners([])} className="text-[#d946ef] cursor-pointer">
+                        <CommandItem onSelect={() => setSelectedPartners([])} className="text-neutral-900 cursor-pointer rounded-none">
                           <div
-                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedPartners.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                           >
                             {selectedPartners.length === 0 && "✓"}
                           </div>
@@ -1104,10 +1114,10 @@ function DashboardPage() {
                                   setSelectedPartners([...selectedPartners, String(p.id)]);
                                 }
                               }}
-                              className="text-[#d946ef] cursor-pointer"
+                              className="text-neutral-900 cursor-pointer rounded-none"
                             >
                               <div
-                                className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                                className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                               >
                                 {isSelected && "✓"}
                               </div>
@@ -1123,21 +1133,21 @@ function DashboardPage() {
             </div>
 
             <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Produto</span>
+              <span className="text-xs font-medium text-neutral-500 mb-1 block">Produto</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]"
+                    className="h-11 w-full rounded-none justify-between gap-2 bg-surface-alt text-neutral-900 border-neutral-200"
                   >
                     <span className="truncate">
                       {selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-600" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
-                  className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50"
+                  className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs"
                   align="start"
                 >
                   <Command className="bg-transparent">
@@ -1147,9 +1157,9 @@ function DashboardPage() {
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
-                        <CommandItem onSelect={() => setSelectedProducts([])} className="text-[#d946ef] cursor-pointer">
+                        <CommandItem onSelect={() => setSelectedProducts([])} className="text-neutral-900 cursor-pointer rounded-none">
                           <div
-                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedProducts.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                           >
                             {selectedProducts.length === 0 && "✓"}
                           </div>
@@ -1167,10 +1177,10 @@ function DashboardPage() {
                                   setSelectedProducts([...selectedProducts, String(p.id)]);
                                 }
                               }}
-                              className="text-[#d946ef] cursor-pointer"
+                              className="text-neutral-900 cursor-pointer rounded-none"
                             >
                               <div
-                                className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                                className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                               >
                                 {isSelected && "✓"}
                               </div>
@@ -1187,7 +1197,7 @@ function DashboardPage() {
 
             <Button
               onClick={() => setMobileFilterOpen(false)}
-              className="w-full h-11 rounded-xl bg-[#B300FF] hover:bg-[#9f00e6] text-white font-semibold mt-2"
+              className="w-full h-11 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-semibold mt-2 shadow-xs cursor-pointer"
             >
               Aplicar Filtros
             </Button>

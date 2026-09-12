@@ -1,48 +1,56 @@
 /**
- * @fileoverview Componente: DynamicConsents
+ * @fileoverview Componente: DynamicConsents (Motor de Termos & Consentimentos LGPD)
+ * @module components/financial
  * @path src/components/financial/DynamicConsents.tsx
- * * ESTRUTURA DO PROJETO:
- * --------------------------------------------------------------------------------
- * src/
- * ├── components/
- * │   ├── financial/
- * │   │   └── DynamicConsents.tsx   # [AQUI] Renderizador de termos dinâmicos
- * │   └── ui/
- * │       ├── checkbox.tsx
- * │       └── tooltip.tsx
- * └── ...
- * --------------------------------------------------------------------------------
- * * PROPÓSITO:
- * Renderiza uma lista de termos de consentimento (LGPD) injetados via API.
- * Suporta templates de texto com links dinâmicos e Tooltips via Radix UI.
- * * * INTEGRAÇÃO:
- * - Recebe `configs` (array), `value` (objeto de estado do form) e `onChange` (callback).
- * * * INTERDEPENDÊNCIAS:
- * - `@/components/ui/checkbox`: Checkbox customizado Shadcn.
- * - `@/components/ui/tooltip`: Wrapper do Radix UI.
- * - `@radix-ui/react-tooltip`: Necessário para o `Portal` do Tooltip.
+ * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: COMPLIANCE, LGPD & NEUTRAL PURITY
+ * =========================================================================
+ * @description Renderizador dinâmico de termos de consentimento, políticas
+ * de privacidade e autorizações regulatórias (BACEN/LGPD) injetadas via BFF.
+ * Suporta parsing de templates com interpolação de links externos e tooltips contextuais.
+ * 
+ * [MECÂNICA ARQUITETURAL V3 - BLINDAGEM NEUTRA AUTOCONTIDA & SBX DESIGN SYSTEM]:
+ * 1. {Bypass de Tokens Globais Contaminados}: Substitui `bg-muted/20`, `border-border`,
+ *    `text-foreground` e `data-[state=checked]:bg-primary` por classes utilitárias
+ *    neutras autocontidas (`bg-neutral-50/80`, `border-neutral-200`, `bg-neutral-900`),
+ *    imunizando o motor de consentimento contra o tema lilás herdado do CSS raiz.
+ * 2. {Zero-Radius Strict Governance}: Aplica cantos retos estritos (`rounded-none`)
+ *    no contêiner estrutural, nos checkboxes e nas janelas flutuantes de Tooltip.
+ * 3. {Event Decoupling & Isolation}: Preserva o cancelamento determinístico
+ *    de eventos (`e.stopPropagation()` e `e.preventDefault()`) nos gatilhos de Tooltip,
+ *    prevenindo mutações indesejadas no estado do Checkbox em toque e clique.
+ * 4. {Tipografia Institucional & Legal Clarity}: Escala reduzida (`text-xs`) com
+ *    entrelinhamento `leading-snug`, contraste em `text-neutral-900` (#1D1D1B) e
+ *    sublinhados técnicos offset para hyperlinks de conformidade legal.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro (Architectural Mechanics)
+ * @version 9.2.0 (Neutral Purity & LGPD Compliance Enforcement)
  */
 
+import React from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 
-// Define o contrato dos links/tooltips
+// =========================================================================
+// [CONTRATOS E INTERFACES TIPADAS]
+// =========================================================================
 interface ConsentLink {
   text: string;
-  type: 'web' | 'tooltip';
+  type: "web" | "tooltip";
   url?: string;
   tooltip_text?: string;
 }
 
-// Define a estrutura do objeto de configuração
 interface ConsentConfig {
   id: string;
   position: number;
   template_text: string;
   is_required?: boolean;
   links?: ConsentLink[];
-  // Campos legados para suporte (opcionais)
+  // Campos legados para compatibilidade reversa com manifests antigos
   prefix?: string;
   suffix?: string;
   link_text?: string;
@@ -50,54 +58,58 @@ interface ConsentConfig {
 }
 
 interface DynamicConsentsProps {
-  configs: ConsentConfig[]; // Aqui substituímos o any[]
+  configs: ConsentConfig[];
   value: Record<string, boolean>;
   onChange: (value: Record<string, boolean>) => void;
 }
 
+// =========================================================================
+// [COMPONENTE PRINCIPAL: DYNAMIC CONSENTS]
+// =========================================================================
 export function DynamicConsents({ configs, value, onChange }: DynamicConsentsProps) {
   if (!configs || configs.length === 0) return null;
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="flex flex-col rounded-lg border border-border bg-muted/10 p-2">
+      {/* Contêiner Estrutural Hairline: cantos retos e superfície neutra suave */}
+      <div className="flex flex-col border border-neutral-200 bg-neutral-50/60 p-2.5 space-y-1 rounded-none">
         {[...configs]
           .sort((a, b) => a.position - b.position)
           .map((opt) => (
-            <div key={opt.id} className="flex gap-2 items-start py-0.5 px-1 group">
+            <div key={opt.id} className="flex gap-2.5 items-start py-1 px-1 group">
               
-              {/* Checkbox Container */}
+              {/* Contêiner do Checkbox: Geometria institucional (cantos retos e neutral styling) */}
               <div className="flex items-center pt-0.5">
                 <Checkbox
                   id={`consent-${opt.id}`}
                   checked={!!value[opt.id]}
                   onCheckedChange={(checked) => onChange({ ...value, [opt.id]: !!checked })}
-                  className="h-4 w-4 shrink-0 rounded-[4px] border border-slate-400 transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]"
-                  style={
-                    value[opt.id]
-                      ? { backgroundColor: "var(--brand-primary)", borderColor: "var(--brand-primary)" }
-                      : {}
-                  }
+                  className="h-4 w-4 shrink-0 rounded-none border border-neutral-300 transition-colors focus-visible:ring-1 focus-visible:ring-neutral-900 data-[state=checked]:bg-neutral-900 data-[state=checked]:text-white data-[state=checked]:border-neutral-900"
                 />
               </div>
 
-              {/* Label & Dynamic Content */}
+              {/* Rótulo e Parser Dinâmico de Termos */}
               <label 
                 htmlFor={`consent-${opt.id}`} 
-                className="text-xs text-muted-foreground leading-snug cursor-pointer select-none flex-1 mt-[2px]"
+                className="text-xs text-neutral-600 leading-snug cursor-pointer select-none flex-1 mt-[2px]"
               >
                 {opt.template_text ? (
-                  /* Parsing do texto via Regex para identificar {Tags} */
+                  /* Parsing do template dinâmico para extração de tags {identificador} */
                   opt.template_text.split(/(\{.*?\})/g).map((part: string, i: number) => {
                     
-                    // Caso: É uma tag dinâmica (link ou tooltip)
                     if (part.startsWith("{") && part.endsWith("}")) {
                       const cleanText = part.replace(/[{}]/g, "");
-                      const linkConfig = opt.links?.find((l: any) => l.text === cleanText);
+                      const linkConfig = opt.links?.find((l: ConsentLink) => l.text === cleanText);
 
-                      if (!linkConfig) return <span key={i} className="font-bold text-foreground">{cleanText}</span>;
+                      if (!linkConfig) {
+                        return (
+                          <span key={i} className="font-semibold text-neutral-900">
+                            {cleanText}
+                          </span>
+                        );
+                      }
 
-                      // Tipo: WEB (Link externo)
+                      // Ação Web: Hyperlink externo seguro
                       if (linkConfig.type === "web") {
                         return (
                           <a
@@ -105,8 +117,7 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                             href={linkConfig.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="underline font-bold hover:opacity-80 inline mx-0.5"
-                            style={{ color: "var(--brand-primary)" }}
+                            className="font-semibold text-neutral-900 underline underline-offset-2 hover:text-neutral-700 inline mx-0.5 transition-colors"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {cleanText}
@@ -114,19 +125,18 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                         );
                       }
 
-                      // Tipo: TOOLTIP (Interativo com Portal)
+                      // Ação Tooltip: Explicação contextual em Portal
                       if (linkConfig.type === "tooltip") {
                         return (
                           <Tooltip key={i}>
                             <TooltipTrigger asChild>
-                              {/* Trocamos span por button para corrigir o mobile e o clique da label */}
                               <button
                                 type="button"
-                                className="underline font-bold cursor-help border-b border-dashed inline mx-0.5 hover:opacity-80 bg-transparent p-0 text-left outline-none"
-                                style={{ color: "var(--brand-primary)", borderColor: "var(--brand-primary)" }}
+                                className="font-semibold text-neutral-900 underline underline-offset-2 border-b border-dashed border-neutral-400 cursor-help inline mx-0.5 hover:text-neutral-700 bg-transparent p-0 text-left outline-none transition-colors"
                                 onClick={(e) => {
-                                  e.preventDefault(); // <-- IMPEDE a label de marcar o checkbox
-                                  e.stopPropagation(); // <-- Impede o evento de subir
+                                  // Impede que o clique de abertura do tooltip acione o checkbox pai
+                                  e.preventDefault();
+                                  e.stopPropagation();
                                 }}
                               >
                                 {cleanText}
@@ -137,9 +147,11 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                                 side="bottom"
                                 align="start"
                                 sideOffset={6}
-                                className="max-w-xs p-3 bg-white text-slate-700 text-[11px] rounded-xl border border-slate-200 shadow-lg leading-relaxed z-[100] animate-in fade-in-0 zoom-in-95"
+                                className="max-w-xs p-3 bg-white text-neutral-900 text-[11px] rounded-none border border-neutral-200 shadow-md leading-relaxed z-[100] animate-in fade-in-0 zoom-in-95"
                               >
-                                <p className="font-normal">{linkConfig.tooltip_text}</p>
+                                <p className="font-normal text-neutral-600">
+                                  {linkConfig.tooltip_text}
+                                </p>
                               </TooltipContent>
                             </TooltipPrimitive.Portal>
                           </Tooltip>
@@ -147,14 +159,20 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                       }
                     }
 
-                    // Caso: Texto estático normal
+                    // Texto estático de preenchimento
                     return <span key={i}>{part}</span>;
                   })
                 ) : (
-                  /* Fallback legado para suporte a modelos antigos */
+                  /* Fallback de compatibilidade para contratos legados */
                   <>
                     {(opt as any).prefix}
-                    <a href={(opt as any).url} target="_blank" className="underline mx-1 font-bold" style={{ color: "var(--brand-primary)" }}>
+                    <a 
+                      href={(opt as any).url} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="font-semibold text-neutral-900 underline underline-offset-2 mx-1 hover:text-neutral-700 transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {(opt as any).link_text}
                     </a>
                     {(opt as any).suffix}

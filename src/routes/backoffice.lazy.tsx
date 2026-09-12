@@ -36,7 +36,7 @@ import {
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { AuthProvider, useAuth } from "@/integrations/auth/AuthContext"; // ✨ Importe o AuthProvider aqui
+import { AuthProvider, useAuth } from "@/integrations/auth/AuthContext";
 import { logLoginHistoryEvent } from "@/lib/login-history";
 
 /**
@@ -58,7 +58,7 @@ function BackofficeGuard() {
  * [REGISTRO DA ROTA TANSTACK ROUTER]
  */
 export const Route = createLazyFileRoute("/backoffice")({
-  component: BackofficeGuard, // Aponta para o Guardião, não para o Layout diretamente
+  component: BackofficeGuard,
 });
 
 /**
@@ -92,7 +92,6 @@ const CONFIG_NAV = [
 function BackofficeLayout() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  // Este hook agora funciona porque o Provider está renderizado "acima" dele
   const { authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, signOut, session } = useAuth();
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -141,32 +140,26 @@ function BackofficeLayout() {
   if (!isMounted || authLoading || authorizationLoading || (!hasInitialized && !backofficeUser && !pathname.includes("/backoffice/login"))) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-        <p className="text-slate-500 font-medium text-sm">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-900 mb-4"></div>
+        <p className="text-neutral-500 font-medium text-sm">
           Carregando informações...
         </p>
       </div> 
     );
   }
 
-  // Bypass para a página de login
   if (pathname.includes("/backoffice/login")) {
     return <Outlet />;
   }
 
-  // Se a checagem terminou e o usuário não tem permissão
   if (!authLoading && !authorizationLoading && (!backofficeUser || !isBackofficeAllowed)) {
     return null; 
   }
 
-  // Tratamento seguro para iniciais do avatar do usuário logado
-  const initials = (backofficeUser?.name || "??")
-    .split(" ")
-    .map((p: string) => p[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  const nameParts = (backofficeUser?.name || "??").trim().split(" ").filter(Boolean);
+  const initials = nameParts.length > 1
+    ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
+    : (nameParts[0]?.[0] || "?").toUpperCase();
 
   const renderNavItem = (item: { to: string; label: string; icon: React.ComponentType<{ className?: string }> }) => {
     const active = pathname === item.to;
@@ -176,25 +169,27 @@ function BackofficeLayout() {
         key={item.to}
         to={item.to as any}
         onClick={() => setMobileMenuOpen(false)}
-        className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-          active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+        className={`group flex items-center gap-2.5 rounded-none px-3 py-0.5 text-[13px] transition-colors ${
+          active 
+            ? "bg-neutral-100 text-neutral-900 font-semibold border-r-2 border-neutral-900" 
+            : "text-neutral-600 font-normal hover:bg-neutral-50 hover:text-neutral-900"
         }`}
       >
-        <Icon className={`h-4 w-4 ${active ? "text-primary" : ""}`} />
+        <Icon className={`h-3.5 w-3.5 ${active ? "text-neutral-900" : "text-neutral-400"}`} />
         {item.label}
       </Link>
     );
   };
 
   const sidebarContent = (
-    <div className="flex h-full flex-col bg-card">
-      <div className="flex h-16 items-center border-b border-border px-5">
+    <div className="flex h-full flex-col bg-white">
+      <div className="flex h-16 items-center border-b border-neutral-200 px-5">
         <WalletLogo size="sm" withTagline />
       </div>
 
-      <nav className="flex-1 space-y-6 p-3 overflow-y-auto">
+      <nav className="flex-1 space-y-2 p-3 overflow-y-auto">
         <div>
-          <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="px-3 pb-1 pt-2 text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-400">
             Operação
           </p>
           {OPERACAO_NAV.map(renderNavItem)}
@@ -202,7 +197,7 @@ function BackofficeLayout() {
 
         {isAdmin && (
           <div>
-            <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="px-3 pb-1 pt-2 text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-400">
               Segurança
             </p>
             {SEGURANCA_NAV.map(renderNavItem)}
@@ -211,7 +206,7 @@ function BackofficeLayout() {
 
         {isAdmin && (
           <div>
-            <p className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="px-3 pb-1 pt-2 text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-400">
               Configuração
             </p>
             {CONFIG_NAV.map(renderNavItem)}
@@ -219,27 +214,27 @@ function BackofficeLayout() {
         )}
       </nav>
 
-      <div className="border-t border-border p-3">
+      <div className="border-t border-neutral-200 p-3">
         {backofficeUser ? (
-          <div className="mt-2 flex items-center gap-3 rounded-lg bg-accent/40 px-3 py-2.5">
+          <div className="flex items-center gap-3 px-2 py-1.5">
             {backofficeUser?.avatar ? (
               <img
                 src={backofficeUser.avatar}
                 alt={backofficeUser?.name || "Usuário"}
-                className="h-8 w-8 rounded-full object-cover"
+                className="h-8 w-8 rounded-full object-cover shrink-0 border border-neutral-200"
               />
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[image:var(--gradient-primary)] text-xs font-bold text-primary-foreground">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 border border-neutral-200 text-xs font-medium text-neutral-700">
                 {initials || "?"}
               </div>
             )}
             <div className="min-w-0 flex-1 leading-tight">
-              <div className="truncate text-sm font-semibold">{backofficeUser?.name}</div>
-              <div className="truncate text-[11px] text-muted-foreground">{backofficeUser?.email}</div>
+              <div className="truncate text-xs font-medium text-neutral-900">{backofficeUser?.name}</div>
+              <div className="truncate text-[11px] text-neutral-400">{backofficeUser?.email}</div>
             </div>
             <button
               onClick={() => signOut()}
-              className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+              className="rounded-none p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900 cursor-pointer"
               title="Encerrar sessão"
             >
               <LogOut className="h-4 w-4" />
@@ -251,15 +246,15 @@ function BackofficeLayout() {
   );
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-background">
+    <div className="flex h-dvh overflow-hidden bg-neutral-50/50">
       {/* Sidebar Desktop */}
-      <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-card lg:flex">
+      <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-neutral-200 bg-white lg:flex">
         {sidebarContent}
       </aside>
 
       {/* Sidebar Mobile (Gaveta Radix Sheet) */}
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-        <SheetContent side="left" className="p-0 w-64">
+        <SheetContent side="left" className="p-0 w-64 rounded-none border-r border-neutral-200">
           {sidebarContent}
         </SheetContent>
       </Sheet>
@@ -267,15 +262,15 @@ function BackofficeLayout() {
       {/* Área Principal de Conteúdo */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Cabeçalho Mobile */}
-        <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 lg:hidden">
+        <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 lg:hidden">
           <WalletLogo size="sm" withTagline />
           <Button
             variant="ghost"
             size="icon"
-            className="rounded-lg"
+            className="rounded-none border border-neutral-200 hover:bg-neutral-100"
             onClick={() => setMobileMenuOpen(true)}
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-5 w-5 text-neutral-900" />
           </Button>
         </header>
 

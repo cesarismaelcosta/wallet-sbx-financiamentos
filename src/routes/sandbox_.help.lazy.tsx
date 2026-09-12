@@ -8,6 +8,12 @@
  * Documentação técnica aprofundada gerada a partir da inspeção exaustiva 
  * dos arquivos reais do ecossistema (Camada de Serviços, Rotas TanStack, 
  * Contextos de Autenticação, Edge Functions Deno em _shared e Arquitetura Stateless).
+ * 
+ * [ATUALIZAÇÃO DE CONFORMIDADE VISUAL]:
+ * - Neutral Purity: Extinção de cores de marca (roxo/lilás) em favor de tons
+ *   sóbrios de neutral-900 a neutral-50 para documentação técnica.
+ * - Zero-Radius: Remoção de cantos arredondados (rounded-xl, rounded-lg) em
+ *   Tabs, Accordions, Cards e badges de código, aplicando rounded-none.
  * ============================================================================
  */
 
@@ -46,19 +52,19 @@ function HelpAccordion({ items }: { items: { q: string; a: React.ReactNode; bull
         <AccordionItem 
           key={i} 
           value={`help-item-${i}`} 
-          className="border border-border rounded-xl px-4 bg-white shadow-sm transition-all focus-within:border-[#B300FF]"
+          className="border border-neutral-200 rounded-none px-4 bg-white shadow-sm transition-all focus-within:border-neutral-900"
         >
-          <AccordionTrigger className="text-left font-bold text-sm text-slate-800 hover:text-[#B300FF] transition-colors py-4 leading-snug">
+          <AccordionTrigger className="text-left font-bold text-sm text-neutral-800 hover:text-neutral-900 transition-colors py-4 leading-snug">
             {item.q}
           </AccordionTrigger>
-          <AccordionContent className="text-muted-foreground text-xs leading-relaxed pb-4 border-t border-slate-100 pt-3">
-            <div className="mb-2 text-slate-600">{item.a}</div>
+          <AccordionContent className="text-neutral-500 text-xs leading-relaxed pb-4 border-t border-neutral-200 pt-3">
+            <div className="mb-2 text-neutral-600">{item.a}</div>
             {item.bullets && item.bullets.length > 0 && (
               <div className="space-y-2 mt-3">
                 {item.bullets.map((bullet, idx) => (
                   <div key={idx} className="flex gap-2 items-start">
-                    <span className="text-[#B300FF] font-bold mt-0.5">•</span>
-                    <span className="text-slate-600 flex-1">{bullet}</span>
+                    <span className="text-neutral-900 font-bold mt-0.5">•</span>
+                    <span className="text-neutral-600 flex-1">{bullet}</span>
                   </div>
                 ))}
               </div>
@@ -71,17 +77,19 @@ function HelpAccordion({ items }: { items: { q: string; a: React.ReactNode; bull
 }
 
 function SandboxHelpPage() {
+  const codeBadge = "bg-neutral-100 border border-neutral-200 text-neutral-900 px-1 py-0.5 rounded-none font-mono text-[10px]";
+
   return (
-    <div className="bg-slate-50/50 min-h-screen pt-12 pb-24 px-6 md:px-12">
+    <div className="bg-neutral-50 min-h-screen pt-12 pb-24 px-6 md:px-12">
       <div className="max-w-6xl mx-auto space-y-6 font-sans">
         
         {/* HEADER DA PÁGINA */}
-        <div className="flex flex-col gap-2 border-b border-slate-200 pb-6">
-          <h1 className="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-3">
-            <LifeBuoy className="h-8 w-8 text-[#B300FF]" />
+        <div className="flex flex-col gap-2 border-b border-neutral-200 pb-6">
+          <h1 className="text-3xl font-black tracking-tight text-neutral-900 flex items-center gap-3">
+            <LifeBuoy className="h-8 w-8 text-neutral-900" />
             Manual Técnico & Arquitetura Stateless do Ecossistema
           </h1>
-          <p className="text-sm text-muted-foreground max-w-4xl leading-relaxed">
+          <p className="text-sm text-neutral-500 max-w-4xl leading-relaxed">
             Documentação estruturada com base na auditoria dos arquivos-fonte do projeto. 
             Abrange o roteamento lazy do TanStack, o ecossistema de serviços, a segurança de borda em Deno (_shared), o modelo de autenticação Stateless em memória e o tratamento automatizado de sessões expiradas.
           </p>
@@ -92,20 +100,20 @@ function SandboxHelpPage() {
           
           {/* Menu de Abas */}
           <div className="overflow-x-auto pb-2">
-            <TabsList className="w-auto inline-flex justify-start h-12 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
-              <TabsTrigger value="frontend" className="rounded-lg data-[state=active]:bg-slate-100 data-[state=active]:text-[#B300FF] px-4 font-semibold text-xs">
+            <TabsList className="w-auto inline-flex justify-start h-12 bg-white p-1 rounded-none border border-neutral-200 shadow-sm">
+              <TabsTrigger value="frontend" className="rounded-none data-[state=active]:bg-neutral-100 data-[state=active]:text-neutral-900 px-4 font-semibold text-xs">
                 <Layers className="w-4 h-4 mr-2" /> Front-end & Rotas
               </TabsTrigger>
-              <TabsTrigger value="services" className="rounded-lg data-[state=active]:bg-slate-100 data-[state=active]:text-[#B300FF] px-4 font-semibold text-xs">
+              <TabsTrigger value="services" className="rounded-none data-[state=active]:bg-neutral-100 data-[state=active]:text-neutral-900 px-4 font-semibold text-xs">
                 <KeyRound className="w-4 h-4 mr-2" /> Serviços & Auth Stateless
               </TabsTrigger>
-              <TabsTrigger value="edge" className="rounded-lg data-[state=active]:bg-slate-100 data-[state=active]:text-[#B300FF] px-4 font-semibold text-xs">
+              <TabsTrigger value="edge" className="rounded-none data-[state=active]:bg-neutral-100 data-[state=active]:text-neutral-900 px-4 font-semibold text-xs">
                 <ServerCrash className="w-4 h-4 mr-2" /> Edge Functions (_shared)
               </TabsTrigger>
-              <TabsTrigger value="orchestrator" className="rounded-lg data-[state=active]:bg-slate-100 data-[state=active]:text-[#B300FF] px-4 font-semibold text-xs">
+              <TabsTrigger value="orchestrator" className="rounded-none data-[state=active]:bg-neutral-100 data-[state=active]:text-neutral-900 px-4 font-semibold text-xs">
                 <TerminalSquare className="w-4 h-4 mr-2" /> BFF & Orchestrator
               </TabsTrigger>
-              <TabsTrigger value="database" className="rounded-lg data-[state=active]:bg-slate-100 data-[state=active]:text-[#B300FF] px-4 font-semibold text-xs">
+              <TabsTrigger value="database" className="rounded-none data-[state=active]:bg-neutral-100 data-[state=active]:text-neutral-900 px-4 font-semibold text-xs">
                 <Database className="w-4 h-4 mr-2" /> PostgreSQL & RLS
               </TabsTrigger>
             </TabsList>
@@ -118,31 +126,31 @@ function SandboxHelpPage() {
             
             {/* ABA: FRONT-END & ROTAS */}
             <TabsContent value="frontend" className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
-                  <CardTitle className="text-lg text-slate-800">TanStack Router e Componentização (Features)</CardTitle>
-                  <CardDescription>Análise do mapeamento de rotas lazy-loaded e da arquitetura modular do hub financeiro.</CardDescription>
+              <Card className="border-neutral-200 shadow-sm rounded-none">
+                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
+                  <CardTitle className="text-lg text-neutral-800">TanStack Router e Componentização (Features)</CardTitle>
+                  <CardDescription className="text-neutral-500">Análise do mapeamento de rotas lazy-loaded e da arquitetura modular do hub financeiro.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-slate-50/30">
+                <CardContent className="pt-6 bg-neutral-50">
                   <HelpAccordion 
                     items={[
                       {
                         q: "Como o TanStack Router gerencia as telas e o carregamento da aplicação?",
                         a: "Mapeado através do diretório 'routes/', o sistema emprega roteamento baseado em arquivos com carregamento assíncrono (.lazy.tsx):",
                         bullets: [
-                          <><b>Sandbox & Ajuda:</b> Os arquivos <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sandbox.tsx</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sandbox_.help.lazy.tsx</code> gerenciam o painel de debug e o manual técnico com redirecionamento automático de sessões expiradas.</>,
-                          <><b>Portal do Cliente (SBX Pay):</b> Gerenciado por <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sbxpay.lazy.tsx</code> e suas extensões para a página inicial, visualização de ofertas e histórico de consultas.</>,
-                          <><b>Backoffice Administrativo:</b> Módulos isolados em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">backoffice.*.lazy.tsx</code> cobrindo alertas, auditorias, configurações, domínios, relatórios, rotas, simulações e controle de usuários.</>,
-                          <><b>Jornadas Verticais:</b> Telas específicas para produtos como Auto Equity, Cartão, Financiamento de Veículos e Seguros localizadas em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">financiamentos.*</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">seguros.*</code>.</>
+                          <><b>Sandbox & Ajuda:</b> Os arquivos <code className={codeBadge}>sandbox.tsx</code> e <code className={codeBadge}>sandbox_.help.lazy.tsx</code> gerenciam o painel de debug e o manual técnico com redirecionamento automático de sessões expiradas.</>,
+                          <><b>Portal do Cliente (SBX Pay):</b> Gerenciado por <code className={codeBadge}>sbxpay.lazy.tsx</code> e suas extensões para a página inicial, visualização de ofertas e histórico de consultas.</>,
+                          <><b>Backoffice Administrativo:</b> Módulos isolados em <code className={codeBadge}>backoffice.*.lazy.tsx</code> cobrindo alertas, auditorias, configurações, domínios, relatórios, rotas, simulações e controle de usuários.</>,
+                          <><b>Jornadas Verticais:</b> Telas específicas para produtos como Auto Equity, Cartão, Financiamento de Veículos e Seguros localizadas em <code className={codeBadge}>financiamentos.*</code> e <code className={codeBadge}>seguros.*</code>.</>
                         ]
                       },
                       {
                         q: "Como a pasta 'features/' modulariza a interface e os produtos de crédito?",
                         a: "O design system e as regras de negócio visuais estão desacoplados em subpastas dedicadas:",
                         bullets: [
-                          <><b>Componentes de Layout:</b> Elementos reutilizáveis como <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">ButtonWhatsApp.tsx</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">DynamicConsents.tsx</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">FAQSection.tsx</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">Footer.tsx</code>.</>,
-                          <><b>Módulos Sequenciais (Wizards):</b> Produtos como o Auto Equity possuem passos estruturados de <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">Step1Eligibility.tsx</code> até <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">Step5Confirm.tsx</code>, validados por schemas próprios e controlados pelo motor central em <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">WizardEngine.tsx</code>.</>,
-                          <><b>Core State:</b> O gerenciamento de estado e navegação utiliza hooks dedicados como <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">useOrchestrator.ts</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">useNavigation.ts</code> e o contexto global do hub.</>
+                          <><b>Componentes de Layout:</b> Elementos reutilizáveis como <code className={codeBadge}>ButtonWhatsApp.tsx</code>, <code className={codeBadge}>DynamicConsents.tsx</code>, <code className={codeBadge}>FAQSection.tsx</code> e <code className={codeBadge}>Footer.tsx</code>.</>,
+                          <><b>Módulos Sequenciais (Wizards):</b> Produtos como o Auto Equity possuem passos estruturados de <code className={codeBadge}>Step1Eligibility.tsx</code> até <code className={codeBadge}>Step5Confirm.tsx</code>, validados por schemas próprios e controlados pelo motor central em <code className={codeBadge}>WizardEngine.tsx</code>.</>,
+                          <><b>Core State:</b> O gerenciamento de estado e navegação utiliza hooks dedicados como <code className={codeBadge}>useOrchestrator.ts</code>, <code className={codeBadge}>useNavigation.ts</code> e o contexto global do hub.</>
                         ]
                       }
                     ]}
@@ -153,30 +161,30 @@ function SandboxHelpPage() {
 
             {/* ABA: SERVIÇOS & AUTH STATELESS */}
             <TabsContent value="services" className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
-                  <CardTitle className="text-lg text-slate-800">Autenticação Stateless e Tratamento de Sessão Expirada</CardTitle>
-                  <CardDescription>Como o sistema unificou a validação em memória e o redirecionamento automático por resiliência.</CardDescription>
+              <Card className="border-neutral-200 shadow-sm rounded-none">
+                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
+                  <CardTitle className="text-lg text-neutral-800">Autenticação Stateless e Tratamento de Sessão Expirada</CardTitle>
+                  <CardDescription className="text-neutral-500">Como o sistema unificou a validação em memória e o redirecionamento automático por resiliência.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-slate-50/30">
+                <CardContent className="pt-6 bg-neutral-50">
                   <HelpAccordion 
                     items={[
                       {
                         q: "Como o ecossistema executa a autenticação e o protocolo de Exchange (sbx-auth-exchange)?",
                         a: "Para mitigar riscos e eliminar consultas desnecessárias ao banco de dados, o sistema adota um fluxo otimizado de autenticação:",
                         bullets: [
-                          <><b>Autenticação Externa:</b> A função <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">autenticarAccountsSBX</code> executa um POST direto no endpoint OAuth2 da Superbid (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">/account/oauth/token</code>), obtendo o token bruto (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">access_token_sbx</code>).</>,
-                          <><b>Exchange Stateless:</b> O token bruto é enviado para a Edge Function <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">sbx-auth-exchange</code>, que valida o usuário no upstream e retorna um perfil unificado junto a um JWT assinado criptografamente em memória (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session_token</code>).</>,
-                          <><b>Zero Banco de Dados para Sessões:</b> A tabela legada <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session_tokens</code> foi eliminada. Toda a validação de acesso ocorre puramente pela verificação matemática da assinatura do JWT.</>
+                          <><b>Autenticação Externa:</b> A função <code className={codeBadge}>autenticarAccountsSBX</code> executa um POST direto no endpoint OAuth2 da Superbid (<code className={codeBadge}>/account/oauth/token</code>), obtendo o token bruto (<code className={codeBadge}>access_token_sbx</code>).</>,
+                          <><b>Exchange Stateless:</b> O token bruto é enviado para a Edge Function <code className={codeBadge}>sbx-auth-exchange</code>, que valida o usuário no upstream e retorna um perfil unificado junto a um JWT assinado criptografamente em memória (<code className={codeBadge}>session_token</code>).</>,
+                          <><b>Zero Banco de Dados para Sessões:</b> A tabela legada <code className={codeBadge}>session_tokens</code> foi eliminada. Toda a validação de acesso ocorre puramente pela verificação matemática da assinatura do JWT.</>
                         ]
                       },
                       {
                         q: "Como o Sandbox lida com o erro SESSION_EXPIRED em chamadas AJAX (Fetch)?",
                         a: "O painel de testes implementa resiliência automatizada por meio da rotina 'checkAndHandleSessionError':",
                         bullets: [
-                          <><b>Interceptação Inteligente:</b> Caso uma chamada assíncrona retorne código <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">SESSION_EXPIRED</code> ou status 401, a aplicação não exibe apenas um aviso estático, mas limpa o storage e executa o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">handleExpiredSession()</code>.</>,
-                          <><b>Redirecionamento com Retorno Preservado:</b> O usuário é redirecionado instantaneamente para <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">/accounts/signin?redirect_uri=...</code>, garantindo que ele retorne ao ponto exato após reautenticar.</>,
-                          <><b>Guarda de Visibilidade e Inatividade:</b> Eventos de <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">visibilitychange</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">pageshow</code> inspecionam o tempo de expiração do JWT (claim <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">exp</code>) preventivamente ao focar na aba.</>
+                          <><b>Interceptação Inteligente:</b> Caso uma chamada assíncrona retorne código <code className={codeBadge}>SESSION_EXPIRED</code> ou status 401, a aplicação não exibe apenas um aviso estático, mas limpa o storage e executa o <code className={codeBadge}>handleExpiredSession()</code>.</>,
+                          <><b>Redirecionamento com Retorno Preservado:</b> O usuário é redirecionado instantaneamente para <code className={codeBadge}>/accounts/signin?redirect_uri=...</code>, garantindo que ele retorne ao ponto exato após reautenticar.</>,
+                          <><b>Guarda de Visibilidade e Inatividade:</b> Eventos de <code className={codeBadge}>visibilitychange</code> e <code className={codeBadge}>pageshow</code> inspecionam o tempo de expiração do JWT (claim <code className={codeBadge}>exp</code>) preventivamente ao focar na aba.</>
                         ]
                       }
                     ]}
@@ -187,29 +195,29 @@ function SandboxHelpPage() {
 
             {/* ABA: EDGE FUNCTIONS & _SHARED */}
             <TabsContent value="edge" className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
-                  <CardTitle className="text-lg text-slate-800">Edge Functions em Deno, Borda Híbrida e _shared</CardTitle>
-                  <CardDescription>Segurança de borda com suporte flexível a cabeçalhos e payloads protegidos.</CardDescription>
+              <Card className="border-neutral-200 shadow-sm rounded-none">
+                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
+                  <CardTitle className="text-lg text-neutral-800">Edge Functions em Deno, Borda Híbrida e _shared</CardTitle>
+                  <CardDescription className="text-neutral-500">Segurança de borda com suporte flexível a cabeçalhos e payloads protegidos.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-slate-50/30">
+                <CardContent className="pt-6 bg-neutral-50">
                   <HelpAccordion 
                     items={[
                       {
                         q: "Como a borda 'financial-gateway-gate' resolve credenciais de forma híbrida?",
                         a: "A Edge Function aceita tokens de acesso por múltiplas vias de transporte com purificação de segurança integrada:",
                         bullets: [
-                          <><b>Prioridade por Header:</b> O sistema prioriza a leitura do token bruto no cabeçalho customizado <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">x-access-token</code> para requisições AJAX seguras via Fetch.</>,
-                          <><b>Fallback por Payload:</b> Caso o envio ocorra via submissão tradicional de formulário HTML (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">&lt;form method="POST"&gt;</code>), o parâmetro <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">auth_token</code> é extraído do corpo.</>,
-                          <><b>Security Patch (Purga Automática):</b> Imediatamente após a captura, a propriedade <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">auth_token</code> é apagada do objeto payload (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">delete payload.auth_token</code>), impedindo vazamentos ou o reenvio indevido da credencial opaca para serviços downstream (Orquestrador).</>
+                          <><b>Prioridade por Header:</b> O sistema prioriza a leitura do token bruto no cabeçalho customizado <code className={codeBadge}>x-access-token</code> para requisições AJAX seguras via Fetch.</>,
+                          <><b>Fallback por Payload:</b> Caso o envio ocorra via submissão tradicional de formulário HTML (<code className={codeBadge}>&lt;form method="POST"&gt;</code>), o parâmetro <code className={codeBadge}>auth_token</code> é extraído do corpo.</>,
+                          <><b>Security Patch (Purga Automática):</b> Imediatamente após a captura, a propriedade <code className={codeBadge}>auth_token</code> é apagada do objeto payload (<code className={codeBadge}>delete payload.auth_token</code>), impedindo vazamentos ou o reenvio indevido da credencial opaca para serviços downstream (Orquestrador).</>
                         ]
                       },
                       {
                         q: "Como o diretório 'supabase/functions/_shared/' padroniza o back-end?",
                         a: "O código serverless utiliza utilitários universais centralizados:",
                         bullets: [
-                          <><b>server.ts:</b> Define os cabeçalhos de CORS e o wrapper de segurança <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">withSecurity</code>.</>,
-                          <><b>jwt.ts e auth.ts:</b> Concentram a lógica de emissão (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">generateSessionToken</code>) e validação em memória (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">verifySessionToken</code>).</>,
+                          <><b>server.ts:</b> Define os cabeçalhos de CORS e o wrapper de segurança <code className={codeBadge}>withSecurity</code>.</>,
+                          <><b>jwt.ts e auth.ts:</b> Concentram a lógica de emissão (<code className={codeBadge}>generateSessionToken</code>) e validação em memória (<code className={codeBadge}>verifySessionToken</code>).</>,
                           <><b>gateKeeper.ts, logger.ts e db.ts:</b> Asseguram regras de IDOR, logs estruturados e conexões seguras com o Supabase.</>
                         ]
                       }
@@ -221,19 +229,19 @@ function SandboxHelpPage() {
 
             {/* ABA: BFF & ORCHESTRATOR */}
             <TabsContent value="orchestrator" className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
-                  <CardTitle className="text-lg text-slate-800">Backend-for-Frontend (BFF) e Orchestrator</CardTitle>
-                  <CardDescription>Como o motor de orquestração distribui regras e fluxos dinâmicos.</CardDescription>
+              <Card className="border-neutral-200 shadow-sm rounded-none">
+                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
+                  <CardTitle className="text-lg text-neutral-800">Backend-for-Frontend (BFF) e Orchestrator</CardTitle>
+                  <CardDescription className="text-neutral-500">Como o motor de orquestração distribui regras e fluxos dinâmicos.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-slate-50/30">
+                <CardContent className="pt-6 bg-neutral-50">
                   <HelpAccordion 
                     items={[
                       {
                         q: "Qual é a função do motor Orchestrator no projeto?",
                         a: "Desacopla as regras de navegação e apresentação do código estático do front-end:",
                         bullets: [
-                          <>A Edge Function <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">orchestrator</code> lê o <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">user_id</code> diretamente do token stateless validado em memória (<code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">auth.user_id</code>) via header <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">x-session-token</code>.</>,
+                          <>A Edge Function <code className={codeBadge}>orchestrator</code> lê o <code className={codeBadge}>user_id</code> diretamente do token stateless validado em memória (<code className={codeBadge}>auth.user_id</code>) via header <code className={codeBadge}>x-session-token</code>.</>,
                           "Entrega payloads JSON estruturados com configurações de rotas, painéis de propostas, FAQs e termos LGPD."
                         ]
                       },
@@ -253,28 +261,28 @@ function SandboxHelpPage() {
 
             {/* ABA: POSTGRESQL & RLS */}
             <TabsContent value="database" className="space-y-6 animate-in duration-300">
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="bg-white rounded-t-xl border-b border-slate-100 pb-5">
-                  <CardTitle className="text-lg text-slate-800">Modelo Relacional, RLS e Triggers (PostgreSQL)</CardTitle>
-                  <CardDescription>Segurança de dados e estruturação de tabelas baseada nos scripts SQL de migração.</CardDescription>
+              <Card className="border-neutral-200 shadow-sm rounded-none">
+                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
+                  <CardTitle className="text-lg text-neutral-800">Modelo Relacional, RLS e Triggers (PostgreSQL)</CardTitle>
+                  <CardDescription className="text-neutral-500">Segurança de dados e estruturação de tabelas baseada nos scripts SQL de migração.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-slate-50/30">
+                <CardContent className="pt-6 bg-neutral-50">
                   <HelpAccordion 
                     items={[
                       {
                         q: "Como o Row Level Security (RLS) protege as tabelas nas migrações?",
                         a: "Os scripts em 'supabase/migrations/' aplicam restrições de acesso rígidas no banco de dados relacional:",
                         bullets: [
-                          <>Todas as tabelas executam explicitamente o comando <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">ENABLE ROW LEVEL SECURITY</code>.</>,
-                          <>A tabela legada <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">session_tokens</code> foi totalmente removida para dar lugar à arquitetura puramente stateless.</>
+                          <>Todas as tabelas executam explicitamente o comando <code className={codeBadge}>ENABLE ROW LEVEL SECURITY</code>.</>,
+                          <>A tabela legada <code className={codeBadge}>session_tokens</code> foi totalmente removida para dar lugar à arquitetura puramente stateless.</>
                         ]
                       },
                       {
                         q: "Como a modelagem separa Topo de Funil (Visits) da Esteira de Crédito (Simulations)?",
                         a: "O banco divide o ciclo de vida do cliente em domínios normalizados:",
                         bullets: [
-                          <><b>Topo de Funil:</b> As tabelas <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">visits</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">visit_updates</code>, <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">visit_entities</code> e <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">visit_consents</code> registram UTMs, IPs e interações prévias.</>,
-                          <><b>Esteira de Crédito:</b> A tabela mestre <code className="bg-slate-100 text-purple-700 px-1 py-0.5 rounded font-mono text-[10px]">simulations</code> gerencia propostas de financiamento, ligando-se a tabelas satélites de auditoria e garantias.</>
+                          <><b>Topo de Funil:</b> As tabelas <code className={codeBadge}>visits</code>, <code className={codeBadge}>visit_updates</code>, <code className={codeBadge}>visit_entities</code> e <code className={codeBadge}>visit_consents</code> registram UTMs, IPs e interações prévias.</>,
+                          <><b>Esteira de Crédito:</b> A tabela mestre <code className={codeBadge}>simulations</code> gerencia propostas de financiamento, ligando-se a tabelas satélites de auditoria e garantias.</>
                         ]
                       }
                     ]}

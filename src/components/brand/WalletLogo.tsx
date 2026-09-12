@@ -38,9 +38,9 @@ const SIZE_MAP: Record<NonNullable<WalletLogoProps["size"]>, string> = {
 };
 
 const TAGLINE_SIZE: Record<NonNullable<WalletLogoProps["size"]>, string> = {
-  sm: "text-[8px] sm:text-[9px] tracking-[0.18em]",
-  md: "text-[10px] tracking-[0.24em]",
-  lg: "text-xs tracking-[0.26em]",
+  sm: "text-[8px] tracking-[0.18em]",
+  md: "text-[9px] sm:text-[10px] tracking-[0.22em]",
+  lg: "text-[10px] sm:text-[11px] tracking-[0.25em]",
 };
 
 export function WalletLogo({
@@ -54,21 +54,21 @@ export function WalletLogo({
   const content = (
     <span
       className={cn(
-        "inline-flex flex-col gap-1",
-        centered ? "items-center" : "items-start",
+        "inline-flex flex-col gap-1.5 shrink-0",
+        centered ? "items-center text-center" : "items-start text-left",
         className,
       )}
     >
       <img
         src={logoSrc}
         alt="Wallet sbX"
-        className={cn(SIZE_MAP[size], "w-auto select-none")}
+        className={cn(SIZE_MAP[size], "w-auto select-none block")}
         draggable={false}
       />
       {withTagline && (
         <span
           className={cn(
-            "font-semibold uppercase text-muted-foreground",
+            "font-mono font-medium uppercase text-neutral-500 whitespace-nowrap leading-none select-none",
             TAGLINE_SIZE[size],
             taglineClassName,
           )}
@@ -81,7 +81,7 @@ export function WalletLogo({
 
   if (asLink) {
     return (
-      <Link to="/" className="inline-flex">
+      <Link to="/" className="inline-flex shrink-0">
         {content}
       </Link>
     );

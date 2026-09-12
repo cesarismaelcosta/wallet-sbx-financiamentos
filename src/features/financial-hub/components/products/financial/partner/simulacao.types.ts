@@ -4,14 +4,14 @@
  * Define a estrutura de estado global para a jornada de simulação.
  * * INTEGRAÇÃO:
  * - Utilizado pelo `useWizard<SimulacaoWizardData>()` em todos os steps.
+ * 
+ * [ATUALIZAÇÃO DE DESIGN SYSTEM]:
+ * - Neutral Purity & Zero-Radius: Propriedades customizadas de `theme` forçam a consistência de cores e bordas em todos os componentes do Simulador.
+ * - Tipografia: Propriedades customizadas de `theme` forçam a consistência de fontes, pesos e tamanhos em todos os componentes do Simulador.
+ * - Layout: Propriedades customizadas de `theme` forçam a consistência de espaçamentos, margens e paddings em todos os componentes do Simulador.
  */
 
 export interface PageConfig {
-  theme: {
-    primary_color: string;
-    box_bg: string;
-    box_radius: string;
-  };
   offer_panel: {
     partner: {
       name: string;

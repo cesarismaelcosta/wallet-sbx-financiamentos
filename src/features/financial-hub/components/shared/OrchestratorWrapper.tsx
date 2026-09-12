@@ -2,13 +2,15 @@
  * @fileoverview Wrapper de Hidratação do Orquestrador
  * @path src/components/common/OrchestratorWrapper.tsx
  * * RESPONSABILIDADE DESTE COMPONENTE:
- * 1. Gerenciar o estado visual (Loading/Error/Success).
- * 2. Aplicar o Branding dinâmico (variáveis CSS) injetado pelo Orchestrator.
- * 3. Envelopar o conteúdo da página com o estilo e contexto necessários.
+ * 1. Gerenciar o estado de hidratação (Loading/Error/Success).
+ * 2. Repassar o payload resolvido pelo Orchestrator para os filhos (Wizard).
+ * 
+ * [ATUALIZAÇÃO DE DESIGN SYSTEM]:
+ * - Neutral Purity & Zero-Radius: Lógica de injeção de CSS customizado 
+ *   (--brand-primary via `theme`) removida. O branding visual customizado não é mais suportado.
  */
 
-import React, { useEffect, useMemo } from "react";
-import { Loader2 } from "lucide-react";
+import React, { useMemo } from "react";
 import { useOrchestratorHydration } from "@/features/financial-hub/core/hooks/useOrchestrator";
 import { GatewayErrorResponse } from "@/features/financial-hub/core/services/gateway";
 
@@ -21,25 +23,6 @@ interface OrchestratorWrapperProps {
 export function OrchestratorWrapper({ visitId, visitUpdateId, children }: OrchestratorWrapperProps) {
   // 1. LÓGICA DE API: Delegamos a busca de dados ao hook especializado
   const { simData, loading, error } = useOrchestratorHydration(visitId, visitUpdateId);
-
-  // 2. BRANDING: Memoização das cores e assets dinâmicos
-  const brandStyles = useMemo(() => {
-    const fallback = {
-      primary_color: "#B300FF",
-    };
-
-    const config = simData?.page_configs.theme || fallback;
-    return {
-      "--brand-primary": config.primary_color ?? fallback.primary_color,
-    } as React.CSSProperties;
-  }, [simData]);
-
-  // Efeito Global: Injeta as cores no :root do HTML (Isso é válido aqui pois é um side-effect lógico)
-  useEffect(() => {
-    const root = document.documentElement;
-    Object.entries(brandStyles).forEach(([key, value]) => root.style.setProperty(key, value as string));
-    return () => Object.keys(brandStyles).forEach((key) => root.style.removeProperty(key));
-  }, [brandStyles]);
 
   const payload = useMemo(() => {
     // Se houver erro, extraímos os dados conforme a estrutura do Gateway

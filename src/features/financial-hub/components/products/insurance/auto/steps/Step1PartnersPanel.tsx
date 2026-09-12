@@ -3,14 +3,13 @@
  * @path src/features/financial-hub/components/products/seguros/steps/Step1PartnersPanel.tsx
  * 
  * =========================================================================
- * 🤖 PADRÃO GEMINI PRO: STRICT THIN PAYLOAD & ARCHITECTURAL MECHANICS
+ * 🤖 PADRÃO GEMINI PRO: ZERO-RADIUS GOVERNANCE & ARCHITECTURAL MECHANICS
  * =========================================================================
  * [MECÂNICA ARQUITETURAL]:
  * - Engine: Consome WizardProvider para gerenciamento de estado.
  * - Navegação: Integração direta com `useNavigation` para intents de redirecionamento de parceiros.
  * - Conformidade: Validação estrita de consentimentos (LGPD) e envio síncrono de dados validados.
- *
- * Cores: Primary #B300FF | Fonte: Inter (font-sans)
+ * - Zero-Radius & Neutral Purity: Governança estrita de design system SBX.
  *
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro (Architectural Mechanics)
@@ -21,11 +20,26 @@ import { ButtonWhatsApp } from "@/features/financial-hub/components/layout/Butto
 import { useNavigation, NAVIGATION_INTENTS } from "@/features/financial-hub/core/hooks/useNavigation";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 import { DynamicConsents } from "@/features/financial-hub/components/layout/DynamicConsents";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function Step1PartnersPanel() {
+
+  // =========================================================================
+  // 🤖 [BFCACHE SHIELD]: Proteção contra congelamento do botão (Back/Forward)
+  // =========================================================================
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+  
   // =========================================================================
   // 🤖 [INSURERS DATA ARCHITECTURE]: Mapeamento de Seguradoras Parceiras
   // =========================================================================
@@ -84,33 +98,31 @@ export function Step1PartnersPanel() {
   };
 
   return (
-    // Removi as classes de box aqui: bg-white border border-slate-100 rounded-3xl p-8
-    <div className="font-sans max-w-xl mx-auto lg:mx-0 w-full">
+    <div className="font-sans max-w-xl mx-auto lg:mx-0 w-full space-y-6">
       
       {/* =========================================================================
        * 🤖 [PROGRESSIVE DISCLOSURE ARCHITECTURE]: Cabeçalho do Card de Seguros
        * ========================================================================= */}
-      <div className="flex items-center justify-between gap-4 mb-6">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="shrink-0 w-16 h-16 overflow-hidden flex items-center justify-center">
             <img
               src="/assets/home/seguros.webp"
               alt="Segurança"
-              className="w-full h-full object-contain"
+              className="w-full h-full object-contain relative saturate-[10%]"
               onError={(e) => {
                 (e.currentTarget as HTMLElement).style.display = 'none';
               }}
             />
           </div>
           <div>
-            {/* Oculto no mobile (hidden), visível de sm para cima (sm:block) */}
-            <h2 className="hidden sm:block text-xs font-bold uppercase tracking-widest text-slate-400 leading-tight">
+            <h2 className="hidden sm:block text-xs font-bold uppercase tracking-widest text-neutral-400 leading-tight">
               Seguradoras
             </h2>
           </div>
         </div>
 
-        <div className="bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">
+        <div className="bg-surface-alt text-neutral-900 border border-neutral-200 px-3 py-1.5 rounded-none text-xs font-bold whitespace-nowrap shrink-0 shadow-xs">
           Cotação gratuita
         </div>
       </div>
@@ -118,27 +130,27 @@ export function Step1PartnersPanel() {
       {/* =========================================================================
        * 🤖 [GRID ARCHITECTURE]: Exibição Dinâmica do Grid de Seguradoras
        * ========================================================================= */}
-      <div className="grid grid-cols-3 gap-3 mb-8">
+      <div className="grid grid-cols-3 gap-3">
         {insurers.map((insurer) => (
           <div 
             key={insurer.name} 
-            className="h-16 w-full border border-slate-100 rounded-xl flex items-center justify-center bg-white p-3 hover:border-[#B300FF] transition-all shadow-sm"
+            className="h-16 w-full border border-neutral-200 rounded-none flex items-center justify-center bg-white p-3 hover:border-neutral-900 transition-all shadow-xs"
           >
-          <img 
+            <img 
               src={insurer.logo} 
               alt={`Logo ${insurer.name}`} 
-              className="max-h-[80%] max-w-[90%] object-contain grayscale-[70%] hover:grayscale-0 transition-all duration-300" 
+              className="max-h-[80%] max-w-[90%] object-contain grayscale hover:grayscale-0 transition-all duration-300" 
             />
           </div>
         ))}
       </div>
 
-      <div className="flex flex-col gap-y-2">
+      <div className="flex flex-col gap-y-4 pt-2">
         {/* =========================================================================
          * 🤖 [CONSENTS ARCHITECTURE]: Módulo Dinâmico de Termos Legais
          * ========================================================================= */}
         <div
-          className={`mb-1 transition-opacity duration-200 ${loading || navLoading ? "pointer-events-none opacity-50" : "opacity-100"}`}
+          className={`transition-opacity duration-200 ${loading || navLoading ? "pointer-events-none opacity-50" : "opacity-100"}`}
         >
           <DynamicConsents configs={consent_configs} value={acceptedConsents} onChange={setacceptedConsents} />
         </div>
@@ -150,11 +162,11 @@ export function Step1PartnersPanel() {
           type="button"
           disabled={loading || navLoading || !areConsentsValid}
           onClick={handleProceed}
-          className="w-full h-14 bg-[#B300FF] hover:bg-[#9900D9] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#B300FF]/20 disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none disabled:!cursor-wait flex items-center justify-center gap-2"
+          className="w-full h-12 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-none transition-all shadow-xs disabled:opacity-50 disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none disabled:!cursor-wait flex items-center justify-center gap-2"
         >
           {loading || navLoading ? (
             <span className="flex items-center justify-center gap-2 animate-pulse">
-              <Loader2 className="h-5 w-5 animate-spin text-white" />
+              <Loader2 className="h-4 w-4 animate-spin text-white" />
               Processando...
             </span>
           ) : (

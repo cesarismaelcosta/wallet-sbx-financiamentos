@@ -142,63 +142,76 @@ function DominiosPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Domínios permitidos</h1>
-          <p className="text-sm text-muted-foreground">Gerencie quais domínios de e-mail podem acessar o backoffice.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Domínios permitidos</h1>
+          <p className="text-sm text-neutral-600">Gerencie quais domínios de e-mail podem acessar o backoffice.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="rounded-xl" onClick={load} disabled={loading}>
+          <Button variant="outline" size="sm" className="rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100 shadow-xs text-xs" onClick={load} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
           </Button>
           {isAdmin && (
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="rounded-xl"><Plus className="mr-2 h-4 w-4" /> Adicionar domínio</Button>
+                <Button size="sm" className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white shadow-xs text-xs">
+                  <Plus className="mr-2 h-4 w-4" /> Adicionar domínio
+                </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader><DialogTitle>Adicionar novo domínio</DialogTitle></DialogHeader>
-                <div className="space-y-4 pt-2">
-                  <Label>Domínio</Label>
-                  <Input placeholder="exemplo.com" value={newDomain} onChange={e => setNewDomain(e.target.value)} />
+              <DialogContent className="sm:max-w-md rounded-none sm:rounded-none bg-white border-neutral-200 shadow-lg">
+                <DialogHeader>
+                  <DialogTitle className="text-neutral-900 text-base">Adicionar novo domínio</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2 pt-2 text-xs">
+                  <Label className="text-neutral-700 text-xs">Domínio</Label>
+                  <Input 
+                    placeholder="exemplo.com" 
+                    value={newDomain} 
+                    onChange={e => setNewDomain(e.target.value)} 
+                    className="rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900 text-neutral-900 placeholder:text-neutral-400 text-xs"
+                  />
                 </div>
-                <DialogFooter><Button onClick={handleAdd}>Confirmar</Button></DialogFooter>
+                <DialogFooter>
+                  <Button className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-medium text-xs" onClick={handleAdd}>
+                    Confirmar
+                  </Button>
+                </DialogFooter>
               </DialogContent>
             </Dialog>
           )}
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <table className="w-full text-sm">
+      <div className="overflow-hidden rounded-none border border-neutral-200 bg-white shadow-xs">
+        <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <th className="px-3 py-2">Domínio</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Adicionado em</th>
-              <th className="w-32 px-3 py-2 text-right">Ações</th>
+            <tr className="border-b border-neutral-200 bg-neutral-100 text-left text-[10px] font-semibold uppercase tracking-wider text-neutral-600">
+              <th className="px-3 py-2.5">Domínio</th>
+              <th className="px-3 py-2.5">Status</th>
+              <th className="px-3 py-2.5">Adicionado em</th>
+              <th className="w-32 px-3 py-2.5 text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="p-10 text-center"><Loader2 className="animate-spin mx-auto"/></td></tr>
+              <tr><td colSpan={4} className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-neutral-900 h-5 w-5"/></td></tr>
             ) : domains.length === 0 ? (
-              <tr><td colSpan={4} className="p-10 text-center text-muted-foreground">Nenhum domínio encontrado.</td></tr>
+              <tr><td colSpan={4} className="p-10 text-center text-neutral-500 text-xs">Nenhum domínio encontrado.</td></tr>
             ) : (
               domains.map((d) => (
-                <tr key={d.id} className="border-b border-border/60 hover:bg-accent/40">
-                  <td className="px-3 py-2 font-medium">{d.domain}</td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${d.is_active ? "bg-emerald-500/10 text-emerald-600" : "bg-destructive/10 text-destructive"}`}>
+                <tr key={d.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
+                  <td className="px-3 py-2.5 font-medium text-neutral-900">{d.domain}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`inline-flex items-center gap-1.5 rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${d.is_active ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600"}`}>
                       {d.is_active ? <UserCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
                       {d.is_active ? "Ativo" : "Inativo"}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">{new Date(d.created_at).toLocaleDateString("pt-BR")}</td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="px-3 py-2.5 text-neutral-400">{new Date(d.created_at).toLocaleDateString("pt-BR")}</td>
+                  <td className="px-3 py-2.5 text-right">
                     {isAdmin && (
-                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={() => toggleStatus(d)}>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2 rounded-none hover:bg-neutral-100 text-neutral-900 font-medium" onClick={() => toggleStatus(d)}>
                         {d.is_active ? (
                           <>
-                            <ToggleLeft className="mr-1 h-4 w-4 text-destructive" /> Inativar
+                            <ToggleLeft className="mr-1 h-4 w-4 text-rose-500" /> Inativar
                           </>
                         ) : (
                           <>

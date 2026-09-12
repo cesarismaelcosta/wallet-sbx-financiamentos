@@ -1,16 +1,17 @@
 /**
- * @fileoverview Passo 1: Elegibilidade (Jornada Auto Equity)
- * * PROPÓSITO:
- * Realizar a validação inicial do cliente antes de prosseguir com a simulação.
- * Este componente orquestra a validação do CPF/E-mail, gestão de consentimentos 
- * (LGPD) e o estado de bloqueio (inelegibilidade).
- * * INTEGRAÇÃO:
- * - Utiliza o `useWizard<any>()` para aceder ao estado global do Motor Genérico.
- * - Lê os dados do utilizador a partir de `state.data` (injetado pelo orquestrador).
- * - Atualiza o fluxo através de `update`, separando navegação (`meta`) de dados (`data`).
- * * INTERDEPENDÊNCIAS:
- * - Engine: `@/components/engine/WizardProvider`
- * - Mock: `@/lib/auto-equity.mock`
+ * @fileoverview Passo 2: Dados Pessoais / Renda (Jornada Auto Equity)
+ * @path src/features/financial-hub/components/products/credit/auto-equity/steps/Step2PersonalData.tsx
+ * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO: ZERO-RADIUS GOVERNANCE & NEUTRAL PURITY
+ * =========================================================================
+ * [MECÂNICA ARQUITETURAL]:
+ * - Engine: Renderizado pela WizardEngine.
+ * - Estado: Consome WizardProvider.
+ * - Conformidade: Zero-Radius Strict Governance & Neutral Purity (Sem tokens de marca corrompidos).
+ *
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro (Architectural Mechanics)
  */
 
 import { useForm } from "react-hook-form";
@@ -28,12 +29,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider"; // Motor Genérico
+import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider"; 
 import { personalIncomeSchema, type PersonalIncomeData } from "../schemas";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 
-// Classe padronizada para unificar tamanho e fonte
-const commonInputClass = "h-10 text-sm transition-all duration-300 focus-visible:ring-2 focus-visible:ring-offset-0";
+// Classe padronizada para unificar tamanho, fonte e zero-radius estrito
+const commonInputClass = "h-11 text-sm rounded-none border-neutral-200 bg-white transition-all duration-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900";
 
 // Labels para o mapeamento visual dos Selects
 const LABELS: Record<string, string> = {
@@ -79,56 +80,48 @@ export function Step2PersonalData() {
     next();
   };
 
-  const isIncomeFilled = Number(income) > 0;
-
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
-      <section className="rounded-xl border border-border p-4">
-        <header className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Wallet className="h-4 w-4 text-[var(--brand-primary)]" /> Sua renda
+      <section className="rounded-none border border-neutral-200 bg-surface-alt p-5 sm:p-6 shadow-xs space-y-4">
+        <header className="flex items-center gap-2 text-sm font-bold text-neutral-900 uppercase tracking-wider">
+          <Wallet className="h-4 w-4 text-neutral-900" strokeWidth={1.5} /> Sua renda
         </header>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {/* Renda Mensal */}
-          <div className="sm:col-span-2">
-            <Label htmlFor="income">Renda mensal</Label>
+          <div className="sm:col-span-2 space-y-1.5">
+            <Label htmlFor="income" className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Renda mensal</Label>
             <Input
               id="income"
               placeholder="Sua renda total mensal sem descontos..."
               autoComplete="off"
-              className={`${commonInputClass} ${isIncomeFilled ? "bg-[var(--brand-primary)]/1 border-[var(--brand-primary)]/10" : "border-input"} focus-visible:border-[var(--brand-primary)]`}
+              className={commonInputClass}
               value={income ? BRL(income) : ""}
               onChange={(e) =>
                 form.setValue("monthlyIncome", maskMoney(e.target.value), { shouldValidate: true })
               }
             />
             {err.monthlyIncome && (
-              <p className="mt-1 text-xs text-destructive">{err.monthlyIncome.message}</p>
+              <p className="mt-1 text-xs text-red-600 font-medium">{err.monthlyIncome.message}</p>
             )}
           </div>
 
           {/* Vínculo profissional */}
-          <div>
-            <Label>Vínculo profissional</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Vínculo profissional</Label>
             <Select
               value={form.watch("professionalStatus") ?? ""}
               onValueChange={(v) => form.setValue("professionalStatus", v as any, { shouldValidate: true })}
             >
-              <SelectTrigger 
-                className={`${commonInputClass} ${form.watch("professionalStatus") 
-                  ? "bg-[var(--brand-primary)]/1 border-[var(--brand-primary)]/10" 
-                  : "border-input"
-                } focus-visible:border-[var(--brand-primary)]`
-                }
-              >
+              <SelectTrigger className={commonInputClass}>
                 <SelectValue placeholder="Escolher..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-none border-neutral-200">
                 {personalIncomeSchema.shape.professionalStatus.options.map((opt) => (
                   <SelectItem 
                     key={opt} 
                     value={opt}
-                    className="data-[highlighted]:!bg-[var(--brand-primary)]/10 data-[highlighted]:!text-[var(--brand-primary)] cursor-pointer"
+                    className="rounded-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-900 cursor-pointer"
                   >
                     {LABELS[opt] || opt}
                   </SelectItem>
@@ -138,27 +131,21 @@ export function Step2PersonalData() {
           </div>
 
           {/* Tempo de vínculo */}
-          <div>
-            <Label>Tempo de vínculo</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Tempo de vínculo</Label>
             <Select
               value={form.watch("timeOfEmployment") ?? ""}
               onValueChange={(v) => form.setValue("timeOfEmployment", v as any, { shouldValidate: true })}
             >
-              <SelectTrigger 
-                className={`${commonInputClass} ${form.watch("timeOfEmployment") 
-                  ? "bg-[var(--brand-primary)]/1 border-[var(--brand-primary)]/10" 
-                  : "border-input"
-                } focus-visible:border-[var(--brand-primary)]`
-                }
-              >
+              <SelectTrigger className={commonInputClass}>
                 <SelectValue placeholder="Escolher..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-none border-neutral-200">
                 {personalIncomeSchema.shape.timeOfEmployment.options.map((opt) => (
                   <SelectItem 
                     key={opt} 
                     value={opt}
-                    className="data-[highlighted]:!bg-[var(--brand-primary)]/10 data-[highlighted]:!text-[var(--brand-primary)] cursor-pointer"
+                    className="rounded-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-900 cursor-pointer"
                   >
                     {LABELS[opt] || opt}
                   </SelectItem>
@@ -169,13 +156,13 @@ export function Step2PersonalData() {
         </div>
       </section>
 
-      {/* Botões de Navegação */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Botões de Navegação com Zero-Radius e Neutral Purity */}
+      <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 pt-2">
         <Button 
           type="button" 
           variant="ghost" 
           onClick={back}
-          className="text-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/10 hover:text-[var(--brand-primary)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+          className="w-full sm:w-auto rounded-none text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900 font-medium"
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> 
           Voltar
@@ -183,7 +170,7 @@ export function Step2PersonalData() {
         <Button 
           type="submit" 
           size="lg" 
-          className="h-12 flex-1 rounded-xl transition-all bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+          className="h-12 w-full sm:w-auto flex-1 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-bold shadow-xs transition-all active:scale-[0.98]"
         >
           Continuar
         </Button>

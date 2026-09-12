@@ -1,101 +1,104 @@
 /**
- * @fileoverview Componente: PanelProductOffer
+ * @fileoverview Componente: PanelProductOffer (Pitch Comercial & Proposta de Valor)
  * @path src/features/financial-hub/components/layout/PanelProductOffer.tsx
  * 
  * =========================================================================
- * [DOCUMENTAÇÃO DO COMPONENTE & REGRAS DE NEGÓCIO]
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: VALUE PROPOSITION, ZERO-RADIUS & SBX DS
  * =========================================================================
- * @description Painel lateral principal de proposta de valor da jornada.
+ * Painel lateral principal de proposta de valor da jornada de simulação.
  * Renderiza dinamicamente a promessa comercial (headline), os benefícios 
- * atrelados (com ícones) e o selo do parceiro (footer).
+ * atrelados (com ícones mapeados) e o selo regulatório do parceiro.
  * 
- * @responsibilities
- * 1. Consumo Seguro: Exibe um Skeleton elegante se os dados ainda estiverem hidratando.
- * 2. Renderização Dinâmica: Interpreta o JSON do Orquestrador para estilizar 
- *    trechos específicos do texto (ex: `highlight`, `bold`).
- * 3. Identidade Visual: Consome a cor primária (brand) do tema injetado.
+ * [MECÂNICA ARQUITETURAL V3 - BLINDAGEM NEUTRA SELETIVA]:
+ * 1. {Reaproveitamento de Skeleton}: Delega o estado de carregamento ao
+ *    `PanelProductOfferSkeleton`, eliminando duplicação e vazamentos.
+ * 2. {Purgação Visual de Cores Externas}: Erradica qualquer injeção hardcoded de azul.
+ *    O estilo `highlight` assume o padrão neutro puro.
+ * 3. {Zero-Radius Strict Governance}: Aplica cantos retos (`rounded-none`) em
+ *    todos os contêineres de ícones, badges e caixas informativas do parceiro.
+ * 4. {Tipografia Seletiva}: Aplicação controlada da classe `.serif` apenas nos 
+ *    elementos de destaque permitidos, preservando o corpo de texto padrão.
+ * 
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro (Architectural Mechanics)
  */
 
 import { ICON_MAP } from "../shared/icons-map";
+import { PanelProductOfferSkeleton } from "./PanelProductOfferSkeleton";
 
-export function PanelProductOffer({ config }: { config: any }) {
+interface PanelProductOfferProps {
+  config: any;
+}
+
+export function PanelProductOffer({ config }: PanelProductOfferProps) {
   // =========================================================================
-  // [ESTADO DE CARREGAMENTO / SKELETON]: Renderiza esqueleto se o dado não chegou
+  // 1. ESTADO DE CARREGAMENTO (DELEGAÇÃO PARA SKELETON AUTOCONTIDO)
   // =========================================================================
   if (!config?.offer_panel?.headline?.parts || !config?.offer_panel?.description?.parts) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        {/* Simulação do Título e Descrição */}
-        <div className="space-y-4">
-          <div className="h-10 bg-slate-100 rounded-xl w-3/4"></div>
-          <div className="h-6 bg-slate-100 rounded-lg w-full"></div>
-          <div className="h-6 bg-slate-100 rounded-lg w-5/6"></div>
-        </div>
-
-        {/* Simulação da Lista de Benefícios */}
-        <div className="space-y-4 pt-4">
-          {[1, 2, 3].map((_, i) => (
-            <div key={i} className="flex items-start gap-3">
-              <div className="h-8 w-8 rounded-lg bg-slate-100 shrink-0"></div>
-              <div className="space-y-2 flex-1">
-                <div className="h-4 bg-slate-100 rounded w-1/2"></div>
-                <div className="h-3 bg-slate-100 rounded w-5/6"></div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Simulação do Rodapé do Parceiro */}
-        <div className="mt-8 rounded-xl border border-slate-100 bg-slate-50/50 p-4 space-y-2">
-          <div className="h-3 bg-slate-100 rounded w-1/4"></div>
-          <div className="h-4 bg-slate-100 rounded w-1/2"></div>
-        </div>
-      </div>
-    );
+    return <PanelProductOfferSkeleton />;
   }
 
-  // Desestruturação segura e extração do tema dinâmico
-  const { offer_panel, theme } = config;
-  const brandColor = theme?.primary_color || "var(--brand-primary)";
+  // =========================================================================
+  // 2. PARSER DINÂMICO DE TEXTO SELETIVO & HIERARQUIA
+  // =========================================================================
+  const { offer_panel } = config;
 
-  const getTextStyle = (type: string) => {
+  const getHeadlineStyle = (type: string) => {
     switch (type) {
-      case "highlight": return "text-[var(--brand-primary)]";
-      case "bold": return "font-bold text-foreground";
-      default: return "text-foreground";
+      case "highlight":
+        return "font-normal text-neutral-900 serif";
+      case "bold":
+        return "font-semibold text-neutral-900";
+      default:
+        return "text-neutral-900";
+    }
+  };
+
+  const getDescriptionStyle = (type: string) => {
+    switch (type) {
+      case "highlight":
+        return "font-semibold text-neutral-900"; // Descrição usa peso forte neutro, sem forçar serifa desalinhada
+      case "bold":
+        return "font-semibold text-neutral-900";
+      default:
+        return "text-neutral-600";
     }
   };
 
   return (
-    <div className="space-y-6" style={{ '--brand-primary': brandColor } as React.CSSProperties}>
+    <div className="space-y-6 text-neutral-900 rounded-none">
       
       {/* 1. HEADLINE E DESCRIÇÃO */}
       <div className="space-y-4">
-        <h1 className="text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
+        <h1 className="text-2xl sm:text-3xl font-semibold leading-tight tracking-tight text-neutral-900">
           {offer_panel.headline.parts.map((part: any, i: number) => (
-            <span key={i} className={getTextStyle(part.type)}>{part.text}</span>
+            <span key={i} className={getHeadlineStyle(part.type)}>
+              {part.text}
+            </span>
           ))}
         </h1>
-        <p className="mt-4 text-base text-muted-foreground">
+        <p className="mt-3 text-sm md:text-base text-neutral-600 leading-relaxed">
           {offer_panel.description.parts.map((part: any, i: number) => (
-            <span key={i} className={getTextStyle(part.type)}>{part.text}</span>
+            <span key={i} className={getDescriptionStyle(part.type)}>
+              {part.text}
+            </span>
           ))}
         </p>
       </div>
 
       {/* 2. LISTA DE BENEFÍCIOS */}
       {offer_panel.benefits && Array.isArray(offer_panel.benefits) && (
-        <ul className="flex flex-col gap-4">
+        <ul className="flex flex-col gap-4 pt-2">
           {offer_panel.benefits.map((b: any, i: number) => {
             const Icon = ICON_MAP[b.icon];
             return (
               <li key={i} className="flex items-start gap-3">
-                <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]">
-                  {Icon && <Icon className="h-4 w-4" />}
+                <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-neutral-200 bg-neutral-100 text-neutral-700">
+                  {Icon && <Icon className="h-4 w-4 text-neutral-700" />}
                 </span>
-                <div>
-                  <p className="text-sm font-medium text-foreground">{b.title}</p>
-                  <p className="text-xs text-muted-foreground">{b.description}</p>
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-neutral-900">{b.title}</p>
+                  <p className="text-xs text-neutral-500 leading-normal">{b.description}</p>
                 </div>
               </li>
             );
@@ -103,13 +106,13 @@ export function PanelProductOffer({ config }: { config: any }) {
         </ul>
       )}
 
-      {/* 3. RODAPÉ DO PARCEIRO */}
+      {/* 3. SELO REGULATÓRIO DO PARCEIRO */}
       {offer_panel.partner?.name && (
-        <div className="mt-8 rounded-xl border border-border bg-muted/40 p-3 sm:p-4 flex flex-col items-start gap-0.5 overflow-hidden w-full">
-          <span className="text-xs text-muted-foreground">
+        <div className="mt-8 rounded-none border border-neutral-200 bg-neutral-50 p-3.5 sm:p-4 flex flex-col items-start gap-1 overflow-hidden w-full shadow-xs">
+          <span className="text-[11px] uppercase tracking-wider text-neutral-500 font-mono">
             {offer_panel.partner.label}
           </span>
-          <strong className="text-[clamp(8px,3.5vw,10px)] sm:text-xs text-foreground truncate w-full block">
+          <strong className="text-xs sm:text-sm font-medium text-neutral-900 truncate w-full block">
             {offer_panel.partner.name}
           </strong>
         </div>

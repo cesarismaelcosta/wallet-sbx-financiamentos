@@ -1,14 +1,13 @@
 /**
  * @fileoverview Definição de Tipos - Jornada de Cartão
  * 
+ * [ATUALIZAÇÃO DE DESIGN SYSTEM]:
+ * - Neutral Purity & Zero-Radius: Propriedades customizadas de `theme` forçam a consistência de cores e bordas em todos os componentes do Card.
+ * - Tipografia: Propriedades customizadas de `theme` forçam a consistência de fontes, pesos e tamanhos em todos os componentes do Card.
+ * - Layout: Propriedades customizadas de `theme` forçam a consistência de espaçamentos, margens e paddings em todos os componentes do Card.
  */
 
 export interface PageConfig {
-  theme: {
-    primary_color: string;
-    box_bg: string;
-    box_radius: string;
-  };
   offer_panel: {
     partner: {
       name: string;

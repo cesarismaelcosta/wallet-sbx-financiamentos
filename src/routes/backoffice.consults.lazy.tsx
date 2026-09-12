@@ -116,7 +116,7 @@
 
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useRef } from "react";
-import { RefreshCw, Search, Filter, Download, ChevronDown, Printer, Loader2, Calendar as CalendarIcon } from "lucide-react";
+import { RefreshCw, Search, Filter, Download, ChevronDown, Printer, Loader2, Calendar as CalendarIcon, Camera } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { useAuth } from "@/integrations/auth/AuthContext";
 
@@ -190,6 +190,7 @@ const safeArray = <T,>(data: T | T[] | null | undefined): T[] => {
   return Array.isArray(data) ? data : [data];
 };
 
+// Cores originais mantidas
 const STATUS_STYLES: Record<string, string> = {
   visita: "bg-purple-500/10 text-purple-600",
   simulacao: "bg-primary/10 text-primary",
@@ -307,8 +308,8 @@ function ConsultsPage() {
     try {
       const offset = targetPage * PAGE_SIZE;
 
-      let p_date_from = null;
-      let p_date_to = null;
+      let p_date_from: string | null = null;
+      let p_date_to: string | null = null;
 
       if (dateRange === "30") {
         const d = new Date();
@@ -498,23 +499,18 @@ function ConsultsPage() {
           )[0] || null;
 
         // ✨ [CORREÇÃO]: A auditoria respeita rigorosamente o evento da timeline.
-        // Se a visita tem um aceite atrelado a este Update, exibe.
-        // Se o Update foi de uma visita antiga (legacy) que não tem `visit_update_id` atrelado no consent, exibe os antigos.
-        // Isso evita que um termo assinado numa Simulação futura vaze para a tela da Visita.
         const rawConsents = safeArray(visit.visit_consents);
         let updateConsents = rawConsents.filter((c: any) => c.visit_update_id === updateData.id);
 
-        // Só exibe termos antigos caso eles não tenham nenhuma amarração e o array normal retorne vazio.
         if (updateConsents.length === 0) updateConsents = rawConsents.filter((c: any) => !c.visit_update_id);
 
-        // Removemos o raw_payload de dentro do visit para evitar colisão na raiz
         const { raw_payload: _, ...cleanVisit } = visit;
 
         setActiveConsult({
           ...cleanVisit,
           created_at: updateData.created_at,
           action: updateData.action,
-          raw_payload: updateData.raw_payload, // Garante estritamente o payload rico do visit_updates
+          raw_payload: updateData.raw_payload,
           partner_id: updateData.partner_id,
           product_id: updateData.product_id,
           partners: updateData.partners,
@@ -533,7 +529,7 @@ function ConsultsPage() {
     }
   }
 
-function getVisitStatus(r: Record<string, unknown>): string {
+  function getVisitStatus(r: Record<string, unknown>): string {
     const act = (String(r.action ?? "")).toUpperCase();
     if (act.includes("SIMULATE")) return "SIMULAÇÃO";
     if (act.includes("CONSULT")) return "CONSULTA";
@@ -625,8 +621,8 @@ function getVisitStatus(r: Record<string, unknown>): string {
     <div className="font-sans space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Consultas e Visitas</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Consultas e Visitas</h1>
+          <p className="text-sm text-neutral-600">
             Acompanhe acessos, consultas, redirecionamentos e conversões em tempo real.
           </p>
         </div>
@@ -634,11 +630,11 @@ function getVisitStatus(r: Record<string, unknown>): string {
           <Button
             variant="outline"
             onClick={handleExportExcel}
-            className="rounded-xl hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200 transition-colors"
+            className="rounded-none hover:bg-neutral-100 hover:text-neutral-900 border-neutral-200 text-neutral-900 transition-colors shadow-xs"
           >
             <Download className="mr-2 h-4 w-4" /> Exportar Excel
           </Button>
-          <Button onClick={() => load(0)} disabled={loading} className="rounded-xl">
+          <Button onClick={() => load(0)} disabled={loading} className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white shadow-xs">
             <RefreshCw className={`mr-2 h-4 w-4 shrink-0 ${loading ? "animate-spin" : ""}`} /> Atualizar
           </Button>
         </div>
@@ -651,22 +647,22 @@ function getVisitStatus(r: Record<string, unknown>): string {
           { label: "Sites parceiros", value: Number(stats.sites_parceiros).toLocaleString("pt-BR") },
           { label: "Simulações geradas", value: Number(stats.simulacoes).toLocaleString("pt-BR") },
         ].map((t) => (
-          <div key={t.label} className="rounded-2xl border border-border bg-card p-5 text-card-foreground">
-            <div className="text-xs font-semibold uppercase text-muted-foreground">{t.label}</div>
-            <div className="mt-2 text-2xl font-bold">{t.value}</div>
+          <div key={t.label} className="rounded-none border border-neutral-200 bg-white p-4 flex flex-col justify-between text-neutral-900 shadow-xs">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-500 whitespace-nowrap">{t.label}</div>
+            <div className="mt-2 text-xl font-semibold tracking-tight whitespace-nowrap">{t.value}</div>
           </div>
         ))}
       </div>
 
-      <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-border p-4">
+      <div className="rounded-none border border-neutral-200 bg-white flex flex-col shadow-xs">
+        <div className="flex flex-col gap-3 border-b border-neutral-200 p-4 bg-neutral-50/50">
           <div className="lg:hidden">
             <Button
               variant="outline"
               onClick={() => setMobileFilterOpen(true)}
-              className="w-full h-11 rounded-xl gap-2 justify-start bg-white border-slate-200 text-slate-700 shadow-sm"
+              className="w-full h-11 rounded-none gap-2 justify-start bg-white border-neutral-200 text-neutral-900 shadow-xs"
             >
-              <Filter className="h-4 w-4 text-[#B300FF]" /> Filtros
+              <Filter className="h-4 w-4 text-neutral-900" /> Filtros
             </Button>
           </div>
           <div className="flex flex-col lg:flex-row lg:items-center gap-4">
@@ -675,9 +671,9 @@ function getVisitStatus(r: Record<string, unknown>): string {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar cliente ou CPF/CNPJ..."
-                className="h-11 w-full rounded-full bg-slate-100/70 border-transparent pl-5 pr-12 text-[13px] text-slate-700 placeholder:text-slate-500 focus-visible:ring-primary/20 focus-visible:bg-white focus-visible:border-primary/30 transition-all shadow-none"
+                className="h-11 w-full rounded-none bg-white border border-neutral-200 pl-5 pr-12 text-[13px] text-neutral-900 placeholder:text-neutral-500 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900 transition-all shadow-none"
               />
-              <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-[#B300FF]" />
+              <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-neutral-400" />
             </div>
 
             <div className="hidden lg:flex lg:items-center lg:gap-2 lg:ml-auto">
@@ -686,7 +682,7 @@ function getVisitStatus(r: Record<string, unknown>): string {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-10 w-[175px] rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600 justify-between"
+                    className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs"
                   >
                     <span className="flex items-center gap-2 truncate">
                       <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -697,13 +693,13 @@ function getVisitStatus(r: Record<string, unknown>): string {
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-56 p-0" align="start">
-                  <Command>
+                <PopoverContent className="w-56 p-0 rounded-none border-neutral-200 shadow-xs" align="start">
+                  <Command className="bg-white">
                     <CommandList>
                       <CommandGroup>
-                        <CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer">
+                        <CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer text-neutral-900 rounded-none">
                           <div
-                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedPartners.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}
+                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedPartners.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                           >
                             {selectedPartners.length === 0 && "✓"}
                           </div>
@@ -719,10 +715,10 @@ function getVisitStatus(r: Record<string, unknown>): string {
                                   setSelectedPartners(selectedPartners.filter((id) => id !== String(p.id)));
                                 else setSelectedPartners([...selectedPartners, String(p.id)]);
                               }}
-                              className={`cursor-pointer ${isSelected ? "bg-primary/10 text-primary font-medium" : ""}`}
+                              className={`cursor-pointer rounded-none text-neutral-900 ${isSelected ? "bg-neutral-100 font-medium" : ""}`}
                             >
                               <div
-                                className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}
+                                className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                               >
                                 {isSelected && "✓"}
                               </div>
@@ -741,7 +737,7 @@ function getVisitStatus(r: Record<string, unknown>): string {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-10 w-[175px] rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 transition-colors text-slate-600 justify-between"
+                    className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs"
                   >
                     <span className="flex items-center gap-2 truncate">
                       <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -752,13 +748,13 @@ function getVisitStatus(r: Record<string, unknown>): string {
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-56 p-0" align="start">
-                  <Command>
+                <PopoverContent className="w-56 p-0 rounded-none border-neutral-200 shadow-xs" align="start">
+                  <Command className="bg-white">
                     <CommandList>
                       <CommandGroup>
-                        <CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer">
+                        <CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer text-neutral-900 rounded-none">
                           <div
-                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${selectedProducts.length === 0 ? "bg-primary text-primary-foreground" : "opacity-50"}`}
+                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedProducts.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                           >
                             {selectedProducts.length === 0 && "✓"}
                           </div>
@@ -774,10 +770,10 @@ function getVisitStatus(r: Record<string, unknown>): string {
                                   setSelectedProducts(selectedProducts.filter((id) => id !== String(p.id)));
                                 else setSelectedProducts([...selectedProducts, String(p.id)]);
                               }}
-                              className={`cursor-pointer ${isSelected ? "bg-primary/10 text-primary font-medium" : ""}`}
+                              className={`cursor-pointer rounded-none text-neutral-900 ${isSelected ? "bg-neutral-100 font-medium" : ""}`}
                             >
                               <div
-                                className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary ${isSelected ? "bg-primary text-primary-foreground" : "opacity-50"}`}
+                                className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                               >
                                 {isSelected && "✓"}
                               </div>
@@ -796,7 +792,7 @@ function getVisitStatus(r: Record<string, unknown>): string {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-10 w-[175px] rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] transition-colors justify-between"
+                    className="h-10 w-[175px] rounded-none gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-neutral-50 transition-colors justify-between shadow-xs"
                   >
                     <span className="flex items-center gap-2 truncate">
                       <Filter className="h-3.5 w-3.5 shrink-0" />
@@ -812,16 +808,16 @@ function getVisitStatus(r: Record<string, unknown>): string {
                     <ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0 w-56 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <PopoverContent className="p-0 w-56 bg-white border-neutral-200 rounded-none shadow-xs z-50" align="start">
                   <Command className="bg-transparent">
                     <CommandList>
                       <CommandGroup>
                         <CommandItem
                           onSelect={() => handleSelectStatus("Todas")}
-                          className="cursor-pointer text-[#d946ef] hover:bg-[#fce7f3]"
+                          className="cursor-pointer text-neutral-900 rounded-none hover:bg-neutral-100"
                         >
                           <div
-                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                            className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedStatus.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                           >
                             {selectedStatus.length === 0 && "✓"}
                           </div>
@@ -835,10 +831,10 @@ function getVisitStatus(r: Record<string, unknown>): string {
                               <CommandItem
                                 key={s}
                                 onSelect={() => handleSelectStatus(s)}
-                                className={`cursor-pointer text-[#d946ef] hover:bg-[#fce7f3] ${isSelected ? "bg-[#d946ef]/10 font-medium" : ""}`}
+                                className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}
                               >
                                 <div
-                                  className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}
+                                  className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}
                                 >
                                   {isSelected && "✓"}
                                 </div>
@@ -857,7 +853,7 @@ function getVisitStatus(r: Record<string, unknown>): string {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-10 w-[175px] rounded-xl gap-2 bg-white hover:bg-[#fce7f3] border-slate-200 transition-colors text-slate-600 justify-between"
+                    className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs"
                   >
                     <span className="flex items-center gap-2 truncate">
                       <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -875,15 +871,15 @@ function getVisitStatus(r: Record<string, unknown>): string {
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0 w-auto" align="start">
-                  <Command>
+                <PopoverContent className="p-0 w-auto rounded-none border-neutral-200 shadow-xs" align="start">
+                  <Command className="bg-white">
                     <CommandList>
                       <CommandGroup>
-                        <CommandItem onSelect={() => setDateRange("30")}>Últimos 30 dias</CommandItem>
-                        <CommandItem onSelect={() => setDateRange("90")}>Últimos 90 dias</CommandItem>
-                        <CommandItem onSelect={() => setDateRange("all")}>Todo o período</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("30")} className="rounded-none text-neutral-900 cursor-pointer">Últimos 30 dias</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("90")} className="rounded-none text-neutral-900 cursor-pointer">Últimos 90 dias</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("all")} className="rounded-none text-neutral-900 cursor-pointer">Todo o período</CommandItem>
                       </CommandGroup>
-                      <div className="p-2 border-t">
+                      <div className="p-2 border-t border-neutral-200">
                         <Calendar
                           mode="range"
                           selected={customRange}
@@ -905,7 +901,7 @@ function getVisitStatus(r: Record<string, unknown>): string {
         <div className="overflow-x-auto w-full pb-2">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-border bg-muted/40 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+              <tr className="border-b border-neutral-200 bg-neutral-100 text-left text-[10px] font-semibold uppercase tracking-wider text-neutral-600 whitespace-nowrap">
                 <th className="px-3 py-2.5 w-[75px]">Data</th>
                 <th className="px-3 py-2.5 w-[140px]">Cliente</th>
                 <th className="px-3 py-2.5 w-[140px]">Produto</th>
@@ -933,77 +929,78 @@ function getVisitStatus(r: Record<string, unknown>): string {
                   ? new Date(offer.event_end_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
                   : "";
 
-                return (
-                  <tr
-                    key={r.row_id}
-                    onClick={() => handleSelectConsult(r)}
-                    className="border-b border-border/60 hover:bg-accent/40 cursor-pointer transition-colors"
-                    title="Clique para ver os detalhes completos da visita"
-                  >
-                    <td className="px-3 py-2.5 w-[75px]">
-                      <div className="font-semibold text-foreground">{created.d}</div>
-                      <div className="text-[11px] text-muted-foreground">{created.h}</div>
-                    </td>
-                    <td className="px-3 py-2.5 w-[140px]">
-                      <div className="font-semibold text-[#d946ef] truncate" title={entity?.name?? undefined}>
-                        {entity?.name || "—"}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">{doc}</div>
-                      <div className="text-[11px] text-muted-foreground">{phone || "—"}</div>
-                    </td>
-                    <td className="px-3 py-2.5 w-[140px]">
-                      <div className="font-semibold text-foreground">{productName}</div>
-                      <div className="text-[10px] text-muted-foreground font-medium uppercase mt-0.5">
-                        ORIGEM: {r.utm_source ? r.utm_source : "—"}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 max-w-[190px] sm:max-w-[220px]">
-                      <div className="font-semibold text-foreground truncate" title={offer?.offer_description ?? undefined}>
-                        {offer?.offer_description || "—"}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground font-medium mt-0.5">
-                        {BRL(offer?.offer_value)} {endEvent ? `(Fim: ${endEvent})` : ""}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 w-[150px]">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(statusName)}`}
+              return (
+                <tr
+                  key={r.row_id}
+                  onClick={() => handleSelectConsult(r)}
+                  className="border-b border-neutral-100 hover:bg-neutral-50 cursor-pointer transition-colors"
+                  title="Clique para ver os detalhes completos da visita"
+                >
+                  <td className="px-3 py-2.5 w-[75px]">
+                    <div className="font-medium text-neutral-900">{created.d}</div>
+                    <div className="text-[11px] text-neutral-400">{created.h}</div>
+                  </td>
+                  <td className="px-3 py-2.5 w-[140px]">
+                    <div className="font-medium text-neutral-900 truncate" title={entity?.name ?? undefined}>
+                      {entity?.name || "—"}
+                    </div>
+                    <div className="text-[11px] text-neutral-400">{doc}</div>
+                    <div className="text-[11px] text-neutral-400">{phone || "—"}</div>
+                  </td>
+                  <td className="px-3 py-2.5 w-[140px]">
+                    <div className="font-medium text-neutral-900">{productName}</div>
+                    <div className="text-[10px] text-neutral-400 uppercase mt-0.5 tracking-tight">
+                      ORIGEM: {r.utm_source ? r.utm_source : "—"}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 max-w-[190px] sm:max-w-[220px]">
+                    <div className="font-medium text-neutral-900 truncate" title={offer?.offer_description ?? undefined}>
+                      {offer?.offer_description || "—"}
+                    </div>
+                    <div className="text-[10px] text-neutral-500 mt-0.5">
+                      {BRL(offer?.offer_value)} {endEvent ? `(Fim: ${endEvent})` : ""}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 w-[150px]">
+                    <span
+                      className={`inline-flex items-center rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusClass(statusName)}`}
+                    >
+                      {statusName}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 w-[130px]">
+                    <div className="flex items-center gap-1.5">
+                      {/* ✅ LOGOS BOLEADAS (EXCEÇÃO NO DESIGN SYSTEM) */}
+                      <div
+                        className="flex h-9 w-9 items-center justify-center bg-transparent shrink-0 rounded-[6px] overflow-hidden"
+                        title={r.partners?.name}
                       >
-                        {statusName}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 w-[130px]">
-                      <div className="flex items-center gap-1.5">
-                        <div
-                          className="flex h-9 w-9 items-center justify-center rounded-md bg-transparent overflow-hidden shrink-0"
-                          title={r.partners?.name}
-                        >
-                          {r.partners?.logo_url ? (
-                            <img
-                              src={r.partners.logo_url}
-                              className="h-full w-full object-cover"
-                              alt={r.partners.name}
-                            />
-                          ) : (
-                            <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase">
-                              {r.partners?.name?.slice(0, 3) || "—"}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs font-medium text-foreground truncate" title={r.partners?.name}>
-                          {r.partners?.name || "—"}
-                        </span>
+                        {r.partners?.logo_url ? (
+                          <img
+                            src={r.partners.logo_url}
+                            className="h-full w-full object-cover rounded-[6px]"
+                            alt={r.partners.name}
+                          />
+                        ) : (
+                          <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase text-neutral-900 bg-neutral-100 rounded-[6px]">
+                            {r.partners?.name?.slice(0, 3) || "—"}
+                          </span>
+                        )}
                       </div>
-                    </td>
-                  </tr>
-                );
+                      <span className="text-xs font-medium text-neutral-900 truncate" title={r.partners?.name}>
+                        {r.partners?.name || "—"}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              );
               })}
             </tbody>
           </table>
         </div>
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border/60 bg-muted/20">
-            <div className="text-xs text-muted-foreground font-medium">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-200 bg-neutral-50">
+            <div className="text-xs text-neutral-500 font-medium">
               {rows.length === 0 ? "Nenhum resultado" : `${page * PAGE_SIZE + 1} a ${page * PAGE_SIZE + rows.length}`}
             </div>
             <div className="flex gap-2">
@@ -1016,7 +1013,7 @@ function getVisitStatus(r: Record<string, unknown>): string {
                   load(prev);
                 }}
                 disabled={page === 0 || loading}
-                className="h-8 text-xs rounded-lg"
+                className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100"
               >
                 Anterior
               </Button>
@@ -1029,7 +1026,7 @@ function getVisitStatus(r: Record<string, unknown>): string {
                   load(next);
                 }}
                 disabled={page >= totalPages - 1 || loading}
-                className="h-8 text-xs rounded-lg"
+                className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100"
               >
                 Próxima
               </Button>
@@ -1039,7 +1036,7 @@ function getVisitStatus(r: Record<string, unknown>): string {
       </div>
 
       <Sheet open={!!activeConsult} onOpenChange={(open) => !open && setActiveConsult(null)}>
-        <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col h-full bg-white">
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col h-full bg-white rounded-none border-neutral-200">
           {activeConsult &&
             (() => {
               const sim = activeConsult;
@@ -1067,20 +1064,38 @@ function getVisitStatus(r: Record<string, unknown>): string {
 
               return (
                 <div className="flex flex-col h-full overflow-hidden">
-                  <div className="p-4 sm:p-6 pb-4 border-b bg-white shrink-0">
+                  <div className="p-4 sm:p-6 pb-4 border-b border-neutral-200 bg-white shrink-0">
                     <SheetHeader className="space-y-3 text-left">
+                      
+                      {/* ✅ LOGO BOLEADA NO MODAL DETAIL */}
+                      <div className="flex items-center justify-between gap-2 pr-8">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex h-7 w-7 items-center justify-center bg-transparent shrink-0 rounded-[6px] overflow-hidden">
+                            {sim.partners?.logo_url ? (
+                              <img src={sim.partners.logo_url} className="h-full w-full object-cover rounded-[6px]" alt={sim.partners?.name} />
+                            ) : (
+                              <span className="flex items-center justify-center h-full w-full text-[9px] font-bold uppercase text-neutral-900 bg-neutral-100 rounded-[6px]">
+                                {sim.partners?.name?.slice(0, 3)}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs font-bold text-neutral-700 uppercase tracking-wide truncate">{sim.partners?.name || "Parceiro N/A"}</span>
+                        </div>
+                        {detailLoading && <div className="flex items-center gap-1.5 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-none"><Loader2 className="h-3 w-3 animate-spin text-neutral-900" /> Carregando detalhes...</div>}
+                      </div>
+
                       <div className="space-y-1 pr-8 text-left w-full">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
+                          <span className="text-[11px] font-bold text-neutral-900 uppercase tracking-wider">
                             {sim.product_types?.name || "Consulta / Visita"}
                           </span>
                           <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusClass(statusName)}`}
+                            className={`inline-flex items-center rounded-none px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${statusClass(statusName)}`}
                           >
                             {statusName}
                           </span>
                         </div>
-                        <SheetTitle className="text-lg sm:text-xl font-bold text-slate-900 break-words text-left w-full">
+                        <SheetTitle className="text-lg sm:text-xl font-bold text-neutral-950 break-words text-left w-full">
                           {entity?.name || "Lead sem nome"}
                         </SheetTitle>
                       </div>
@@ -1106,17 +1121,17 @@ function getVisitStatus(r: Record<string, unknown>): string {
                     {!!pageConfigs?.footer && <PanelFooter footer={pageConfigs.footer as any} />}
                   </div>
 
-                  <div className="p-4 bg-white border-t border-gray-200 flex items-center justify-between gap-3 shrink-0 shadow-lg">
+                  <div className="p-4 bg-white border-t border-neutral-200 flex items-center justify-between gap-3 shrink-0 shadow-xs">
                     <Button
                       variant="outline"
                       onClick={handlePrintSheet}
-                      className="flex-1 rounded-xl text-xs gap-2 border-[#B300FF]/35 text-[#B300FF] hover:bg-[#B300FF]/5 h-10 font-semibold"
+                      className="flex-1 rounded-none text-xs gap-2 border-neutral-200 text-neutral-900 hover:bg-neutral-100 h-10 font-bold"
                     >
                       <Printer className="h-4 w-4" /> Imprimir / PDF
                     </Button>
                     <Button
                       onClick={() => setActiveConsult(null)}
-                      className="flex-1 rounded-xl text-xs bg-[#B300FF] hover:bg-[#9f00e6] text-white h-10 font-semibold"
+                      className="flex-1 rounded-none text-xs bg-neutral-900 hover:bg-neutral-800 text-white h-10 font-bold"
                     >
                       Fechar
                     </Button>
@@ -1128,7 +1143,7 @@ function getVisitStatus(r: Record<string, unknown>): string {
       </Sheet>
 
       <div style={{ display: "none" }}>
-        <div ref={printRef} className="w-full text-slate-900 bg-white p-8">
+        <div ref={printRef} className="w-full text-neutral-900 bg-white p-8">
           {activeConsult &&
             (() => {
               const sim = activeConsult;
@@ -1158,17 +1173,17 @@ function getVisitStatus(r: Record<string, unknown>): string {
               return (
                 <div className="space-y-6">
                   {/* 3. Cabeçalho formatado para o PDF (Regra importada do Simulations) */}
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
+                  <div className="flex items-center justify-between border-b border-neutral-200 pb-4 mb-4">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-bold text-[#B300FF] uppercase">
+                        <span className="text-xs font-bold text-neutral-900 uppercase">
                           {sim.product_types?.name || "Consulta / Visita"}
                         </span>
-                        <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full border bg-slate-50 uppercase`}>
+                        <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-none border border-neutral-300 bg-neutral-50 uppercase`}>
                           {statusName}
                         </span>
                       </div>
-                      <h1 className="text-2xl font-bold">{entity?.name || "Lead sem nome"}</h1>
+                      <h1 className="text-2xl font-bold text-neutral-950">{entity?.name || "Lead sem nome"}</h1>
                     </div>
                   </div>
 
@@ -1205,35 +1220,35 @@ function getVisitStatus(r: Record<string, unknown>): string {
           GAVETA DE FILTROS MOBILE (O QUE FALTAVA)
           ========================================================= */}
       <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white z-50">
+        <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-white z-50 border-t border-neutral-200">
           <SheetHeader className="mb-4 text-left">
-            <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
+            <SheetTitle className="text-lg font-bold text-neutral-900">Filtros</SheetTitle>
           </SheetHeader>
           
           <div className="flex flex-col gap-4 w-full">
             
             <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
+              <span className="text-xs font-medium text-neutral-500 mb-1 block">Período</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 shadow-xs">
                     <span className="flex items-center gap-2 truncate">
-                      <CalendarIcon className="h-4 w-4 shrink-0" />
+                      <CalendarIcon className="h-4 w-4 shrink-0 text-neutral-500" />
                       Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-500" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
                   <Command className="bg-transparent">
                     <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
-                        <CommandItem onSelect={() => setDateRange("30")} className="text-[#d946ef] cursor-pointer">Últimos 30 dias</CommandItem>
-                        <CommandItem onSelect={() => setDateRange("90")} className="text-[#d946ef] cursor-pointer">Últimos 90 dias</CommandItem>
-                        <CommandItem onSelect={() => setDateRange("all")} className="text-[#d946ef] cursor-pointer">Todo o período</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("30")} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">Últimos 30 dias</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("90")} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">Últimos 90 dias</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("all")} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">Todo o período</CommandItem>
                       </CommandGroup>
-                      <div className="border-t p-3">
-                        <p className="text-xs text-muted-foreground mb-2">Personalizado:</p>
+                      <div className="border-t border-neutral-200 p-3">
+                        <p className="text-xs text-neutral-500 mb-2 font-medium">Personalizado:</p>
                         <Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} />
                       </div>
                     </CommandList>
@@ -1243,22 +1258,22 @@ function getVisitStatus(r: Record<string, unknown>): string {
             </div>
 
             <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Parceiro</span>
+              <span className="text-xs font-medium text-neutral-500 mb-1 block">Parceiro</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 shadow-xs">
                     <span className="truncate">
                       {selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-500" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
                   <Command className="bg-transparent">
                     <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
-                        <CommandItem onSelect={() => setSelectedPartners([])} className="text-[#d946ef] cursor-pointer">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedPartners.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => setSelectedPartners([])} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedPartners.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
                             {selectedPartners.length === 0 && "✓"}
                           </div>
                           Todos Parceiros
@@ -1266,8 +1281,8 @@ function getVisitStatus(r: Record<string, unknown>): string {
                         {partnersList.map((p) => {
                           const isSelected = selectedPartners.includes(String(p.id));
                           return (
-                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter((id) => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className="text-[#d946ef] cursor-pointer">
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter((id) => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className={`text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
                                 {isSelected && "✓"}
                               </div>
                               {p.name}
@@ -1282,22 +1297,22 @@ function getVisitStatus(r: Record<string, unknown>): string {
             </div>
 
             <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Produto</span>
+              <span className="text-xs font-medium text-neutral-500 mb-1 block">Produto</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 shadow-xs">
                     <span className="truncate">
                       {selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-500" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
                   <Command className="bg-transparent">
                     <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
-                        <CommandItem onSelect={() => setSelectedProducts([])} className="text-[#d946ef] cursor-pointer">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedProducts.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => setSelectedProducts([])} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedProducts.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
                             {selectedProducts.length === 0 && "✓"}
                           </div>
                           Todos Produtos
@@ -1305,8 +1320,8 @@ function getVisitStatus(r: Record<string, unknown>): string {
                         {productsList.map((p) => {
                           const isSelected = selectedProducts.includes(String(p.id));
                           return (
-                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter((id) => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className="text-[#d946ef] cursor-pointer">
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter((id) => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className={`text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
                                 {isSelected && "✓"}
                               </div>
                               {p.name}
@@ -1321,22 +1336,22 @@ function getVisitStatus(r: Record<string, unknown>): string {
             </div>
 
             <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Situação</span>
+              <span className="text-xs font-medium text-neutral-500 mb-1 block">Situação</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 shadow-xs">
                     <span className="truncate">
                       {selectedStatus.length === 0 ? "Todas" : `${selectedStatus.length} selecionada(s)`}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-500" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
                   <Command className="bg-transparent">
                     <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
-                        <CommandItem onSelect={() => handleSelectStatus("Todas")} className="text-[#d946ef] cursor-pointer">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${selectedStatus.length === 0 ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => handleSelectStatus("Todas")} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedStatus.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
                             {selectedStatus.length === 0 && "✓"}
                           </div>
                           Todas
@@ -1344,8 +1359,8 @@ function getVisitStatus(r: Record<string, unknown>): string {
                         {statusOptions.filter((s) => s !== "Qualificadas").map((s) => {
                           const isSelected = selectedStatus.includes(s);
                           return (
-                            <CommandItem key={s} onSelect={() => handleSelectStatus(s)} className="text-[#d946ef] cursor-pointer">
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-[#d946ef] ${isSelected ? "bg-[#d946ef] text-white" : "opacity-50"}`}>
+                            <CommandItem key={s} onSelect={() => handleSelectStatus(s)} className={`text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
                                 {isSelected && "✓"}
                               </div>
                               {s}
@@ -1359,7 +1374,7 @@ function getVisitStatus(r: Record<string, unknown>): string {
               </Popover>
             </div>
 
-            <Button onClick={() => setMobileFilterOpen(false)} className="w-full h-11 rounded-xl bg-[#B300FF] hover:bg-[#9f00e6] text-white font-semibold mt-2">
+            <Button onClick={() => setMobileFilterOpen(false)} className="w-full h-11 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-bold mt-2 shadow-xs cursor-pointer">
               Aplicar Filtros
             </Button>
           </div>

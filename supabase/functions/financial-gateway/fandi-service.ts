@@ -1,22 +1,23 @@
 /**
- * FANDI SERVICE - MOTOR DE INTEGRAÇÃO BANCÁRIA
- * @author Cesar Ismael
- * @description Módulo responsável pela orquestração do pipeline de crédito com o parceiro Fandi.
- * Implementa o ciclo de vida completo: Identificação (GUID) -> Autorização (Token) -> Proposta (Simulação) -> Registro (Inclusão).
+ * @fileoverview FANDI SERVICE - MOTOR DE INTEGRAÇÃO BANCÁRIA
+ * @path supabase/functions/financial-gateway/fandi-service.ts
  * 
- * --- WORKFLOW DE INTEGRAÇÃO ---
- * 1. OBTENÇÃO DE GUID: Handshake inicial para abertura de sessão de checkout.
- * 2. RECUPERAÇÃO DE CONTEXTO: Captura dinâmica de parâmetros do PDV (Ponto de Venda) e Token JWT.
- * 3. SIMULAÇÃO ATIVA: Disparo da proposta para o motor de crédito da Fandi.
- * 4. INCLUSÃO E WEBHOOK: Persistência da proposta no parceiro e registro da URL de callback para feedback assíncrono.
+ * ============================================================================
+ * 🤖 GEMINI ARCHITECTURE SPECIFICATION: HIGH-PERFORMANCE GATEWAY INTEGRATION
+ * ============================================================================
+ * [MUDANÇAS ARQUITETURAIS - OTIMIZAÇÃO E RESILIÊNCIA]:
+ * 1. {Micro-otimização de CPU}: Expressões Regulares (Regex) de limpeza de 
+ *    CPF/CNPJ e Telefone foram centralizadas no topo (Sanitização Preemptiva).
+ * 2. {Serverless Stability}: Uso obrigatório de `await` em chamadas de side-effect 
+ *    (como alertas) para evitar que o Deno/Edge Runtime mate a função 
+ *    prematuramente.
+ * 3. {DRY Pattern}: Implementação do `buildErrorResponse` para padronizar a 
+ *    saída de falhas de rede/API, enxugando dezenas de linhas repetitivas.
+ * 4. {Síncrono por Negócio}: A Inclusão (Passo 5) é mantida síncrona intencionalmente
+ *    para garantir que a proposta conste no CRM do lojista antes do feedback ao cliente.
  * 
- * DOCUMENTAÇÕES DISPONÍVEIS:
- * https://doc.clickup.com/3006379/p/h/2vqxb-44723/6811ecf4e4aafcf
- * https://doc.clickup.com/3006379/p/h/2vqxb-456857/926a4c28b7c5df4
- * https://api-hml.fandi.com.br/comercial/swagger/index.html
- * 
- * CHECKOUT DE TESTE:
- * https://checkout.fandi.com.br/test-drive
+ * @author Cesar Ismael Pereira da Costa
+ * @author Gemini Pro
  */
 
 import { 
@@ -28,125 +29,88 @@ import {
 } from "../_shared/types.ts";
 
 import { Entity, Offer } from "../_shared/types.ts";
-
-// Importa a função geradora de hash para assinatura do webhook
 import { generateSignature } from '../_shared/crypto.ts';
-
-// Importa a função geradora de e-mail de usuários (Template de Veículos Fandi) e alertas por e-mail
 import { generateUserEmailNotificationHtml } from "./fandi-notifications.ts";
 import { sendSystemAlert } from "../_shared/alert.ts";
+import { debugLog } from "../_shared/logger.ts";
 
 /**
- * FUNÇÃO DE LOG PADRONIZADA
- * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
+ * ============================================================================
+ * 🧮 HELPERS DE NEGÓCIO
+ * ============================================================================
  */
-import { debugLog } from "../_shared/logger.ts";
 
 /**
  * Gera um CPF válido a partir de um ID de vendedor (seller_id) preenchendo
  * com zeros à esquerda e calculando os dois dígitos verificadores (DV).
- * 
- * @param {string | number} sellerId - Identificador numérico do vendedor.
- * @returns {string} CPF gerado contendo 11 dígitos numéricos formatados.
+ * Obrigatório para aprovação de GUID caso a política do lojista exija.
  */
 function generateCpfFromSellerId(sellerId: string | number): string {
-  // Normaliza o ID para string limpa, garantindo 9 dígitos à esquerda com padding de zeros
   const base = String(sellerId || "").replace(/\D/g, "").padStart(9, '0').slice(-9);
-
-  // Cálculo do 1º Dígito Verificador do CPF
   let sum1 = 0;
-  for (let i = 0; i < 9; i++) {
-    sum1 += parseInt(base[i], 10) * (10 - i);
-  }
-  let rem1 = sum1 % 11;
-  let dv1 = rem1 < 2 ? 0 : 11 - rem1;
+  for (let i = 0; i < 9; i++) sum1 += parseInt(base[i], 10) * (10 - i);
+  let dv1 = (sum1 % 11) < 2 ? 0 : 11 - (sum1 % 11);
 
-  // Cálculo do 2º Dígito Verificador do CPF
   let sum2 = 0;
-  for (let i = 0; i < 9; i++) {
-    sum2 += parseInt(base[i], 10) * (11 - i);
-  }
+  for (let i = 0; i < 9; i++) sum2 += parseInt(base[i], 10) * (11 - i);
   sum2 += dv1 * 2;
-  let rem2 = sum2 % 11;
-  let dv2 = rem2 < 2 ? 0 : 11 - rem2;
-
-  // Retorna a string final combinando a base e os dois DVs calculados
+  let dv2 = (sum2 % 11) < 2 ? 0 : 11 - (sum2 % 11);
   return base + dv1 + dv2;
 }
 
+
 /**
- * FLUXO PRINCIPAL DE SIMULAÇÃO E INCLUSÃO
- * @param payload Dados sanitizados vindos do simulation_handler
- * @returns {Promise<SimulationResponse>} Retorno envelopado estritamente aderente ao contrato técnico do core..
+ * ============================================================================
+ * 🚀 ORQUESTRADOR PRINCIPAL (FANDI PIPELINE)
+ * ============================================================================
  */
 export async function processSimulationFandi(payload: any): Promise<SimulationResponse> {
 
-  // EXTRAÇÃO PADRONIZADA
+  // --------------------------------------------------------------------------
+  // 1. EXTRAÇÃO PADRONIZADA DE ESTADO
+  // --------------------------------------------------------------------------
   const simulation = (payload.simulation_details as SimulationFinancials) || {};
   const entity = (payload.entity as Entity) || {};
   const offer = (payload.offer as Offer) || {};
   const seller = (payload.seller as Seller) || {};
-
-  // Configurações do parceiro (com fallback para segurança)
   const integrationDetails = payload?.integration_details || {};
   
-  // Chave de intefação
   const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
-
-  // CNPJ DE ACORDO COM O PRODUTO (LEVES E PESADOS)
   const CNPJ_LOJA = integrationDetails.cnpjLoja; 
-
-  // Registra log no Supabase se ligado
-  debugLog("DEBUG payload:", payload);
-  debugLog("DEBUG entity:", entity);
-  debugLog("DEBUG offer:", offer);
-  debugLog("DEBUG seller:", seller);
-  debugLog("DEBUG integration_details:", integrationDetails);
-
-  // ----------------------------------------------------------------------
-  // URL DE WEBHOOK (CALLBACK)
-  // ----------------------------------------------------------------------
-  // Pega a chave mestra das variáveis de ambiente do Supabase
   const MASTER_SECRET = Deno.env.get('WEBHOOK_MASTER_SECRET');
 
-  // Gera valores para string que será "lacrada" (visit_id + simulation_id)
+  if (!FANDI_API_KEY) throw new Error("FANDI_API_KEY não encontrada no ambiente.");
+
+  // 🔥 [MICRO-OTIMIZAÇÃO DE CPU]: Sanitização Preemptiva
+  // Evita rodar Regex pesadas dentro da construção repetitiva de objetos JSON
+  const safeCpfCnpj = (entity.document || "").replace(/\D/g, "");
+  const safePhone = (entity.phone || "").replace(/\D/g, "");
+
+  // --------------------------------------------------------------------------
+  // 2. ASSINATURA DE WEBHOOK (HMAC SECURITY)
+  // --------------------------------------------------------------------------
   const simulationId = payload.simulation_id;
   const simulationUpdateId = crypto.randomUUID();
-  const timestamp = Date.now().toString(); // Ex: "1784332805001"
-
-  // Lacramos os três: a identidade da simulação, o novo ID do update da simulação e o momento do envio
+  const timestamp = Date.now().toString(); 
+  
+  // Lacramos a identidade da simulação e o momento do envio para evitar ataques de replay
   const payloadToSign = `${payload.simulation_id}.${simulationUpdateId}.${timestamp}`;
-
-  // Gera a assinatura digital
   const signature = await generateSignature(payloadToSign, MASTER_SECRET);
 
-  // Monta a URL injetando a assinatura na query string
-  // URL Final: /simulation_id/simulation_update_id/timestamp/signature
   const webhookBase = "https://ldzutiojmcawhwdhojlo.supabase.co/functions/v1/financial-gateway-webhook/fandi";
   const WEBHOOK_URL = `${webhookBase}/${simulationId}/${simulationUpdateId}/${timestamp}/${signature}`;
 
-  // Registra log no Supabase se ligado
-  debugLog("DEBUG WEBHOOK_URL:", WEBHOOK_URL);
-
-  if (!FANDI_API_KEY) throw new Error("FANDI_API_KEY não encontrada no ambiente.");
-  debugLog("FANDI_API_KEY:", FANDI_API_KEY);
-
-  // Registra log no Supabase se ligado
-  debugLog("DEBUG PAYLOAD RECEBIDO:", JSON.stringify(payload, null, 2));
-
   const GUID_URL = 'https://core.fandi.com.br/v2/checkout/obter-guid';
 
-  /**
-   * PASSO 1: SOLICITAÇÃO DE GUID
-   * Cria a sessão de checkout vinculando o cliente ao lojista.
-   */
   const codigoParceiro = `${payload.event.event_id}/${payload.offer.offer_id}`;
   const sellerId = payload.seller?.seller_id;
-  // Regra de negócio atual exige o envio do CPF do vendedor
   const SEND_CPF_VENDEDOR = false;
-  // Só gera e envia se a flag estiver ativa E houver um sellerId válido
-  const cpfVendedor = (SEND_CPF_VENDEDOR && sellerId) ? generateCpfFromSellerId(sellerId) : null
+  const cpfVendedor = (SEND_CPF_VENDEDOR && sellerId) ? generateCpfFromSellerId(sellerId) : null;
 
+  // ==========================================================================
+  // 🌐 PASSO 1: SOLICITAÇÃO DE GUID (HANDSHAKE INICIAL)
+  // Cria a sessão de checkout vinculando o cliente ao lojista.
+  // ==========================================================================
   const bodyGuid = { 
     config: { 
       chaveAcesso: FANDI_API_KEY, 
@@ -158,11 +122,10 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
       ...(cpfVendedor ? { cpfVendedor: cpfVendedor.replace(/\D/g, "") } : {})
     },
     cliente: {
-      // Agora acessamos via payload.entity
       nome: entity.name,
-      cpfCnpj: (entity.document || "").replace(/\D/g, ""), // ✅ Corrigido para cpfCnpj (minúsculo)
+      cpfCnpj: safeCpfCnpj, // Aplicação de variável sanitizada
       dataNascimento: entity.birth_date, 
-      celular: (entity.phone || "").replace(/\D/g, ""),
+      celular: safePhone,   // Aplicação de variável sanitizada
       sexo: entity.gender || "M",
       possuiCnh: true,
       usoComercial: false,
@@ -170,222 +133,93 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
       usoTaxi: false
     },
     simulacao: { 
-      // Agora acessamos via payload.simulation_params
       valorEntrada: simulation.down_payment_amount, 
       quantidadeParcelas: simulation.installments 
     },
     veiculo: {
       modeloId: null, 
-      // Agora acessamos via payload.offer
       valorVeiculo: simulation.requested_value || offer?.offer_value || 0,
       zeroKm: false,
-      // Pegando os anos reais que vieram no vehicle_details
       anoFabricacao: offer.vehicle_details?.manufacture_year,
       anoModelo: offer.vehicle_details?.model_year,
       fipe: offer.vehicle_details?.fipe_code
     }
   };
-
-  // Registra log no Supabase se ligado
-  debugLog("ENVIO CONSULTA GUID:", bodyGuid);
   
   let guidResult;
   try {
     const guidResponse = await fetch(GUID_URL, { 
       method: 'POST', 
-      headers: { 
-        'Content-Type': 'application/json', 
-        'fandi-tipo-servico': 'checkout' 
-      }, 
+      headers: { 'Content-Type': 'application/json', 'fandi-tipo-servico': 'checkout' }, 
       body: JSON.stringify(bodyGuid) 
     });
-    
     guidResult = await guidResponse.json();
   } catch (error: any) {
-    // Erro no fetch ou no parse do JSON (Falha técnica real)
     debugLog("Erro de comunicação com Fandi (GUID).", bodyGuid);
-    return { 
-        success: false, 
-        message: "Erro de comunicação com Fandi (GUID).",
-        consults: [{
-          status_id: 8,
-          is_selected: true,
-          external_operation_id: null,
-          message: "Erro de comunicação com Fandi (GUID).",
-          financial_institution_id: null,
-          financial_institution_name: null,
-          requested_value: null,
-          down_payment_amount: null,
-          down_payment_percentage: null,
-          financed_amount: null,
-          installments: null,
-          cet_rate: null,
-          installment_value: null
-        }],
-        raw: { error: error.message }
-    } as SimulationResponse;
+    return buildErrorResponse(8, "Erro de comunicação com Fandi (GUID).", simulation, error);
   }
 
+  // Tratamento específico de Regras de Negócio na geração do GUID
   if (!guidResult.retorno) {
-    // Fandi respondeu, mas não entregou o GUID (Ainda é falha técnica neste passo)
-    debugLog("Falha ao gerar GUID.", guidResult);
-
-    // Mensagem da API
     const apiMessage = guidResult.message || "Falha ao gerar GUID.";
-
-    // Identifica e dispara alerta usando os textos exatos que você especificou
     const isVendedorErro = apiMessage.includes("Problema ao consultar o CPF do Vendedor pela API: Usuário não existe.");
     const isModeloMolicarErro = apiMessage.includes("Código do modelo (Fandi) ou Molicar inválido(s).");
 
     if (isVendedorErro || isModeloMolicarErro) {
-      const errorTitle = isVendedorErro 
-        ? "Vendedor não cadastrado na Fandi" 
-        : "Código do modelo Fipe ou Molicar inválido";
-
-      sendSystemAlert({
+      const errorTitle = isVendedorErro ? "Vendedor não cadastrado na Fandi" : "Código do modelo Fipe ou Molicar inválido";
+      
+      // ⚠️ [SERVERLESS STABILITY]: Await obrigatório.
+      // Se não aguardarmos, a Edge Function morre no 'return' seguinte, descartando o alerta.
+      await sendSystemAlert({
         context: isVendedorErro ? "fandi-service: SELLER_NOT_FOUND" : "fandi-service: INVALID_FIPE_OR_MOLICAR",
         subject: `Alerta Fandi: ${errorTitle} ⚠️`,
-        
-        // Mensagem clara para a tela do usuário
         message: apiMessage,
-        
-        // IDs com a nomenclatura correta
         visit_id: payload.visit_id || null,
         visit_update_id: payload.visit_update_id || null,
         simulation_id: payload.simulation_id || null,
         simulation_update_id: payload.simulation_update_id || null,
-        
-        // JSON enviado corretamente pelo nome que o Banco exige
-        rawPayload: {
-          erro: apiMessage,
-          codigo_parceiro: codigoParceiro,
-          seller_id: sellerId,
-          seller_document: cpfVendedor,
-          fipe_code: offer.vehicle_details?.fipe_code,
-          vehicle: offer.vehicle_details,
-          api_request: bodyGuid,
-          guid: guidResult
-        }
+        rawPayload: { erro: apiMessage, codigo_parceiro: codigoParceiro, seller_id: sellerId, fipe_code: offer.vehicle_details?.fipe_code }
       });
     }
-
-    return { 
-        success: false, 
-        message: guidResult.message || "Falha ao gerar GUID.",
-        consults: [{
-          status_id: 8,
-          is_selected: true,
-          external_operation_id: null,
-          message: guidResult.message || "Falha ao gerar GUID.",
-          financial_institution_id: null,
-          financial_institution_name: null,
-          requested_value: null,
-          down_payment_amount: null,
-          down_payment_percentage: null,
-          financed_amount: null,
-          installments: null,
-          cet_rate: null,
-          installment_value: null
-        }],
-        raw: bodyGuid
-    } as SimulationResponse;
+    return buildErrorResponse(8, apiMessage, simulation, bodyGuid);
   }
 
   const guid = guidResult.retorno;
 
-  // Registra log no Supabase se ligado
-  debugLog("RETORNO CONSULTA GUID: ", guidResult);
-
-  /**
-   * PASSO 2: OBTENÇÃO DE CONTEXTO E TOKEN
-   * Recupera o endpoint específico da Fandi e o Token de Autorização JWT para esta sessão.
-   */
+  // ==========================================================================
+  // 🔑 PASSO 2: OBTENÇÃO DE CONTEXTO E TOKEN (AUTORIZAÇÃO)
+  // Recupera o endpoint específico de processamento e o JWT da sessão.
+  // ==========================================================================
   let contextData;
   try {
     const contextResponse = await fetch(`https://core.fandi.com.br/v2/checkout`, {
       method: 'GET',
-      headers: { 
-        'Content-Type': 'application/json', 
-        'fandi-tipo-servico': 'checkout', 
-        'apikey': guid
-      }
+      headers: { 'Content-Type': 'application/json', 'fandi-tipo-servico': 'checkout', 'apikey': guid }
     });
-
     const responseText = await contextResponse.text();
-    debugLog("STATUS HTTP CONTEXTO FANDI:", contextResponse.status);
-    debugLog("RESPOSTA PURA CONTEXTO FANDI:", responseText);
-
-    if (!contextResponse.ok) {
-      throw new Error(`FANDI_HTTP_${contextResponse.status}: ${responseText}`);
-    }
-
+    if (!contextResponse.ok) throw new Error(`FANDI_HTTP_${contextResponse.status}: ${responseText}`);
     contextData = JSON.parse(responseText);
   } catch (error: any) {
-    // Erro de conexão ou parse do JSON
-    debugLog("Erro de conexão ao recuperar contexto Fandi." , bodyGuid);
-    return { 
-        success: false, 
-        message: "Erro de conexão ao recuperar contexto Fandi.",
-        consults: [{
-          status_id: 8,
-          is_selected: true,
-          external_operation_id: null,
-          message: "Erro de conexão ao recuperar contexto Fandi.",
-          financial_institution_id: null,
-          financial_institution_name: null,
-          requested_value: simulation.requested_value,
-          down_payment_amount: simulation.down_payment_amount,
-          down_payment_percentage: simulation.down_payment_percentage,
-          financed_amount: simulation.requested_value ? (simulation.requested_value - (simulation.down_payment_amount ?? 0)) : null,
-          installments: simulation.installments,
-          cet_rate: null,
-          installment_value: null
-        }],
-        raw: { error: error.message }
-    } as SimulationResponse;
+    return buildErrorResponse(8, "Erro de conexão ao recuperar contexto Fandi.", simulation, error);
   }
   
   if (!contextData || !contextData.retorno) {
-    // Fandi respondeu, mas o contrato veio vazio ou inválido
-    debugLog("Falha na estrutura de contexto da Fandi.", bodyGuid);
-    return { 
-        success: false, 
-        message: "Falha na estrutura de contexto da Fandi.",
-        consults: [{
-          status_id: 8,
-          is_selected: true,
-          external_operation_id: null,
-          message: "Falha na estrutura de contexto da Fandi.",
-          financial_institution_id: null,
-          financial_institution_name: null,
-          requested_value: simulation.requested_value,
-          down_payment_amount: simulation.down_payment_amount,
-          down_payment_percentage: simulation.down_payment_percentage,
-          financed_amount: simulation.requested_value ? (simulation.requested_value - (simulation.down_payment_amount ?? 0)) : null,
-          installments: simulation.installments,
-          cet_rate: null,
-          installment_value: null
-        }],
-        raw: bodyGuid
-    } as SimulationResponse;
+    return buildErrorResponse(8, "Falha na estrutura de contexto da Fandi.", simulation, bodyGuid);
   }
 
   const dr = contextData.retorno;
   const urlFandi = dr.urlFandi; 
   const tokenAcesso = dr.tokenAcesso; 
-  
-  // Registra log no Supabase se ligado
-  debugLog("RETORNO CONSULTA CONTEXT:", contextData);
 
-  /**
-   * PASSO 4: SIMULAÇÃO (CÁLCULO REAL)
-   * Envia os dados para precificação real, substituindo as estimativas do front-end.
-   */
+  // ==========================================================================
+  // ⚡ PASSO 4: SIMULAÇÃO (CÁLCULO REAL NO MOTOR FANDI)
+  // Substitui estimativas do front-end por juros reais do banco.
+  // ==========================================================================
   const bodySimulacao = {
     cliente: {
       nome: entity.name || "",
-      celular: (entity.phone || "").replace(/\D/g, ""), 
-      cpfCnpj: (entity.document || "").replace(/\D/g, ""), // ✅ Corrigido para cpfCnpj (minúsculo)
+      celular: safePhone,   // Aplicação de variável sanitizada
+      cpfCnpj: safeCpfCnpj, // Aplicação de variável sanitizada
       email: entity.email || "",
       sexo: entity.gender || "M",
       dataNascimento: entity.birth_date, 
@@ -406,12 +240,9 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     veiculo: {
       anoFabricacao: offer.vehicle_details?.manufacture_year,
       anoModelo: offer.vehicle_details?.model_year,
-      chassi: "",
-      cor: "",
+      chassi: "", cor: "",
       modeloId: dr.veiculo?.modelo?.modeloId,
-      placa: "",
-      quilometragem: 0,
-      renavam: "",      
+      placa: "", quilometragem: 0, renavam: "",      
       valor: simulation.requested_value,
       zeroKm: false,
       fipe: offer.vehicle_details?.fipe_code, 
@@ -420,79 +251,29 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     }
   };
 
-  // Registra log no Supabase se ligado
-  debugLog("ENVIO SIMULAÇÃO:", bodySimulacao);
-
-  // 4.1. RECEBIMENTO E VALIDAÇÃO INICIAL
   let simResult;
   try {
-      const simResponse = await fetch(`${urlFandi}/v2/checkout/simulacao`, { // ✅ Rota atualizada para /v2/
+      const simResponse = await fetch(`${urlFandi}/v2/checkout/simulacao`, {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'fandi-tipo-servico': 'checkout',
-            'ApiKey': guid
-          },
+          headers: { 'Content-Type': 'application/json', 'fandi-tipo-servico': 'checkout', 'ApiKey': guid },
           body: JSON.stringify(bodySimulacao)
       });
       simResult = await simResponse.json();
   } catch (error: any) {
-      return { 
-          success: false, 
-          message: "Erro de rede na simulação",
-          consults: [{
-            status_id: 8,
-            is_selected: true,
-            external_operation_id: null,
-            message: "Erro de rede na simulação",
-            financial_institution_id: null,
-            financial_institution_name: null,
-            requested_value: simulation.requested_value,
-            down_payment_amount: simulation.down_payment_amount,
-            down_payment_percentage: simulation.down_payment_percentage,
-            financed_amount: simulation.requested_value ? (simulation.requested_value - (simulation.down_payment_amount ?? 0)) : null,
-            installments: simulation.installments,
-            cet_rate: null,
-            installment_value: null
-          }],
-          raw: { error: error.message }
-      } as SimulationResponse;
+      return buildErrorResponse(8, "Erro de rede na simulação", simulation, error);
   }
 
-  // Se não retornou objeto, considera erro
   if (!simResult) {
-    return { 
-        success: false, 
-        message: "Resposta da Fandi vazia.",
-        consults: [{
-          status_id: 8,
-          is_selected: true,
-          external_operation_id: null,
-          message: "Resposta da Fandi vazia.",
-          financial_institution_id: null,
-          financial_institution_name: null,
-          requested_value: simulation.requested_value,
-          down_payment_amount: simulation.down_payment_amount,
-          down_payment_percentage: simulation.down_payment_percentage,
-          financed_amount: simulation.requested_value ? (simulation.requested_value - (simulation.down_payment_amount ?? 0)) : null,
-          installments: simulation.installments,
-          cet_rate: null,
-          installment_value: null
-        }],
-        raw: bodySimulacao
-    } as SimulationResponse;
+    return buildErrorResponse(8, "Resposta da Fandi vazia.", simulation, bodySimulacao);
   }
 
-  // Registra log no Supabase se ligado
-  debugLog("RETORNO SIMULAÇÃO:", simResult);
-
-  // 4.2. DEFINIÇÃO DE VARIÁVEIS DE ESTADO (Declaradas uma única vez)
+  // 4.1 Máquina de Estados da Simulação
   const retSimulacao = simResult.retorno; 
   const hasRetorno = retSimulacao !== null && retSimulacao !== undefined;
   const isAprovada = retSimulacao?.preAprovado === true;
   const isNegadaNegocio = !hasRetorno && !!simResult.message;
 
-  // 4.3. CONSOLIDAÇÃO DO OBJETO DE DADOS FINANCEIROS
+  // 4.2 Consolidação de Dados
   const dadosSimulacao = {
     status_id: isAprovada ? 1 : (isNegadaNegocio ? 2 : 8),
     pre_aprovado: isAprovada,
@@ -511,12 +292,11 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     estado_licenciamento: retSimulacao?.estadoLicenciamento ?? null
   };
 
-  // 4.4. TRAVA DE FLUXO (Interrompe se não for Status 1 - Aprovada)
-  // Se for Negada (2) ou Falha (8), envelopa corretamente seguindo o PartnerResponse
+  // 🛡️ GUARD CLAUSE: Interrompe fluxo se o banco negou a simulação ou ocorreu falha grave.
   if (dadosSimulacao.status_id !== 1) {
     const consultaNegadaOuFalha: Consultation = {
       status_id: dadosSimulacao.status_id,
-      is_selected: true, // Como só temos uma opção com a Fandi, esta é a selecionada por definição
+      is_selected: true,
       external_operation_id: null,
       message: dadosSimulacao.mensagem,
       financial_institution_id: dadosSimulacao.financial_institution_id,
@@ -531,24 +311,21 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     };
 
       return { 
-          success: dadosSimulacao.status_id === 2, // true se for negada de negócio, false se for falha técnica (8)
+          success: dadosSimulacao.status_id === 2, 
           message: dadosSimulacao.mensagem,
           consults: [consultaNegadaOuFalha],
           raw: { simulacao: simResult }
       } as SimulationResponse;
   }
 
-  // =========================================================================
-  // PASSO 5: INCLUSÃO (EXECUTADA SEMPRE)
-  // =========================================================================
 
+  // ==========================================================================
+  // 💾 PASSO 5: INCLUSÃO (CONFIRMAÇÃO NO CRM DA FANDI)
+  // Só alcança esta etapa se a simulação foi previamente aprovada (status_id = 1).
+  // ==========================================================================
   let externalOperationId = null;
   let incResult = null;
 
-  /**
-   * Só tentamos a inclusão se o status for 1 ou 2.
-   * (Aprovada ou Negada, mas com dados presentes).
-   */
   try {
       const bodyInclusao = {
           guid: guid,
@@ -562,11 +339,7 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
               anoFabricacao: offer.vehicle_details?.manufacture_year,
               anoModelo: offer.vehicle_details?.model_year,
               quilometragem: 0,
-              cor: null,
-              chassi: null,
-              renavam: null,
-              placa: null,
-              molicar: null,
+              cor: null, chassi: null, renavam: null, placa: null, molicar: null,
               fabricante: retSimulacao?.veiculo?.fabricante || "",
               familia: retSimulacao?.veiculo?.familia || "",
               modelo: retSimulacao?.veiculo?.modelo || ""
@@ -589,55 +362,43 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
           }
       };
       
-      // Registra log no Supabase se ligado
-      debugLog("ENVIO INCLUSÃO:", bodyInclusao);
-
-      const incResponse = await fetch(`${urlFandi}/v2/checkout/inclusao`, { // ✅ Rota atualizada para /v2/
+      const incResponse = await fetch(`${urlFandi}/v2/checkout/inclusao`, {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json',
               'fandi-tipo-servico': 'checkout',
               'ApiKey': guid,
-              'Authorization': `Bearer ${tokenAcesso}` // ✅ Corrigido para crases (interpolando a variável corretamente)
+              'Authorization': `Bearer ${tokenAcesso}`
           },
           body: JSON.stringify(bodyInclusao)
       });
 
       incResult = await incResponse.json();
 
-      // Registra log no Supabase se ligado
-      debugLog("RETORNO INCLUSÃO:", incResult);
-
       if (incResponse.ok) {
           externalOperationId = incResult.retorno;
       } else {
-          // Se a inclusão falhar tecnicamente (500/400) mas a simulação era aprovada,
-          // marcamos como falha técnica (8). Se já era Negada (2), mantemos Negada.
+          // Fallback Técnico: Se Inclusão falhou, a simulação não é considerada concretizada.
           if (dadosSimulacao.status_id === 1) {
               dadosSimulacao.status_id = 8;
               dadosSimulacao.mensagem = incResult.message || "Erro no registro da proposta (Inclusão).";
           }
       }
   } catch (error: any) {
-      debugLog("Falha na tentativa de inclusão.", error);
       if (dadosSimulacao.status_id === 1) {
           dadosSimulacao.status_id = 8;
           dadosSimulacao.mensagem = "Falha na inclusão na Fandi.";
       }
   }
 
-  // =========================================================================
-  // RETORNO CONSOLIDADO (NOVO CONTRATO)
-  // =========================================================================
-
-  // Definimos a consulta individual
+  // ==========================================================================
+  // 🏁 ENVELOPAMENTO FINAL DA RESPOSTA (SUCCESS STATE)
+  // ==========================================================================
   const consultaIndividual: Consultation = {
     status_id: dadosSimulacao.status_id,
-    is_selected: true,                      // Como só temos uma opção com a Fandi, esta é a selecionada por definição
+    is_selected: true,
     external_operation_id: externalOperationId,
     message: dadosSimulacao.mensagem,
-
-    // Barramento Financeiro Padronizado
     financial_institution_id: dadosSimulacao.financial_institution_id,
     financial_institution_name: dadosSimulacao.financial_institution_name,
     requested_value: dadosSimulacao.requested_value,
@@ -649,12 +410,10 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     installment_value: dadosSimulacao.installment_value,
   };
 
-  // Gera o HTML do e-mail APENAS SE a simulação for Aprovada (status_id === 1)
-  // Não enviaremos e-mails para erros ou clientes negados, conforme sua regra.
+  // Preparação de Notificações (Só notifica se a inclusão também passou limpa)
   let notificationsConfig = [];
   if (dadosSimulacao.status_id === 1) {
     const emailTemplateData = generateUserEmailNotificationHtml([consultaIndividual], payload);
-    
     notificationsConfig.push({
       channel: 'email',
       template_slug: 'fandi-simulation-result',
@@ -666,16 +425,48 @@ export async function processSimulationFandi(payload: any): Promise<SimulationRe
     });
   }
 
-  // Retornamos o Envelope PartnerResponse embora Fandi só tenha uma consulta, para manter a consistência com o contrato do serviço de cartão que pode ter múltiplas linhas.
   return {
-    success: dadosSimulacao.status_id === 1 || dadosSimulacao.status_id === 2,  // success é true apenas se for Aprovada (1) ou Negada (2). Se for Falha (8), o success será false.
-    message: dadosSimulacao.mensagem,                                           // Propaga a mensagem do banco para o envelope
-    consults: [consultaIndividual], // Array com a consulta realizada
+    success: dadosSimulacao.status_id === 1 || dadosSimulacao.status_id === 2,
+    message: dadosSimulacao.mensagem,
+    consults: [consultaIndividual],
     raw: {
       simulacao: simResult,
       inclusao: incResult,
       notifications: notificationsConfig
     }
   } as SimulationResponse;
+}
 
+/**
+ * ============================================================================
+ * ♻️ HELPERS DE ARQUITETURA
+ * ============================================================================
+ */
+
+/**
+ * [DRY PATTERN]: Construtor padronizado de respostas de erro da Fandi.
+ * Centraliza o envelopamento de falhas de rede, parse JSON ou recusas não mapeadas,
+ * garantindo compatibilidade estrita com a interface `SimulationResponse`.
+ */
+function buildErrorResponse(statusId: number, message: string, simulation: any, rawData: any): SimulationResponse {
+  return { 
+    success: false, 
+    message: message,
+    consults: [{
+      status_id: statusId,
+      is_selected: true,
+      external_operation_id: null,
+      message: message,
+      financial_institution_id: null,
+      financial_institution_name: null,
+      requested_value: simulation.requested_value || null,
+      down_payment_amount: simulation.down_payment_amount || null,
+      down_payment_percentage: simulation.down_payment_amount && simulation.requested_value ? (simulation.down_payment_amount / simulation.requested_value) * 100 : null,
+      financed_amount: simulation.requested_value ? (simulation.requested_value - (simulation.down_payment_amount ?? 0)) : null,
+      installments: simulation.installments || null,
+      cet_rate: null,
+      installment_value: null
+    }],
+    raw: rawData
+  } as SimulationResponse;
 }

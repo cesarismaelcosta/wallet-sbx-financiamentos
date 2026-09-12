@@ -32,7 +32,7 @@
  */
 
 import React, { useState, useRef } from "react";
-import { MapPin, ChevronLeft, ChevronRight, ExternalLink, Gavel, Mail, Tag, Handshake, Plus, Loader2 } from "lucide-react";
+import { MapPin, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, ExternalLink, Gavel, Mail, Tag, Handshake, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // =========================================================================
@@ -81,7 +81,7 @@ function ModalityTag({ modalityDesc, endDateStr, offerTypeId, modalityId, isShop
   if (isShopping === true) {
     if (offerTypeId === 10) {
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-100 text-[#003B73]">
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
           <Handshake size={13} className="text-slate-700" strokeWidth={2.5} />
           <Plus size={10} className="text-slate-700" strokeWidth={3} />
           <Tag size={13} className="text-slate-700" strokeWidth={2.5} />
@@ -91,14 +91,14 @@ function ModalityTag({ modalityDesc, endDateStr, offerTypeId, modalityId, isShop
     }
     if (offerTypeId === 8) {
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-100 text-[#003B73]">
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
           <Tag size={13} className="text-slate-700" strokeWidth={2.5} />
           <span className="tracking-tight">Compre já</span>
         </div>
       );
     }
     return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-100 text-[#003B73]">
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
         <Handshake size={13} className="text-slate-700" strokeWidth={2.5} />
         <span className="tracking-tight">Mercado Balcão</span>
       </div>
@@ -107,7 +107,7 @@ function ModalityTag({ modalityDesc, endDateStr, offerTypeId, modalityId, isShop
 
   if (modalityId === 5 || modalityDesc === "Tomada de preço") {
     return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-sky-100 text-[#003B73]">
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-sky-100 text-[#003B73]">
         <Mail size={13} className="text-slate-700" strokeWidth={2.5} />
         <span className="tracking-tight">Tomada de preço</span>
       </div>
@@ -117,7 +117,7 @@ function ModalityTag({ modalityDesc, endDateStr, offerTypeId, modalityId, isShop
   if (formattedDate === "—") return <div />;
   
   return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-orange-100 text-[#003B73]">
+    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-orange-100 text-[#003B73]">
       <Gavel size={13} className="text-slate-700" strokeWidth={2.5} />
       <span className="tracking-tight">{formattedDate}</span>
     </div>
@@ -206,20 +206,20 @@ export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: Ca
   const showMetric = !isLeilao && !isTomadaDePreco && !!offerData.system_metric;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group">
+    <div className="rounded-none border border-neutral-200 bg-white overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group">
       <div className="flex flex-col h-full">
         
         {/* ================================================================ */}
         {/* RENDERIZAÇÃO DA MÍDIA (CARROSSEL)                                */}
         {/* ================================================================ */}
         <div 
-          className="relative h-44 w-full bg-slate-100 overflow-hidden shrink-0 rounded-t-lg touch-pan-y"
+          className="relative h-44 w-full bg-neutral-100 overflow-hidden shrink-0 rounded-none touch-pan-y"
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
         >
           {hasError ? (
-            <div className="absolute inset-0 bg-[#f1f5f9] flex items-center justify-center text-slate-400 text-xs font-bold uppercase tracking-wider">
+            <div className="absolute inset-0 bg-neutral-100 flex items-center justify-center text-neutral-400 text-xs font-bold uppercase tracking-wider">
               Foto Indisponível
             </div>
           ) : (
@@ -236,12 +236,12 @@ export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: Ca
             />
           )}
           
-          <span className="absolute bottom-2 left-2 bg-black/75 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md z-10 shadow">
+          <span className="absolute bottom-2 left-2 bg-neutral-900/80 backdrop-blur-sm text-white font-mono text-[9px] font-light uppercase tracking-[0.18em] px-2 py-1 rounded-none z-10">
             Lote #{offerData.lot_number || offerData.offer_id}
           </span>
 
           {item.is_simulated && (
-            <span className="absolute bottom-2 right-2 bg-white text-slate-900 text-[10px] font-normal px-2.5 py-0.5 rounded-md z-10 shadow lowercase">
+            <span className="absolute bottom-2 right-2 bg-white text-neutral-900 text-[10px] font-normal px-2.5 py-0.5 rounded-none z-10 shadow lowercase">
               com simulação
             </span>
           )}
@@ -251,27 +251,28 @@ export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: Ca
             <>
               <button 
                 onClick={handlePrevPhoto} 
-                className="absolute left-1.5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 backdrop-blur-xs text-white p-1.5 rounded-full transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
+                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 backdrop-blur-sm text-white p-1.5 rounded-none transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
               >
-                <ChevronLeft size={16} />
+                <ArrowLeft size={16} strokeWidth={1.5} />
               </button>
               <button 
                 onClick={handleNextPhoto} 
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 backdrop-blur-xs text-white p-1.5 rounded-full transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 backdrop-blur-sm text-white p-1.5 rounded-none transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
               >
-                <ChevronRight size={16} />
+                <ArrowRight size={16} strokeWidth={1.5} />
               </button>
             </>
           )}
         </div>
 
-        <div className="h-px w-full bg-slate-100" />
+        <div className="h-px w-full bg-neutral-200" />
 
         {/* ================================================================ */}
         {/* METADADOS E INFORMAÇÕES DA OFERTA                                */}
         {/* ================================================================ */}
         <div className="p-4 flex flex-col flex-grow justify-between space-y-3">
           <div className="space-y-3">
+            {/* Tag e Link Intactos no mesmo lugar */}
             <div className="flex items-center justify-between w-full">
               <ModalityTag 
                 modalityDesc={eventData.modality_desc} 
@@ -280,28 +281,29 @@ export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: Ca
                 modalityId={eventData.modality_id}
                 isShopping={offerData.is_shopping}
               />
-                <a 
-                  href={getSuperbidUrl(offerData)} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="text-[#B300FF] hover:text-[#9300cc] transition-colors p-1 ml-auto" 
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ExternalLink size={20} />
-                </a>
+              <a 
+                href={getSuperbidUrl(offerData)} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-neutral-400 hover:text-neutral-700 transition-colors p-1 ml-auto" 
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink size={18} strokeWidth={1.5} />
+              </a>
             </div>
 
-            <h3 className="font-bold text-sm text-foreground line-clamp-2 uppercase min-h-[2.5rem]">
+            <h3 className="font-normal text-[13px] md:text-sm text-neutral-900 leading-snug line-clamp-2 uppercase min-h-[2.5rem]">
               {offerDesc}
             </h3>
             
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1 text-xs text-slate-500 truncate">
-                <MapPin size={12} className="shrink-0" />
-                <span className="truncate">{locationDisplay}</span>
-              </div>
-              <div className="text-xs text-muted-foreground truncate min-h-[1rem]">
+            {/* AQUI: Vendedor primeiro (text-xs), Localização depois (text-[11px]) */}
+            <div className="space-y-1 mt-2">
+              <div className="text-xs text-neutral-500 truncate uppercase">
                 {sellerName || "\u00A0"}
+              </div>
+              <div className="flex items-center gap-1 text-[11px] text-neutral-400 truncate">
+                <MapPin size={12} strokeWidth={1.5} className="shrink-0" />
+                <span className="truncate">{locationDisplay}</span>
               </div>
             </div>
           </div>
@@ -309,14 +311,14 @@ export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: Ca
           {/* ================================================================ */}
           {/* PAINEL DE PRECIFICAÇÃO                                           */}
           {/* ================================================================ */}
-          <div className="pt-2 border-t border-slate-100 mt-auto">
-            <div className="text-xs text-slate-400 font-normal mb-0.5">
+          <div className="pt-3 border-t border-neutral-300 mt-auto">
+            <div className="text-[10px] text-neutral-400 font-normal uppercase mb-1">
               {priceLabel}
             </div>
-            <div className="text-lg font-extrabold text-foreground">
+            <div className="text-lg md:text-xl font-bold tracking-tight text-neutral-900">
               {priceFormatted}
               {showMetric && (
-                <span className="text-xs font-normal text-slate-500 ml-1 uppercase">
+                <span className="text-[11px] font-medium text-neutral-500 ml-1 uppercase">
                   /{offerData.system_metric}
                 </span>
               )}
@@ -333,15 +335,18 @@ export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: Ca
           onClick={() => onSimulate(item)} 
           disabled={loading || disabled}
           variant="outline" 
-          className="w-full rounded-md shadow-xs bg-white text-[#B300FF] border border-[#B300FF]/40 hover:bg-purple-50 font-medium text-xs py-2 cursor-pointer transition-all"
+          className="group flex items-center justify-center gap-2 w-full rounded-none shadow-xs bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 font-medium text-[13px] h-11 cursor-pointer transition-all duration-300 ease-out"
         >
           {loading ? (
-            <div className="flex items-center justify-center gap-2">
+            <>
               <Loader2 className="w-4 h-4 animate-spin" />
               <span>Aguarde...</span>
-            </div>
+            </>
           ) : (
-            item.is_simulated ? "Refazer Simulação" : (isCartao ? "Simular parcelamento" : "Simular financiamento")
+            <>
+              <span>{item.is_simulated ? "Refazer Simulação" : (isCartao ? "Simular parcelamento" : "Simular financiamento")}</span>
+              <ArrowRight size={15} strokeWidth={1.5} className="transition-transform duration-300 group-hover:translate-x-1" />
+            </>
           )}
         </Button>
       </div>

@@ -1,38 +1,53 @@
 /**
- * @fileoverview Skeleton: PanelFAQSkeleton
+ * @fileoverview Skeleton: PanelFAQSkeleton (Casca Estrutural da FAQ)
+ * @module features/financial-hub/components/layout
  * @path src/features/financial-hub/components/layout/PanelFAQSkeleton.tsx
  * 
  * =========================================================================
- * [PROPÓSITO]
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-RADIUS, NEUTRAL PURITY & ANTI-CLS
  * =========================================================================
- * @description Versão esqueleto do painel de FAQ para prevenir Layout Shift.
- * Simula a grade de duas colunas e o formato de acordeão fechado.
+ * @description Versão esqueleto estrutural autocontida da seção de Dúvidas Frequentes.
+ * Simula a geometria bilateral de acordeões e o cabeçalho institucional para
+ * mitigar o Cumulative Layout Shift (CLS) durante o carregamento de metadados da oferta.
+ * 
+ * [MECÂNICA ARQUITETURAL V3 - BLINDAGEM NEUTRA AUTOCONTIDA]:
+ * 1. {Bypass de Primitivo Contaminado}: Elimina o uso do componente `<Skeleton />`
+ *    global, utilizando blocos neutros puros (`bg-neutral-100`, `bg-neutral-200/80`)
+ *    para blindar contra vazamentos de variáveis roxas/lilases herdadas do root.
+ * 2. {Zero-Radius Strict Governance}: Aplica cantos retos (`rounded-none`) em todas
+ *    as cascas de itens de acordeão e no placeholder do título.
+ * 3. {Purgação de Neutros Desalinhados}: Substitui `bg-background` e `border-border`
+ *    por classes neutras explícitas (`bg-white`, `border-neutral-200`), mantendo
+ *    fidelidade visual sem alterar os estilos globais compartilhados.
+ * 4. {Anti-CLS Spatial Fidelity}: Espelha com precisão 1:1 o grid bilateral balanceado,
+ *    as alturas de gatilho e as margens do `PanelFAQ.tsx`.
  * 
  * @author César Ismael Pereira da Costa
- * @author Gemini Pro
+ * @author Gemini Pro (Architectural Mechanics)
+ * @version 9.2.0 (Neutral Purity & Self-Contained Shading)
  */
 
 export function PanelFAQSkeleton() {
   return (
-    <section className="py-20 bg-white">
-      <div className="mx-auto max-w-7xl px-2 sm:px-6 animate-pulse">
-        {/* Título Skeleton */}
-        <div className="h-10 w-64 bg-slate-200/70 rounded-lg mx-auto mb-16"></div>
+    <section className="py-16 md:py-24 border-t border-neutral-200 bg-white text-neutral-900 relative overflow-hidden">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 animate-pulse">
+        {/* Título Esqueleto Centralizado */}
+        <div className="h-8 md:h-9 w-64 mx-auto mb-12 md:mb-16 bg-neutral-200/80 rounded-none" />
         
-        {/* Grid Skeleton */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
+        {/* Grid Bilateral Balanceado */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4 items-start">
           
           {/* Coluna 1 Skeleton */}
-          <div className="space-y-4">
+          <div className="w-full space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-14 w-full bg-slate-100/60 rounded-xl border border-slate-100"></div>
+              <div key={i} className="h-14 w-full bg-neutral-100 border border-neutral-200 rounded-none" />
             ))}
           </div>
 
           {/* Coluna 2 Skeleton */}
-          <div className="space-y-4">
+          <div className="w-full space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-14 w-full bg-slate-100/60 rounded-xl border border-slate-100"></div>
+              <div key={i} className="h-14 w-full bg-neutral-100 border border-neutral-200 rounded-none" />
             ))}
           </div>
           

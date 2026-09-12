@@ -190,7 +190,7 @@ export function Step1Simulation() {
   if (!state || !state.data) {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-primary)]" />
+        <Loader2 className="h-10 w-10 animate-spin text-neutral-900" />
       </div>
     );
   }
@@ -207,23 +207,24 @@ export function Step1Simulation() {
          * 🤖 [PROGRESSIVE DISCLOSURE ARCHITECTURE]: Header Síncrono e Contexto da Oferta
          * ========================================================================= */}
         <div className="flex items-start gap-4">
+          {/* Imagem totalmente solta sem nenhum box */}
           <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
-            <img src="/assets/home/cartao.webp" alt="Cartão" className="w-full h-full object-contain" />
+            <img src="/assets/home/cartao.webp" alt="Cartão" className="w-full h-full object-contain relative saturate-[10%]" />
           </div>
 
           <div className="space-y-0.5 flex-1 w-0 min-w-0">
-            <h3 className="text-[clamp(14px,4vw,20px)] sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full block">
-              Simulação de parcelamento*!
+            <h3 className="text-[clamp(16px,4vw,20px)] sm:text-xl font-bold text-neutral-900 uppercase tracking-tight leading-snug">
+              Simulação de parcelamento*
             </h3>
 
-            <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-slate-600 truncate pt-0.5 w-full block">
+            <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 truncate pt-0.5 w-full block">
               {offerDescText}
             </p>
 
             {/* LINHA DO LOTE E PREÇO COM LINK AO LADO */}
             <div className="flex items-center pt-0.5">
-              <p className="text-sm text-slate-600 truncate">
-                Lote {loteSubIndex} • <strong className="text-slate-900 font-bold mr-2">{BRL(offerValue || 0)}</strong>
+              <p className="text-sm text-neutral-600 truncate">
+                Lote {loteSubIndex} • <strong className="text-neutral-900 font-bold mr-2">{BRL(offerValue || 0)}</strong>
               </p>
 
               {offer && (
@@ -231,10 +232,10 @@ export function Step1Simulation() {
                   href={getSuperbidUrl(offer)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#B300FF] hover:text-[#9300cc] transition-colors flex items-center outline-none focus:outline-none focus:ring-0"
+                  className="text-neutral-400 hover:text-neutral-700 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
                   title="Ver oferta original na Superbid"
                 >
-                  <ExternalLink size={18} />
+                  <ExternalLink size={18} strokeWidth={1.5} />
                 </a>
               )}
             </div>
@@ -248,8 +249,8 @@ export function Step1Simulation() {
           {isLoadingUI ? (
             <div className="space-y-3 animate-in fade-in duration-300">
               {/* STATUS TRACKER (Minimalista) */}
-              <div className="flex items-center gap-2 px-1 text-slate-500">
-                <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-[var(--brand-primary)]" />
+              <div className="flex items-center gap-2 px-1 text-neutral-500">
+                <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-neutral-900" />
                 <span className="text-xs font-normal tracking-wide transition-opacity duration-300 animate-in fade-in">
                   {loadingMessage}
                 </span>
@@ -260,20 +261,20 @@ export function Step1Simulation() {
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <div
                     key={`skeleton-${i}`}
-                    className="w-full flex flex-col items-start p-4 bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-xs animate-pulse space-y-3"
+                    className="w-full flex flex-col items-start p-4 bg-surface-alt border border-neutral-200 rounded-none overflow-hidden shadow-xs animate-pulse space-y-3"
                   >
                     <div className="flex items-baseline gap-2 w-full">
-                      <div className="h-5 w-8 bg-slate-200 rounded-md"></div>
-                      <div className="h-6 w-28 bg-slate-200 rounded-md"></div>
+                      <div className="h-5 w-8 bg-neutral-200 rounded-none"></div>
+                      <div className="h-6 w-28 bg-neutral-200 rounded-none"></div>
                     </div>
-                    <div className="h-3 w-20 bg-slate-100 rounded-md"></div>
+                    <div className="h-3 w-20 bg-neutral-100 rounded-none"></div>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            // [RESOLVED STATE]: Injeção dos dados reais com animação
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in slide-in-from-bottom-4 fade-in duration-500 ease-out">
+            // [RESOLVED STATE]: Injeção dos dados reais com fundo bg-surface-alt e fonte serifada de destaque no multiplicador
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl animate-in slide-in-from-bottom-4 fade-in duration-500 ease-out">
               {(simulationResult?.consults || []).map((item: any, index: number) => {
                 const qtdParcelas = item.installments;
                 const valorParcela = item.installment_value;
@@ -282,25 +283,24 @@ export function Step1Simulation() {
                 return (
                   <button
                     key={index}
-                    className="w-full flex flex-col items-start p-4 bg-white border border-[var(--brand-primary)] rounded-xl overflow-hidden hover:bg-slate-50 transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 hover:-translate-y-0.5 hover:shadow-md"
+                    className="w-full flex flex-col items-start pl-6 pr-4 py-3.5 bg-surface-alt border border-neutral-300 rounded-none overflow-hidden hover:bg-neutral-100 hover:border-neutral-900 transition-all focus-visible:ring-0 focus-visible:outline-none focus:border-neutral-900 hover:-translate-y-0.5 shadow-xs"
                   >
-                    <div className="flex flex-nowrap items-baseline gap-1.5 w-full whitespace-nowrap">
-                      <span
-                        className="font-black shrink-0"
-                        style={{ color: "var(--brand-primary)", fontSize: "clamp(0.9rem, 3.5vw, 1.1rem)" }}
-                      >
+                    <div className="flex items-baseline gap-1.5 w-full">
+                      <span className="text-[13px] md:text-sm font-medium text-neutral-500 shrink-0">
                         {qtdParcelas}x
                       </span>
 
-                      <span
-                        className="font-black text-slate-900 tracking-tight shrink-0"
-                        style={{ fontSize: "clamp(1.1rem, 4.5vw, 1.35rem)" }}
-                      >
+                      <span className="text-lg md:text-xl font-bold tracking-tight text-neutral-900 shrink-0">
                         {BRL(valorParcela)}
                       </span>
                     </div>
 
-                    <span className="text-xs text-slate-500 mt-1.5">Total {BRL(totalOpcao)}</span>
+                    {/* Linha discreta alinhada com o multiplicador */}
+                    <div className="w-7 h-px bg-neutral-200 mt-2 mb-1.5" />
+
+                    <span className="text-xs font-normal text-neutral-500">
+                      Total {BRL(totalOpcao)}
+                    </span>
                   </button>
                 );
               })}
@@ -308,7 +308,7 @@ export function Step1Simulation() {
           )}
         </div>
 
-        <p className="text-[12px] text-slate-400 font-medium leading-relaxed pb-4">
+        <p className="text-[12px] text-neutral-400 font-medium leading-relaxed pb-4">
           * Considera o valor do lance no momento da simulação, sem adicionar eventuais comissões ou outras taxas que
           também podem ser parceladas.
         </p>

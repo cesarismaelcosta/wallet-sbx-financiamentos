@@ -2,9 +2,20 @@
  * @fileoverview Rota: financialGatewayGate (Tela de Error Fallback do Gateway)
  * @path src/routes/financialGatewayGate.tsx
  *
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO: ZERO-RADIUS GOVERNANCE & NEUTRAL PURITY
+ * =========================================================================
  * Atua exclusivamente como receptora de erros redirecionados pela borda quando 
  * ocorre falha na autenticação ou orquestração. O handoff de sucesso (token #xt) 
  * é tratado diretamente pelo Sniper Tático nos guards de rota.
+ * 
+ * [MECÂNICA ARQUITETURAL]:
+ * 1. {Zero-Radius Strict Governance}: Eliminação total de cantos arredondados.
+ * 2. {Neutral Purity}: Monocromia estrita (`neutral-900`, `neutral-600`, `neutral-200`).
+ * 3. {Image Filtering}: Tratamento de imagem de erro em escala de cinza limpa.
+ *
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro (Architectural Mechanics)
  */
 
 import { createFileRoute } from "@tanstack/react-router";
@@ -75,7 +86,7 @@ export const Route = createFileRoute("/financialGatewayGate")({
     // [CONTROLE DE FLUXO]: Temporizador regressivo para redirecionamento automático
     // =====================================================================
     useEffect(() => {
-      if (code === "SESSION_EXPIRED") return; // Evita conflito com o redirect imediato acima
+      if (code === "SESSION_EXPIRED") return;
 
       if (countdown > 0) {
         const timer = setTimeout(() => setCountdown((prev) => prev - 1), 1000);
@@ -87,7 +98,6 @@ export const Route = createFileRoute("/financialGatewayGate")({
       }
     }, [countdown, targetReturnUrl, code]);
 
-    // Se a sessão expirou, retorna nulo momentaneamente enquanto o efeito executa o redirect
     if (code === "SESSION_EXPIRED") {
       return null;
     }
@@ -101,18 +111,24 @@ export const Route = createFileRoute("/financialGatewayGate")({
       : rawMessage;
 
     // =====================================================================
-    // [RENDERIZAÇÃO DE INTERFACE]: UI Padrão de Falha e Recuperação
+    // [RENDERIZAÇÃO DE INTERFACE]: UI Padrão de Falha e Recuperação (Neutral Purity)
     // =====================================================================
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans']">
-        <img src="/assets/error/error.webp" alt="Erro" className="w-34 h-34 object-contain mb-6" />
-        <p className="text-slate-800 font-bold text-lg mb-2">Ops! Algo deu errado.</p>
-        <p className="text-slate-500 font-medium text-sm text-center max-w-md px-4">{cleanMessage}</p>
-        <p className="text-slate-400 font-medium text-xs mt-4 mb-6">Retornando em {countdown}s...</p>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans'] p-4">
+        {/* Imagem de erro tratada em escala de cinza */}
+        <img 
+          src="/assets/error/error.webp" 
+          alt="Erro" 
+          className="w-34 h-34 object-contain relative saturate-[10%]" 
+        />
+        
+        <p className="text-neutral-900 font-bold text-lg mb-2 tracking-tight">Ops! Algo deu errado.</p>
+        <p className="text-neutral-600 font-medium text-sm text-center max-w-md px-4 leading-relaxed">{cleanMessage}</p>
+        <p className="text-neutral-400 font-medium text-xs mt-4 mb-6">Retornando em {countdown}s...</p>
 
         <button
           onClick={() => window.location.replace(targetReturnUrl)}
-          className="flex items-center text-[#B400FF] font-semibold text-sm hover:opacity-80 transition-opacity"
+          className="flex items-center text-neutral-900 font-bold text-sm hover:text-neutral-600 transition-colors cursor-pointer"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Retornar agora

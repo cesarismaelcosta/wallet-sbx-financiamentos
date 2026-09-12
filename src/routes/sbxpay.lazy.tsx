@@ -264,7 +264,7 @@ export function SbXPAYLayOut() {
                 if (postData.state) {
                   setFastPathState(postData.state);
                 }
-                
+
                 // 🛡️ Sucesso: Aplica a nova âncora temporal
                 const responseUrlObj = new URL(postData.url, window.location.origin);
                 const originalParams = new URLSearchParams(window.location.search);
@@ -272,13 +272,18 @@ export function SbXPAYLayOut() {
                 responseUrlObj.searchParams.forEach((val, key) => originalParams.set(key, val));
 
                 navigate({
-                  to: responseUrlObj.pathname,
+                  to: responseUrlObj.pathname as any,
                   search: Object.fromEntries(originalParams.entries()) as any,
                   replace: true,
                 });
+                // 👇 DESTRAVAR OS BOTÕES 👇
+                if (isMounted) setIsVerifying(false);
+                return;
               } else if (postData?.fallback_url) {
                 // 🛡️ Handoff Token: O Backend exigiu reautenticação
                 navigate({ to: postData.fallback_url as any, replace: true });
+                // 👇 DESTRAVAR OS BOTÕES 👇
+                if (isMounted) setIsVerifying(false);                
                 return;
               }
             } catch (postErr) {

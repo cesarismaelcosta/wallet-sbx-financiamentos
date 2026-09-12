@@ -3,27 +3,19 @@
  * @path src/routes/backoffice.login.lazy.tsx
  * 
  * =========================================================================
- * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ISOLAMENTO E SSO
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ISOLAMENTO, SSO & ZERO-RADIUS
  * =========================================================================
  * Este módulo atua como a única porta de entrada segura para o painel 
  * administrativo (Backoffice) do ecossistema sbX.
  * 
- * [MECÂNICA ARQUITETURAL]:
- * 1. {Scope Inheritance}: A rota foi declarada como `/backoffice/login` (sem 
- *    underline de escape) para herdar obrigatoriamente o contexto de estado 
- *    injetado pelo Guardião Mestre (`BackofficeGuard`), garantindo acesso ao 
- *    `AuthProvider` sem vazar lógica globalmente.
- * 2. {SSO Whitelist}: Integração direta com Google OAuth limitando o escopo
- *    de acesso exclusivamente a contas @superbid.net.
- * 3. {Silent Re-validation}: A interceptação de `handleInitialSession` garante 
- *    que sessões persistidas sejam validadas em background (RBAC/Whitelist)
- *    sem exigir novos cliques do usuário na tela de SignIn.
- * 4. {Bypass Visual}: Apesar de herdar o Guardião de segurança, o componente
- *    de layout pai renderiza apenas um `<Outlet/>` nesta URL, assegurando uma 
- *    apresentação visual limpa (sem sidebar ou topbar).
- * 
- * @author César Ismael Pereira da Costa
- * @author Gemini Pro
+ * [ATUALIZAÇÃO DE DESIGN SYSTEM]:
+ * 1. Zero-Radius: Remoção absoluta de `rounded-3xl` e `rounded-xl`. Todos 
+ *    os elementos (Card principal, Botões, Alertas de Erro) adotam `rounded-none`.
+ * 2. Neutral Purity: Extinção de variáveis temáticas como `bg-card` ou `primary`. 
+ *    Uso explícito da paleta `neutral-900` para focos, `neutral-500` para 
+ *    textos secundários e `bg-white` para o contêiner estrutural principal.
+ * 3. Scope Inheritance: Mantém a herança de contexto do `BackofficeGuard`.
+ * =========================================================================
  */
 
 import { createLazyFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -111,28 +103,28 @@ function BackofficeLogin() {
   // [OUTPUT]: RENDERIZAÇÃO ESTÉTICA (UI)
   // =========================================================================
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[oklch(0.985_0.008_320)] px-4">
+    <div className="flex min-h-screen items-center justify-center bg-neutral-100 px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 flex justify-center">
           <WalletLogo size="lg" withTagline centered asLink />
         </div>
 
-        <div className="rounded-3xl border border-border bg-card p-8 shadow-[var(--shadow-card)]">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+        <div className="rounded-none border border-neutral-200 bg-white p-8 shadow-md">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-neutral-900">
             <ShieldCheck className="h-3.5 w-3.5" /> Backoffice
           </div>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight">
+          <h1 className="mt-3 text-2xl font-bold tracking-tight text-neutral-900">
             Acesso restrito
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-neutral-600 leading-relaxed">
             Entre com sua conta corporativa{" "}
-            <span className="font-semibold text-foreground">@superbid.net</span>{" "}
+            <span className="font-bold text-neutral-900">@superbid.net</span>{" "}
             para acessar o painel de operações.
           </p>
 
           {/* Área de Erro Forense (Domínio/Whitelist) */}
           {visibleDomainError && (
-            <div className="mt-5 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+            <div className="mt-5 flex items-start gap-2 rounded-none border border-red-200 bg-red-50 p-3 text-xs text-red-700">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>{visibleDomainError}</div>
             </div>
@@ -140,7 +132,7 @@ function BackofficeLogin() {
 
           {/* Área de Erro Geral (Timeout/API) */}
           {error && (
-            <div className="mt-5 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+            <div className="mt-5 flex items-start gap-2 rounded-none border border-red-200 bg-red-50 p-3 text-xs text-red-700">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>{error}</div>
             </div>
@@ -153,12 +145,14 @@ function BackofficeLogin() {
               variant="outline"
               onClick={handleGoogle}
               disabled={submitting || authLoading || authorizationLoading}
-              className="h-12 w-full gap-3 rounded-xl font-semibold"
+              className="h-12 w-full gap-3 rounded-none border-neutral-200 font-bold text-neutral-900 hover:bg-neutral-50 hover:text-neutral-900 shadow-xs"
             >
               {submitting || authorizationLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {authorizationLoading ? "Validando permissões..." : "Estabelecendo handshake…"}
+                  <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
+                  <span className="text-neutral-500">
+                    {authorizationLoading ? "Validando permissões..." : "Estabelecendo handshake…"}
+                  </span>
                 </>
               ) : (
                 <>
@@ -183,24 +177,15 @@ function BackofficeLogin() {
               }}
               variant="ghost"
               size="sm"
-              className="mt-3 w-full rounded-xl text-xs"
+              className="mt-3 w-full rounded-none text-xs text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100"
             >
               Forçar saída desta conta
             </Button>
           )}
 
-          <p className="mt-6 text-center text-[11px] text-muted-foreground">
-            Ao entrar você concorda com a Política de Uso interna da Wallet sbX. <br/>Acessos são monitorados e registrados (Audit Trail).
+          <p className="mt-6 text-center text-[10px] text-neutral-400 leading-relaxed uppercase tracking-wider">
+            Ao entrar você concorda com a <br/> Política de Uso da Wallet sbX. <br/>Acessos são monitorados via Audit Trail.
           </p>
-        </div>
-
-        <div className="mt-6 text-center">
-          <Link
-            to="/"
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            ← Voltar para a área de clientes
-          </Link>
         </div>
       </div>
     </div>

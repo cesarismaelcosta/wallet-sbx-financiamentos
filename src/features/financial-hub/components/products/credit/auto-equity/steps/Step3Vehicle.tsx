@@ -1,12 +1,17 @@
 /**
  * @fileoverview Passo 3: Informações do Veículo
- * * PROPÓSITO:
- * Recolher os dados do veículo (placa e parentesco do proprietário).
- * * INTEGRAÇÃO:
- * - Utiliza `useWizard<any>()` para interagir com o Motor Genérico.
- * - Lê valores iniciais de `state.data.vehicle` (vindo do Orquestrador ou passo anterior).
- * - Atualiza o estado da jornada através do `update` do Motor, mantendo 
- * a consistência dos dados (data) e navegação (meta).
+ * @path src/features/financial-hub/components/products/credit/auto-equity/steps/Step3Vehicle.tsx
+ * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO: ZERO-RADIUS GOVERNANCE & NEUTRAL PURITY
+ * =========================================================================
+ * [MECÂNICA ARQUITETURAL]:
+ * - Engine: Renderizado pela WizardEngine.
+ * - Estado: Consome WizardProvider.
+ * - Conformidade: Zero-Radius Strict Governance & Neutral Purity (Sem tokens de marca corrompidos).
+ *
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro (Architectural Mechanics)
  */
 
 import { useForm } from "react-hook-form";
@@ -21,8 +26,8 @@ import {
 import { vehicleSchema, type VehicleData } from "../schemas";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider"; // Motor Genérico
 
-// Classe padronizada para unificar tamanho e fonte
-const commonInputClass = "h-10 text-sm transition-all duration-300 focus-visible:ring-2 focus-visible:ring-offset-0";
+// Classe padronizada para unificar tamanho, fonte e zero-radius estrito
+const commonInputClass = "h-11 text-sm rounded-none border-neutral-200 bg-white transition-all duration-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900";
 
 export function Step3Vehicle() {
   // Acedemos ao motor genérico
@@ -60,47 +65,39 @@ export function Step3Vehicle() {
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
-      <section className="rounded-xl border border-border p-4">
-        <header className="mb-6 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Car className="h-4 w-4 text-[var(--brand-primary)]" /> Informações do veículo
+      <section className="rounded-none border border-neutral-200 bg-surface-alt p-5 sm:p-6 shadow-xs space-y-4">
+        <header className="flex items-center gap-2 text-sm font-bold text-neutral-900 uppercase tracking-wider">
+          <Car className="h-4 w-4 text-neutral-900" strokeWidth={1.5} /> Informações do veículo
         </header>
 
-        <div className="space-y-5">
+        <div className="space-y-4">
           {/* Campo Placa */}
-          <div className="space-y-2">
-            <Label htmlFor="licensePlate">Placa do veículo</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="licensePlate" className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Placa do veículo</Label>
             <Input 
               id="licensePlate"
               {...form.register("licensePlate")} 
               placeholder="Ex: ABC1D23" 
               maxLength={7}
               autoComplete="off"
-              className={`${commonInputClass} uppercase ${plate && plate.length > 0 
-                ? "bg-[var(--brand-primary)]/1 border-[var(--brand-primary)]/10" 
-                : "border-input"
-              } focus-visible:border-[var(--brand-primary)]`}
+              className={`${commonInputClass} uppercase`}
             />
             {err.licensePlate && (
-              <p className="text-xs text-destructive">{err.licensePlate.message}</p>
+              <p className="text-xs text-red-600 font-medium">{err.licensePlate.message}</p>
             )}
           </div>
 
           {/* Campo Proprietário */}
-          <div className="space-y-2">
-            <Label>Quem é o proprietário do veículo?</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Quem é o proprietário do veículo?</Label>
             <Select 
               value={kinship ?? ""}
               onValueChange={(v) => form.setValue("ownerKinshipDegree", v as any, { shouldValidate: true })}
             >
-              <SelectTrigger 
-                className={`${commonInputClass} ${kinship 
-                  ? "bg-[var(--brand-primary)]/1 border-[var(--brand-primary)]/10" 
-                  : "border-input"
-                } focus-visible:border-[var(--brand-primary)]`}
-              >
+              <SelectTrigger className={commonInputClass}>
                 <SelectValue placeholder="Selecione o proprietário" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-none border-neutral-200">
                 {[
                   { value: "SELF", label: "O próprio solicitante" },
                   { value: "SPOUSE", label: "Cônjuge" },
@@ -112,7 +109,7 @@ export function Step3Vehicle() {
                   <SelectItem 
                     key={item.value} 
                     value={item.value}
-                    className="data-[highlighted]:!bg-[var(--brand-primary)]/10 data-[highlighted]:!text-[var(--brand-primary)] cursor-pointer"
+                    className="rounded-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-900 cursor-pointer"
                   >
                     {item.label}
                   </SelectItem>
@@ -120,19 +117,19 @@ export function Step3Vehicle() {
               </SelectContent>
             </Select>
             {err.ownerKinshipDegree && (
-              <p className="text-xs text-destructive">{err.ownerKinshipDegree.message}</p>
+              <p className="text-xs text-red-600 font-medium">{err.ownerKinshipDegree.message}</p>
             )}
           </div>
         </div>
       </section>
 
-      {/* Botões de Navegação */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Botões de Navegação com Zero-Radius e Neutral Purity */}
+      <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 pt-2">
         <Button 
           type="button" 
           variant="ghost" 
           onClick={back}
-          className="text-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/10 hover:text-[var(--brand-primary)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+          className="w-full sm:w-auto rounded-none text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900 font-medium"
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> 
           Voltar
@@ -140,7 +137,7 @@ export function Step3Vehicle() {
         <Button 
           type="submit" 
           size="lg" 
-          className="h-12 flex-1 rounded-xl transition-all bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+          className="h-12 w-full sm:w-auto flex-1 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-bold shadow-xs transition-all active:scale-[0.98]"
         >
           Continuar
         </Button>

@@ -19,21 +19,21 @@ function ConfiguracoesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Configurações</h1>
+        <p className="text-sm text-neutral-600">
           Ajuste preferências da sua operação de crédito.
         </p>
       </div>
 
       {/* Notificações em destaque */}
-      <div className="rounded-2xl border border-border bg-card p-6">
+      <div className="rounded-none border border-neutral-200 bg-white p-6 shadow-xs">
         <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <div className="flex h-11 w-11 items-center justify-center rounded-none bg-neutral-100 text-neutral-900 border border-neutral-200 shrink-0">
             <Bell className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <h2 className="text-base font-bold">Notificações</h2>
-            <p className="text-sm text-muted-foreground">
+            <h2 className="text-base font-bold text-neutral-900">Notificações</h2>
+            <p className="text-sm text-neutral-600">
               Escolha como deseja ser avisado sobre novas propostas e aprovações.
             </p>
             <div className="mt-5 space-y-3">
@@ -45,9 +45,9 @@ function ConfiguracoesPage() {
               ].map((n) => (
                 <div
                   key={n.l}
-                  className="flex items-center justify-between rounded-xl border border-border px-4 py-3"
+                  className="flex items-center justify-between rounded-none border border-neutral-200 px-4 py-3 bg-neutral-50/50"
                 >
-                  <span className="text-sm font-medium">{n.l}</span>
+                  <span className="text-sm font-medium text-neutral-900">{n.l}</span>
                   <Switch defaultChecked={n.on} />
                 </div>
               ))}
@@ -63,14 +63,14 @@ function ConfiguracoesPage() {
           return (
             <div
               key={s.title}
-              className="rounded-2xl border border-border bg-card p-6 transition-all hover:-translate-y-0.5 hover:border-primary/40"
+              className="rounded-none border border-neutral-200 bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-neutral-900 shadow-xs flex flex-col"
             >
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div className="flex h-11 w-11 items-center justify-center rounded-none bg-neutral-100 text-neutral-900 border border-neutral-200 shrink-0">
                 <Icon className="h-5 w-5" />
               </div>
-              <h3 className="mt-4 text-base font-bold">{s.title}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{s.desc}</p>
-              <Button size="sm" variant="outline" className="mt-4 rounded-lg">
+              <h3 className="mt-4 text-base font-bold text-neutral-900">{s.title}</h3>
+              <p className="mt-1 text-sm text-neutral-600 flex-1">{s.desc}</p>
+              <Button size="sm" variant="outline" className="mt-4 rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100 font-bold shadow-xs w-full sm:w-auto self-start">
                 Configurar
               </Button>
             </div>

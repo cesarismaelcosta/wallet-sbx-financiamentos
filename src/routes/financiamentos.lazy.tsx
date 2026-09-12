@@ -55,7 +55,7 @@ export const Route = createLazyFileRoute('/financiamentos')({
 // O usuário NÃO sente a transição de montagem, pois os pixels são idênticos.
 function RouteSkeleton() {
   return (
-    <div className="min-h-screen bg-white text-foreground flex flex-col transition-colors duration-300 relative">
+    <div className="min-h-screen bg-white text-foreground flex flex-col transition-colors duration-300 relative rounded-none">
       <PanelHeader showNav={true} showAuth={true} links={[]} />
       
       <main className="flex-1 w-full flex flex-col pt-16">

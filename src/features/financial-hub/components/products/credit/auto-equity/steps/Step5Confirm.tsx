@@ -1,10 +1,17 @@
 /**
  * @fileoverview Passo 5: Confirmação e Resultado (Auto-Equity)
  * @path src/features/financial-hub/components/products/credit/auto-equity/steps/Step5Confirm.tsx
- * * PROPÓSITO:
- * Exibe o feedback final do processamento da proposta (sucesso, negação ou erro).
- * * INTEGRAÇÃO:
- * - Utiliza o contexto `useWizard` para ler o estado da simulação e executar a reinicialização.
+ * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO: ZERO-RADIUS GOVERNANCE & NEUTRAL PURITY
+ * =========================================================================
+ * [MECÂNICA ARQUITETURAL]:
+ * - Propósito: Exibe o feedback final do processamento da proposta (sucesso, negação ou erro).
+ * - Integração: Utiliza o contexto `useWizard` para ler o estado da simulação e executar a reinicialização.
+ * - Conformidade: Zero-Radius Strict Governance & Neutral Purity (Imagens tratadas em escala de cinza).
+ *
+ * @author César Ismael Pereira da Costa
+ * @author Gemini Pro (Architectural Mechanics)
  */
 
 import { useState, useEffect } from "react";
@@ -54,13 +61,13 @@ export function Step5Confirm() {
   };
 
   return (
-    // Layout Compacto: py-4 reduz o espaço vertical excessivo
+    // Layout Compacto com Neutral Purity
     <div className="flex flex-col items-center justify-center py-4 text-center animate-in fade-in zoom-in duration-300 w-full max-w-lg mx-auto">
       {/* 1. ESTADO DE CARREGAMENTO */}
       {status === "loading" && (
         <div className="flex flex-col items-center gap-3 py-12">
-          <Loader2 className="h-10 w-10 animate-spin text-[var(--brand-primary)]" />
-          <h2 className="text-lg font-semibold text-foreground">Analisando proposta...</h2>
+          <Loader2 className="h-10 w-10 animate-spin text-neutral-900" strokeWidth={1.5} />
+          <h2 className="text-lg font-bold text-neutral-900 tracking-tight">Analisando proposta...</h2>
         </div>
       )}
 
@@ -74,22 +81,22 @@ export function Step5Confirm() {
                 <img
                   src="/assets/home/carhomeequity.webp"
                   alt="Proposta enviada"
-                  className="w-full h-full object-contain"
+                  className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
                 />
               </div>
 
               <div className="space-y-2 max-w-sm mx-auto">
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight">Proposta enviada!</h2>
-                <p className="text-sm text-slate-500 leading-relaxed">
+                <h2 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">Proposta enviada!</h2>
+                <p className="text-sm text-neutral-600 leading-relaxed">
                   Recebemos sua proposta. Entraremos em contato pelo e-mail{" "}
-                  <strong>{state.data?.eligibility?.email}</strong>.
+                  <strong className="text-neutral-900">{state.data?.eligibility?.email}</strong>.
                 </p>
               </div>
 
-              {/* Protocolo */}
+              {/* Protocolo com Zero-Radius */}
               {state.data?.proposalId && (
-                <div className="rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm">
-                  Protocolo: <strong className="text-foreground">{state.data.proposalId}</strong>
+                <div className="rounded-none border border-neutral-200 bg-surface-alt px-4 py-2.5 text-sm text-neutral-700 shadow-xs">
+                  Protocolo: <strong className="text-neutral-900">{state.data.proposalId}</strong>
                 </div>
               )}
             </>
@@ -102,13 +109,13 @@ export function Step5Confirm() {
                 <img
                   src="/assets/home/financiamentocreditonegada.webp"
                   alt="Proposta não aprovada"
-                  className="w-full h-full object-contain"
+                  className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
                 />
               </div>
 
               <div className="space-y-2 max-w-xs mx-auto">
-                <h3 className="text-xl font-bold text-slate-900 tracking-tight">Proposta não aprovada</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">
+                <h3 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">Proposta não aprovada</h3>
+                <p className="text-sm text-neutral-600 leading-relaxed">
                   Infelizmente, não foi possível prosseguir neste momento com os dados informados.
                 </p>
               </div>
@@ -122,26 +129,26 @@ export function Step5Confirm() {
                 <img
                   src="/assets/home/financiamentoveiculosnegada.png"
                   alt="Erro na comunicação"
-                  className="w-full h-full object-contain"
+                  className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
                 />
               </div>
 
               <div className="space-y-2 max-w-xs mx-auto">
-                <h3 className="text-xl font-bold text-slate-900 tracking-tight">Ops, algo deu errado</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">
+                <h3 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">Ops, algo deu errado</h3>
+                <p className="text-sm text-neutral-600 leading-relaxed">
                   Houve um problema na comunicação. Por favor, tente novamente.
                 </p>
               </div>
             </>
           )}
 
-          {/* Botões: Layout Horizontal Padronizado (igual a Veículos) */}
-          <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 pt-6 w-full border-t border-slate-100">
+          {/* Botões: Layout Horizontal Padronizado com Zero-Radius e Neutral Purity */}
+          <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 pt-6 w-full border-t border-neutral-200">
             {/* Botão Voltar / Recomeçar */}
             <Button
               variant="ghost"
               onClick={handleRestart}
-              className="w-full sm:w-auto text-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/10 hover:text-[var(--brand-primary)] transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+              className="w-full sm:w-auto rounded-none text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900 font-medium transition-colors"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               {status === "success" ? "Voltar ao início" : "Tentar novamente"}

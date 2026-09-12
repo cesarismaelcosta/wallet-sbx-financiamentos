@@ -1,25 +1,31 @@
 /**
  * @fileoverview ORQUESTRADOR CENTRAL (Gateway de Roteamento Bilateral & Fast Path)
  * @path supabase/functions/orchestrator/index.ts
- * @version 3.1.1
+ * @version 3.1.2
  *
  * ============================================================================
- * 🤖 GEMINI ARCHITECTURE SPECIFICATION: ZERO-TRUST ROUTING & S2S BYPASS
+ * PRINCÍPIOS DE ARQUITETURA E ROTEAMENTO
  * ============================================================================
  *
- * [EVOLUÇÃO v3.1.0 - SIGNED STATE & S2S TRUST]:
- * 1. {Handoff Token / Signed State}: Emissão de token criptografado na interceptação
- *    do erro 401 (SESSION_EXPIRED). Preserva `visit_id`, `visit_update_id` e
- *    `target_url` para blindar o login contra manipulação manual de URL (Open Redirect).
- * 2. {S2S Bypass Validation}: O pipeline de POST agora intercepta e valida a
- *    chancela `s2s_signed_entity` enviada de servidor para servidor pelo `sbx-auth`.
- *    Isso garante que a identidade PII repassada é confiável, eliminando falsos
- *    positivos de `PROFILE_UNAVAILABLE` durante a hidratação da jornada.
+ * 1. {Autoridade de Estado e Identidade}: 
+ *    O Orquestrador é a única Fonte da Verdade. Nenhum ID é "adivinhado" ou 
+ *    deduzido no banco. O Orquestrador avalia o payload, resolve os IDs 
+ *    (visit_id e visit_update_id) e decide a regra de negócio (isNewVisit / 
+ *    isNewUpdate) antes de acionar a camada de persistência.
  *
- * [EVOLUÇÃO v3.1.1 - OLAP SYNC]:
- * 1. {Background Sync}: O GET agora sincroniza alterações do Upstream (Superbid)
- *    direto no banco via `syncHydratedOffer`, mantendo o OLAP 100% consistente
- *    com o state entregue ao Front-end, sem onerar a latência.
+ * 2. {Autocura Sem I/O (Sessão Fantasma)}: 
+ *    Usa o cache de hidratação (`ctx.visitExists`) para identificar visitantes 
+ *    tentando acessar a jornada com um ID antigo (já apagado do banco). Em ações
+ *    de topo de funil, a jornada é reiniciada silenciosamente. Em conversão, bloqueia.
+ * 
+ * 3. {A Ação Dita a Regra}: 
+ *    Ações de navegação (VISIT, CONSULT, CONTACT) geram NOVOS logs temporais (INSERT).
+ *    Ações de conversão (SIMULATE, REDIRECT) EVOLUEM o log existente (UPDATE).
+ *
+ * 4. {Handoff Token / S2S Bypass}: 
+ *    Uso de tokens JWT criptografados para preservação de contexto em redirects 
+ *    de login (SESSION_EXPIRED) e chancelas para contornar bloqueios de PII 
+ *    em comunicações Server-to-Server seguras.
  *
  * @author Cesar Ismael Pereira da Costa
  * @author Gemini Pro
@@ -63,6 +69,11 @@ const normalizeRoute = (raw?: string | null) => {
   }
 };
 
+/**
+ * Valida a consistência de navegação inicial.
+ * Apenas instâncias Server-to-Server (S2S) podem passar parâmetros complexos 
+ * sem uma visita âncora estabelecida.
+ */
 function validateThinPayload(payload: ThinPayload, isS2S: boolean = false): { action: Action } {
   const errors: string[] = [];
   const action = String(payload.action || "").toUpperCase() as Action;
@@ -73,7 +84,7 @@ function validateThinPayload(payload: ThinPayload, isS2S: boolean = false): { ac
 
   if (!payload.interaction_context?.utm_source) errors.push("interaction_context.utm_source ausente.");
   if (!payload.interaction_context?.origin_url) errors.push("interaction_context.origin_url ausente.");
-  if (!payload.origin_url) errors.push("origin_url ausente na raiz do payload. Obrigatorio para o roteamento.");
+  if (!payload.origin_url) errors.push("origin_url ausente na raiz do payload. Obrigatorio para roteamento.");
 
   if (NAVIGATION_ACTIONS.includes(action) && !payload.target_url) {
     errors.push(`target_url ausente. Obrigatoria para acoes do tipo ${action}.`);
@@ -88,33 +99,47 @@ function validateThinPayload(payload: ThinPayload, isS2S: boolean = false): { ac
   return { action };
 }
 
-function toUiError(err: any, fallbacks: { origin: string; auth: string }) {
+function toUiError(err: any, fallbacks: { origin: string; auth: string }, method: string) {
   let message = "Ocorreu um erro ao processar sua requisicao.";
   let code = "UNKNOWN_ERROR";
-  let fallback_url = fallbacks.origin;
+  
+  // O padrão é ejetar pro "/" no GET (evita loop) e manter na origem no POST
+  let fallback_url = method === "GET" ? "/" : fallbacks.origin;
 
   const raw = String(err?.message || "");
 
   if (raw.includes("OFFER_NOT_FOUND")) {
     message = "Esta oferta nao esta mais disponivel ou nao foi encontrada.";
     code = "OFFER_NOT_FOUND";
+    // Usa o fallback padrão definido acima (GET = "/", POST = origin)
+    
   } else if (raw.includes("INVALID_RELATIONSHIP")) {
     message = "Voce nao tem permissao para acessar esta oferta ou visita.";
     code = "INVALID_RELATIONSHIP";
+    // Usa o fallback padrão definido acima (GET = "/", POST = origin)
+    
   } else if (raw.includes("SESSION_EXPIRED")) {
     message = "Sua sessao expirou. Por favor, faca login novamente.";
     code = "SESSION_EXPIRED";
-    fallback_url = fallbacks.auth;
+    // SOBRESCREVE a regra de ouro: Sempre joga pro Login, independente se for GET ou POST
+    fallback_url = fallbacks.auth; 
+    
   } else if (raw.includes("PROFILE_UNAVAILABLE")) {
     message = "Perfil não identificado ou sessão anônima em rota protegida.";
     code = "PROFILE_UNAVAILABLE";
+    // SOBRESCREVE a regra de ouro: Sempre joga pro Login
     fallback_url = fallbacks.auth;
+    
   } else if (raw.includes("UPSTREAM_CONNECTION_ERROR")) {
     message = "Estamos com instabilidade no servico de ofertas. Tente novamente em instantes.";
     code = "UPSTREAM_CONNECTION_ERROR";
+    // Usa o fallback padrão
+    
   } else if (raw.includes("FORBIDDEN") || raw.includes("INVALID_PAYLOAD")) {
     message = "Inconsistencia nos dados de seguranca (Bloqueio).";
     code = "FORBIDDEN";
+    // Usa o fallback padrão (ejetando pra raiz no GET por segurança)
+    
   } else if (raw) {
     message = raw;
   }
@@ -125,7 +150,8 @@ function toUiError(err: any, fallbacks: { origin: string; auth: string }) {
   return uiError;
 }
 
-// ✨ FIX: Chaves criptográficas não podem ir pro banco de dados em logs
+// ✨ FIX: Prevenção de Injeção em Logs - Chaves criptográficas NUNCA podem ser 
+// persistidas no banco na coluna raw_payload.
 const SECRET_KEYS = new Set([
   "auth_token",
   "session_token",
@@ -189,6 +215,7 @@ serve(
         let statusCode = 401;
 
         // ✨ [HANDOFF TOKEN / SIGNED STATE]: A Sessão Expirou. Lacramos o cofre.
+        // Criptografamos o estado da visita atual e blindamos o login contra Open Redirect
         if (raw.includes("SESSION_EXPIRED")) {
           userMessage = "Sua sessao expirou. Por favor, faca login novamente.";
           errorCode = "SESSION_EXPIRED";
@@ -266,7 +293,7 @@ serve(
       const sessionUserId = auth?.user_id || auth?.userId || auth?.sub || auth?.payload?.sub || null;
 
       // =====================================================================
-      // PIPELINE DE LEITURA (GET): Hidratacao do Front-End
+      // PIPELINE DE LEITURA (GET): Hidratação do Front-End
       // =====================================================================
       if (req.method === "GET") {
         try {
@@ -281,7 +308,7 @@ serve(
           const currentRoute = normalizeRoute(originPath);
           const isHomeRoute = currentRoute === "" || HOME_ROUTES.includes(currentRoute);
 
-          // 1. Hidratação única (traz entidade, oferta, product_id e dados da visita de uma só vez)
+          // 1. Hidratação única (traz entidade, oferta, product_id e dados da visita)
           const ctx = await hydrateVisitContext({
             sql,
             visitId,
@@ -293,8 +320,8 @@ serve(
 
           if (!ctx.visitExists) throw new Error("Visita nao encontrada ou expirada no banco de dados.");
 
-          // ✨ [ZERO-TRUST OLAP SYNC]: Delega a sincronização de Upstream para a camada de persistência
-          // de forma assíncrona para não onerar o TTI (Time to Interactive) da aplicação cliente.
+          // ✨ [ZERO-TRUST OLAP SYNC]: Delega a sincronização de mutações no Upstream (Superbid)
+          // para a camada de persistência de forma assíncrona para não onerar o TTI do Front-End.
           if (!isHomeRoute && ctx.trustedOffer && visitId && visitUpdateId) {
             const syncPromise = syncHydratedOffer(
               sql, 
@@ -323,7 +350,7 @@ serve(
             });
           }
 
-          // 2. Resolução de configs usando o product_id que já veio na hidratação
+          // 2. Resolução de configs usando o product_id retornado na hidratação
           const config = await resolveOrchestratorConfigs({
             supabase,
             eventId: ctx.trustedEvent?.event_id ?? null,
@@ -343,7 +370,7 @@ serve(
           const offerValue = ctx.trustedOffer?.offer_value ? parseFloat(String(ctx.trustedOffer.offer_value)) : null;
           const minDown = config.rules?.min_down_payment_percentage ?? null;
 
-          // 3. Montagem do payload usando diretamente o ctx (Zero queries extras)
+          // 3. Montagem rápida do payload, aproveitando inteiramente o contexto cacheado
           const hydratedPayload = {
             visit_id: visitId,
             visit_update_id: visitUpdateId,
@@ -398,7 +425,7 @@ serve(
           debugLog("Payload construído: ", hydratedPayload);
           return { status: 200, data: hydratedPayload };
         } catch (error: any) {
-          const uiError = toUiError(error, fallbacks);
+          const uiError = toUiError(error, fallbacks, req.method);
           debugLog(`[Orquestrador GET Error]: ${error?.message} -> ${(uiError as any).errorCode}`);
 
           return {
@@ -420,16 +447,17 @@ serve(
         try {
           debugLog("[POST STEP 1] Iniciando parsing do body...");
           const rawPayload = JSON.parse(rawBodyText || "{}");
+          
           // 🔒 ZERO-TRUST: 1º allowlist (descarta chaves fora do contrato),
           // 2º normalização (undefined -> null) e remoção de segredos.
           const thin: ThinPayload = sanitizePayload(pickThin(rawPayload));
 
           thin.interaction_context = thin.interaction_context || {};
-          
+
           // ✨ INJEÇÃO: Passa a flag indicando se é uma requisição S2S confiável
           const isS2S = Boolean(rawPayload.s2s_signed_entity);
           const { action } = validateThinPayload(thin, isS2S);
-          
+
           thin.action = action;
 
           const infra = await captureInfrastructure(req);
@@ -448,6 +476,8 @@ serve(
             }
           }
 
+          // A LOGICA ORIGINAL RESTAURADA: Se tem Entidade S2S assinada, o ID do auth é ignorado. 
+          // Caso contrário, DEVE repassar o sessionUserId que foi pego lá no começo do script!
           const userIdForHydrate = validatedS2SEntity ? null : sessionUserId;
 
           debugLog("[POST STEP 2] Chamando hydrateVisitContext...");
@@ -456,7 +486,7 @@ serve(
             ...(targetVisitId && { visitId: targetVisitId }),
             ...(thin.visit_update_id && { visitUpdateId: thin.visit_update_id }),
             offerId: targetOfferId,
-            userId: userIdForHydrate,
+            userId: userIdForHydrate, // Aqui estava o erro! Restaurado o seu ID.
             trustedS2SEntity: validatedS2SEntity,
             environment: auth.environment as "staging" | "production",
             mode: NAVIGATION_ACTIONS.includes(action) && !targetOfferId ? "light" : "full",
@@ -509,13 +539,13 @@ serve(
 
           let orchestratorConfigId: number | null = null;
 
-          // Se for uma ação estritamente de navegação pura (como VISIT ou CONTACT)
+          // Valida a URL de destino (Fast Path usa target_url simples, conversão usa Orquestrador)
           if (NAVIGATION_ACTIONS.includes(action)) {
             if (!payload.target_url) {
               throw new Error(`Para acoes de '${action}', a target_url e obrigatoria no payload.`);
             }
           } else {
-            // SIMULATE, CONSULT e agora também o REDIRECT caem aqui!
+            // SIMULATE, CONSULT e REDIRECT necessitam resolver configurações complexas
             debugLog("[POST STEP 4] Resolvendo orchestrator configs...");
             const resolved = await resolveOrchestratorConfigs({
               supabase,
@@ -531,8 +561,7 @@ serve(
               throw new Error("Nenhuma configuracao de destino ativa encontrada para esta acao.");
             }
 
-            // O REDIRECT herda a URL de destino da configuração do parceiro/produto, 
-            // além de todas as FAQs, footer e regras de consentimento!
+            // Injeta configurações de compliance e roteamento profundo do parceiro
             payload.target_url = resolved.page_url;
             payload.is_integrated = resolved.is_integrated;
             payload.integration_method = resolved.integration_method;
@@ -547,125 +576,145 @@ serve(
 
             orchestratorConfigId = resolved.orchestrator_config_id ?? null;
             payload.orchestrator_config_id = orchestratorConfigId;
-            debugLog("[POST STEP 4] Configs resolvidas ID para REDIRECT:", orchestratorConfigId);
+            debugLog("[POST STEP 4] Configs resolvidas ID para conversão:", orchestratorConfigId);
           }
 
-          const hasVisitAnchor = Boolean(payload.visit_id);
-          const isNavigationAction = NAVIGATION_ACTIONS.includes(action) && hasVisitAnchor;
-          const simulationId = payload.simulation_id || null;
+          // =====================================================================
+          // [POST STEP 5] RESOLUÇÃO ESTRITA DE IDs E AÇÃO (CONTRATO)
+          // =====================================================================
+          const targetAction = payload.action;
+          let finalVisitId = payload.visit_id || null;
+          let isNewVisit = false;
 
-          if (isNavigationAction) {
-            debugLog("[POST STEP 5A] Executando fluxo Fast Path (Navigation Action)...");
-
-            // ✨ CORREÇÃO: Respeita os IDs do Payload (Handoff) antes de gerar novos
-            const effectiveVisitId = payload.visit_id || crypto.randomUUID();
-            // ✨ O visit_id continua o mesmo, mas cada clique gera um novo snapshot temporal (update_id)
-            const effectiveUpdateId = crypto.randomUUID();
-
-            const targetUrlStr = payload?.target_url || "/";
-            const [cleanPath, queryStr] = targetUrlStr.split("?");
-            const queryParams = new URLSearchParams(queryStr || "");
-
-            queryParams.set("visit_id", effectiveVisitId);
-            queryParams.set("visit_update_id", effectiveUpdateId);
-            if (simulationId) queryParams.set("simulation_id", simulationId);
-
-            let finalUrl = `${cleanPath}?${queryParams.toString()}`;
-
-            const persistPromise = persistVisitData(
-              sql,
-              payload,
-              infra,
-              categoryId ?? undefined,
-              payload.action,
-              payload.origin_url,
-              payload.target_url,
-              payload.visit_id || null,
-              orchestratorConfigId,
-              effectiveVisitId,
-              effectiveUpdateId, // ✨ Passa o ID correto pro banco
-            );
-
-            const rt = (globalThis as any).EdgeRuntime;
-            if (rt && typeof rt.waitUntil === "function") {
-              rt.waitUntil(
-                persistPromise.catch((err: any) => console.error("[Background Persist Error]:", err?.message || err)),
-              );
+          // 🛡️ AUTOCURA: Proteção contra Sessão Fantasma
+          // Se o Front enviar um ID de visita que não existe mais no banco (Sessão Expirada):
+          if (finalVisitId && ctx.visitExists === false) {
+            if (targetAction === 'VISIT' || targetAction === 'CONSULT') {
+              debugLog(`[Orquestrador] Sessão ${finalVisitId} fantasma/expirada. Reiniciando jornada.`);
+              finalVisitId = null; // Força a recriação limpa da sessão
             } else {
-              await persistPromise;
+              // Tentativa de conversão (SIMULATE/REDIRECT) requer histórico vivo. 
+              // Se a sessão expirou, bloqueia e roteia pro login ou reinício.
+              throw new Error("SESSION_EXPIRED"); 
             }
-
-            debugLog("[POST STEP 5A] Fast Path concluído. Retornando resposta...");
-            return {
-              status: 200,
-              data: {
-                action: "REDIRECT",
-                url: finalUrl,
-                visit_id: effectiveVisitId,
-                visit_update_id: effectiveUpdateId, // ✨ Devolve o ID correto pro Front
-                simulation_id: simulationId,
-                partner_id: payload.partner_id ?? null,
-                state: payload, // ✨ INJEÇÃO: Devolve o pacote inteiro pro SPA guardar no Cache
-              },
-            };
           }
 
-          debugLog("[POST STEP 5B] Executando persistência síncrona...");
+          if (!finalVisitId) {
+            finalVisitId = crypto.randomUUID();
+            isNewVisit = true;
+          }
+          
+          let finalUpdateId: string;
+          let isNewUpdate: boolean;
 
-          // [POST STEP 5B] Executando persistência síncrona...
-          const { visitId, visitUpdateId } = await persistVisitData(
-            sql,
-            payload,
-            infra,
-            categoryId ?? undefined,
-            payload.action,
-            payload.origin_url,
-            payload.target_url,
-            payload.visit_id,
-            orchestratorConfigId,
-          );
+          // A Ação é a única autoridade que decide entre Criar Log (INSERT) e Evoluir (UPDATE)
+          switch (targetAction) {
+            case 'VISIT':
+            case 'CONSULT':
+            case 'CONTACT':
+              // Ações de navegação (Topo de funil): Geram sempre um novo marco temporal
+              finalUpdateId = crypto.randomUUID();
+              isNewUpdate = true;
+              break;
 
-          debugLog("[POST STEP 5B] Persistência síncrona finalizada:", { visitId, visitUpdateId });
+            case 'SIMULATE':
+            case 'REDIRECT':
+              // Ações de conversão (Fundo de funil): Evoluem OBRIGATORIAMENTE o estado atual
+              if (!payload.visit_update_id) {
+                // Trava de Segurança estourada antes de abrir transação no banco.
+                throw new Error(`[FATAL] Ação '${targetAction}' exige um 'visit_update_id' explícito no payload.`);
+              }
+              finalUpdateId = payload.visit_update_id;
+              isNewUpdate = false; 
+              break;
 
-          // Extrai os parâmetros da URL destino para injetar as âncoras de sessão preservadas
+            default:
+              throw new Error(`[FATAL] Ação não suportada pelo Orquestrador: ${targetAction}`);
+          }
+
+          // Atualiza o payload com a Fonte da Verdade definitiva
+          payload.visit_id = finalVisitId;
+          payload.visit_update_id = finalUpdateId;
+          const simulationId = payload.simulation_id || null;
+          
+          // ✨ A SUA REGRA DE OURO: Só manda persistir a entidade se a requisição
+          // explícita de handoff S2S estiver presente neste exato ciclo.
+          const hasSignedEntity = Boolean(validatedS2SEntity);
+
+          // Montagem Final da URL de Destino (Injeção via Query String)
           const targetUrlStr = payload?.target_url || "/";
           const [cleanPath, queryStr] = targetUrlStr.split("?");
           const queryParams = new URLSearchParams(queryStr || "");
-
-          // ✨ O BANCO tem prioridade máxima no update temporal.
-          // Se o banco gerou/retornou um ID, ele é o novo cursor.
-          const anchorVisitId = visitId;
-          const anchorUpdateId = visitUpdateId;
-
-          if (anchorVisitId) queryParams.set("visit_id", anchorVisitId);
-          if (anchorUpdateId) queryParams.set("visit_update_id", anchorUpdateId);
+          
+          queryParams.set("visit_id", finalVisitId);
+          queryParams.set("visit_update_id", finalUpdateId);
           if (simulationId) queryParams.set("simulation_id", simulationId);
+          
+          const finalUrl = `${cleanPath}?${queryParams.toString()}`;
 
-          let finalUrl = `${cleanPath}?${queryParams.toString()}`;
+          // =====================================================================
+          // [POST STEP 6] PERSISTÊNCIA (Fast Path ou Síncrona)
+          // =====================================================================
+          debugLog("[POST STEP 6] Chamando Camada de Persistência...");
+          const persistPromise = persistVisitData(
+            sql,
+            targetAction,
+            finalVisitId,
+            finalUpdateId,
+            isNewVisit,
+            isNewUpdate,
+            hasSignedEntity, // Flag repassada de forma cega
+            payload,
+            infra,
+            categoryId ?? undefined,
+            payload.origin_url,
+            payload.target_url,
+            orchestratorConfigId
+          );
 
-          debugLog("[POST STEP 6] Retornando objeto final de sucesso...");
+          // Fast Path para navegação limpa (Não trava o navegador esperando o INSERT)
+          const isNavigationAction = NAVIGATION_ACTIONS.includes(targetAction) && !isNewVisit;
+          const rt = (globalThis as any).EdgeRuntime;
+
+          if (isNavigationAction && rt && typeof rt.waitUntil === "function") {
+            debugLog("[Orquestrador] Resolvendo acesso via Fast Path (Background Persist)...");
+            rt.waitUntil(
+              persistPromise.catch((err: any) => console.error("[Background Persist Error]:", err?.message || err))
+            );
+          } else {
+            debugLog("[Orquestrador] Executando persistência Síncrona...");
+            await persistPromise;
+          }
+
+          debugLog("[POST FINAL] Retornando objeto de roteamento pro front-end...");
           return {
             status: 200,
             data: {
               action: "REDIRECT",
               url: finalUrl,
-              visit_id: anchorVisitId,
-              visit_update_id: anchorUpdateId,
+              visit_id: finalVisitId,
+              visit_update_id: finalUpdateId,
               simulation_id: simulationId,
               partner_id: payload.partner_id ?? null,
-              state: payload, // ✨ INJEÇÃO: Devolve o pacote inteiro pro SPA guardar no Cache
+              state: payload, // Cache do front-end é atualizado com as âncoras definitivas
             },
           };
+
         } catch (error: any) {
           debugLog(`[Orquestrador POST Error REAL]: ${error?.message}`, error);
+
+          // ✨ Aplica o formatador de erros visuais (toUiError) 
+          // para padronizar as respostas de falha no POST, igual já fazemos no GET.
+          const uiError = toUiError(error, fallbacks, req.method);
 
           return {
             status: 400,
             data: {
               success: false,
-              code: (error as any).errorCode || "UNKNOWN_ERROR",
-              message: error?.message || "Erro ao processar a requisicao.",
-              fallback_url: (error as any).fallback_url || originPath,
+              code: (uiError as any).errorCode,
+              message: uiError.message,
+              // Mantém o fallback que o erro possa ter injetado, ou usa o do toUiError
+              fallback_url: (error as any).fallback_url || (uiError as any).fallback_url || originPath,
             },
           };
         }

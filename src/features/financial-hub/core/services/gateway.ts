@@ -37,7 +37,7 @@ export interface GatewayErrorResponse {
 
 /** Timeouts por natureza da chamada (ms). */
 const TIMEOUT_FAST = 8000; // orquestração e configs
-const TIMEOUT_SIMULATION = 40000; // motor de crédito / upstream externo
+const TIMEOUT_SIMULATION = 90000; // motor de crédito / upstream externo
 
 // =========================================================================
 // [1] DEFINIÇÃO E ENFORCEMENT DO THIN PAYLOAD

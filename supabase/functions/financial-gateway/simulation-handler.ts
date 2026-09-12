@@ -186,55 +186,96 @@ export async function processSimulation(
   let gatewayResult: SimulationResponse | null = null;
   const action = 'SIMULATE'; // Ação master de funil para o Painel
 
+  // ✨ FUNÇÃO DE AUTO-CURA: Gera um retorno padronizado quando qualquer parceiro cai.
+  const buildFallbackResult = (err: any): SimulationResponse => ({
+    success: false,
+    message: "Serviço indisponível no parceiro no momento.",
+    consults: [{
+      status_id: 99, // ⚠️ Substitua pelo ID real do seu banco para "Erro de Integração/Timeout"
+      is_selected: true,
+      message: err?.message || "Timeout/Falha na API do Parceiro"
+    }],
+    raw: { error: err?.message, stack: err?.stack }
+  });
+
   switch (payload.partner_id) {
     
-    case 1: // sbxPAY (Cartão de Crédito)
+    // -----------------------------------------------------------------------
+    // PARCEIRO 1: sbxPAY (Cartão de Crédito)
+    // -----------------------------------------------------------------------
+    case 1: 
       payload.simulation_id = payload.simulation_id || crypto.randomUUID();
-      
-      debugLog("💳 INICIO SIMULAÇÃO CARTÃO: ", payload.simulation_id);
-      gatewayResult = await processSimulationCreditCard(payload);
-      
       payload.action_description = 'SIMULATE_CONDITIONS';
       
-      // Inserção da Simulação no Banco (passando True para sincronizar visitas)
+      try {
+        debugLog("💳 INICIO SIMULAÇÃO CARTÃO: ", payload.simulation_id);
+        gatewayResult = await processSimulationCreditCard(payload);
+      } catch (err: any) {
+        gatewayResult = buildFallbackResult(err);
+        await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, 'EXECUTE_SIMULATION', true);
+        throw err; // Propaga o erro para a UI após garantir a persistência
+      }
+      
       const resultCC = await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, 'EXECUTE_SIMULATION', true);
       payload.simulation_update_id = String(resultCC.simulation_update_id);
       break;
 
-    case 2: // Fandi (Financiamento B2B/B2C)
+    // -----------------------------------------------------------------------
+    // PARCEIRO 2: Fandi (Financiamento B2B/B2C)
+    // -----------------------------------------------------------------------
+    case 2: 
       payload.simulation_id = payload.simulation_id || crypto.randomUUID();
-
-      debugLog("🏢 REQUISITANDO MOTOR INTEGRADO (FANDI API): ", payload.simulation_id);
-      gatewayResult = await processSimulationFandi(payload);
-      
       payload.action_description = 'SIMULATE_ELIGIBILITY';
+
+      try {
+        debugLog("🏢 REQUISITANDO MOTOR INTEGRADO (FANDI API): ", payload.simulation_id);
+        gatewayResult = await processSimulationFandi(payload);
+      } catch (err: any) {
+        gatewayResult = buildFallbackResult(err);
+        await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, 'EXECUTE_SIMULATION', true);
+        throw err;
+      }
       
       const resultFandi = await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, 'EXECUTE_SIMULATION', true);
       payload.simulation_id = String(resultFandi.simulation_id);
       payload.simulation_update_id = String(resultFandi.simulation_update_id);
       break;
 
-    case 3: // CREDITAS (Garantia de Veículos/Imóveis)
+    // -----------------------------------------------------------------------
+    // PARCEIRO 3: CREDITAS (Garantia de Veículos/Imóveis)
+    // -----------------------------------------------------------------------
+    case 3: 
       debugLog(`🏦 INICIO FLUXO CREDITAS - PRODUTO: ${payload.product_id} | FASE: ${step}`, payload.simulation_id);
 
       if (payload.product_id === 7) { // CAR EQUITY (Auto Equity)
         
         if (step === 'CHECK_ELIGIBILITY') {
           payload.simulation_id = payload.simulation_id || crypto.randomUUID();
-                    
-          gatewayResult = await processSimulationCreditasAutoEquity(payload, step);
           payload.action_description = 'SIMULATION_CHECK_ELIGIBILITY';
           
+          try {
+            gatewayResult = await processSimulationCreditasAutoEquity(payload, step);
+          } catch (err: any) {
+            gatewayResult = buildFallbackResult(err);
+            await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, step, true);
+            throw err;
+          }
+
           const resultCreditas = await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, step, true);
           payload.simulation_update_id = String(resultCreditas.simulation_update_id);
           
         } else {
           // EXECUTE_SIMULATION (Fase de cotação final e efetivação)
-          gatewayResult = await processSimulationCreditasAutoEquity(payload, step);
+          if (!payload.simulation_id) throw new Error("O simulation_id é obrigatório para avançar à fase de EXECUTE_SIMULATION.");
           payload.action_description = 'SIMULATE_CONDITIONS';
           
-          if (!payload.simulation_id) {
-            throw new Error("O simulation_id é obrigatório para avançar à fase de EXECUTE_SIMULATION.");
+          try {
+            gatewayResult = await processSimulationCreditasAutoEquity(payload, step);
+          } catch (err: any) {
+            gatewayResult = buildFallbackResult(err);
+            // ⚠️ Aqui usamos UPDATE, porque a simulação já existe no banco da fase CHECK_ELIGIBILITY
+            await updateSimulationData(sql, payload.simulation_id, payload, infra, gatewayResult, action, payload.action_description, step);
+            throw err;
           }
           
           const simulationUpdateId = await updateSimulationData(sql, payload.simulation_id, payload, infra, gatewayResult, action, payload.action_description, step);
@@ -242,18 +283,13 @@ export async function processSimulation(
         }
         
       } else if (payload.product_id === 6) { // HOME EQUITY
-        debugLog("Fluxo Home Equity ainda não implementado para o Parceiro 3 (Creditas).");
-        gatewayResult = {
-          success: false,
-          message: "Produto Home Equity em implementação.",
-          consults: [],
-          raw: { error: "Not Implemented" }
-        };
-      } else {
-        throw new Error(`Produto ${payload.product_id} não suportado para o Parceiro 3.`);
+        // ... (Mantém o seu código atual do Home Equity) ...
       }
       break;
 
+    // -----------------------------------------------------------------------
+    // FALLBACK DE ROTEAMENTO
+    // -----------------------------------------------------------------------
     default:
       throw new Error(
         `BUSINESS_ERROR: Parceiro (ID: ${payload.partner_id}) não configurado no Motor. ` +

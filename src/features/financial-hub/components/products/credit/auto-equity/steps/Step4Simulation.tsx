@@ -3,18 +3,13 @@
  * @path src/features/financial-hub/components/products/credit/auto-equity/steps/Step4Simulation.tsx
  * 
  * =========================================================================
- * 🤖 PADRÃO GEMINI PRO: STRICT THIN PAYLOAD & ARCHITECTURAL MECHANICS
+ * 🤖 PADRÃO GEMINI PRO: ZERO-RADIUS GOVERNANCE & NEUTRAL PURITY
  * =========================================================================
  * [MECÂNICA ARQUITETURAL]:
  * - Engine: Utiliza `useWizard<any>()` para interagir com o Motor Genérico.
  * - Estado: Lê valores de `state.data` (presets de simulação).
  * - Transportador: callSimulation (centralizado em lib/api/gateway.ts).
- * 
- * O payload de rede foi purificado. O uso do `...state.data` foi abolido para
- * evitar o envio de lixo de UI (estado interno, objetos aninhados) para a 
- * camada de rede. O componente monta um payload estritamente "Thin", extraindo 
- * os cursores temporais (`visit_id`, `visit_update_id`) da URL e enviando 
- * APENAS os IDs identificadores, o step e os detalhes da simulação necessários.
+ * - Conformidade: Zero-Radius Strict Governance & Neutral Purity (Sem tokens de marca corrompidos).
  *
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro (Architectural Mechanics)
@@ -31,6 +26,8 @@ import { useWizard } from "@/features/financial-hub/components/shared/WizardProv
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
+
+const commonInputClass = "h-11 text-sm rounded-none border-neutral-200 bg-white transition-all duration-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900";
 
 export function Step4Simulation() {
   // =========================================================================
@@ -49,10 +46,6 @@ export function Step4Simulation() {
   // =========================================================================
   // 🤖 [ZERO-TRUST HANDLER ARCHITECTURE]: Execução de Rede e Thin Payload
   // =========================================================================
-  /**
-   * Dispara o motor de simulação via Gateway.
-   * Constrói o payload fundindo estado global com preferências locais.
-   */
   const handleSimular = async () => {
     if (loading || isSimulating.current) return;
 
@@ -64,35 +57,29 @@ export function Step4Simulation() {
       const urlVisitId = urlParams.get("visit_id");
       const urlVisitUpdateId = urlParams.get("visit_update_id");
 
-      // Monta Payload Magro Zero-Trust encapsulando os dados no simulation_details
       const payload = {
         action: "SIMULATE",
         visit_id: urlVisitId || state.data.visit_id,
         visit_update_id: urlVisitUpdateId || state.data.visit_update_id,
-        simulation_id: state.data.simulation_id, // Gerado na Elegibilidade
+        simulation_id: state.data.simulation_id,
         product_id: state.data.product_id,
         partner_id: state.data.partner_id,
         step: "EXECUTE_SIMULATION",
         simulation_details: {
-          requested_value: amount, // O backend puxa isso na linha 72 e 101
-          purpose: purpose, // Vem da tela do Step 4
-          personalIncome: state.data.personalIncome, // Vem da tela do Step 2
-          vehicle: state.data.vehicle, // Vem da tela do Step 3
+          requested_value: amount,
+          purpose: purpose,
+          personalIncome: state.data.personalIncome,
+          vehicle: state.data.vehicle,
         },
       };
 
-      // 🔒 LGPD: log removido — payload contém renda, veículo e consentimentos.
-
-      // Chamada via Gateway
       const result = await execute(() => callSimulation(payload, "EXECUTE_SIMULATION"));
 
-      // Alimentação síncrona do Cache de RAM Fast Path se houver estado
       if (result.state) {
         setFastPathState(result.state);
       }
 
       if (result.success) {
-        // Atualiza estado global para o próximo step (Resultados)
         update({
           data: { 
             ...state.data, 
@@ -113,7 +100,6 @@ export function Step4Simulation() {
         console.error("Erro na simulação:", result.message);
       }
     } catch (error: any) {
-      // Aqui acontece a mágica: dispara o evento global que o Layout ouve
       window.dispatchEvent(new CustomEvent("app-error", { detail: error }));
     } finally {
       setLoading(false);
@@ -125,18 +111,18 @@ export function Step4Simulation() {
     <div className="flex flex-col gap-6">
       
       {/* =========================================================================
-       * 🤖 [SLIDER ARCHITECTURE]: Controle de Valor Desejado
+       * 🤖 [SLIDER ARCHITECTURE]: Controle de Valor Desejado com Zero-Radius
        * ========================================================================= */}
-      <div className="rounded-xl border border-border p-6 bg-muted/20">
-        <Label>Valor desejado</Label>
-        <div className="text-3xl font-bold text-foreground mt-2">{BRL(amount)}</div>
+      <div className="rounded-none border border-neutral-200 p-5 sm:p-6 bg-surface-alt shadow-xs space-y-3">
+        <Label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Valor desejado</Label>
+        <div className="text-2xl sm:text-3xl font-bold text-neutral-900 tracking-tight">{BRL(amount)}</div>
 
-        <div className="mt-4" style={{ "--primary": "var(--brand-primary)" } as React.CSSProperties}>
-          {/* Estilo scoped para o Slider do Shadcn */}
+        <div className="pt-2">
+          {/* Estilo scoped para o Slider do Shadcn com cores neutras */}
           <style>{`
             .slider-fix [role="slider"]:focus-visible {
               outline: none !important;
-              box-shadow: 0 0 0 2px var(--brand-primary) !important;
+              box-shadow: 0 0 0 2px #171717 !important;
             }
           `}</style>
 
@@ -156,18 +142,13 @@ export function Step4Simulation() {
       {/* =========================================================================
        * 🤖 [SELECT ARCHITECTURE]: Seleção do Propósito do Empréstimo
        * ========================================================================= */}
-      <div className="space-y-2">
-        <Label>Motivo do empréstimo</Label>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Motivo do empréstimo</Label>
         <Select value={purpose} onValueChange={setPurpose} disabled={loading}>
-          <SelectTrigger
-            className={`transition-all duration-300 
-              ${purpose ? "bg-[var(--brand-primary)]/1 border-[var(--brand-primary)]/10" : "border-input"}
-              focus:ring-[var(--brand-primary)] 
-              focus:border-[var(--brand-primary)]`}
-          >
+          <SelectTrigger className={commonInputClass}>
             <SelectValue placeholder="Escolher..." />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="rounded-none border-neutral-200">
             {[
               { value: "INVESTMENT_IN_OWN_BUSINESS", label: "Investimento em negócio próprio" },
               { value: "DEBTS_PAYMENT", label: "Pagamento de dívidas" },
@@ -179,7 +160,7 @@ export function Step4Simulation() {
               <SelectItem
                 key={item.value}
                 value={item.value}
-                className="data-[highlighted]:!bg-[var(--brand-primary)]/10 data-[highlighted]:!text-[var(--brand-primary)] cursor-pointer"
+                className="rounded-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-900 cursor-pointer"
               >
                 {item.label}
               </SelectItem>
@@ -191,26 +172,26 @@ export function Step4Simulation() {
       {/* =========================================================================
        * 🤖 [ACTION ARCHITECTURE]: Botões de Navegação e Submissão
        * ========================================================================= */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 pt-2">
         <Button
           type="button"
           variant="ghost"
           onClick={back}
-          disabled={loading} // Bloqueia o "Voltar" durante o loading
-          className="..."
+          disabled={loading}
+          className="w-full sm:w-auto rounded-none text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900 font-medium"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Voltar
         </Button>
         <Button
           size="lg"
-          className="h-12 flex-1 rounded-xl bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+          className="h-12 w-full sm:w-auto flex-1 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-bold shadow-xs transition-all active:scale-[0.98] disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none"
           disabled={!purpose || loading}
           onClick={handleSimular}
         >
           {loading ? (
             <>
-              <Loader2 className="animate-spin mr-2" /> Confirmando...
+              <Loader2 className="animate-spin mr-2 h-4 w-4" /> Confirmando...
             </>
           ) : (
             "Confirmar Proposta"

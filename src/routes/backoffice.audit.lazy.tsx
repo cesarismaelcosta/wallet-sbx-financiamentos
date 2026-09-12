@@ -240,13 +240,13 @@ function AuditoriaPage() {
       
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Auditoria</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Auditoria</h1>
+          <p className="text-sm text-neutral-600">
             Monitore o histórico de acessos, eventos de autenticação e segurança do sistema.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => load(page)} disabled={loading} className="rounded-xl">
+          <Button onClick={() => load(page)} disabled={loading} className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white shadow-xs">
             <RefreshCw className={`mr-2 h-4 w-4 shrink-0 ${loading ? "animate-spin" : ""}`} /> 
             Atualizar
           </Button>
@@ -261,19 +261,19 @@ function AuditoriaPage() {
         <StatCard label="E-mails únicos" value={stats.emails_unicos} highlight />
       </div>
 
-      {error && <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"><strong>Erro:</strong> {error}</div>}
+      {error && <div className="rounded-none border border-red-200 bg-red-50 p-4 text-sm text-red-600"><strong>Erro:</strong> {error}</div>}
 
-      <div className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden">
+      <div className="rounded-none border border-neutral-200 bg-white flex flex-col overflow-hidden shadow-xs">
         
-        <div className="flex flex-col gap-3 border-b border-border p-4">
+        <div className="flex flex-col gap-3 border-b border-neutral-200 p-4 bg-neutral-50/50">
           
           <div className="lg:hidden">
             <Button 
               variant="outline" 
               onClick={() => setMobileFilterOpen(true)}
-              className="w-full h-11 rounded-xl gap-2 justify-start bg-white border-slate-200 text-slate-700 shadow-sm"
+              className="w-full h-11 rounded-none gap-2 justify-start bg-white border-neutral-200 text-neutral-900 shadow-xs"
             >
-              <Filter className="h-4 w-4 text-[#B300FF]" /> Filtros
+              <Filter className="h-4 w-4 text-neutral-900" /> Filtros
             </Button>
           </div>
 
@@ -284,32 +284,38 @@ function AuditoriaPage() {
                 value={search} 
                 onChange={(e) => setSearch(e.target.value)} 
                 placeholder="Buscar por e-mail ou IP..." 
-                className="h-11 w-full rounded-full bg-slate-100/70 border-transparent pl-5 pr-12 text-[13px] text-slate-700 placeholder:text-slate-500 focus-visible:ring-primary/20 focus-visible:bg-white focus-visible:border-primary/30 transition-all shadow-none" 
+                className="h-11 w-full rounded-none bg-white border border-neutral-200 pl-5 pr-12 text-[13px] text-neutral-900 placeholder:text-neutral-500 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900 transition-all shadow-none" 
               />
-              <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-[#B300FF]" />
+              <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-neutral-400" />
             </div>
 
             <div className="hidden lg:flex lg:items-center lg:gap-2 lg:ml-auto">
               
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[170px] rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 text-slate-600 justify-between">
+                  <Button variant="outline" size="sm" className="h-10 w-[170px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 text-neutral-900 justify-between shadow-xs">
                     <span className="truncate">Evento: {eventFilter === "all" ? "Todos" : EVENT_LABEL[eventFilter as LoginRow["event"]]}</span>
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-56 p-0" align="start">
-                  <Command>
+                <PopoverContent className="w-56 p-0 rounded-none border-neutral-200 shadow-xs" align="start">
+                  <Command className="bg-white">
                     <CommandList 
-                      className="max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y p-1" 
+                      className="max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y" 
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
-                        {EVENT_OPTIONS.map(opt => (
-                          <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id as any)} className="cursor-pointer">
-                            {opt.label}
-                          </CommandItem>
-                        ))}
+                        {EVENT_OPTIONS.map(opt => {
+                          const isSelected = eventFilter === opt.id;
+                          return (
+                            <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id as any)} className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {opt.label}
+                            </CommandItem>
+                          );
+                        })}
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -318,23 +324,29 @@ function AuditoriaPage() {
 
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[150px] rounded-xl gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8] hover:bg-[#fce7f3] justify-between">
+                  <Button variant="outline" size="sm" className="h-10 w-[150px] rounded-none gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-neutral-50 justify-between shadow-xs">
                     <span className="truncate">Status: {statusFilter === "all" ? "Todos" : statusFilter === "success" ? "Sucessos" : "Falhas"}</span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
+                    <ChevronDown className="h-3 w-3 shrink-0 opacity-40" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0 w-48 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <PopoverContent className="p-0 w-48 bg-white border-neutral-200 rounded-none shadow-xs z-50" align="start">
                   <Command className="bg-transparent">
                     <CommandList 
-                      className="max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y p-1" 
+                      className="max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y" 
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
-                        {STATUS_OPTIONS.map(opt => (
-                          <CommandItem key={opt.id} onSelect={() => setStatusFilter(opt.id)} className="cursor-pointer text-[#d946ef]">
-                            {opt.label}
-                          </CommandItem>
-                        ))}
+                        {STATUS_OPTIONS.map(opt => {
+                          const isSelected = statusFilter === opt.id;
+                          return (
+                            <CommandItem key={opt.id} onSelect={() => setStatusFilter(opt.id)} className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {opt.label}
+                            </CommandItem>
+                          );
+                        })}
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -343,27 +355,27 @@ function AuditoriaPage() {
 
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[160px] rounded-xl gap-2 bg-white hover:bg-slate-50 border-slate-200 text-slate-600 justify-between">
+                  <Button variant="outline" size="sm" className="h-10 w-[160px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 text-neutral-900 justify-between shadow-xs">
                     <span className="truncate">Período: {period === "custom" ? "Personalizado" : PERIOD_OPTIONS.find(p => p.id === period)?.label}</span>
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0 w-auto" align="start">
-                  <Command>
+                <PopoverContent className="p-0 w-auto rounded-none border-neutral-200 shadow-xs" align="start">
+                  <Command className="bg-white">
                     <CommandList 
-                            className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
-                            style={{ WebkitOverflowScrolling: 'touch' }}
-                            onWheelCapture={(e) => e.stopPropagation()}
+                      className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" 
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
                         {PERIOD_OPTIONS.map(opt => (
-                          <CommandItem key={opt.id} onSelect={() => setPeriod(opt.id)}>
+                          <CommandItem key={opt.id} onSelect={() => setPeriod(opt.id)} className="rounded-none text-neutral-900 cursor-pointer hover:bg-neutral-100">
                             {opt.label}
                           </CommandItem>
                         ))}
                       </CommandGroup>
-                      <div className="p-2 border-t">
-                        <p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p>
+                      <div className="p-2 border-t border-neutral-200">
+                        <p className="text-xs font-bold px-2 mb-2 text-neutral-500">Personalizado:</p>
                         <Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setPeriod("custom"); }} numberOfMonths={1} />
                       </div>
                     </CommandList>
@@ -379,7 +391,7 @@ function AuditoriaPage() {
         <div className="overflow-x-auto w-full pb-2">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-border bg-muted/40 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+              <tr className="border-b border-neutral-200 bg-neutral-100 text-left text-[10px] font-semibold uppercase tracking-wider text-neutral-600 whitespace-nowrap">
                 <th className="px-3 py-2.5 w-[120px]">Quando</th>
                 <th className="px-3 py-2.5 w-[200px]">E-mail</th>
                 <th className="px-3 py-2.5 w-[140px]">Evento</th>
@@ -392,51 +404,50 @@ function AuditoriaPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="p-10 text-center text-muted-foreground">
+                  <td colSpan={7} className="p-10 text-center text-neutral-500">
                     <div className="flex items-center justify-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" /> Carregando informações...
+                      <Loader2 className="h-4 w-4 animate-spin text-neutral-900" /> Carregando informações...
                     </div>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-10 text-center text-muted-foreground">
+                  <td colSpan={7} className="p-10 text-center text-neutral-500">
                     Nenhum registro encontrado.
                   </td>
                 </tr>
               ) : (
                 filtered.map((r) => {
                   const dt = formatDateTime(getEventDateTime(r));
-                  const origem = [r.city, r.state, r.country].filter(Boolean).join(" · ");
                   return (
-                    <tr key={r.id} className="border-b border-border/60 hover:bg-accent/40 transition-colors">
-                      <td className="px-3 py-2.5 w-[120px] text-muted-foreground">
-                        <div className="font-semibold text-foreground">{dt.date}</div>
+                    <tr key={r.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
+                      <td className="px-3 py-2.5 w-[120px] text-neutral-500">
+                        <div className="font-bold text-neutral-900">{dt.date}</div>
                         <div>{dt.time}</div>
                       </td>
-                      <td className="px-3 py-2.5 w-[200px] truncate font-medium text-foreground" title={r.email}>{r.email}</td>
-                      <td className="px-3 py-2.5 w-[140px] text-muted-foreground">{EVENT_LABEL[r.event] || r.event}</td>
+                      <td className="px-3 py-2.5 w-[200px] truncate font-medium text-neutral-900" title={r.email}>{r.email}</td>
+                      <td className="px-3 py-2.5 w-[140px] text-neutral-600 font-medium">{EVENT_LABEL[r.event] || r.event}</td>
                       <td className="px-3 py-2.5 w-[120px]">
                         {r.success ? (
-                          <span className="text-emerald-600 font-semibold">Sucesso</span>
+                          <span className="text-emerald-600 font-bold">Sucesso</span>
                         ) : (
-                          <span className="text-destructive font-semibold">Falha</span>
+                          <span className="text-rose-600 font-bold">Falha</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-muted-foreground">
-                        <div className="text-foreground whitespace-nowrap">{r.ip_address || "—"}</div>
-                        <div className="text-foreground font-medium whitespace-nowrap">{r.city || "—"}</div>
-                        <div className="text-[11px] text-muted-foreground whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-neutral-500">
+                        <div className="text-neutral-900 whitespace-nowrap">{r.ip_address || "—"}</div>
+                        <div className="text-neutral-900 font-medium whitespace-nowrap">{r.city || "—"}</div>
+                        <div className="text-[11px] text-neutral-500 whitespace-nowrap">
                           {[r.state, r.country].filter(Boolean).join(" · ") || "—"}
                         </div>
                       </td>
                       <td className="px-3 py-2.5">
-                        <div className="font-bold text-foreground whitespace-nowrap">{r.origin_page || "—"}</div>
-                        <div className="text-muted-foreground truncate max-w-[160px] md:max-w-[250px]">
+                        <div className="font-bold text-neutral-900 whitespace-nowrap">{r.origin_page || "—"}</div>
+                        <div className="text-neutral-500 truncate max-w-[160px] md:max-w-[250px]">
                           {r.origin_function || "—"}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-muted-foreground">
+                      <td className="px-3 py-2.5 text-neutral-500 font-medium">
                         {r.device_type || "—"} · {r.operating_system || "—"}
                       </td>
                     </tr>
@@ -448,8 +459,8 @@ function AuditoriaPage() {
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border/60 bg-muted/20">
-            <div className="text-xs text-muted-foreground font-medium">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-200 bg-neutral-50">
+            <div className="text-xs text-neutral-500 font-medium">
               {rows.length === 0 ? "Nenhum resultado" : `${page * PAGE_SIZE + 1} a ${page * PAGE_SIZE + rows.length}`}
             </div>
             <div className="flex gap-2">
@@ -462,7 +473,7 @@ function AuditoriaPage() {
                   load(prev);
                 }}
                 disabled={page === 0 || loading}
-                className="h-8 text-xs rounded-lg"
+                className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100"
               >
                 Anterior
               </Button>
@@ -475,7 +486,7 @@ function AuditoriaPage() {
                   load(next);
                 }}
                 disabled={page >= totalPages - 1 || loading}
-                className="h-8 text-xs rounded-lg"
+                className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100"
               >
                 Próxima
               </Button>
@@ -489,32 +500,38 @@ function AuditoriaPage() {
           GAVETA DE FILTROS MOBILE (AUDITORIA)
           ========================================================= */}
       <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 bg-white z-50">
+        <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-white z-50 border-t border-neutral-200">
           <SheetHeader className="mb-4 text-left">
-            <SheetTitle className="text-lg font-bold">Filtros</SheetTitle>
+            <SheetTitle className="text-lg font-bold text-neutral-900">Filtros</SheetTitle>
           </SheetHeader>
 
           <div className="flex flex-col gap-4 w-full">
 
             {/* Filtro de Evento */}
             <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Evento</span>
+              <span className="text-xs font-medium text-neutral-500 mb-1 block">Evento</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-white border-slate-200 text-slate-600">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white border-neutral-200 text-neutral-900 shadow-xs">
                     <span className="truncate">Evento: {eventFilter === "all" ? "Todos" : EVENT_LABEL[eventFilter as LoginRow["event"]]}</span>
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0" align="start">
-                  <Command>
-                    <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 rounded-none border-neutral-200 shadow-xs" align="start">
+                  <Command className="bg-white">
+                    <CommandList className="max-h-[70vh] overflow-y-auto overscroll-contain touch-pan-y" onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
-                        {EVENT_OPTIONS.map(opt => (
-                          <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id as any)} className="cursor-pointer">
-                            {opt.label}
-                          </CommandItem>
-                        ))}
+                        {EVENT_OPTIONS.map(opt => {
+                          const isSelected = eventFilter === opt.id;
+                          return (
+                            <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id as any)} className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {opt.label}
+                            </CommandItem>
+                          );
+                        })}
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -524,23 +541,29 @@ function AuditoriaPage() {
 
             {/* Filtro de Status */}
             <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Status</span>
+              <span className="text-xs font-medium text-neutral-500 mb-1 block">Status</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-[#fdf2f8] text-[#d946ef] border-[#fbcfe8]">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 shadow-xs">
                     <span className="truncate">Status: {statusFilter === "all" ? "Todos" : statusFilter === "success" ? "Sucessos" : "Falhas"}</span>
                     <ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-[#fdf2f8] border-[#fbcfe8] z-50" align="start">
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none shadow-xs z-50" align="start">
                   <Command className="bg-transparent">
-                    <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
+                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
-                        {STATUS_OPTIONS.map(opt => (
-                          <CommandItem key={opt.id} onSelect={() => setStatusFilter(opt.id)} className="cursor-pointer text-[#d946ef]">
-                            {opt.label}
-                          </CommandItem>
-                        ))}
+                        {STATUS_OPTIONS.map(opt => {
+                          const isSelected = statusFilter === opt.id;
+                          return (
+                            <CommandItem key={opt.id} onSelect={() => setStatusFilter(opt.id)} className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                                {isSelected && "✓"}
+                              </div>
+                              {opt.label}
+                            </CommandItem>
+                          );
+                        })}
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -550,35 +573,36 @@ function AuditoriaPage() {
 
             {/* Filtro de Período */}
             <div className="w-full">
-              <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
+              <span className="text-xs font-medium text-neutral-500 mb-1 block">Período</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-xl justify-between gap-2 bg-white border-slate-200 text-slate-600">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white border-neutral-200 text-neutral-900 shadow-xs">
                     <span className="truncate">Período: {period === "custom" ? "Personalizado" : PERIOD_OPTIONS.find(p => p.id === period)?.label}</span>
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0" align="start">
-                  <Command>
-                    <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0 rounded-none border-neutral-200 shadow-xs" align="start">
+                  <Command className="bg-white">
+                    <CommandList className="max-h-56 overflow-y-auto overscroll-contain touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }} onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
                         {PERIOD_OPTIONS.map(opt => (
-                          <CommandItem key={opt.id} onSelect={() => setPeriod(opt.id)}>
+                          <CommandItem key={opt.id} onSelect={() => setPeriod(opt.id)} className="rounded-none text-neutral-900 cursor-pointer hover:bg-neutral-100">
                             {opt.label}
                           </CommandItem>
                         ))}
                       </CommandGroup>
-                      <div className="p-2 border-t">
-                        <p className="text-xs font-semibold px-2 mb-2 text-muted-foreground">Personalizado:</p>
+                      <div className="p-2 border-t border-neutral-200">
+                        <p className="text-xs font-bold px-2 mb-2 text-neutral-500">Personalizado:</p>
                         <Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setPeriod("custom"); }} numberOfMonths={1} />
                       </div>
                     </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
+
             </div>
 
-            <Button onClick={() => setMobileFilterOpen(false)} className="w-full h-11 rounded-xl bg-[#B300FF] hover:bg-[#9f00e6] text-white font-semibold mt-2">
+            <Button onClick={() => setMobileFilterOpen(false)} className="w-full h-11 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-bold mt-2 shadow-xs cursor-pointer">
               Aplicar Filtros
             </Button>
 
@@ -597,18 +621,22 @@ function StatCard({ label, value, tone = "default", highlight = false }: {
   highlight?: boolean; 
 }) {
   const toneClass = { 
-    default: "text-foreground", 
+    default: "text-neutral-900", 
     success: "text-emerald-600", 
-    danger: "text-destructive", 
+    danger: "text-rose-600", 
     warn: "text-amber-600" 
   }[tone];
   
   const formattedValue = typeof value === "number" ? value.toLocaleString("pt-BR") : value;
   
   return (
-    <div className={`rounded-3xl border p-5 shadow-sm ${highlight ? "bg-primary text-primary-foreground" : "bg-card"}`}>
-      <div className="text-xs font-semibold uppercase">{label}</div>
-      <div className={`mt-2 text-2xl font-bold ${highlight ? "text-primary-foreground" : toneClass}`}>{formattedValue}</div>
+    <div className={`rounded-none border border-neutral-200 p-4 flex flex-col justify-between shadow-xs ${highlight ? "bg-neutral-100 border-neutral-300" : "bg-white"}`}>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-500 whitespace-nowrap">
+        {label}
+      </div>
+      <div className={`mt-2 text-xl font-semibold tracking-tight ${toneClass} whitespace-nowrap`}>
+        {formattedValue}
+      </div>
     </div>
   );
 }

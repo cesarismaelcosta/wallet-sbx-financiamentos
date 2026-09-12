@@ -1,17 +1,33 @@
 /**
- * @fileoverview Componente: FinancialHubLayout
+ * @fileoverview Componente: FinancialHubLayout (Esqueleto Mestre de Simulação)
+ * @module features/financial-hub/components/layout
  * @path src/features/financial-hub/components/layout/FinancialHubLayout.tsx
  * 
  * =========================================================================
- * [DOCUMENTAÇÃO DO COMPONENTE]
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-TRUST, HYDRATION VEIL & NEUTRAL PURITY
  * =========================================================================
- * @description Esqueleto mestre e injetor de dados das jornadas financeiras. 
- * Responsável por gerenciar a hidratação do Orquestrador, injetar o contexto 
- * global, tratar erros críticos de sessão e orquestrar a exibição dos Skeletons
- * estruturais durante o carregamento inicial.
+ * @description Esqueleto mestre e contêiner soberano de dados para jornadas financeiras.
+ * Centraliza o ciclo de vida da simulação, barreira de hidratação do Orquestrador,
+ * telemetria OLAP e fallbacks resilientes de sessão sob arquitetura neutra autocontida.
+ * 
+ * [MECÂNICA ARQUITETURAL V3 - BLINDAGEM NEUTRA AUTOCONTIDA & SBX DESIGN SYSTEM]:
+ * 1. {Bypass de Tokens Globais Contaminados}: Substitui referências a `bg-background`,
+ *    `text-foreground` e `text-muted-foreground` por classes utilitárias neutras diretas
+ *    (`bg-white`, `text-neutral-900`, `text-neutral-600`, `border-neutral-200`), blindando
+ *    o layout contra qualquer vazamento lilás/lavanda proveniente do CSS base intocável.
+ * 2. {Hydration Veil (Cortina Zero-Flicker)}: Mantém os skeletons sincronizados e
+ *    visíveis enquanto o Orquestrador processa a resposta da API, alternando para o conteúdo
+ *    real via transição suave de opacidade e prevenindo Cumulative Layout Shift (CLS).
+ * 3. {Zero-Radius Strict Governance}: Aplica cantos retos (`rounded-none`) em todos os
+ *    elementos de controle, botões de ação e telas de fallback de erro.
+ * 4. {Failsafe Guard (10s Hard Limit)}: Destrava a interface e abre a cortina caso ocorra
+ *    latência anômala ou falha de hidratação em nós filhos, impedindo tela branca permanente.
+ * 5. {Tratamento de Exceções Determinístico}: Mapeamento centralizado de códigos de erro
+ *    (ex: `SESSION_EXPIRED`, `OFFER_NOT_FOUND`) com contagem regressiva e redirecionamento seguro.
  * 
  * @author César Ismael Pereira da Costa
- * @author Gemini Pro
+ * @author Gemini Pro (Architectural Mechanics)
+ * @version 9.2.0 (Neutral Purity & Deterministic Hydration Gate)
  */
 
 import React, { useState, useEffect } from "react";
@@ -29,69 +45,102 @@ import { PanelFooterSkeleton } from "./PanelFooterSkeleton";
 import { FinancialHubContext } from "@/features/financial-hub/core/contexts/FinancialHubContext";
 import { useOrchestratorHistorySync } from "@/features/financial-hub/core/hooks/useOrchestratorHistorySync";
 
+// =========================================================================
+// [CONTRATOS E INTERFACES TIPADAS]
+// =========================================================================
 interface FinancialHubLayoutProps {
   children: React.ReactNode;
 }
 
-/**
- * @component ErrorCountdown
- * @description Componente interno de fallback para erros críticos da jornada (401, 403, 404).
- */
-function ErrorCountdown({ fallbackUrl, message, title }: { fallbackUrl: string; message?: string; title?: string }) {
+interface ErrorCountdownProps {
+  // Agora opcional, pois nem todo erro precisa te chutar para outra página
+  fallbackUrl?: string; 
+  message?: string;
+  title?: string;
+  
+  // Gatilho de resgate: Se existir, o componente executa essa função em vez de mudar de URL
+  onRetry?: () => void;
+}
+
+function ErrorCountdown({ fallbackUrl, message, title, onRetry }: ErrorCountdownProps) {
   const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
+    // DECISÃO AUTOMÁTICA: O que fazer quando o relógio zerar
     if (countdown === 0) {
-      window.location.href = fallbackUrl;
+      if (onRetry) {
+        // Cenário Timeout: Executa a limpeza do erro. 
+        // O usuário NÃO muda de página. O React apenas destrói essa tela de erro e exibe o form novamente.
+        onRetry();
+      } else if (fallbackUrl) {
+        // Cenário Erro Grave (ex: Token vencido): Joga o usuário para o link definido (ex: Login ou Home).
+        window.location.href = fallbackUrl;
+      }
       return;
     }
 
+    // Mantém o relógio rodando a cada segundo
     const timer = setInterval(() => setCountdown((prev) => prev - 1), 1000);
     return () => clearInterval(timer);
-  }, [countdown, fallbackUrl]);
+  }, [countdown, fallbackUrl, onRetry]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans'] p-6 text-center">
-      <img src="/assets/error/error.webp" alt="Erro na simulação" className="w-34 h-34 object-contain mb-6" />
-      <h2 className="text-xl font-bold text-slate-800 mb-2">{title || "Ops! Tivemos um problema"}</h2>
-      <p className="text-slate-500 font-medium text-sm mb-2 max-w-md px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-white font-sans p-6 text-center text-neutral-900">
+      <img src="/assets/error/error.webp" alt="Erro na simulação" className="w-32 h-32 object-contain mb-6 mix-blend-multiply saturate-[10%]" />
+      
+      <h2 className="text-xl font-semibold text-neutral-900 mb-2">{title || "Ops! Tivemos um problema"}</h2>
+      <p className="text-neutral-600 font-normal text-sm mb-2 max-w-md px-4">
         {message || "Não foi possível carregar a simulação desta oferta."}
       </p>
-      <p className="text-slate-400 font-medium text-xs mt-4 mb-6">Retornando em {countdown}s...</p>
+      
+      {/* MENSAGEM DINÂMICA: O texto muda para deixar claro para o usuário o que o sistema fará sozinho */}
+      <p className="text-neutral-400 font-normal text-xs mt-4 mb-6 tabular-nums">
+        {onRetry ? `Tentando novamente em ${countdown}s...` : `Retornando em ${countdown}s...`}
+      </p>
+
+      {/* AÇÃO MANUAL: Se o usuário não quiser esperar os 5 segundos, ele força a mesma lógica do useEffect */}
       <button
-        onClick={() => (window.location.href = fallbackUrl)}
-        className="flex items-center text-[#B400FF] font-semibold text-sm hover:opacity-80 transition-opacity cursor-pointer"
+        onClick={() => {
+          if (onRetry) onRetry();
+          else if (fallbackUrl) window.location.href = fallbackUrl;
+        }}
+        className="flex items-center justify-center gap-2 px-5 py-2 font-normal rounded-none transition-colors text-sm w-full md:w-auto border border-neutral-200 bg-white text-neutral-900 hover:bg-neutral-50 shadow-xs"
       >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Retornar agora
+        <ArrowLeft className="w-4 h-4" strokeWidth={1.25} />
+        <span className="font-jakarta tracking-tight text-center">
+          {onRetry ? "Tentar Novamente Agora" : "Retornar agora"}
+        </span>
       </button>
     </div>
   );
 }
 
+// =========================================================================
+// [COMPONENTE PRINCIPAL: FINANCIAL HUB LAYOUT]
+// =========================================================================
 export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
   const search = useSearch({ strict: false }) as { visit_id?: string; visit_update_id?: string };
   
-  const navigate = useNavigate(); // ✨ Instanciando roteador
-  const { sessionToken, logout, userProfile } = useFinancialAuth(); // ✨ Puxando os dados do Fat JWT
+  const navigate = useNavigate();
+  const { sessionToken, logout, userProfile } = useFinancialAuth();
 
   const [isOrchestratorHydrating, setIsOrchestratorHydrating] = useState(true);
   const [runtimeError, setRuntimeError] = useState<any>(null);
 
-  // 1. FAILSAFE DE SEGURANÇA (10s)
+  // 1. FAILSAFE DE SEGURANÇA (10s Hard Timeout)
   useEffect(() => {
     if (isOrchestratorHydrating) {
       const timeout = setTimeout(() => {
         setIsOrchestratorHydrating(false);
         console.warn(
-          "⚠️ [Failsafe] A cortina global foi aberta à força por timeout (10s). Verifique se ocorreu algum erro silencioso nos componentes filhos.",
+          "⚠️ [Failsafe] A cortina global foi aberta por timeout de 10s. Verifique integridade de dados nos filhos.",
         );
       }, 10000);
       return () => clearTimeout(timeout);
     }
   }, [isOrchestratorHydrating]);
 
-  // 2. Listener de erros globais
+  // 2. LISTENER DE EVENTOS DE ERRO DE RUNTIME
   useEffect(() => {
     const handleError = (e: any) => {
       setRuntimeError(e.detail);
@@ -101,20 +150,20 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
     return () => window.removeEventListener("app-error", handleError);
   }, []);
 
-  // 🛡️ Ativa a blindagem e sincronização de histórico em todo o ecossistema
+  // 🛡️ Sincronização do cursor temporal OLAP e mitigação de botões de navegação
   useOrchestratorHistorySync();
 
   return (
     <OrchestratorWrapper visitId={search.visit_id ?? ""} visitUpdateId={search.visit_update_id}>
       {(simData) => {
-        // Redirecionamento seguro de target_url
+        // Redirecionamento determinístico caso target_url divirja da rota atual
         useEffect(() => {
           if (simData?.target_url && typeof window !== "undefined") {
             const currentPath = window.location.pathname.replace(/\/$/, "");
             let intendedPath = "";
             try {
               intendedPath = new URL(simData.target_url).pathname.replace(/\/$/, "");
-            } catch (e) {
+            } catch {
               intendedPath = simData.target_url.split("?")[0].replace(/\/$/, "");
             }
 
@@ -124,7 +173,7 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
           }
         }, [simData?.target_url]);
 
-        // Tratamento de Erros de Runtime
+        // Tratamento de Erros de Runtime disparados por eventos globais
         if (runtimeError) {
           let uiTitle = "Ops! Tivemos um problema";
           if (runtimeError.code === "SESSION_EXPIRED") uiTitle = "Sessão Expirada";
@@ -140,14 +189,20 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
           );
         }
 
-        // Tratamento de Erros da API
+        // Tratamento de Respostas Negativas da API do Orquestrador
         if (simData?.success === false) {
           let uiTitle = "Ops! Tivemos um problema";
           if (simData.code === "SESSION_EXPIRED") uiTitle = "Sessão Expirada";
           else if (simData.code === "INVALID_RELATIONSHIP") uiTitle = "Acesso Restrito";
           else if (simData.code === "OFFER_NOT_FOUND") uiTitle = "Oferta Indisponível";
 
-          return <ErrorCountdown title={uiTitle} message={simData.message} fallbackUrl={simData.fallback_url || "/"} />;
+          return (
+            <ErrorCountdown
+              title={uiTitle}
+              message={simData.message}
+              fallbackUrl={simData.fallback_url || "/"}
+            />
+          );
         }
 
         const contextPayload = {
@@ -157,9 +212,8 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
 
         return (
           <FinancialHubContext.Provider value={contextPayload}>
-            <div className="min-h-screen bg-white text-foreground transition-colors duration-300 relative flex flex-col">
-              {/* Header Padronizado */}
-              {/* Header Padronizado Estático (64px) */}
+            <div className="min-h-screen bg-surface-alt text-neutral-900 relative flex flex-col">
+              {/* Header Institucional Padronizado (64px) */}
               <PanelHeader 
                 showNav={true}
                 links={[
@@ -174,12 +228,10 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
                 onNavigate={(path) => navigate({ to: path as any })}
               />
 
-              {/* =========================================================================
-                * SKELETONS ESTRUTURAIS DE HIDRATAÇÃO (Substitui o spinner antigo)
-                * ========================================================================= */}
+              {/* Skeletons Estruturais durante Hidratação */}
               {isOrchestratorHydrating && (
                 <>
-                  <main className="flex-1 w-full flex flex-col pt-16">
+                  <main className="flex-1 w-full flex flex-col pt-16 bg-white">
                     <div className="max-w-7xl mx-auto px-6 py-12 w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
                       <PanelProductOfferSkeleton />
                       <PanelStepSkeleton />
@@ -190,17 +242,16 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
                 </>
               )}
 
-              {/* =========================================================================
-                * CONTEÚDO REAL DA APLICAÇÃO (Exibido após a hidratação)
-                * ========================================================================= */}
+              {/* Conteúdo Renderizado da Jornada */}
               <main
-                className={`flex-1 w-full flex flex-col transition-opacity duration-500 pt-16 ${
+                className={`flex-1 w-full flex flex-col transition-opacity duration-300 pt-16 bg-white ${
                   isOrchestratorHydrating ? "opacity-0 pointer-events-none h-0 overflow-hidden" : "opacity-100"
                 }`}
               >
                 {children}
               </main>
 
+              {/* Rodapé e FAQ liberados pós-hidratação */}
               {!isOrchestratorHydrating && (
                 <>
                   <PanelFAQ items={simData?.page_faqs} />

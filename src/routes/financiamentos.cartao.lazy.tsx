@@ -25,6 +25,7 @@
  */
 
 import { createLazyFileRoute } from "@tanstack/react-router";
+import { useEffect } from "react"; // ✨ FIX: Import adicionado
 
 // Motor Genérico (Infraestrutura)
 import { WizardProvider } from "@/features/financial-hub/components/shared/WizardProvider";
@@ -49,6 +50,19 @@ function CardConsultPage() {
 
   // Guard Clause Estrito: Se a entidade não foi hidratada, aborta a montagem
   if (!simData?.entity) return null; 
+
+  // =========================================================================
+  // ✨ FIX: O INTERRUPTOR DA CORTINA (ZERO-FLICKER)
+  // =========================================================================
+  // Assim que a tela possui dados e a árvore do DOM nasce invisível,
+  // avisamos o Layout Pai para abrir a cortina e cancelar o timeout de 10s.
+  useEffect(() => {
+    if (simData?.setIsOrchestratorHydrating) {
+      const timer = setTimeout(() => simData.setIsOrchestratorHydrating(false), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [simData?.setIsOrchestratorHydrating]);
+  // =========================================================================
   
   return (
     <>
@@ -72,7 +86,7 @@ function CardConsultPage() {
       </section>
 
       {/* 5. [SUPORTE]: Seção estática de educação do consumidor */}
-      <div id="como-funciona">
+      <div className="dark w-full" id="como-funciona">
         <HowItWorks />
       </div>
     </>

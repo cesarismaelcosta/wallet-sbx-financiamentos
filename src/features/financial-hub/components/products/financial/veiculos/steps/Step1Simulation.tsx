@@ -3,7 +3,7 @@
  * @path src/components/veiculos/steps/Step1Simulation.tsx
  * 
  * =========================================================================
- * 🤖 PADRÃO GEMINI PRO: STRICT THIN PAYLOAD & ARCHITECTURAL MECHANICS
+ * 🤖 PADRÃO GEMINI PRO: ZERO-RADIUS GOVERNANCE & ARCHITECTURAL MECHANICS
  * =========================================================================
  * [MECÂNICA ARQUITETURAL]:
  * - Engine: Renderizado pela WizardEngine.
@@ -55,6 +55,7 @@ export function Step1Simulation() {
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const { state, updateData, update } = useWizard<any>();
+  const [loadingMessage, setLoadingMessage] = useState("Consultando ofertas...");
 
   // Estados locais para controle fluido do Slider (evita race condition)
   const [localValorVeiculo, setLocalValorVeiculo] = useState(0);
@@ -62,11 +63,42 @@ export function Step1Simulation() {
   const [localParcelas, setLocalParcelas] = useState<number | null>(null);
 
   // =========================================================================
+  // 🤖 [UX ARCHITECTURE]: Roteiro de Loading Progressivo (Mitiga latência Fandi)
+  // =========================================================================
+  useEffect(() => {
+    let timers: NodeJS.Timeout[] = [];
+    
+    if (loading) {
+      setLoadingMessage("Iniciando simulação...");
+      
+      timers.push(setTimeout(() => {
+        setLoadingMessage("Enviando seus dados...");
+      }, 4000));
+
+      timers.push(setTimeout(() => {
+        setLoadingMessage("Consultando condições...");
+      }, 12000));
+
+      timers.push(setTimeout(() => {
+        setLoadingMessage("Buscando mais condições...");
+      }, 24000));
+      
+      timers.push(setTimeout(() => {
+        setLoadingMessage("Finalizando as consultas...");
+      }, 35000));
+    } else {
+      timers.forEach(clearTimeout);
+      setLoadingMessage("Consultando ofertas...");
+    }
+
+    return () => timers.forEach(clearTimeout);
+  }, [loading]);
+
+  // =========================================================================
   // 🤖 [RENDER GUARD ARCHITECTURE]: Proteção contra Regressões de Ciclo
   // =========================================================================
   const initializedOfferIdRef = useRef<any>(null);
 
-  // Inicialização controlada: só carrega os valores padrão 1 vez por oferta
   useEffect(() => {
     const currentOfferId = state?.data?.offer?.offer_id || state?.data?.offer?.id;
     
@@ -92,12 +124,7 @@ export function Step1Simulation() {
   // =========================================================================
   // 🤖 [ZERO-TRUST HANDLER ARCHITECTURE]: Execução de Rede e Thin Payload
   // =========================================================================
-  /**
-   * handleSimular: Integração consolidada via callSimulation.
-   * Sintaxe validada e isolada para garantir que o compilador reconheça o 'async'.
-   */
   const handleSimular = async () => {
-    // 1. Prevenção de cliques múltiplos
     if (loading || isSimulating.current) return;
 
     isSimulating.current = true;
@@ -108,7 +135,6 @@ export function Step1Simulation() {
       const urlVisitId = urlParams.get("visit_id");
       const urlVisitUpdateId = urlParams.get("visit_update_id");
 
-      // 2. Montagem do Payload Magro (Thin Payload / Zero-Trust)
       const payload = {
         action: "SIMULATE",
         visit_id: urlVisitId || state.data.visit_id,
@@ -132,14 +158,12 @@ export function Step1Simulation() {
           })),
       };
 
-      // 3. Chamada via Gateway centralizado e captura do resultado
       const result = await execute(() => callSimulation(payload));
 
       if (result.state) {
         setFastPathState(result.state);
       }
 
-      // 4. Atualização de estado e avanço correto para o Step 2
       update({
         meta: { ...state.meta, step: 2 },
         data: {
@@ -156,9 +180,6 @@ export function Step1Simulation() {
       });
     } catch (error: any) {
       console.error("[Erro na Simulação Veículos]:", error);
-
-      // DISPARA O EVENTO GLOBAL PARA O LAYOUT OUVIR
-      // O Layout vai capturar esse erro e exibir o ErrorCountdown automaticamente.
       window.dispatchEvent(new CustomEvent("app-error", { detail: error }));
     } finally {
       setLoading(false);
@@ -172,201 +193,196 @@ export function Step1Simulation() {
   if (!state?.data || Object.keys(state.data).length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <span className="text-slate-400">Carregando...</span>
+        <span className="text-neutral-400">Carregando...</span>
       </div>
     );
   }
 
   const { rules, consent_configs, offer } = state.data;
-  // Atributos extraídos com segurança e fallback para evitar NaN
   const tetoMaximo =
     offer?.vehicle_details?.fipe_value ?? 
     ((offer?.offer_value || 0) * (1 + (rules?.max_offer_cap_percent ?? 20) / 100));
 
-  // Atributo do lote (índice ou número)
   const loteSubIndex = offer?.lote_index || offer?.lote_numero || "1";
-
-  // Descrição limpa do veículo
   const offerDescText = offer?.offer_description ? offer.offer_description.replace(/[.,]+$/, "") : "";
 
   return (
-    <div className="space-y-4 max-w-xl mx-auto lg:mx-0">
-      
-      {/* =========================================================================
-       * 🤖 [PROGRESSIVE DISCLOSURE ARCHITECTURE]: Header Síncrono da Oferta
-       * ========================================================================= */}
-      <div className="flex items-center gap-4 mb-4">
-        <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
-          <img
-            src="/assets/home/financiamentoveiculossimulacao.webp"
-            alt="Veículos"
-            className="w-full h-full object-contain"
-          />
-        </div>
+    <div className="w-full space-y-8 animate-in fade-in duration-500">
+      <div className="bg-white space-y-6">
+        
+        {/* =========================================================================
+         * 🤖 [PROGRESSIVE DISCLOSURE ARCHITECTURE]: Header Síncrono da Oferta
+         * ========================================================================= */}
+        <div className="flex items-start gap-4">
+          <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
+            <img
+              src="/assets/home/financiamentoveiculossimulacao.webp"
+              alt="Veículos"
+              className="w-full h-full object-contain relative saturate-[10%]"
+            />
+          </div>
 
-        <div className="space-y-0.5 flex-1 w-0 min-w-0">
-          {/* Título Principal (Fonte fluida 14px a 20px) */}
-          <h3 className="text-[clamp(14px,4vw,20px)] sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full block">
-            Simule seu financiamento!
-          </h3>
+          <div className="space-y-0.5 flex-1 w-0 min-w-0">
+            {/* Fonte cai para 14px no mobile, peso black, linha única forçada */}
+            <h3 className="text-[clamp(14px,3.5vw,20px)] sm:text-2xl font-black text-neutral-900 uppercase tracking-tight leading-snug truncate w-full block">
+              Simule seu financiamento
+            </h3>
 
-          {/* Linha 1: Descrição do veículo em cinza claro (Fonte fluida 10px a 12px) */}
-          <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-slate-600 truncate pt-0.5 w-full block">
-            {offerDescText}
-          </p>
-
-          {/* Linha 2: Lote e valor com destaque + Link Externo */}
-          <div className="flex items-center pt-0.5">
-            <p className="text-sm text-slate-600 truncate">
-              Lote {loteSubIndex} • <strong className="text-slate-900 font-bold mr-2">{BRL(localValorVeiculo)}</strong>
+            <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 truncate pt-0.5 w-full block">
+              {offerDescText}
             </p>
-            
-            {offer && (
-              <a 
-                href={getSuperbidUrl(offer)} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-[#B300FF] hover:text-[#9300cc] transition-colors flex items-center outline-none focus:outline-none focus:ring-0"
-                title="Ver oferta original na Superbid"
-              >
-                <ExternalLink size={18} />
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
 
-      {/* =========================================================================
-       * 🤖 [ZERO-TRUST INPUTS & SLIDER CONTROLS]: Container de Simulação
-       * ========================================================================= */}
-      <div className="bg-slate-50 border border-border rounded-lg p-4 sm:p-7 space-y-4">
-        {/* Grid: gap-x-4 (mobile) / gap-x-8 (desktop) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4">
-          
-          {/* Valor do lance */}
-          <div className="space-y-1">
-            <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">
-              Valor do lance
-            </Label>
-            <Input
-              disabled={loading}
-              value={BRL(localValorVeiculo)}
-              onChange={(e) => {
-                if (loading) return; // Trava extra de segurança
-                const rawValue = Number(e.target.value.replace(/\D/g, "")) / 100;
-                setLocalValorVeiculo(rawValue);
-                updateData({ valorVeiculo: rawValue });
-              }}
-              className={`h-10 rounded-xl bg-white border-slate-200 font-semibold disabled:bg-slate-100 disabled:text-slate-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
-            />
-            <div className="pt-1 px-1">
-              <SliderCustomizado
-                value={localValorVeiculo}
-                onValueChange={(v: number) => {
-                  if (loading) return; // Impede o arraste visual durante o loading
-                  setLocalValorVeiculo(v);
-                }}
-                onValueCommit={(v: number) => {
-                  if (loading) return;
-                  updateData({ valorVeiculo: v });
-                }}
-                min={offer?.offer_value}
-                max={tetoMaximo}
-                step={100}
-                isCurrency={true}
-                disabled={loading}
-              />
-            </div>
-          </div>
-
-          {/* Entrada */}
-          <div className="space-y-1">
-            <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Entrada</Label>
-            <Input
-              disabled={loading}
-              value={BRL((localValorVeiculo * localPercentualEntrada) / 100)}
-              onChange={(e) => {
-                if (loading) return;
-                const rawValue = Number(e.target.value.replace(/\D/g, "")) / 100;
-                const newPerc = localValorVeiculo > 0 ? (rawValue / localValorVeiculo) * 100 : 0;
-                setLocalPercentualEntrada(newPerc);
-                updateData({ valorEntrada: rawValue });
-              }}
-              className={`h-10 rounded-xl bg-white border-slate-200 font-semibold disabled:bg-slate-100 disabled:text-slate-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
-            />
-            <div className="pt-1 px-1">
-              <SliderCustomizado
-                value={localPercentualEntrada}
-                onValueChange={(perc: number) => {
-                  if (loading) return;
-                  setLocalPercentualEntrada(perc);
-                }}
-                onValueCommit={(perc: number) => {
-                  if (loading) return;
-                  updateData({ valorEntrada: (localValorVeiculo * perc) / 100 });
-                }}
-                min={rules?.min_down_payment_percentage}
-                max={rules?.max_down_payment_percentage}
-                step={1}
-                disabled={loading}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Parcelas */}
-        <div className="space-y-3">
-          <Label className="text-[11px] font-medium text-black uppercase tracking-wider font-sans">Parcelas</Label>
-          <RadioGroup
-            disabled={loading}
-            value={localParcelas ? String(localParcelas) : ""}
-            onValueChange={(v) => {
-              const val = Number(v);
-              setLocalParcelas(val);
-            }}
-            className="flex flex-wrap gap-2"
-          >
-            {(state.data?.rules?.installment_options ?? []).map((p: number) => (
-              <div key={p} className="flex-1">
-                <RadioGroupItem value={String(p)} id={`p-${p}`} className="peer sr-only" disabled={loading} />
-                <Label
-                  htmlFor={`p-${p}`}
-                  className={`flex items-center justify-center p-2 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 peer-data-[state=checked]:border-[var(--brand-primary)] peer-data-[state=checked]:bg-white transition-all shadow-sm ${loading ? "!cursor-wait opacity-50" : "cursor-pointer"}`}
+            <div className="flex items-center pt-0.5">
+              <p className="text-sm text-neutral-600 truncate">
+                Lote {loteSubIndex} • <strong className="text-neutral-900 font-bold mr-2">{BRL(localValorVeiculo)}</strong>
+              </p>
+              
+              {offer && (
+                <a 
+                  href={getSuperbidUrl(offer)} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-neutral-400 hover:text-neutral-700 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
+                  title="Ver oferta original na Superbid"
                 >
-                  <span className="font-bold text-xs text-black">{p}x</span>
-                </Label>
-              </div>
-            ))}
-          </RadioGroup>
+                  <ExternalLink size={18} strokeWidth={1.5} />
+                </a>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* =========================================================================
-       * 🤖 [CONSENTS ARCHITECTURE]: Módulo Dinâmico de Termos Legais
-       * ========================================================================= */}
-      <div
-        className={`transition-opacity duration-200 pt-1 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}
-      >
-        <DynamicConsents configs={consent_configs} value={acceptedConsents} onChange={setAcceptedConsents} />
-      </div>
+        {/* =========================================================================
+         * 🤖 [ZERO-TRUST INPUTS & SLIDER CONTROLS]: Container de Simulação
+         * ========================================================================= */}
+        <div className="bg-surface-alt border border-neutral-200 rounded-none p-4 sm:p-7 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4">
+            
+            {/* Valor do lance */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-neutral-900 uppercase tracking-wider font-sans">
+                Valor do lance
+              </Label>
+              <Input
+                disabled={loading}
+                value={BRL(localValorVeiculo)}
+                onChange={(e) => {
+                  if (loading) return;
+                  const rawValue = Number(e.target.value.replace(/\D/g, "")) / 100;
+                  setLocalValorVeiculo(rawValue);
+                  updateData({ valorVeiculo: rawValue });
+                }}
+                className={`h-10 rounded-none bg-white border-neutral-200 font-semibold disabled:bg-neutral-100 disabled:text-neutral-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
+              />
+              <div className="pt-1 px-1">
+                <SliderCustomizado
+                  value={localValorVeiculo}
+                  onValueChange={(v: number) => {
+                    if (loading) return;
+                    setLocalValorVeiculo(v);
+                  }}
+                  onValueCommit={(v: number) => {
+                    if (loading) return;
+                    updateData({ valorVeiculo: v });
+                  }}
+                  min={offer?.offer_value}
+                  max={tetoMaximo}
+                  step={100}
+                  isCurrency={true}
+                  disabled={loading}
+                />
+              </div>
+            </div>
 
-      {/* =========================================================================
-       * 🤖 [ACTION ARCHITECTURE]: Botão de Disparo com Estados de Loading
-       * ========================================================================= */}
-      <Button
-        type="button"
-        onClick={handleSimular}
-        disabled={!areConsentsValid || !localParcelas || loading}
-        className="w-full h-12 rounded-xl text-white shadow-sm transition-all active:scale-[0.98] bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 disabled:opacity-50 disabled:!cursor-wait flex items-center justify-center gap-2 mt-1"
-      >
-        {loading ? (
-          <span className="flex items-center justify-center gap-2 animate-pulse">
-            <Loader2 className="h-4 w-4 animate-spin" /> Consultando ofertas...
-          </span>
-        ) : (
-          "Simular financiamento"
-        )}
-      </Button>
+            {/* Entrada */}
+            <div className="space-y-1">
+              <Label className="text-[11px] font-medium text-neutral-900 uppercase tracking-wider font-sans">Entrada</Label>
+              <Input
+                disabled={loading}
+                value={BRL((localValorVeiculo * localPercentualEntrada) / 100)}
+                onChange={(e) => {
+                  if (loading) return;
+                  const rawValue = Number(e.target.value.replace(/\D/g, "")) / 100;
+                  const newPerc = localValorVeiculo > 0 ? (rawValue / localValorVeiculo) * 100 : 0;
+                  setLocalPercentualEntrada(newPerc);
+                  updateData({ valorEntrada: rawValue });
+                }}
+                className={`h-10 rounded-none bg-white border-neutral-200 font-semibold disabled:bg-neutral-100 disabled:text-neutral-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
+              />
+              <div className="pt-1 px-1">
+                <SliderCustomizado
+                  value={localPercentualEntrada}
+                  onValueChange={(perc: number) => {
+                    if (loading) return;
+                    setLocalPercentualEntrada(perc);
+                  }}
+                  onValueCommit={(perc: number) => {
+                    if (loading) return;
+                    updateData({ valorEntrada: (localValorVeiculo * perc) / 100 });
+                  }}
+                  min={rules?.min_down_payment_percentage}
+                  max={rules?.max_down_payment_percentage}
+                  step={1}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Parcelas */}
+          <div className="space-y-3">
+            <Label className="text-[11px] font-medium text-neutral-900 uppercase tracking-wider font-sans">Parcelas</Label>
+            <RadioGroup
+              disabled={loading}
+              value={localParcelas ? String(localParcelas) : ""}
+              onValueChange={(v) => {
+                const val = Number(v);
+                setLocalParcelas(val);
+              }}
+              className="flex flex-wrap gap-2"
+            >
+              {(state.data?.rules?.installment_options ?? []).map((p: number) => (
+                <div key={p} className="flex-1">
+                  <RadioGroupItem value={String(p)} id={`p-${p}`} className="peer sr-only" disabled={loading} />
+                  <Label
+                    htmlFor={`p-${p}`}
+                    className={`flex items-center justify-center p-2 border border-neutral-300 rounded-none bg-surface-alt hover:bg-neutral-100 peer-data-[state=checked]:border-neutral-900 peer-data-[state=checked]:bg-white transition-all shadow-xs ${loading ? "!cursor-wait opacity-50" : "cursor-pointer"}`}
+                  >
+                    <span className="font-bold text-xs text-neutral-900">{p}x</span>
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+        </div>
+
+        {/* =========================================================================
+         * 🤖 [CONSENTS ARCHITECTURE]: Módulo Dinâmico de Termos Legais
+         * ========================================================================= */}
+        <div
+          className={`transition-opacity duration-200 pt-1 ${loading ? "pointer-events-none opacity-50" : "opacity-100"}`}
+        >
+          <DynamicConsents configs={consent_configs} value={acceptedConsents} onChange={setAcceptedConsents} />
+        </div>
+
+        {/* =========================================================================
+         * 🤖 [ACTION ARCHITECTURE]: Botão de Disparo com Estados de Loading
+         * ========================================================================= */}
+        <Button
+          type="button"
+          onClick={handleSimular}
+          disabled={!areConsentsValid || !localParcelas || loading}
+          className="w-full h-12 rounded-none text-white shadow-xs transition-all active:scale-[0.98] bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 disabled:!cursor-wait flex items-center justify-center gap-2 mt-1"
+        >
+          {loading ? (
+            <span className="flex items-center justify-center gap-2 animate-pulse">
+              <Loader2 className="h-4 w-4 animate-spin" /> {loadingMessage}
+            </span>
+          ) : (
+            "Simular financiamento"
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

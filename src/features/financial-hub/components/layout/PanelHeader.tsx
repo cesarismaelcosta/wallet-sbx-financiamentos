@@ -1,33 +1,38 @@
 /**
- * @fileoverview Componente Mestre: PanelHeader
+ * @fileoverview Componente Mestre: PanelHeader (Navegação Global & OLAP Trigger)
+ * @module features/financial-hub/components/layout
  * @path src/features/financial-hub/components/layout/PanelHeader.tsx
  * 
  * =========================================================================
- * 🤖 GEMINI ARCHITECTURE SPECIFICATION: DETERMINISTIC NAVIGATION
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: DETERMINISTIC NAVIGATION & NEUTRAL PURITY
  * =========================================================================
- * @description Header fixo e estático unificado para todo o ecossistema.
- * Além da UI, este componente atua como o Gatilho Ativo de Navegação OLAP.
+ * @description Cabeçalho mestre unificado com fixação de viewport (h-16 / 64px)
+ * e barreira determinística de rastreabilidade analítica (OLAP). Atua como
+ * autoridade central de navegação, sincronização temporal e autenticação stateless.
  * 
- * [EVOLUÇÃO ARQUITETURAL v8.0.0 - FIM DO PHANTOM VISIT]:
- * 1. {Orquestração Ativa}: O clique na Logo deixou de ser um Link SPA "cego".
- *    Agora, o próprio Header intercepta o clique, isola as "race conditions"
- *    e dispara um `POST` com `action: VISIT` para o Orquestrador.
- * 2. {Navegação Determinística}: O Header aguarda o servidor responder com
- *    a URL oficial (contendo o novo `visit_update_id` atômico) e só então
- *    executa o roteamento (TanStack navigate).
- * 3. {Plug & Play}: Como o payload lê dinamicamente a `window.location.href`,
- *    qualquer tela que importar este Header ganha rastreabilidade completa
- *    de retorno à Home automaticamente.
+ * [MECÂNICA ARQUITETURAL V3 - BLINDAGEM NEUTRA AUTOCONTIDA & SBX DESIGN SYSTEM]:
+ * 1. {Deterministic Navigation (Fim do Phantom Visit)}: Intercepta o acionamento
+ *    da Logo com handshake atômico (`action: "VISIT"`), aguardando a emissão do
+ *    `visit_update_id` antes de acionar a transição de rota pelo TanStack Router.
+ * 2. {Bypass de Tokens Globais Contaminados}: Estilização puramente neutra e
+ *    autocontida (`bg-white`, `bg-neutral-100`, `border-neutral-200`, `text-neutral-900`),
+ *    blindando o layout contra vazamentos de variáveis legadas com matiz lilás/lavanda.
+ * 3. {Avatar Circular Preservado}: Mantém estritamente o formato circular (`rounded-full`)
+ *    para o elemento de iniciais do usuário, tanto na barra desktop quanto na folha móvel.
+ * 4. {Zero-Radius Strict Governance}: Aplica cantos retos (`rounded-none`) em todos
+ *    os demais elementos estruturais (links de navegação, menu Popover e Sheet mobile).
+ * 5. {Stateless Fat-JWT Awareness}: Derivação prioritária de identidade em memória
+ *    via `FinancialAuthContext`, com fallback seguro para login alfanumérico e initials limpas.
  * 
  * @author César Ismael Pereira da Costa
- * @author Gemini Pro
- * @version 8.1.0 (Correção de Crash de Roteamento Absoluto + Limpeza de Legado VL)
+ * @author Gemini Pro (Architectural Mechanics)
+ * @version 9.2.0 (Gemini Pro Architecture Enforcement & Neutral Shading)
  */
 
 import React, { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { WalletLogo } from "@/components/brand/WalletLogo";
-import { LogOut, LogIn, AppWindow, Settings, Home } from "lucide-react";
+import { LogOut, AppWindow, Settings, Home } from "lucide-react";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import type { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -35,7 +40,7 @@ import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 // =========================================================================
-// ✨ HELPER: Extrator de Iniciais (Nível Especialista)
+// [HELPERS: EXTRATOR DE INICIAIS SEMÂNTICO]
 // =========================================================================
 export function getInitials(identifier?: string | null): string {
   if (!identifier) return "??";
@@ -53,6 +58,9 @@ export function getInitials(identifier?: string | null): string {
   return `${firstLetter}${lastLetter}`.toUpperCase();
 }
 
+// =========================================================================
+// [CONTRATOS E INTERFACES TIPADAS]
+// =========================================================================
 export interface HeaderLink {
   href: string;
   label: string;
@@ -69,6 +77,9 @@ interface PanelHeaderProps {
   showEnvironmentLinks?: boolean;
 }
 
+// =========================================================================
+// [COMPONENTE PRINCIPAL: PANEL HEADER]
+// =========================================================================
 export function PanelHeader({ 
   showNav = true, 
   showAuth = false, 
@@ -84,18 +95,13 @@ export function PanelHeader({
   const [isNavigating, setIsNavigating] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // ✨ IDENTIDADE OMNI-AWARE & FAT JWT (100% STATELESS)
+  // 1. Identidade Omni-Aware a partir do Fat-JWT em memória
   const { userProfile } = useFinancialAuth();
   
-  // O userData pode vir via props (se injetado por outro lugar)
-  // ou via userProfile (que é o Fat JWT decodificado em memória no contexto)
   const hubName = userData?.name || userProfile?.name;
   const hubLogin = userData?.login || userProfile?.login;
   
-  // ✨ FIX: Hierarquia limpa e estrita para Stateless.
-  // Prioriza o Nome, e usa o login da Superbid como fallback.
   let identityString = "??";
-
   if (hubName && hubName !== "N/A" && hubName !== "Visitante Logado") {
     identityString = hubName;
   } else if (hubLogin) {
@@ -113,7 +119,7 @@ export function PanelHeader({
   };
   
   // =========================================================================
-  // ✨ [DETERMINISTIC ROUTING]: O Header toma o controle da volta para a Home
+  // ⚡ [DETERMINISTIC ROUTING]: Disparo Transacional e Handshake OLAP
   // =========================================================================
   const handleLogoClick = async () => {
     if (isNavigating) return;
@@ -142,8 +148,7 @@ export function PanelHeader({
 
       const visitResponse = await callOrchestrator(visitPayload, "POST");
 
-      // ✨ FIX: Prevenção de Crash. O TanStack navigate quebra com URLs absolutas.
-      // O Orquestrador devolve URLs absolutas. Precisamos extrair pathname + search.
+      // Tratamento anti-crash para URLs absolutas retornadas pelo Orquestrador
       if (visitResponse?.url) {
         const urlObj = new URL(visitResponse.url, window.location.origin);
         navigate({ 
@@ -183,48 +188,50 @@ export function PanelHeader({
 
   return (
     <>
-      <style>{`
-        .glass { background: rgba(255, 255, 255, 0.90); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-      `}</style>
-
-      {/* 🔒 OVERLAY GLOBAL DE BLOQUEIO DE TOQUE DURANTE A NAVEGAÇÃO DO HEADER */}
+      {/* 🔒 [INTERACTION LOCK]: Bloqueia cliques concorrentes durante o handshake */}
       {isNavigating && (
-        <div className="fixed inset-0 z-[9999] bg-transparent cursor-wait" />
+        <div className="fixed inset-0 z-[9999] bg-black/10 backdrop-blur-[1px] cursor-wait" />
       )}
 
-      {/* HEADER FIXO: Altura h-16 (64px) */}
-      <header className="fixed top-0 left-0 w-full z-50 glass border-b border-slate-100 shadow-xs h-16 flex items-center">
+      {/* =====================================================================
+          HEADER FIXO INSTITUCIONAL (Altura Estática: 64px / h-16)
+         ===================================================================== */}
+      <header className="fixed top-0 left-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-neutral-200 shadow-xs h-16 flex items-center">
         <div className="max-w-7xl mx-auto w-full px-6 flex items-center justify-between">
           
-          {/* Lado Esquerdo: Logo fixa com container block para preservar a tagline */}
+          {/* Lado Esquerdo: Logo Oficial Superbid */}
           <div className="flex items-center shrink-0 h-full">
             <button 
               onClick={handleLogoClick}
               disabled={isNavigating}
-              className={`flex items-center h-full outline-none border-none focus:outline-none focus:ring-0 bg-transparent cursor-pointer p-0 transition-opacity ${isNavigating ? 'opacity-50' : 'hover:opacity-80'}`}
+              className={`flex items-center outline-none border-none focus:outline-none focus:ring-0 bg-transparent cursor-pointer p-0 transition-opacity ${
+                isNavigating ? "opacity-50" : "hover:opacity-80"
+              }`}
               title="Voltar ao Início"
             >
-              <div className="hidden sm:block">
+              <div className="hidden sm:flex items-center [&_img]:h-6 [&_img]:w-auto">
                 <WalletLogo size="md" withTagline />
               </div>
-              <div className="flex sm:hidden items-center">
+              <div className="flex sm:hidden items-center [&_img]:h-5 [&_img]:w-auto">
                 <WalletLogo size="sm" withTagline />
               </div>
             </button>
           </div>
 
-          {/* Lado Direito: Navegação e Controles */}
+          {/* Lado Direito: Navegação e Controles de Sessão */}
           <div className="flex items-center gap-6">
             {showNav && links.length > 0 && (
-              <nav className="hidden md:flex items-center space-x-1 text-[13px] font-semibold text-slate-600">
+              <nav className="hidden md:flex items-center gap-6">
                 {links.map((link) => (
                   <a
                     key={link.href}
                     href={`#${link.href}`}
                     onClick={(e) => handleScroll(e, link.href)}
-                    className="px-3 py-2 rounded-xl outline-none hover:bg-purple-50 hover:text-purple-600 transition-all"
+                    className="text-[13px] font-medium text-neutral-600 hover:text-neutral-900 focus-visible:text-neutral-900 focus-visible:outline-none transition-colors relative group"
                   >
                     {link.label}
+                    {/* Linha animada que expande no Hover e no Focus (Tab) */}
+                    <span className="absolute -bottom-1 left-0 h-px w-0 bg-neutral-900 group-hover:w-full group-focus-visible:w-full transition-all duration-500 ease-out"></span>
                   </a>
                 ))}
               </nav>
@@ -235,80 +242,92 @@ export function PanelHeader({
                 {sessionToken ? (
                   <div className="flex items-center gap-3">
                     
-                    {/* =================================================== */}
-                    {/* 1. DESKTOP: Popover com a Home no topo do menu */}
-                    {/* =================================================== */}
+                    {/* =========================================================
+                        1. DESKTOP: Popover com Avatar Circular
+                       ========================================================= */}
                     <div className="hidden md:block">
                       <Popover>
                         <PopoverTrigger asChild>
                           <button 
-                            className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 border-none outline-none ring-0 shadow-none hover:bg-slate-200 transition-colors cursor-pointer"
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 border border-neutral-200 outline-none ring-0 hover:bg-neutral-200 transition-colors cursor-pointer"
                             title={identityString}
                           >
-                            <span className="text-[13px] font-normal tracking-tight text-[#B300FF]" style={{ fontWeight: 400 }}>
+                            <span className="text-[13px] font-medium tracking-tight text-neutral-800 font-mono">
                               {getInitials(identityString)}
                             </span>
                           </button>
                         </PopoverTrigger>
                         
-                        <PopoverContent className="w-48 p-1.5 shadow-md border-slate-100" align="end" sideOffset={8}>
-                          {/* ✨ Atalho de Home no Popover Desktop (com roxo da marca) */}
+                        <PopoverContent className="w-52 p-1.5 shadow-md border border-neutral-200 bg-white rounded-none" align="end" sideOffset={8}>
                           <button
-                            onClick={() => {
-                              handleLogoClick();
-                            }}
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-purple-50 hover:text-purple-600 transition-colors cursor-pointer group"
+                            onClick={() => handleLogoClick()}
+                            className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors cursor-pointer"
                           >
-                            <Home className="h-4 w-4 text-[#B300FF] group-hover:text-purple-600" /> Início
+                            <Home className="h-4 w-4 text-neutral-500" /> Início
                           </button>
-                          <div className="h-px bg-slate-100 my-1 mx-1" />
+
+                          <div className="h-px bg-neutral-200 my-1 mx-1" />
 
                           {showEnvironmentLinks && (
                             <>
-                              <a href="/backoffice" target="_blank" rel="noopener noreferrer" className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600 transition-colors">
-                                <AppWindow className="h-4 w-4 text-slate-500" /> Backoffice
+                              <a 
+                                href="/backoffice" 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
+                              >
+                                <AppWindow className="h-4 w-4 text-neutral-500" /> Backoffice
                               </a>
-                              <a href="/sandbox" target="_blank" rel="noopener noreferrer" className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600 transition-colors">
-                                <Settings className="h-4 w-4 text-slate-500" /> Sandbox
+                              <a 
+                                href="/sandbox" 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
+                              >
+                                <Settings className="h-4 w-4 text-neutral-500" /> Sandbox
                               </a>
-                              <div className="h-px bg-slate-100 my-1 mx-1" />
+                              <div className="h-px bg-neutral-200 my-1 mx-1" />
                             </>
                           )}
-                          <button onClick={onLogout} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
-                            <LogOut className="h-4 w-4 text-slate-500" /> Sair
+
+                          <button 
+                            onClick={onLogout} 
+                            className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors cursor-pointer"
+                          >
+                            <LogOut className="h-4 w-4 text-neutral-500" /> Sair
                           </button>
                         </PopoverContent>
                       </Popover>
                     </div>
 
-                    {/* =================================================== */}
-                    {/* 2. MOBILE: Apenas o Avatar limpo acionando a Sheet   */}
-                    {/* =================================================== */}
+                    {/* =========================================================
+                        2. MOBILE: Bottom Sheet com Avatar Circular
+                       ========================================================= */}
                     <div className="block md:hidden">
                       <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                         <SheetTrigger asChild>
                           <button 
-                            className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 border-0 outline-none shadow-none ring-0 focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none data-[state=open]:ring-0 data-[state=open]:outline-none hover:bg-slate-200 transition-colors cursor-pointer select-none"
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 border border-neutral-200 outline-none transition-colors cursor-pointer"
                             title={identityString}
                           >
-                            <span className="text-[13px] tracking-tight text-[#B300FF]" style={{ fontWeight: 400 }}>
+                            <span className="text-[13px] font-medium tracking-tight text-neutral-800 font-mono">
                               {getInitials(identityString)}
                             </span>
                           </button>
                         </SheetTrigger>
 
-                        <SheetContent side="bottom" className="rounded-t-3xl p-6 bg-white border-t border-slate-100 z-50">
-                          <SheetHeader className="text-left pb-4 border-b border-slate-100">
+                        <SheetContent side="bottom" className="rounded-none p-6 bg-white border-t border-neutral-200 z-50">
+                          <SheetHeader className="text-left pb-4 border-b border-neutral-200">
                             <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-50 text-[#B300FF] font-bold border border-purple-100 shrink-0">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-800 font-semibold border border-neutral-200 shrink-0 font-mono">
                                 {getInitials(identityString)}
                               </div>
                               <div className="overflow-hidden">
-                                <SheetTitle className="text-sm font-bold text-slate-900 truncate">
+                                <SheetTitle className="text-sm font-semibold text-neutral-900 truncate">
                                   {identityString}
                                 </SheetTitle>
                                 {hubLogin && (
-                                  <p className="text-xs text-slate-500 font-normal truncate">
+                                  <p className="text-xs text-neutral-500 font-normal truncate">
                                     {hubLogin}
                                   </p>
                                 )}
@@ -316,18 +335,18 @@ export function PanelHeader({
                             </div>
                           </SheetHeader>
 
-                          <div className="flex flex-col gap-1.5 pt-4">
-                            {/* ✨ Atalho de Home na Bottom Sheet Mobile (com roxo da marca) */}
+                          <div className="flex flex-col gap-1 pt-4">
                             <button
                               onClick={() => {
                                 setIsMobileMenuOpen(false);
                                 handleLogoClick();
                               }}
-                              className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-700 hover:bg-purple-50 hover:text-purple-600 transition-colors text-left w-full cursor-pointer group"
+                              className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors text-left w-full cursor-pointer"
                             >
-                              <Home className="h-5 w-5 text-[#B300FF] group-hover:text-purple-600" /> Início
+                              <Home className="h-4 w-4 text-neutral-500" /> Início
                             </button>
-                            <div className="h-px bg-slate-100 my-1 mx-2" />
+                            
+                            <div className="h-px bg-neutral-200 my-1 mx-1" />
 
                             {showEnvironmentLinks && (
                               <>
@@ -336,20 +355,20 @@ export function PanelHeader({
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   onClick={() => setIsMobileMenuOpen(false)}
-                                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-700 hover:bg-purple-50 hover:text-purple-600 transition-colors"
+                                  className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
                                 >
-                                  <AppWindow className="h-5 w-5 text-slate-500" /> Backoffice
+                                  <AppWindow className="h-4 w-4 text-neutral-500" /> Backoffice
                                 </a>
                                 <a
                                   href="/sandbox"
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   onClick={() => setIsMobileMenuOpen(false)}
-                                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-700 hover:bg-purple-50 hover:text-purple-600 transition-colors"
+                                  className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
                                 >
-                                  <Settings className="h-5 w-5 text-slate-500" /> Sandbox
+                                  <Settings className="h-4 w-4 text-neutral-500" /> Sandbox
                                 </a>
-                                <div className="h-px bg-slate-100 my-1 mx-2" />
+                                <div className="h-px bg-neutral-200 my-1 mx-1" />
                               </>
                             )}
                             
@@ -359,9 +378,9 @@ export function PanelHeader({
                                   setIsMobileMenuOpen(false);
                                   onLogout?.();
                                 }}
-                                className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-700 bg-slate-50/80 border border-slate-100 hover:bg-purple-50 hover:text-purple-600 hover:border-purple-100 transition-all cursor-pointer"
+                                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 bg-neutral-50 border border-neutral-200 hover:bg-neutral-100 transition-colors cursor-pointer"
                               >
-                                <LogOut className="h-5 w-5 text-slate-500" /> 
+                                <LogOut className="h-4 w-4 text-neutral-500" /> 
                                 <span>Sair da Conta</span>
                               </button>
                             </div>

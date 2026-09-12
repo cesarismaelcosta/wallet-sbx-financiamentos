@@ -1,259 +1,156 @@
 /**
  * @fileoverview Camada de Persistência Transacional (Visitas e Originação)
  * @path supabase/functions/orchestrator/persist-data.ts
+ * @version 7.8.2
  *
  * ============================================================================
- * 🤖 GEMINI ARCHITECTURE SPECIFICATION: TRANSACTIONAL BULK PARALLELISM
+ * PRINCÍPIOS DA CAMADA DE PERSISTÊNCIA (EXECUTOR BURRO)
  * ============================================================================
- * Camada responsável por persistir o estado do "Carrinho" (Visita) de forma atômica.
+ * 1. {Contrato Estrito (Zero Adivinhação)}:
+ *    Esta função NÃO deduz estado e NÃO faz consultas prévias (SELECT). 
+ *    Toda a decisão (INSERT vs UPDATE, se a entidade já existe) é injetada 
+ *    explicitamente pelo Orquestrador através das flags booleanas.
+ *
+ * 2. {Travas de Consistência (ACID)}:
+ *    Uso de `RETURNING id`. Se um UPDATE falhar (retornar 0 linhas), a 
+ *    transação aborta com erro [FATAL], impedindo o surgimento de registros "zumbis".
  * 
- * [MUDANÇAS ARQUITETURAIS - REFATORAÇÃO DE PERFORMANCE E OLAP]:
- * 1. {Bulk Parallelism & Pipelining}: Agrupamento das queries filhas (ofertas, 
- *    entidades, configurações e múltiplos consentimentos LGPD) em um `Promise.all`. 
- *    Reduz a latência de escrita em até 70% eliminando chamadas sequenciais (cascata).
- * 2. {Fast Path Compatibility}: Assinatura expandida para aceitar `preGeneratedVisitId`
- *    e `preGeneratedUpdateId`. Isso permite que o Orquestrador responda ao cliente 
- *    em milissegundos (`waitUntil`) delegando a geração de IDs para a borda.
- * 3. {1:N Offers - Dedup Cirúrgico}: A checagem `hasOffer` agora procura especificamente 
- *    pelo `offer_id` da requisição. Isso permite atrelar múltiplas ofertas na mesma visita.
- * 4. {Rastreabilidade OLAP}: Injeção do `visit_update_id` na tabela `visit_offers`.
- *    O backoffice agora consegue rastrear exatamente em qual interação (pageview) 
- *    aquela oferta específica foi adicionada ao carrinho.
- * 5. {Race Condition Shield}: Adicionada cláusula `ON CONFLICT DO UPDATE` no insert 
- *    da oferta. Evita que o Fast Path quebre o banco caso dois requests idênticos
- *    disputem milissegundos de I/O de rede e garante atualização de preço.
- * 6. {Sincronia GET}: Função `syncHydratedOffer` para atualizar o OLAP 
- *    em background durante a hidratação da tela, blindando dados mutáveis.
- * 
+ * 3. {Bulk Parallelism & Pipelining}: 
+ *    Agrupamento dinâmico das queries filhas (ofertas, entidades, configurações)
+ *    em um único `Promise.all`, reduzindo drasticamente a latência de escrita.
+ *
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
- * @version 7.8.0
  */
 
 import { debugLog } from "../_shared/logger.ts";
+import type { OrchestratorPayload, OriginDetails } from "../_shared/types.ts";
 
-/**
- * Função: persistVisitData
- * @description Realiza a persistência atômica da jornada sbX.
- * Utiliza transações nativas do PostgreSQL para garantir que, em caso de falha,
- * nenhum dado parcial (zumbi) seja gravado no banco de dados.
- */
 export async function persistVisitData(
   sql: any,
+  // ============================================================================
+  // CONTRATO EXPLÍCITO: Parâmetros ditados pelo Orquestrador (Fonte da Verdade)
+  // ============================================================================
+  action: 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT',
+  visitId: string,
+  visitUpdateId: string,
+  isNewVisit: boolean,
+  isNewUpdate: boolean,
+  hasSignedEntity: boolean, // Orquestrador avisa se a entidade já existe vinculada à visita
+  // ============================================================================
   payload: OrchestratorPayload,
   origin: OriginDetails,
   categoryId?: number,
-  action?: 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT',
   originUrl?: string,
   targetUrl?: string,
-  existingVisitId?: string | null,
-  orchestratorConfigId?: number | null,
-  /**
-   * [waitUntil] UUIDs gerados na borda para responder antes do commit.
-   * A integridade referencial é mantida: dentro da transação a visita é
-   * inserida com este id ANTES de visit_updates/visit_offers.
-   */
-  preGeneratedVisitId?: string,
-  preGeneratedUpdateId?: string
-): Promise<{ visitId: string; visitUpdateId: string | undefined }> {
+  orchestratorConfigId?: number | null
+): Promise<{ visitId: string; visitUpdateId: string }> {
 
   try {
-    // Início da transação atômica.
+    // Início da transação atômica: Tudo é gravado ou nada é gravado.
     return await sql.begin(async (t: any) => {
-      let visitId: string = existingVisitId || "";
-      let isNewVisit = !visitId;
-
+      
       // =========================================================================
-      // 1. RESOLUÇÃO DE IDENTIDADE E ÂNCORAS (EXECUÇÃO SEQUENCIAL)
+      // 1. TABELA PRINCIPAL (visits) - O "Cabeçalho" da Jornada
       // =========================================================================
-      // Verificação de estado atual (Consulta transacional)
-      const rows = visitId 
-        ? await t`SELECT id FROM visits WHERE id = ${visitId}` 
-        : [];
-      const journeyState = rows.length > 0 ? rows[0] : null;
+      if (isNewVisit) {
+        // Primeiro acesso: Cria a âncora principal do visitante
+        await t`
+          INSERT INTO visits (
+            id, action, action_description, origin_url, target_url, raw_payload, utm_source, utm_medium, utm_campaign,
+            ip_address, country, state, city, user_agent, device_type, operating_system, origin_details
+          ) VALUES (
+            ${visitId}, ${action}, ${payload.action_description ?? null}, ${originUrl ?? null}, ${(targetUrl || "").split('?')[0]}, ${payload}::jsonb,
+            ${payload.interaction_context?.utm_source ?? null}, ${payload.interaction_context?.utm_medium ?? null}, ${payload.interaction_context?.utm_campaign ?? null},
+            ${origin.ip_address ?? null}, ${origin.country ?? null}, ${origin.state ?? null}, ${origin.city ?? null}, 
+            ${origin.user_agent ?? null}, ${origin.device_type ?? null}, ${origin.operating_system ?? null}, ${origin ?? null}::jsonb
+          )
+        `;
+      } else {
+        // Evolução de Jornada (Conversão): Atualiza o estado da âncora.
+        const updatedVisit = await t`
+          UPDATE visits SET 
+            action = ${action},
+            action_description = ${payload.action_description ?? null},
+            target_url = ${(targetUrl || "").split('?')[0]}
+            ${action === 'SIMULATE' ? t`, raw_payload = ${payload}::jsonb` : t``}
+          WHERE id = ${visitId}
+          RETURNING id
+        `;
 
-      // ✨ Decide se faz autocura (topo de funil) ou bloqueia (fundo de funil)
-      if (visitId && !journeyState) {
-        if (payload.action === 'VISIT' || payload.action === 'CONSULT') {
-          debugLog("[Aviso] visit_id nao encontrado no banco. Autocurando para acesso inicial.");
-          visitId = ""; 
-          isNewVisit = true;
-        } else {
-          throw new Error("SESSION_EXPIRED");
+        // 🔒 TRAVA ESTRITA ACID: Prevenção contra Sessões Fantasmas.
+        // Se o banco não encontrar o visitId para atualizar, abortamos a transação inteira.
+        // Isso impede falhas silenciosas ou violações de Foreign Key nas tabelas filhas.
+        if (updatedVisit.length === 0) {
+           throw new Error(`[FATAL] Inconsistência de Estado: A visita âncora ${visitId} não foi encontrada.`);
         }
       }
 
-      const hasEntity = journeyState ? await t`SELECT id FROM visit_entities WHERE visit_id = ${visitId}`.then((r: any) => r.length > 0) : false;
-
-      // [1:N MODEL - CART PRESERVATION]
-      const hasConsent = journeyState ? await t`SELECT id FROM visit_consents WHERE visit_id = ${visitId}`.then((r: any) => r.length > 0) : false;
-      const hasOrchestratorConfig = journeyState ? await t`SELECT visit_id FROM visit_orchestrator_configs WHERE visit_id = ${visitId}`.then((r: any) => r.length > 0) : false;
-
-      // 2. Atualização ou Criação da Âncora da Visita
-      if (visitId && action !== 'CONTACT') {
-        const isSimulate = payload.action === 'SIMULATE';
-
-        const updatedRows = isSimulate
-          ? await t`
-              UPDATE visits SET 
-                action = ${payload.action},
-                target_url = ${ (targetUrl || "").split('?')[0] },
-                raw_payload = ${payload}::jsonb
-              WHERE id = ${visitId}
-              RETURNING id
-            `
-          : await t`
-              UPDATE visits SET 
-                action = ${payload.action},
-                target_url = ${ (targetUrl || "").split('?')[0] }
-              WHERE id = ${visitId}
-              RETURNING id
-            `;
-
-        const updated = updatedRows.length > 0 ? updatedRows[0] : null;
-
-        if (!updated) isNewVisit = true;
-      }
-
-      if (isNewVisit) {
-        const newVisitId = preGeneratedVisitId || crypto.randomUUID();
-        const [newVisit] = await t`
-          INSERT INTO visits (
-            id, utm_source, utm_medium, utm_campaign, 
-            origin_url, target_url, action, ip_address, country, state, 
-            city, user_agent, device_type, operating_system, origin_details,
-            raw_payload
-          )
-          VALUES (
-            ${newVisitId},
-            ${payload.interaction_context?.utm_source ?? null},
-            ${payload.interaction_context?.utm_medium ?? null},
-            ${payload.interaction_context?.utm_campaign ?? null},
-            ${originUrl ?? null},
-            ${(targetUrl || "").split('?')[0]}, 
-            ${payload.action ?? null}, 
-            ${origin.ip_address ?? null}, ${origin.country ?? null}, ${origin.state ?? null}, 
-            ${origin.city ?? null}, ${origin.user_agent ?? null}, ${origin.device_type ?? null}, 
-            ${origin.operating_system ?? null}, ${origin ?? null}::jsonb,
-            ${payload ?? null}::jsonb
-          )
-          RETURNING id
-        `;
-        visitId = newVisit.id;
-      }
-
-      // 3. Log de Navegação (Atomic Pageview)
-      const targetUpdateId = payload.visit_update_id || null;
-      let newUpdateId: string;
-      let update;
-
-      let updatedRows = [];
-      if (targetUpdateId && visitId && (payload.action === 'SIMULATE' || payload.action === 'REDIRECT')) {
-        const isSimulate = payload.action === 'SIMULATE';
-
-        updatedRows = isSimulate 
-          ? await t`
-              UPDATE visit_updates 
-              SET action = ${payload.action ?? null}, 
-                  action_description = ${payload.action_description ?? null},
-                  ip_address = ${origin?.ip_address ?? null},
-                  country = ${origin?.country ?? null},
-                  state = ${origin?.state ?? null},
-                  city = ${origin?.city ?? null},
-                  user_agent = ${origin?.user_agent ?? null},
-                  device_type = ${origin?.device_type ?? null},
-                  operating_system = ${origin?.operating_system ?? null},
-                  origin_details = ${origin ?? null}::jsonb,
-                  raw_payload = ${payload}::jsonb
-              WHERE id = ${targetUpdateId} 
-                AND visit_id = ${visitId} 
-                AND action = 'CONSULT'
-              RETURNING id
-            `
-          : await t`
-              UPDATE visit_updates 
-              SET action = ${payload.action ?? null}, 
-                  action_description = ${payload.action_description ?? null},
-                  ip_address = ${origin?.ip_address ?? null},
-                  country = ${origin?.country ?? null},
-                  state = ${origin?.state ?? null},
-                  city = ${origin?.city ?? null},
-                  user_agent = ${origin?.user_agent ?? null},
-                  device_type = ${origin?.device_type ?? null},
-                  operating_system = ${origin?.operating_system ?? null},
-                  origin_details = ${origin ?? null}::jsonb
-              WHERE id = ${targetUpdateId} 
-                AND visit_id = ${visitId} 
-                AND action = 'CONSULT'
-              RETURNING id
-            `;
-      }
-
-      if (updatedRows.length > 0) {
-        newUpdateId = updatedRows[0].id;
-        update = { id: newUpdateId };
-      } else {
-        newUpdateId = preGeneratedUpdateId || crypto.randomUUID();
-        const [newUpd] = await t`
+      // =========================================================================
+      // 2. TABELA DE LOG TEMPORAL (visit_updates) - O Rastro da Interação
+      // =========================================================================
+      if (isNewUpdate) {
+        // Ações de Topo de Funil (Navegação) exigem a criação de um novo registro temporal
+        await t`
           INSERT INTO visit_updates (
-            id, visit_id, partner_id, product_id, utm_source, utm_medium, utm_campaign, 
-            action, action_description, origin_url, target_url, 
-            ip_address, country, state, city, user_agent, device_type, operating_system, origin_details,
-            raw_payload
+            id, visit_id, action, action_description, origin_url, target_url, raw_payload,
+            partner_id, product_id, utm_source, utm_medium, utm_campaign,
+            ip_address, country, state, city, user_agent, device_type, operating_system, origin_details
+          ) VALUES (
+            ${visitUpdateId}, ${visitId}, ${action}, ${payload.action_description ?? null}, ${originUrl ?? null}, ${(targetUrl || "").split('?')[0]}, ${payload}::jsonb,
+            ${payload.partner_id ?? null}, ${payload.product_id ?? null}, ${payload.interaction_context?.utm_source || 'direct'}, ${payload.interaction_context?.utm_medium ?? null}, ${payload.interaction_context?.utm_campaign ?? null},
+            ${origin.ip_address ?? null}, ${origin.country ?? null}, ${origin.state ?? null}, ${origin.city ?? null}, 
+            ${origin.user_agent ?? null}, ${origin.device_type ?? null}, ${origin.operating_system ?? null}, ${origin ?? null}::jsonb
           )
-          VALUES (
-            ${newUpdateId},
-            ${visitId}, 
-            ${payload.partner_id ?? null}, 
-            ${payload.product_id ?? null}, 
-            ${payload.interaction_context?.utm_source || 'direct'},
-            ${payload.interaction_context?.utm_medium || null},
-            ${payload.interaction_context?.utm_campaign || null},
-            ${payload.action ?? null}, 
-            ${payload.action_description ?? null},
-            ${originUrl ?? null},
-            ${(targetUrl || "").split('?')[0]},
-            ${origin?.ip_address ?? null},
-            ${origin?.country ?? null},
-            ${origin?.state ?? null},
-            ${origin?.city ?? null},
-            ${origin?.user_agent ?? null},
-            ${origin?.device_type ?? null},
-            ${origin?.operating_system ?? null},
-            ${origin ?? null}::jsonb,
-            ${payload ?? null}::jsonb
-          )
+        `;
+      } else {
+        // Ações de Fundo de Funil (Conversão) evoluem o snapshot temporal da página atual
+        const updatedLog = await t`
+          UPDATE visit_updates SET 
+            action = ${action}, 
+            action_description = ${payload.action_description ?? null},
+            raw_payload = ${payload}::jsonb
+          WHERE id = ${visitUpdateId} 
+            AND visit_id = ${visitId}
           RETURNING id
         `;
-        update = newUpd;
+        
+        // 🔒 TRAVA ESTRITA ACID: Impede mutações em updates inexistentes (dessincronização de Front).
+        if (updatedLog.length === 0) {
+          throw new Error(`[FATAL] Inconsistência de Estado: O update_id ${visitUpdateId} não foi encontrado para atualização da ação ${action}.`);
+        }
       }
 
-
       // =========================================================================
-      // 🚀 4. BULK PARALLELISM: Execução simultânea de dependências filhas
+      // 🚀 3. BULK PARALLELISM: Execução simultânea de dependências filhas
       // =========================================================================
-      // Agora que temos os IDs base (visitId e updateId), podemos disparar todas
-      // as outras inserções em paralelo, agrupando as Promises.
+      // Agrupamos todas as instruções secundárias em um array para executá-las 
+      // em paralelo, reduzindo drasticamente o tempo total da transação.
       const pendingWrites: Promise<any>[] = [];
 
-      // 4.1. Vínculo de Auditoria das Configurações do Orquestrador
-      if (orchestratorConfigId) {
+      // 3.1. Vínculo de Auditoria das Configurações do Orquestrador
+      // Grava o vínculo APENAS na criação de um novo log temporal, economizando I/O.
+      if (isNewUpdate && orchestratorConfigId) {
         pendingWrites.push(t`
           INSERT INTO visit_orchestrator_configs (visit_id, visit_update_id, orchestrator_config_id) 
-          VALUES (${visitId}, ${newUpdateId}, ${orchestratorConfigId})
+          VALUES (${visitId}, ${visitUpdateId}, ${orchestratorConfigId})
           ON CONFLICT (visit_id, visit_update_id, orchestrator_config_id) DO NOTHING
         `);
       }
 
-      // 4.2. Persistência de Dados de Negócio (Entidades)
-      if (payload.entity?.entity_id && !hasEntity) {
+      // 3.2. Persistência de Dados de Negócio (Entidades)
+      // ✨ REGRA DE NEGÓCIO: O Orquestrador hidrata a entidade em todos os requests,
+      // mas nós SÓ inserimos no banco no exato request em que a identidade S2S foi chancelada.
+      if (hasSignedEntity && payload.entity?.entity_id) {
         pendingWrites.push(t`
           INSERT INTO visit_entities (visit_id, entity_id, entity_type, document, name, phone, email, birth_date, gender, entity_details) 
           VALUES (${visitId}, ${payload.entity.entity_id.toString()}, ${payload.entity.entity_type}, ${payload.entity.document}, ${payload.entity.name}, ${payload.entity.phone}, ${payload.entity.email}, ${payload.entity.birth_date}, ${payload.entity.gender}, ${payload.entity}::jsonb)
         `);
       }
 
-      // 4.3. Integridade OLAP e Proteção de Concorrência (Ofertas)
+      // 3.3. Integridade OLAP e Escudo de Concorrência (Ofertas)
+      // O 'ON CONFLICT DO UPDATE' previne quebras caso duas requisições Fast Path 
+      // disputem o mesmo milissegundo, garantindo sempre o registro da última mutação de preço/detalhes.
       if (payload.offer?.offer_id) {
         pendingWrites.push(t`
           INSERT INTO visit_offers (
@@ -263,27 +160,13 @@ export async function persistVisitData(
                 offer_id, offer_description, offer_value, offer_details
               ) 
               VALUES (
-                ${visitId},
-                ${newUpdateId}, 
-                ${categoryId || null}, 
-                ${payload.offer.subcategory_id ? Number(payload.offer.subcategory_id) : null}, 
-                ${payload.offer.subcategory || null}, 
-                ${payload.manager?.manager_name || null}, 
-                ${payload.manager ?? null}::jsonb, 
-                ${payload.seller?.seller_id || null}, 
-                ${payload.seller?.legal_name || null}, 
-                ${payload.seller?.trade_name || null}, 
-                ${payload.seller?.economic_group || null}, 
-                ${payload.seller ?? null}::jsonb, 
-                ${payload.event?.event_id || null}, 
-                ${payload.event?.event_description || null}, 
-                ${payload.event?.event_start_date || null}, 
-                ${payload.event?.event_end_date || null}, 
-                ${payload.event ?? null}::jsonb, 
-                ${payload.offer.offer_id}, 
-                ${payload.offer.offer_description}, 
-                ${payload.offer.offer_value}, 
-                ${payload.offer ?? null}::jsonb
+                ${visitId}, ${visitUpdateId}, ${categoryId || null}, ${payload.offer.subcategory_id ? Number(payload.offer.subcategory_id) : null}, 
+                ${payload.offer.subcategory || null}, ${payload.manager?.manager_name || null}, ${payload.manager ?? null}::jsonb, 
+                ${payload.seller?.seller_id || null}, ${payload.seller?.legal_name || null}, ${payload.seller?.trade_name || null}, 
+                ${payload.seller?.economic_group || null}, ${payload.seller ?? null}::jsonb, ${payload.event?.event_id || null}, 
+                ${payload.event?.event_description || null}, ${payload.event?.event_start_date || null}, ${payload.event?.event_end_date || null}, 
+                ${payload.event ?? null}::jsonb, ${payload.offer.offer_id}, ${payload.offer.offer_description}, 
+                ${payload.offer.offer_value}, ${payload.offer ?? null}::jsonb
               )
               ON CONFLICT (visit_id, visit_update_id, offer_id) DO UPDATE SET
                 offer_value = EXCLUDED.offer_value,
@@ -295,13 +178,11 @@ export async function persistVisitData(
         `);
       }
 
-      // 4.4. Determinismo Temporal LGPD (Consentimentos via Bulk Mapping)
+      // 3.4. Determinismo Temporal LGPD (Consentimentos)
       if (payload.consents?.length > 0) {
         for (const c of payload.consents) {
           const acceptedValue = c.accepted === true || c.acceptedConsents === true;
           const acceptedAt = c.accepted_at || c.acceptedConsents_at || new Date().toISOString();
-
-          debugLog(`Preparando consentimento: ${c.consent_id} para Update ${newUpdateId}`, { accepted: acceptedValue });
 
           pendingWrites.push(t`
             INSERT INTO visit_consents (
@@ -310,7 +191,7 @@ export async function persistVisitData(
               ip_address, country, state, city, user_agent, device_type, 
               operating_system, origin_details, page_snapshot, raw_payload
             ) VALUES (
-              ${visitId}, ${newUpdateId}, ${c.consent_id}, ${acceptedValue}, ${acceptedAt}, 
+              ${visitId}, ${visitUpdateId}, ${c.consent_id}, ${acceptedValue}, ${acceptedAt}, 
               ${(targetUrl || "").split('?')[0]}, ${payload.entity?.entity_id || null}, 
               ${payload.entity?.name || null}, ${payload.entity?.email || null}, ${payload.entity?.document || null}, 
               ${payload.entity?.phone || null}, ${payload.entity?.birth_date || null}, ${payload.entity?.gender || null}, 
@@ -330,48 +211,35 @@ export async function persistVisitData(
         }
       }
 
-      // ✨ Dispara todas as escritas filhas SIMULTANEAMENTE na mesma transação (Pipelining)
+      // ✨ Dispara todas as escritas filhas SIMULTANEAMENTE (Pipelining)
       if (pendingWrites.length > 0) {
         await Promise.all(pendingWrites);
       }
 
-      return { visitId, visitUpdateId: update.id };
+      return { visitId, visitUpdateId };
     });
   } catch (error) {
     debugLog("[FATAL] Erro na persistência atômica da visita:", error);
-    throw error;
+    throw error; // Repassa o erro para o Orquestrador lidar com o HTTP Status
   }
 }
-
 
 /**
  * ✨ [ZERO-TRUST OLAP SYNC]
  * Sincroniza os dados hidratados da oferta no banco durante requisições GET (Background).
- * Atualiza todos os nós de relacionamento que podem ter sofrido mutação no Upstream.
+ * Garante que nosso Data Lake reflita eventuais mutações (como preço atualizado)
+ * ocorridas no Upstream (Superbid) após a criação da visita, sem onerar o TTI do front.
  */
 export async function syncHydratedOffer(
-  sql: any,
-  visitId: string,
-  visitUpdateId: string,
-  offer: any,
-  event: any,
-  manager: any,
-  seller: any
+  sql: any, visitId: string, visitUpdateId: string, offer: any, event: any, manager: any, seller: any
 ): Promise<void> {
   if (!offer?.offer_id) return;
-  
   try {
     await sql`
       UPDATE visit_offers 
-      SET offer_value = ${offer.offer_value},
-          offer_description = ${offer.offer_description},
-          offer_details = ${offer}::jsonb,
-          event_details = ${event ?? null}::jsonb,
-          manager_details = ${manager ?? null}::jsonb,
-          seller_details = ${seller ?? null}::jsonb
-      WHERE visit_id = ${visitId} 
-        AND visit_update_id = ${visitUpdateId} 
-        AND offer_id = ${offer.offer_id}
+      SET offer_value = ${offer.offer_value}, offer_description = ${offer.offer_description}, offer_details = ${offer}::jsonb,
+          event_details = ${event ?? null}::jsonb, manager_details = ${manager ?? null}::jsonb, seller_details = ${seller ?? null}::jsonb
+      WHERE visit_id = ${visitId} AND visit_update_id = ${visitUpdateId} AND offer_id = ${offer.offer_id}
     `;
     debugLog(`[Persist] Oferta ${offer.offer_id} sincronizada via GET no background.`);
   } catch (error) {

@@ -1,32 +1,35 @@
 /**
- * @fileoverview 🛍️ Componente: OfferDetailsSBXPAY (Rota: /sbxpay/offer)
+ * @fileoverview 🛍️ Componente: OfferDetailsSBXPAY (Vitrine Central de Ofertas / Prateleira Mid-Funnel)
+ * @module routes
  * @path src/routes/sbxpay/offer.tsx
  *
  * =========================================================================
- * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-TRUST & CART PRESERVATION (OLAP)
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-TRUST, OLAP & NEUTRAL PURITY
  * =========================================================================
- * Vitrine central de ofertas (Prateleira) atuando como "Mid-Funnel". 
- * Integrada diretamente ao BFF `sbx-offer-query` para performance máxima.
+ * @description Vitrine central de ofertas atuando como Mid-Funnel institucional.
+ * Integrada diretamente ao BFF de queries de ofertas (`sbx-offer-query`) para performance
+ * máxima, filtros dinâmicos de categorias e preservação de cursor OLAP para simulação.
  *
- * [MECÂNICA ARQUITETURAL]:
- * 1. {BFF Bypass}: A vitrine não faz `GET` no Orquestrador. Ela consome dados
- *    diretamente do BFF de Ofertas para listagem. O Orquestrador só é invocado 
- *    na intenção de clique (POST).
- * 2. {Cart Preservation (OLAP)}: O método `handleSimulacao` atua como uma corrida 
- *    de bastão. Ele extrai o `visit_id` (sessão) e o `visit_update_id` (cursor 
- *    desta tela na linha do tempo) da URL e os injeta no payload `CONSULT`. 
- *    Isso garante que o backend registre que o usuário saiu "da Vitrine e foi
- *    para o Produto X", fechando a telemetria do funil sem criar visitas órfãs.
- * 3. {Zero-Trust Thin Payload}: O Front-end não manipula e nem envia dados 
- *    pessoais (PII) do usuário na transição. A validação de identidade é delegada 
- *    ao Orquestrador (Edge) através do JWT.
- * 4. {Zero-Latency Fast Path}: Ao confirmar a intenção de simulação, o Orquestrador
- *    devolve as regras financeiras e a entidade (`state`). O componente intercepta
- *    esse pacote e o injeta no Cofre da RAM antes da mudança de rota, permitindo que 
- *    o Wizard da próxima tela nasça em 0ms.
- * 
+ * [MECÂNICA ARQUITETURAL V3 - BLINDAGEM NEUTRA AUTOCONTIDA & SBX DESIGN SYSTEM]:
+ * 1. {Bypass de Tokens Globais Contaminados}: Substitui tokens genéricos do tema
+ *    (`bg-background`, `border-border`, `text-foreground`, `bg-muted`, `bg-popover`)
+ *    por classes utilitárias neutras puras (`bg-white`, `border-neutral-200`,
+ *    `text-neutral-900`, `bg-neutral-100`, `bg-neutral-50`), assegurando pureza visual.
+ * 2. {Zero-Radius Strict Governance}: Aplica cantos retos estritos (`rounded-none`)
+ *    em todos os elementos interativos: dropdowns de filtro/ordenação, botões de paginação,
+ *    barras móveis, contêineres de aviso e cascas estruturais.
+ * 3. {Primitivo Skeleton Autocontido}: O `OfferSkeletonLoader` descarta o componente
+ *    global `<Skeleton />`, utilizando marcação crua neutra (`bg-neutral-100`, `bg-neutral-200/80`)
+ *    para anular vazamentos de tons lavanda/lilás herdados do root.
+ * 4. {Cart & Telemetry Preservation (OLAP)}: O método `handleSimulacao` mantém
+ *    o repasse estrito de `visit_id` e `visit_update_id` no payload `CONSULT`,
+ *    garantindo continuidade da jornada sem duplicar instâncias de visita.
+ * 5. {Zero-Latency Fast Path}: Hidrata o cofre efêmero da RAM (`setFastPathState`)
+ *    antes da transição SPA pelo TanStack Router, permitindo montagem instantânea do Wizard.
+ *
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro (Architectural Mechanics)
+ * @version 9.2.1 (Neutral Purity & Self-Contained Shelf Architecture)
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -41,13 +44,12 @@ import { fetchOffersQuery } from "@/services/offer";
 import { logSystemError } from "@/services/systemNotification";
 import { clearSession } from "@/services/session";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
-// ✨ INJEÇÃO: Importação do Cofre Epêmero da RAM
 import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { CardOfferV } from "@/features/financial-hub/components/shared/renderes/CardOfferV";
 import { CardOfferVSkeleton } from "@/features/financial-hub/components/shared/renderes/CardOfferVSkeleton";
 
 // =========================================================================
-// [TAXONOMIA VISUAL]: Dicionário Estático de Ícones de Categorias
+// [TAXONOMIA VISUAL]: Dicionário Estático de Categorias Oficiais
 // =========================================================================
 const SUPERBID_CATEGORY_FILTERS = [
   { name: "Todas", filterValue: null, active: true },
@@ -83,7 +85,7 @@ const SORT_OPTIONS = [
 ];
 
 // =========================================================================
-// [CONFIGURAÇÃO DE FLUXOS]
+// [CONFIGURAÇÃO DE FLUXOS E PRODUTOS]
 // =========================================================================
 const FLOW_MAP: Record<string, { product_id: number }> = {
   Carros: { product_id: 2 },
@@ -106,7 +108,7 @@ export const Route = createLazyFileRoute("/sbxpay/offer")({
 });
 
 // =========================================================================
-// [COMPONENTE DROPDOWN DESKTOP]
+// [COMPONENTE DROPDOWN DESKTOP - SBX DESIGN SYSTEM]
 // =========================================================================
 function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = "left" }: any) {
   const [isOpen, setIsOpen] = useState(false);
@@ -125,23 +127,30 @@ function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = 
   return (
     <div className="relative" ref={ref}>
       <div
-        className="flex items-center justify-between gap-2 px-4 py-2.5 border border-[#B300FF] rounded-full cursor-pointer bg-white text-[#B300FF] min-w-[170px] shadow-sm transition-all hover:bg-purple-50/50"
+        className="flex items-center justify-between gap-2 px-3.5 py-2 border border-neutral-200 bg-white text-neutral-900 min-w-[160px] rounded-none shadow-xs cursor-pointer transition-colors hover:bg-neutral-50"
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center gap-2">
-          {Icon && <Icon size={14} />}
-          <span className="text-xs font-semibold select-none">{displayLabel}</span>
+          {Icon && <Icon size={14} className="text-neutral-500" />}
+          <span className="text-xs font-medium select-none">{displayLabel}</span>
         </div>
-        <ChevronDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        <ChevronDown size={14} className={`text-neutral-500 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
       </div>
+
       {isOpen && (
         <div
-          className={`absolute top-[calc(100%+8px)] ${align === "right" ? "right-0" : "left-0"} min-w-full w-max bg-white border border-slate-200 rounded-lg shadow-xl py-2 z-50 overflow-hidden`}
+          className={`absolute top-[calc(100%+4px)] ${
+            align === "right" ? "right-0" : "left-0"
+          } min-w-full w-max bg-white border border-neutral-200 rounded-none shadow-md py-1 z-50 overflow-hidden`}
         >
           {options.map((opt: any) => (
             <div
               key={opt.value}
-              className={`px-4 py-2.5 text-sm cursor-pointer transition-colors ${value === opt.value ? "bg-purple-50 text-[#B300FF] font-bold" : "text-slate-700 hover:bg-slate-50"}`}
+              className={`px-3.5 py-2 text-xs cursor-pointer transition-colors ${
+                value === opt.value
+                  ? "bg-neutral-100 text-neutral-900 font-semibold"
+                  : "text-neutral-700 hover:bg-neutral-50"
+              }`}
               onClick={() => {
                 onChange(opt.value);
                 setIsOpen(false);
@@ -156,17 +165,17 @@ function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = 
   );
 }
 
-// 1. Esqueleto de carregamento da página de oferta usando o card fantasma
+// =========================================================================
+// [ESQUELETO ESTRUTURAL DA PRATELEIRA: NEUTRAL BYPASS]
+// =========================================================================
 function OfferSkeletonLoader() {
   return (
-    <div className="max-w-7xl mx-auto px-6 py-28 space-y-8">
-      {/* Header da Página */}
-      <div className="flex justify-between items-center animate-pulse">
-        <div className="h-8 w-48 bg-slate-200 rounded-lg"></div>
-        <div className="h-8 w-28 bg-slate-200 rounded-lg"></div>
+    <div className="max-w-7xl mx-auto px-6 py-28 space-y-8 animate-pulse bg-white">
+      <div className="flex justify-between items-center">
+        <div className="h-8 w-48 bg-neutral-200/80 rounded-none" />
+        <div className="h-8 w-28 bg-neutral-100 rounded-none" />
       </div>
 
-      {/* Grid preenchido com os cards fantasmas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pt-6">
         {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
           <CardOfferVSkeleton key={i} />
@@ -186,8 +195,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
   const currentFlow = FLOW_MAP[flowKey || "Carros"] || FLOW_MAP["Carros"];
   const isCartao = currentFlow.product_id === 8;
-  
-  // ✨ Remoção arquitetural: Contexto não é lido pois a Vitrine não consome dados do usuário
 
   const isMobile = useIsMobile();
   const isMobileRef = useRef(isMobile);
@@ -212,24 +219,21 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
-
   const totalPages = Math.max(Math.ceil(totalElements / pageSize), 1);
-
   const mainPaddingTop = isMobile && isCartao ? "pt-[136px]" : "pt-[80px]";
 
-  // Troca de ordenação/categoria: reseta lista e página no próprio handler
   const handleSortChange = (value: string) => {
     setCurrentSort(value);
     setOffersList([]);
     setPageNumber(1);
   };
+
   const handleCategoryChange = (value: string) => {
     setSelectedCategory(value);
     setOffersList([]);
     setPageNumber(1);
   };
 
-  // Fecha menus caso o usuário clique fora no mobile
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
@@ -241,7 +245,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Garante que a página nunca inicie travada no loading de submissão ao montar ou voltar pelo histórico
   useEffect(() => {
     setSimulatingIndex(null);
 
@@ -258,10 +261,9 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     };
   }, []);
 
-  // Busca os dados da listagem (BFF Integration)
   useEffect(() => {
     if (!sessionToken) {
-      setLoading(false); // 👈 Destrava o carregamento se o token estiver hidratando
+      setLoading(false);
       return;
     }
     const controller = new AbortController();
@@ -284,7 +286,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
         if (!controller.signal.aborted) {
           const newOffers = data?.offers || [];
-          // Mobile: scroll infinito acumula. Desktop: paginação clássica substitui a lista.
           setOffersList((prev) => (pageNumber === 1 || !isMobileRef.current ? newOffers : [...prev, ...newOffers]));
           setTotalElements(data?.total || 0);
           if (pageNumber === 1 || !isMobileRef.current) window.scrollTo({ top: 0, behavior: "smooth" });
@@ -307,7 +308,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     return () => controller.abort();
   }, [currentFlow.product_id, currentSort, pageNumber, sessionToken, flowKey, selectedCategory]);
 
-  // Fallback e Auto-Redirect em caso de erro crítico
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     if (fetchError) {
@@ -320,7 +320,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     return () => clearTimeout(timer);
   }, [fetchError, countdown, dynamicReturnUri, navigate]);
 
-  // Scroll infinito: APENAS mobile (no desktop usamos paginação clássica)
   useEffect(() => {
     if (!isMobile) return;
     const handleScroll = () => {
@@ -333,39 +332,26 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isMobile, loading, pageNumber, totalPages]);
 
-  // Delegação de Negócio via Gateway
   const handleSimulacao = async (offerItem: any, idx: number) => {
     setSimulatingIndex(idx);
 
     try {
       const currentHref = window.location.href;
 
-      // 1. Extraia o visit_id e visit_update_id da URL no instante do clique
       const urlParams = new URLSearchParams(window.location.search);
       const cartVisitId = urlParams.get("visit_id");
-      const cartVisitUpdateId = urlParams.get("visit_update_id"); // ✨ Cursor da Vitrine (Mantém a linha OLAP)
+      const cartVisitUpdateId = urlParams.get("visit_update_id");
 
-      // Extrai o offer_id do item da oferta selecionada
       const rawOffer = offerItem?.offer || offerItem;
       const targetOfferId = rawOffer?.offer_id || rawOffer?.id;
 
-      // 2. Montagem do payload seguro (THIN PAYLOAD)
       const payload = {
         action: "CONSULT",
         ...(currentFlow.product_id && { product_id: String(currentFlow.product_id) }),
-        
-        // ✨ [CART PRESERVATION]: Mantém a mesma visita e update ao trocar de oferta.
         ...(cartVisitId ? { visit_id: cartVisitId } : {}),
         ...(cartVisitUpdateId ? { visit_update_id: cartVisitUpdateId } : {}),
-        
-        // ✨ CORREÇÃO: Garante que o offer_id vá na raiz para o ThinPayload do Orquestrador
         ...(targetOfferId ? { offer_id: String(targetOfferId) } : {}),
-        
-        // ✨ [ZERO-TRUST]: o Edge hidrata offer/seller/event/manager a partir do
-        // offer_id (ctx.trusted*). Objetos completos não são montados aqui.
         origin_url: currentHref,
-        
-        // ✨ Remoção Arquitetural: `entity` não é mais enviada. Zero-Trust no Edge!
         interaction_context: {
           origin_url: currentHref,
           utm_source: "offer_list",
@@ -377,28 +363,18 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       const response = await callOrchestrator(payload, "POST");
 
       if (response?.url) {
-        
-        // =====================================================================
-        // ✨ THE ZERO-LATENCY FAST PATH (Cofre da RAM)
-        // =====================================================================
-        // Contrato Estrito: Só injeta na RAM se o Orquestrador mandou a árvore 
-        // de estado completa. Se não mandou, o cofre fica vazio e a próxima 
-        // tela fará o GET por segurança (Fallback).
         if (response.state) {
           setFastPathState(response.state);
         }
 
-        // Transformamos a string da URL em um objeto real
         const urlObj = new URL(response.url, window.location.origin);
 
-        // Se o domínio de destino for idêntico ao nosso (SPA)
         if (urlObj.origin === window.location.origin) {
           navigate({ 
             to: urlObj.pathname as any,
             search: Object.fromEntries(urlObj.searchParams.entries()) as any,
           });
         } else {
-          // Navegação externa (ex: Banco parceiro)
           window.location.href = response.url;
         }
       } else {
@@ -420,15 +396,16 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   // =========================================================================
   if (fetchError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center font-['Inter']">
-        <p className="text-slate-800 font-bold text-lg mb-2">Ops! Falha ao carregar ofertas.</p>
-        <p className="text-slate-500 font-medium text-sm mb-4">Redirecionando em {countdown}s...</p>
-        <button
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center text-neutral-900 rounded-none">
+        <p className="text-neutral-900 font-semibold text-lg mb-2">Ops! Falha ao carregar ofertas.</p>
+        <p className="text-neutral-500 font-normal text-sm mb-4">Redirecionando em {countdown}s...</p>
+        <Button
+          variant="outline"
           onClick={() => navigate({ to: dynamicReturnUri as any })}
-          className="flex items-center text-[#B400FF] font-semibold text-sm cursor-pointer bg-transparent border-none"
+          className="border-neutral-200 text-neutral-900 hover:bg-neutral-100 rounded-none"
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> Retornar agora
-        </button>
+        </Button>
       </div>
     );
   }
@@ -436,7 +413,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   const formattedTotal = totalElements.toLocaleString("pt-BR");
 
   return (
-    <div className="min-h-screen bg-slate-50 font-['Inter'] pb-20 relative">
+    <div className="min-h-screen bg-white text-neutral-900 pb-20 relative rounded-none">
 
       {/* 1. HEADER */}
       <PanelHeader 
@@ -448,46 +425,50 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         onNavigate={(path) => navigate({ to: path as any })}
       />
 
-      {/* 2. BARRA FLUTUANTE MOBILE FIXA (Sempre visível) */}
+      {/* 2. BARRA FLUTUANTE MOBILE FIXA */}
       <div
-        className="md:hidden fixed top-[60px] left-0 w-full h-[48px] bg-white border-b border-slate-200 shadow-sm z-40"
+        className="md:hidden fixed top-[60px] left-0 w-full h-[48px] bg-white border-b border-neutral-200 shadow-xs z-40 rounded-none"
         ref={mobileMenuRef}
       >
-        <div className="flex items-center w-full h-full divide-x divide-slate-200">
-          {/* 2A. Filtrar (ESQUERDA - APENAS PARA CARTÃO) */}
+        <div className="flex items-center w-full h-full divide-x divide-neutral-200">
+          {/* 2A. Filtrar (Mobile) */}
           {isCartao && (
             <div
-              className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-[#B300FF]"
+              className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-neutral-900 transition-colors hover:bg-neutral-50"
               onClick={() => {
                 setFilterMenuOpen(!filterMenuOpen);
                 setSortMenuOpen(false);
               }}
             >
-              <SlidersHorizontal size={16} />
-              <span className="text-sm font-semibold select-none">Filtrar</span>
+              <SlidersHorizontal size={15} className="text-neutral-500" />
+              <span className="text-xs font-medium select-none">Filtrar</span>
             </div>
           )}
 
-          {/* 2B. Ordenar (DIREITA - VISÍVEL PARA TODOS) */}
+          {/* 2B. Ordenar (Mobile) */}
           <div
-            className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-[#B300FF]"
+            className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-neutral-900 transition-colors hover:bg-neutral-50"
             onClick={() => {
               setSortMenuOpen(!sortMenuOpen);
               setFilterMenuOpen(false);
             }}
           >
-            <ArrowUpDown size={16} />
-            <span className="text-sm font-semibold select-none">Ordenar</span>
+            <ArrowUpDown size={15} className="text-neutral-500" />
+            <span className="text-xs font-medium select-none">Ordenar</span>
           </div>
         </div>
 
         {/* Menus Dropdown (Mobile) */}
         {isCartao && filterMenuOpen && (
-          <div className="absolute top-[48px] left-0 w-full bg-white shadow-xl border-b border-slate-200 max-h-[75vh] overflow-y-auto z-40">
+          <div className="absolute top-[48px] left-0 w-full bg-white shadow-lg border-b border-neutral-200 max-h-[75vh] overflow-y-auto z-40 rounded-none">
             {FILTER_OPTIONS.map((opt, idx) => (
               <div
                 key={idx}
-                className={`px-6 py-3.5 text-sm border-b border-slate-50 last:border-0 cursor-pointer ${selectedCategory === opt.value ? "text-[#B300FF] bg-purple-50/50 font-bold" : "text-slate-700 active:bg-slate-100"}`}
+                className={`px-5 py-3 text-xs border-b border-neutral-100 last:border-0 cursor-pointer ${
+                  selectedCategory === opt.value
+                    ? "text-neutral-900 bg-neutral-100 font-semibold"
+                    : "text-neutral-600 hover:bg-neutral-50"
+                }`}
                 onClick={() => {
                   handleCategoryChange(opt.value);
                   setFilterMenuOpen(false);
@@ -500,11 +481,15 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         )}
 
         {sortMenuOpen && (
-          <div className="absolute top-[48px] left-0 w-full bg-white shadow-xl border-b border-slate-200 max-h-[60vh] overflow-y-auto z-40">
+          <div className="absolute top-[48px] left-0 w-full bg-white shadow-lg border-b border-neutral-200 max-h-[60vh] overflow-y-auto z-40 rounded-none">
             {SORT_OPTIONS.map((opt, idx) => (
               <div
                 key={idx}
-                className={`px-6 py-4 text-sm border-b border-slate-50 last:border-0 cursor-pointer ${currentSort === opt.value ? "text-[#B300FF] bg-purple-50/50 font-bold" : "text-slate-700 active:bg-slate-100"}`}
+                className={`px-5 py-3.5 text-xs border-b border-neutral-100 last:border-0 cursor-pointer ${
+                  currentSort === opt.value
+                    ? "text-neutral-900 bg-neutral-100 font-semibold"
+                    : "text-neutral-600 hover:bg-neutral-50"
+                }`}
                 onClick={() => {
                   handleSortChange(opt.value);
                   setSortMenuOpen(false);
@@ -518,15 +503,14 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       </div>
 
       {/* ÁREA ÚTIL DE CONTEÚDO */}
-      <main className={`max-w-7xl mx-auto px-4 ${mainPaddingTop} pb-8 font-['Inter']`}>
-        {/* DESKTOP BARRA DE FILTRO E ORDENAÇÃO (Sempre visível) */}
+      <main className={`max-w-7xl mx-auto px-4 ${mainPaddingTop} pb-8`}>
+        {/* DESKTOP BARRA DE FILTRO E ORDENAÇÃO */}
         <div className="hidden md:flex w-full items-center justify-between gap-4 pt-2 pb-6">
           <div className="flex items-center">
-            <p className="text-sm font-normal text-slate-800 m-0">{formattedTotal} anúncios</p>
+            <p className="text-xs font-medium text-neutral-500 m-0 tabular-nums">{formattedTotal} anúncios</p>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* FILTRAR APENAS SE FOR CARTÃO */}
             {isCartao && (
               <DesktopDropdown
                 icon={SlidersHorizontal}
@@ -538,7 +522,6 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
               />
             )}
 
-            {/* ORDENAR VISÍVEL PARA TODOS */}
             <DesktopDropdown
               icon={ArrowUpDown}
               label="Ordenar"
@@ -550,12 +533,12 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
           </div>
         </div>
 
-        {/* MOBILE: QUANTIDADE DE ANÚNCIOS (Esconde no desktop pois já está na barra acima) */}
+        {/* MOBILE: QUANTIDADE DE ANÚNCIOS */}
         <div className="md:hidden mb-4">
-          <p className="text-sm font-normal text-slate-800 m-0">{formattedTotal} anúncios</p>
+          <p className="text-xs font-medium text-neutral-500 m-0 tabular-nums">{formattedTotal} anúncios</p>
         </div>
 
-        {/* ENGINE DE CARDS UTILIZANDO OS COMPONENTES CardOfferV E CardOfferVScheleton*/}
+        {/* ENGINE DE CARDS */}
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
@@ -563,13 +546,13 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
             ))}
           </div>
         ) : offersList.length === 0 ? (
-          <div className="bg-white rounded-lg p-12 text-center border border-slate-200 shadow-xs my-12">
-            <p className="text-slate-600 font-medium text-sm">
+          <div className="bg-neutral-50 text-neutral-900 p-12 text-center border border-neutral-200 rounded-none shadow-xs my-12">
+            <p className="text-neutral-500 font-normal text-sm">
               Nenhuma oferta encontrada para esta categoria no momento.
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in duration-300">
             {offersList.map((item, idx) => (
               <CardOfferV
                 key={item?.offer?.offer_id || idx}
@@ -583,27 +566,29 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
           </div>
         )}
 
-        {/* RODAPÉ: paginação só no desktop; mobile usa scroll infinito */}
+        {/* PAGINAÇÃO DESKTOP / SCROLL MOBILE */}
         {totalElements > 0 && (
           <>
             {totalPages > 1 && (
               <div className="hidden md:flex items-center justify-center gap-3 py-8 mt-6">
                 <Button
                   variant="outline"
+                  size="sm"
                   disabled={pageNumber === 1 || loading}
                   onClick={() => setPageNumber((p) => Math.max(p - 1, 1))}
-                  className="rounded-xl border-slate-300 text-xs font-semibold"
+                  className="border-neutral-200 text-neutral-900 hover:bg-neutral-100 text-xs rounded-none"
                 >
                   ← Anterior
                 </Button>
-                <span className="text-xs text-slate-600 px-2 font-medium">
+                <span className="text-xs text-neutral-500 px-2 font-normal tabular-nums">
                   Página {pageNumber} de {totalPages}
                 </span>
                 <Button
                   variant="outline"
+                  size="sm"
                   disabled={pageNumber >= totalPages || loading}
                   onClick={() => setPageNumber((p) => Math.min(p + 1, totalPages))}
-                  className="rounded-xl border-slate-300 text-xs font-semibold"
+                  className="border-neutral-200 text-neutral-900 hover:bg-neutral-100 text-xs rounded-none"
                 >
                   Próxima →
                 </Button>
@@ -612,10 +597,10 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
             <div className="md:hidden py-8 text-center">
               {loading && pageNumber > 1 && (
-                <span className="text-xs text-slate-500 font-medium">Carregando mais ofertas...</span>
+                <span className="text-xs text-neutral-500">Carregando mais ofertas...</span>
               )}
               {!loading && pageNumber >= totalPages && (
-                <span className="text-xs text-slate-400 font-medium">Você viu todas as ofertas.</span>
+                <span className="text-xs text-neutral-400">Você viu todas as ofertas.</span>
               )}
             </div>
           </>

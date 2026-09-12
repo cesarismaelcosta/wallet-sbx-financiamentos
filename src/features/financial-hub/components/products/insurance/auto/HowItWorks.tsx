@@ -1,11 +1,20 @@
 /**
- * @fileoverview Guia Rápido Profissional - Visual Limpo e Compacto
- * Fonte: Inter (font-sans)
+ * @fileoverview Componente: HowItWorks (Seguro Auto)
+ * @description Guia Rápido Profissional com Fundo Preto Institucional (#1D1D1B) e Zero-Radius.
+ * 
+ * =========================================================================
+ * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-RADIUS, CLEAN ICONS & WHITE HIGHLIGHTS
+ * =========================================================================
+ * 1. {Zero-Radius Strict Governance}: Eliminação total de arredondamentos (`rounded-none`).
+ * 2. {Solid Black Region}: Fundo preto institucional explícito (`bg-[#1D1D1B]`) com 
+ *    cartões e container interno em `bg-neutral-900` e bordas em `border-white/20`.
+ * 3. {SBX Typography}: Títulos e Abas monoespaçados, uppercase e espaçados (tracking), 
+ *    com ícones/bullets mutados (neutral-400) e descrições em branco puro para leitura fluida.
  */
-import { useState } from 'react';
-import { Umbrella, Calculator, CarFront } from 'lucide-react';
 
-// Centralizamos os dados aqui. Se precisar mudar um texto, é aqui.
+import { useState } from 'react';
+import { Umbrella, Calculator, CarFront, Check } from 'lucide-react';
+
 const TABS_CONFIG = [
   {
     id: 'coberturas',
@@ -51,16 +60,20 @@ export function HowItWorks() {
   const activeData = TABS_CONFIG.find(t => t.id === activeTab)!;
 
   return (
-    <section className="py-16 bg-white font-sans">
-      <div className="max-w-5xl mx-auto px-4">
+    <section id="como-funciona" className="scroll-mt-24 py-16 lg:py-16 bg-[#1D1D1B] text-white font-sans border-b border-white/20 rounded-none">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
         
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold text-slate-900 mb-4">Como comparar cotações de seguro</h2>
-          <p className="text-slate-600 max-w-2xl mx-auto">Entenda como personalizar o seu seguro e comparar as diversas opções disponíveis.</p>
+        <div className="text-center mb-12">
+          <h2 className="text-2xl sm:text-3xl font-semibold text-white mb-4 tracking-tight">
+            Como comparar cotações de seguro
+          </h2>
+          <p className="text-white/80 max-w-2xl mx-auto text-sm sm:text-base leading-relaxed">
+            Entenda como personalizar o seu seguro e comparar as diversas opções disponíveis.
+          </p>
         </div>
 
-        {/* Abas com novo padrão: Borda e Texto na marca, Fundo cinza */}
-        <div className="flex flex-wrap justify-center gap-3 mb-10">
+        {/* Abas com padrão Zero-Radius, Dark Theme e Tipografia SBX */}
+        <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-10">
           {TABS_CONFIG.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -68,36 +81,45 @@ export function HowItWorks() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold text-sm transition-all border ${
+                className={`flex items-center gap-2 px-6 py-3 rounded-none font-mono text-xs uppercase tracking-[0.1em] transition-all border ${
                   isActive 
-                    ? 'bg-slate-100 text-[var(--brand-primary)] border-[var(--brand-primary)]' 
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                    ? 'bg-white text-neutral-900 border-white shadow-xs' 
+                    : 'bg-neutral-900 text-neutral-400 border-white/20 hover:border-white/40 hover:text-white'
                 }`}
               >
-                <Icon size={18}/> {tab.label}
+                <Icon size={16} strokeWidth={1.5} className={isActive ? 'text-neutral-900' : 'text-neutral-400'} /> 
+                {tab.label}
               </button>
             );
           })}
         </div>
 
         {/* Conteúdo Dinâmico */}
-        <div className="bg-[#F8F9FA] p-8 md:p-10 rounded-3xl border border-slate-100 min-h-[420px]">
-          <p className="text-slate-600 font-semibold mb-8 text-center max-w-3xl mx-auto">
+        <div className="bg-neutral-900 p-6 md:p-10 rounded-none border border-white/20 min-h-[420px]">
+          {/* Texto descritivo da aba */}
+          <p className="text-white font-medium mb-8 text-center max-w-3xl mx-auto text-sm sm:text-base leading-relaxed">
             {activeData.desc}
           </p>
           
           <div className={`grid ${activeData.grid} gap-6`}>
             {activeData.items.map((item) => (
-              <div key={item.title} className="bg-white p-6 rounded-2xl border border-slate-200 flex flex-col">
-                <h4 className="text-lg font-semibold text-[var(--brand-primary)] mb-3">{item.title}</h4>
-                <ul className="space-y-1.5">
+              <div key={item.title} className="bg-[#1D1D1B] p-6 sm:p-8 rounded-none border border-white/20 flex flex-col shadow-xs transition-all hover:bg-[#1D1D1B]/80">
+                
+                {/* Título SBX: Mono, Uppercase, Tracking largo, Branco puro */}
+                <h4 className="font-mono text-sm uppercase tracking-[0.18em] text-white mb-5">
+                  {item.title}
+                </h4>
+                
+                <ul className="space-y-3">
                   {item.points.map((p, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
-                      <span className="text-[var(--brand-primary)] font-bold">•</span>
+                    <li key={idx} className="flex items-start gap-3 text-sm text-white leading-relaxed">
+                      {/* Check icon atua como o "ícone mutado" (neutral-400) do nosso padrão */}
+                      <Check className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" strokeWidth={2} />
                       <span>{p}</span>
                     </li>
                   ))}
                 </ul>
+                
               </div>
             ))}
           </div>

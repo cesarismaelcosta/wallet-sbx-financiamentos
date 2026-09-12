@@ -59,25 +59,24 @@ export function Step2Confirm() {
           <>
             {/* Header: Ícone oculto no mobile (hidden sm:flex), linhas mais juntas (space-y-0.5) e maior respiro (mb-6) */}
             <div className="flex items-start gap-4 mb-6">
-              <div className="bg-primary/10 p-2.5 rounded-full shrink-0 hidden sm:flex">
-                <ThumbsUp className="h-6 w-6" style={{ color: "var(--brand-primary)" }} />
+              <div className="bg-neutral-100 p-2.5 rounded-none border border-neutral-200 shrink-0 hidden sm:flex">
+                <ThumbsUp className="h-6 w-6 text-neutral-900" />
               </div>
               
               <div className="space-y-0.5 flex-1 w-0 min-w-0">
-                {/* Título Principal (Fonte fluida 14px a 20px) */}
-                <h3 className="text-[clamp(14px,4vw,20px)] sm:text-xl font-black text-slate-900 uppercase tracking-tight leading-snug truncate w-full block">
-                  Oferta encontrada!
+                {/* Clamp de 14px com peso black e truncate, igual ao Step 1 */}
+                <h3 className="text-[clamp(14px,3.5vw,20px)] sm:text-2xl font-black text-neutral-900 uppercase tracking-tight leading-snug truncate w-full block">
+                  Oferta encontrada
                 </h3>
                 
-                {/* Linha 1: Descrição do item em cinza claro (Fonte fluida 10px a 12px) */}
-                <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-slate-600 truncate pt-0.5 w-full block">
+                {/* Cores convertidas de slate para neutral */}
+                <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 truncate pt-0.5 w-full block">
                   {offerDescText}
                 </p>
 
-                {/* Linha 2: Lote e valor com destaque + Link Externo Padronizado */}
                 <div className="flex items-center pt-0.5">
-                  <p className="text-sm text-slate-600 truncate">
-                    Lote {loteSubIndex} • <strong className="text-slate-900 font-bold mr-2">{BRL(valorOferta)}</strong>
+                  <p className="text-sm text-neutral-600 truncate">
+                    Lote {loteSubIndex} • <strong className="text-neutral-900 font-bold mr-2">{BRL(valorOferta)}</strong>
                   </p>
 
                   {offer && (
@@ -85,61 +84,70 @@ export function Step2Confirm() {
                       href={getSuperbidUrl(offer)} 
                       target="_blank" 
                       rel="noopener noreferrer" 
-                      className="text-[#B300FF] hover:text-[#9300cc] transition-colors flex items-center outline-none focus:outline-none focus:ring-0"
+                      className="text-neutral-400 hover:text-neutral-700 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
                       title="Ver oferta original na Superbid"
                     >
-                      <ExternalLink size={18} />
+                      <ExternalLink size={18} strokeWidth={1.5} />
                     </a>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Box da Oferta: Estruturado com wrap para exibir Entrada + Financiado */}
-            <div className="bg-slate-50 border border-border rounded-lg p-6 sm:p-8 space-y-3 overflow-hidden">
-              <p className="text-slate-600 text-xs sm:text-sm font-medium mb-0 leading-tight w-full flex flex-wrap items-center gap-1">
-                <span>ent.</span> 
-                <span className="font-medium text-slate-600">
-                  <span className="text-[0.85em]">R$</span> {BRL(valorEntradaAPI).replace("R$", "").trim()}
-                </span> 
-                <span>+</span> 
-                <span className="font-medium text-slate-600">
-                  <span className="text-[0.85em]">R$</span> {BRL(valorFinanciadoAPI).replace("R$", "").trim()}
-                </span> 
-                <span>em</span>
+            {/* Box da Oferta: Padrão Zero-Radius e Neutral */}
+            <div className="bg-surface-alt border border-neutral-200 rounded-none p-6 sm:p-8 space-y-3 overflow-hidden">
+              
+              {/* Texto inline (sem flexbox) e com condicional exata validada para 'sem entrada' */}
+              <p className="text-neutral-600 text-[11px] sm:text-sm font-medium mb-1 leading-tight w-full">
+                {valorEntradaAPI > 0 ? (
+                  <>
+                    ent. <span className="text-[0.85em]">R$</span> {BRL(valorEntradaAPI).replace("R$", "").trim()} +{" "}
+                  </>
+                ) : (
+                  <>sem entrada +{" "}</>
+                )}
+                <span className="text-[0.85em]">R$</span> {BRL(valorFinanciadoAPI).replace("R$", "").trim()} em
               </p>
               
-              {/* CONTAINER EM UMA ÚNICA LINHA - PROIBIDO QUEBRAR (flex-nowrap) */}
-              <div className="flex flex-nowrap items-baseline gap-1 sm:gap-1.5 w-full whitespace-nowrap">
+              {/* CONTAINER EM UMA ÚNICA LINHA ACHATADA - Fim do bug de Baseline (Degrau) */}
+              <div className="flex flex-nowrap items-baseline w-full whitespace-nowrap">
                 
-                {/* Parcelas */}
+                {/* Multiplicador: Fim do var(--brand-primary), agora é neutral-500 */}
                 <span 
-                  className="font-black shrink-0" 
-                  style={{ color: "var(--brand-primary)", fontSize: "clamp(1.1rem, 5vw, 1.5rem)" }}
+                  className="font-medium text-neutral-500 shrink-0 mr-1.5 sm:mr-2" 
+                  style={{ fontSize: "clamp(1.2rem, 5.5vw, 1.5rem)" }}
                 >
                   {mainConsult?.installments}x
                 </span>
                 
-                {/* Valor Principal */}
+                {/* Símbolo R$ no mesmo nível */}
                 <span 
-                  className="font-black text-slate-900 tracking-tight shrink-0 flex items-baseline gap-0.5"
+                  className="font-bold text-neutral-900 tracking-tight shrink-0 mr-1"
+                  style={{ fontSize: "clamp(1.2rem, 5.25vw, 1.68rem)" }}
+                >
+                  R$
+                </span>
+
+                {/* Valor Principal (Diretamente no mesmo nível) */}
+                <span 
+                  className="font-bold text-neutral-900 tracking-tight shrink-0"
                   style={{ fontSize: "clamp(1.6rem, 7vw, 2.25rem)" }}
                 >
-                  <span className="text-[0.75em] font-bold">R$</span>
-                  <span>{BRL(mainConsult?.installment_value || 0).replace("R$", "").trim()}</span>
+                  {BRL(mainConsult?.installment_value || 0).replace("R$", "").trim()}
                 </span>
 
                 {/* Sufixo (/mês) */}
                 <span 
-                  className="text-slate-400 font-medium shrink-0"
+                  className="text-neutral-400 font-medium shrink-0 ml-1.5 sm:ml-2"
                   style={{ fontSize: "clamp(0.7rem, 3vw, 0.875rem)" }}
                 >
                   /mês*
                 </span>
               </div>
 
-              <div className="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-200">
-                Taxa de juros de <span className="font-bold text-slate-900">{Number(mainConsult?.cet_rate || 0).toFixed(2)}%</span> a.m.
+              {/* Escala neutral na taxa de juros */}
+              <div className="text-xs text-neutral-500 mt-3 pt-3 border-t border-neutral-200">
+                Taxa de juros de <span className="font-bold text-neutral-900">{Number(mainConsult?.cet_rate || 0).toFixed(2)}%</span> a.m.
               </div>
             </div>
 
@@ -175,9 +183,9 @@ export function Step2Confirm() {
         ) : (
           /* Estado de Recusa - Padronizado e Minimalista */
           <div className="text-center py-12 space-y-6 flex flex-col items-center">
-            
-            <div className="bg-red-50 p-4 rounded-full w-fit border border-slate-100">
-              <ShieldCheck className="h-8 w-8 text-red-500" />
+
+            <div className="bg-neutral-100 p-4 rounded-none w-fit border border-neutral-200">
+              <ShieldCheck className="h-8 w-8 text-neutral-900" />
             </div>
 
             <div className="space-y-2 max-w-xs mx-auto">
