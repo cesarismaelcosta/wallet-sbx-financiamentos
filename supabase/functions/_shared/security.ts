@@ -13,10 +13,14 @@
  *    retornar a string exata da origem que realizou a chamada (`http://localhost:5173`, `https://id.lovable.app`, etc.).
  * 2. Suporte Nativo a Desenvolvimento Local: Libera qualquer variação de `localhost` ou `127.0.0.1` em qualquer porta.
  * 3. Suporte Nativo ao Ecossistema Lovable: Libera subdomínios de `lovable.app`, `lovableproject.com` e `lovable.dev`.
- * 4. Suporte Nativo à Produção Superbid/sbX: Libera domínios corporativos (`superbid.net`, `s4bdigital.net`, `fandi.com.br`).
+ * 4. Suporte Nativo à Produção Superbid/sbX: Libera domínios corporativos (`superbid.net`).
+ *
+ * IMPORTANTE: Não existe mais um modo "libera tudo" (wildcard "*"). Toda origem é validada
+ * estritamente contra ALLOWED_DOMAIN_SUFFIXES abaixo. Quando a URL definitiva de produção
+ * existir, adicione-a a essa lista (não reintroduza um wildcard).
  *
  * @author César Ismael Pereira da Costa
- * @version 3.0.0 (Ajuste de CORS estrito para Lovable, Localhost e Credentials HttpOnly)
+ * @version 4.0.0 (Remoção do modo wildcard "*"; allowlist estrita por sufixo de domínio)
  */
 
 import { debugLog } from "../_shared/logger.ts";
@@ -24,6 +28,11 @@ import { debugLog } from "../_shared/logger.ts";
 /**
  * Lista de sufixos de domínios permitidos na Allowlist corporativa.
  * Qualquer origem cujo hostname termine com um desses sufixos será autorizada.
+ * ÚNICA fonte de verdade de autorização de origem — não existe mais um modo
+ * "libera tudo" por trás disso (ver histórico: `ALLOWED_DOMAINS = ["*"]` foi
+ * removido por anular CORS e proteção de Open Redirect ao mesmo tempo).
+ * `s4bdigital.net` e `fandi.com.br` foram removidos por serem legado/erro de
+ * documentação — não correspondem a domínios em uso.
  */
 const ALLOWED_DOMAIN_SUFFIXES = [
   // Ambiente Local / Desenvolvimento
@@ -37,14 +46,7 @@ const ALLOWED_DOMAIN_SUFFIXES = [
 
   // Ecossistema Corporativo Superbid / sbX
   "superbid.net",
-  "s4bdigital.net",
 ];
-
-/**
- * Flag global de desenvolvimento. Se contiver "*", ativa modo flexível de dev,
- * refletindo qualquer origem válida sem quebrar o header Access-Control-Allow-Credentials.
- */
-const ALLOWED_DOMAINS = ["*"];
 
 /**
  * Helper interno que valida se o hostname extraído da origem pertence à Allowlist corporativa
@@ -54,13 +56,8 @@ const ALLOWED_DOMAINS = ["*"];
  * @returns {boolean} True se a origem for autorizada.
  */
 const isDomainAllowed = (hostname: string): boolean => {
-  // Se o curinga '*' estiver ativo no array de domínios, permite qualquer hostname
-  if (ALLOWED_DOMAINS.includes("*")) {
-    return true;
-  }
-
   // Checa se o hostname bate exatamente com algum sufixo autorizador ou é subdomínio dele
-  return ALLOWED_DOMAIN_SUFFIXES.some(suffix => 
+  return ALLOWED_DOMAIN_SUFFIXES.some(suffix =>
     hostname === suffix || hostname.endsWith(`.${suffix}`)
   );
 };
