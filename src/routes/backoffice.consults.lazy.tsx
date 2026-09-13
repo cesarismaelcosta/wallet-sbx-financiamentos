@@ -39,13 +39,36 @@
  * -------------------------------------------------------------------------
  * PROCEDURE 1: Listagem Geral de Consultas (Otimizada com CTE)
  * -------------------------------------------------------------------------
+ * [ATUALIZADO - 2026-09-13]: A assinatura mudou — não recebe mais
+ * p_allowed_partners/p_allowed_products como parâmetro vindo do cliente.
+ * A resolução de permissões agora é feita inteiramente dentro da função,
+ * via current_backoffice_actor() (mesmo padrão do restante do backoffice),
+ * fechando a possibilidade de um cliente malicioso forjar esses arrays.
  * CREATE OR REPLACE FUNCTION get_backoffice_consults(
  *   p_limit INT DEFAULT 50, p_offset INT DEFAULT 0, p_date_from TIMESTAMPTZ DEFAULT NULL,
  *   p_date_to TIMESTAMPTZ DEFAULT NULL, p_partner_ids INT[] DEFAULT NULL,
  *   p_product_ids INT[] DEFAULT NULL, p_allowed_partners TEXT[] DEFAULT NULL, p_allowed_products TEXT[] DEFAULT NULL
- * ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
- * DECLARE v_result JSONB;
+ * ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+ * SET search_path TO 'public', 'pg_temp' AS $$
+ * DECLARE
+ *   v_result JSONB;
+ *   v_actor RECORD;
+ *   v_effective_partners TEXT[];
+ *   v_effective_products TEXT[];
  * BEGIN
+ *   SELECT * INTO v_actor FROM public.current_backoffice_actor();
+ *   IF v_actor.role IS NULL THEN
+ *       RETURN '[]'::jsonb;
+ *   END IF;
+ *
+ *   IF v_actor.role IN ('admin', 'manager') THEN
+ *       v_effective_partners := ARRAY['*'];
+ *       v_effective_products := ARRAY['*'];
+ *   ELSE
+ *       SELECT ARRAY_AGG(value::TEXT) INTO v_effective_partners FROM jsonb_array_elements_text(v_actor.allowed_partners);
+ *       SELECT ARRAY_AGG(value::TEXT) INTO v_effective_products FROM jsonb_array_elements_text(v_actor.allowed_products);
+ *   END IF;
+ *
  *   WITH paginated_results AS (
  *     SELECT v.id AS v_id, vu.id AS vu_id, vu.action, vu.created_at, vu.partner_id, vu.product_id,
  *            vu.raw_payload, v.utm_source, v.state, p.id AS p_id, p.name AS p_name, p.logo_url AS p_logo_url, pt.id AS pt_id, pt.name AS pt_name
@@ -54,8 +77,8 @@
  *     WHERE vu.action IN ('SIMULATE', 'CONSULT', 'REDIRECT')
  *       AND (p_date_from IS NULL OR vu.created_at >= p_date_from) AND (p_date_to IS NULL OR vu.created_at <= p_date_to)
  *       AND (p_partner_ids IS NULL OR vu.partner_id = ANY(p_partner_ids)) AND (p_product_ids IS NULL OR vu.product_id = ANY(p_product_ids))
- *       AND (p_allowed_partners IS NULL OR '{"*"}'::TEXT[] <@ p_allowed_partners OR vu.partner_id::TEXT = ANY(p_allowed_partners))
- *       AND (p_allowed_products IS NULL OR '{"*"}'::TEXT[] <@ p_allowed_products OR vu.product_id::TEXT = ANY(p_allowed_products))
+ *       AND (v_effective_partners IS NULL OR '{"*"}'::TEXT[] <@ v_effective_partners OR vu.partner_id::TEXT = ANY(v_effective_partners))
+ *       AND (v_effective_products IS NULL OR '{"*"}'::TEXT[] <@ v_effective_products OR vu.product_id::TEXT = ANY(v_effective_products))
  *     ORDER BY vu.created_at DESC LIMIT p_limit OFFSET p_offset
  *   )
  *   SELECT jsonb_agg(jsonb_build_object(
@@ -81,10 +104,24 @@
  * -------------------------------------------------------------------------
  * PROCEDURE 2: Detalhes Profundos da Consulta (Modal)
  * -------------------------------------------------------------------------
+ * [SECURITY FIX - 2026-09-13]: Esta função estava SEM checagem de autorização,
+ * permitindo que qualquer usuário autenticado (não apenas staff do backoffice)
+ * chamasse o RPC com um p_visit_update_id arbitrário e obtivesse PII completo
+ * do lead (nome, CPF/CNPJ, telefone, e-mail, data de nascimento, IP, geo).
+ * Corrigido adicionando o mesmo gate usado em get_backoffice_simulation_details.
+ * Aplicado em dev e homologação.
  * CREATE OR REPLACE FUNCTION get_backoffice_consult_details(p_visit_update_id UUID)
- * RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
- * DECLARE v_result JSONB;
+ * RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+ * SET search_path TO 'public', 'pg_temp' AS $$
+ * DECLARE
+ *   v_result JSONB;
+ *   v_actor RECORD;
  * BEGIN
+ *   SELECT * INTO v_actor FROM public.current_backoffice_actor();
+ *   IF v_actor.role IS NULL THEN
+ *       RETURN jsonb_build_object('error', 'forbidden');
+ *   END IF;
+ *
  *   SELECT jsonb_build_object(
  *     'id', vu.id, 'action', vu.action, 'created_at', vu.created_at, 'partner_id', vu.partner_id,
  *     'product_id', vu.product_id, 'raw_payload', vu.raw_payload,
