@@ -31,7 +31,7 @@ export const autenticateWalletsbX = async (
     // -----------------------------------------------------------------------
     const response = await fetch(`${supabaseUrl}/functions/v1/sbx-auth`, {
       method: "POST",
-      credentials: "include",
+      credentials: USE_COOKIE ? "include" : "omit",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${supabaseAnonKey}`,

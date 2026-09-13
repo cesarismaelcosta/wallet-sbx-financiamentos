@@ -45,13 +45,6 @@ import { processSimulationCreditCard } from "./credit-card-service.ts";
 import { processSimulationCreditasAutoEquity } from "./creditas-auto-equity-service.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 
-// CONFIGURAÇÃO DE CORS - LIBERAÇÃO DE TRÁFEGO
-export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
