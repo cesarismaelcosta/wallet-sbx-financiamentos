@@ -1,21 +1,24 @@
 /**
  * @fileoverview Interceptador Global de Borda (Middleware de Segurança & Gateway)
  * @module _shared/server
- * 
+ *
  * ============================================================================
  * [ARQUITETURA & CLEAN ARCHITECTURE]
  * ============================================================================
  * O wrapper `withSecurity` atua como o ponto único de entrada (Perimeter Gateway)
  * para todas as Edge Functions do ecossistema de Financiamentos e Seguros.
- * 
+ *
  * [RESPONSABILIDADES CRÍTICAS]:
  * 1. Resolução de Contrato: Consulta o `registry.ts` para aplicar regras de método,
  *    headers exigidos e restrições de origem (CORS).
  * 2. Handshake de Borda (Preflight): Responde automaticamente a requisições CORS `OPTIONS`.
  * 3. Blindagem de Perímetro (Zero-Trust): Valida de forma declarativa e centralizada
- *    se a rota exige autenticação por sessão de usuário (`requiresSession`) ou 
- *    segredo server-to-server (`requiresSecret`), bloqueando acessos anônimos (`401`).
- * 4. Retrocompatibilidade de Resposta: Aceita tanto instâncias nativas de `Response` 
+ *    se a rota exige autenticação por sessão de usuário (`requiresSession`), segredo
+ *    estático server-to-server (`requiresSecret`) ou assinatura HMAC com janela de
+ *    validade (`requiresHmac` — para chamadores que não guardam segredo em texto,
+ *    como jobs do `pg_cron` calculando a assinatura via `pgcrypto`/Vault), bloqueando
+ *    acessos anônimos (`401`) em qualquer um dos três casos.
+ * 4. Retrocompatibilidade de Resposta: Aceita tanto instâncias nativas de `Response`
  *    quanto o padrão unificado de objetos `{ status, data, headers }`.
  * 5. Fail-Safe Global: Captura exceções não tratadas na regra de negócio, garantindo
  *    resposta JSON padronizada sem vazamento de stack trace.
@@ -24,6 +27,7 @@
 import { FUNCTION_CONFIGS } from "./registry.ts";
 import { getSafeCorsOrigin } from "./security.ts";
 import { validateRequest } from "./auth.ts";
+import { verifyHmacSignature } from "./hmac.ts";
 
 export interface StandardResponse {
   status: number;
@@ -160,10 +164,15 @@ export const withSecurity = (
       }
     }
 
-    // Se a função exige explicitamente autenticação (por sessão ou segredo) e falhou em ambas:
-    if ((config.requiresSession || config.requiresSecret) && !perimeterAuthorized) {
+    // 5.C. Validação de assinatura HMAC (Cron / Server-to-Server sem sessão nem segredo em texto)
+    if (config.requiresHmac && !perimeterAuthorized) {
+      perimeterAuthorized = await verifyHmacSignature(req, config.requiresHmac);
+    }
+
+    // Se a função exige explicitamente autenticação (por sessão, segredo ou HMAC) e falhou em todas:
+    if ((config.requiresSession || config.requiresSecret || config.requiresHmac) && !perimeterAuthorized) {
       return new Response(
-        JSON.stringify({ error: perimeterErrorMsg }), 
+        JSON.stringify({ error: perimeterErrorMsg }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

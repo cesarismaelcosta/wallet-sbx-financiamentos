@@ -6,23 +6,31 @@
  * Este serviço é o CÉREBRO da fila. Ele varre o banco em busca de tarefas.
  * * 1. OBJETIVO: Mover registros 'pending' para 'processing' e chamar o Gateway.
  * 2. GATILHO (CRON JOB):
- * Deve ser configurado no Supabase para rodar a cada 1 minuto:
- * ----------------------------------------------------------------------------
- * [cron.jobs.process-notifications]
- * schedule = "* * * * *"
- * cmd = "curl -X POST 'https://SEU_PROJETO.supabase.co/functions/v1/notification-dispatcher' 
- * -H 'Authorization: Bearer SEU_SERVICE_ROLE_KEY'"
- * ----------------------------------------------------------------------------
- * * 3. SEGURANÇA: Bloqueia chamadas externas via Service Role Key.
+ * Deve ser configurado no Supabase para rodar a cada 1 minuto, autenticando
+ * via assinatura HMAC (ver bloco de setup abaixo) — NÃO com a service_role key.
+ * * 3. SEGURANÇA: A autenticação do chamador (o cron) é validada de forma
+ * centralizada pelo wrapper `withSecurity` (`_shared/server.ts`), através do
+ * campo `requiresHmac` configurado em `_shared/registry.ts` para esta função.
+ * Este arquivo não contém nenhuma lógica de autenticação própria — ela vive
+ * inteiramente em `_shared/hmac.ts` (`verifyHmacSignature`), reaproveitável
+ * por qualquer outra função que precisar do mesmo padrão.
+ * O segredo (`NOTIFICATION_DISPATCHER_SECRET`) nunca trafega em texto: o
+ * chamador manda um `x-timestamp` e uma `x-signature` (HMAC-SHA256 do
+ * timestamp, calculada com o segredo como chave), e a função recalcula e
+ * compara em tempo constante, rejeitando timestamps fora de uma janela de
+ * ~30s (proteção contra replay).
  * 4. CONCORRÊNCIA: Atualiza status para 'processing' antes de chamar o Gateway,
  * evitando que o mesmo e-mail seja enviado duas vezes se o cron disparar rápido.
  * --------------------------------------------------------------------------------
  */
 
 /**
+ * SETUP DE INFRAESTRUTURA (rodar uma vez no SQL Editor do projeto):
  *
- * -- Habilita a extensão pg_cron
+ * -- Habilita as extensões necessárias (pg_cron e pgcrypto já vêm habilitadas
+ * -- por padrão nos projetos Supabase, mas o IF NOT EXISTS torna isso idempotente)
  * CREATE EXTENSION IF NOT EXISTS pg_cron;
+ * CREATE EXTENSION IF NOT EXISTS pgcrypto;
  *
  * -- 1. Cria a função que atualiza o timestamp
  * CREATE OR REPLACE FUNCTION public.handle_updated_at()
@@ -32,30 +40,52 @@
  *   RETURN NEW;
  * END;
  * $$ LANGUAGE plpgsql;
- * 
+ *
  * -- 2. Cria o Trigger que liga a função à tabela notifications
  * CREATE TRIGGER set_notifications_updated_at
  * BEFORE UPDATE ON public.notifications
  * FOR EACH ROW
  * EXECUTE FUNCTION public.handle_updated_at();
- * 
- * 
- * 
+ *
+ * -- 3. Guarda o segredo HMAC no Vault (o MESMO valor deve ser configurado
+ * --    como env var `NOTIFICATION_DISPATCHER_SECRET` desta Edge Function
+ * --    via `supabase secrets set` ou o painel — Vault e Secrets de Function
+ * --    são dois cofres separados, cada um só é lido pelo seu próprio runtime)
+ * SELECT vault.create_secret(
+ *   '<valor-gerado-aleatoriamente>',
+ *   'notification_dispatcher_secret',
+ *   'Segredo HMAC para autenticar o cron do notification-dispatcher'
+ * );
+ *
+ * -- 4. Agenda o job. O comando calcula, a cada disparo, um timestamp e a
+ * --    assinatura HMAC-SHA256 correspondente via pgcrypto — o valor do
+ * --    segredo em si nunca aparece em texto puro no comando do job.
  * SELECT cron.schedule(
  * 'processar-notificacoes-pendentes',
  * '* * * * *', -- Roda a cada minuto
  * $$
+ * WITH params AS (
+ *   SELECT
+ *     extract(epoch FROM now())::bigint::text AS ts,
+ *     (SELECT decrypted_secret FROM vault.decrypted_secrets
+ *      WHERE name = 'notification_dispatcher_secret') AS secret
+ * )
  * SELECT net.http_post(
  *   url := 'https://SEU_PROJETO_REF.supabase.co/functions/v1/notification-dispatcher',
  *   headers := jsonb_build_object(
  *     'Content-Type', 'application/json',
- *     'Authorization', 'Bearer SEU_SERVICE_ROLE_KEY' -- Substitua pela sua chave REAL
+ *     'x-timestamp', p.ts,
+ *     'x-signature', encode(hmac(p.ts, p.secret, 'sha256'), 'hex')
  *   ),
  *   body := '{}'::jsonb
- * );
+ * )
+ * FROM params p;
  * $$
  * );
- * 
+ *
+ * Para atualizar um job já existente sem perder o histórico de execuções,
+ * usar `cron.alter_job(job_id := <id>, command := $$ ... $$)` em vez de
+ * apagar e recriar com `cron.schedule`.
  */
 
 /**
