@@ -69,17 +69,17 @@ function shouldLogEvent(emailHash: string, event: LoginHistoryEvent): boolean {
  */
 async function postEvent(payload: LogLoginHistoryInput, accessToken: string): Promise<boolean> {
   try {
-    // MAPEAMENTO CORRETO PARA O BACKEND
+    // MAPEAMENTO CORRETO PARA O BACKEND (Edge Function `log-access`)
     const backendPayload = {
       event: payload.event,
       success: payload.success,
-      reason: payload.failureReason, // 👈 CORREÇÃO: Traduz failureReason para reason
+      failureReason: payload.failureReason, // a function log-access lê `body.failureReason`, não `body.reason`
       origin_page: typeof window !== "undefined" ? window.location.pathname : null,
       origin_function: "logLoginHistoryEvent",
     };
 
-    // Ajuste a URL se necessário (ex: se usar proxy do Vite, mude para "/api/loginhistory")
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/login-history`, {
+    // A Edge Function deployada se chama `log-access` (não `login-history`)
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/log-access`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
