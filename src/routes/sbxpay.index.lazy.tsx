@@ -257,7 +257,8 @@ export function sbXPAYHome() {
       }
     } catch (error: any) {
       if (error && error.code === "SESSION_EXPIRED" && error.fallback_url) {
-        window.location.href = error.fallback_url;
+        const safeUrl = new URL(error.fallback_url, window.location.origin);
+        window.location.href = safeUrl.pathname + safeUrl.search;
         return;
       }
 

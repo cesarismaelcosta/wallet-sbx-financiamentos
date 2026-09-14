@@ -32,6 +32,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { validateRequest } from "../_shared/auth.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
+import { getSafeRedirectUrl } from "../_shared/security.ts";
 
 const EVENT_BASE_URLS = {
   production: "https://event-query.superbid.net",
@@ -49,7 +50,7 @@ serve(withSecurity('sbx-event', async (req: Request) => {
   try {
     auth = await validateRequest(req);
   } catch (err: any) {
-    const authUrl = req.headers.get("x-auth-fallback-url") || "/accounts/signin";
+    const authUrl = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/accounts/signin");
     debugLog(`[sbx-event] ❌ Falha de autenticação: ${err.message}`);
     return {
       status: 401,

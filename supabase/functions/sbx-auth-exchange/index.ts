@@ -110,7 +110,7 @@ serve(
         throw new Error("UNAUTHORIZED: Nenhuma credencial recebida (x-access-token ou x-exchange-token).");
       }
 
-      const { environment, audience } = body;
+      const { environment } = body;
       if (!environment || (environment !== "production" && environment !== "staging")) {
         throw new Error("BAD_REQUEST: Ambiente inválido ou não especificado.");
       }
@@ -180,8 +180,10 @@ serve(
 
       // =================================================================
       // RESOLUÇÃO ESTRITA DE ORIGEM (ZERO-TRUST)
+      // Sempre derivada do header Origin/Referer da própria requisição —
+      // nunca aceita do corpo, não existe motivo pro client declarar isso.
       // =================================================================
-      const finalAudience = audience || origin;
+      const finalAudience = origin;
       
       if (!finalAudience) {
         throw new Error("SECURITY_ERROR: Origem ou Audience não fornecidos na requisição.");

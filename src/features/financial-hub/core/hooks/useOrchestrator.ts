@@ -219,7 +219,10 @@ export const orchestrateNavigation = async (
       const urlObj = new URL(err.fallback_url, window.location.origin);
       if (err.message) urlObj.searchParams.set("alert_msg", err.message);
       if (err.code) urlObj.searchParams.set("alert_type", err.code);
-      window.location.replace(urlObj.toString());
+      // 🛡️ [SEGURANÇA]: Nunca repassa host/protocolo do fallback_url — só
+      // path+query, igual ao padrão já usado em PanelHeader.tsx. Bloqueia
+      // Open Redirect (CWE-601) mesmo se fallback_url vier absoluto/malicioso.
+      window.location.replace(urlObj.pathname + urlObj.search);
       return;
     }
 

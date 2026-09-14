@@ -22,6 +22,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateRequest } from "../_shared/auth.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
+import { getSafeRedirectUrl } from "../_shared/security.ts";
 
 /**
  * ============================================================================
@@ -99,8 +100,8 @@ async function resolveOrchestratorConfigs(
  */
 serve(withSecurity('orchestrator-configs', async (req: Request) => {
   // Captura preventiva dos headers de rastreio e fallback no milissegundo zero
-  const originPath = req.headers.get("x-original-url") || "/";
-  const authPath = req.headers.get("x-auth-fallback-url") || "/";
+  const originPath = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
+  const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/");
 
   try {
     // 1. Restrição Estrita de Método HTTP (Apenas Leitura via GET)

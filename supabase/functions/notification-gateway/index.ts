@@ -24,9 +24,6 @@ serve(withSecurity('notification-gateway', async (req: Request) => {
   const receivedSecret = req.headers.get('x-gateway-secret');
   const expectedSecret = Deno.env.get('NOTIFICATION_GATEWAY_SECRET');
 
-  debugLog("DEBUG: Secret recebido:", receivedSecret);
-  debugLog("DEBUG: Secret esperado (configurado no env):", expectedSecret ? "EXISTE" : "NÃO CONFIGURADO");
-
   if (!receivedSecret || receivedSecret !== expectedSecret) {
     debugLog("ERRO [AUTH]: Acesso negado. Secret inválido ou ausente.");
     return { status: 401, data: { error: "Unauthorized" } };

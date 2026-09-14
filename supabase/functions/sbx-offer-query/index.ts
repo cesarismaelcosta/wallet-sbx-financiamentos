@@ -36,6 +36,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { validateRequest } from "../_shared/auth.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
+import { getSafeRedirectUrl } from "../_shared/security.ts";
 
 const OFFER_BASE_URLS = {
   production: "https://offer-query.superbid.net",
@@ -71,8 +72,8 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
   // =========================================================================
   // FASE 1: GATEKEEPER DE BORDA (Validação Stateless do JWT & Headers)
   // =========================================================================
-  const originPath = req.headers.get("x-original-url") || "/";
-  const authPath = req.headers.get("x-auth-fallback-url") || "/accounts/signin";
+  const originPath = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
+  const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/accounts/signin");
 
   const incomingHeaders = {
     auth: req.headers.get("authorization") ? "Presente" : "Ausente",

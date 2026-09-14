@@ -51,11 +51,12 @@ import { sql } from "../_shared/db.ts";
 
 // ✨ [INJEÇÃO ZERO-TRUST]: Ferramentas do Cartório Criptográfico S2S
 import { signSigninParameters } from "../_shared/s2s.ts";
+import { getSafeRedirectUrl } from "../_shared/security.ts";
 
 serve(withSecurity('financial-gateway', async (req: Request) => {
   // Descoberta da Origem da Navegação (Usado para o Fallback de Erro)
-  const originPath = req.headers.get("x-original-url") || "/";
-  const authPath = req.headers.get("x-auth-fallback-url") || "/accounts/signin";
+  const originPath = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
+  const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/accounts/signin");
 
   // Escopo amplo para acesso nos Catchs e tratamento de sessão
   let payload: any = null;

@@ -384,7 +384,9 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       if (error?.code === "SESSION_EXPIRED" || error?.status === 401 || error?.code === 401) {
         clearSession();
         const currentPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/sbxpay";
-        window.location.href = error?.fallback_url || `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
+        const rawFallback = error?.fallback_url || `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
+        const safeUrl = new URL(rawFallback, window.location.origin);
+        window.location.href = safeUrl.pathname + safeUrl.search;
         return;
       }
       setSimulatingIndex(null);

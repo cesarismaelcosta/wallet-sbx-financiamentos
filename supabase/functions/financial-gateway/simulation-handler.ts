@@ -227,7 +227,7 @@ export async function processSimulation(
         // 🛡️ Passa `resolvedConfig.rules` explicitamente (nunca `payload.rules`, que pode
         // ter sido ecoado do cliente) — o motor especializado valida ANTES de acionar
         // a API real da Fandi.
-        gatewayResult = await processSimulationFandi(payload, resolvedConfig.rules ?? {});
+        gatewayResult = await processSimulationFandi(payload, resolvedConfig.rules ?? {}, supabase);
       } catch (err: any) {
         gatewayResult = buildFallbackResult(err);
         await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, 'EXECUTE_SIMULATION', true);

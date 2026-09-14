@@ -14,7 +14,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FinancialGatewayGateRouteImport } from './routes/financialGatewayGate'
 import { Route as AccountsSigninRouteImport } from './routes/accounts.signin'
-import { Route as ApiLoginhistoryRouteImport } from './routes/api.loginhistory'
 
 const BackofficeLazyRouteImport = createFileRoute('/backoffice')()
 const FinanciamentosLazyRouteImport = createFileRoute('/financiamentos')()
@@ -103,11 +102,6 @@ const AccountsSigninRoute = AccountsSigninRouteImport.update({
 } as any).lazy(() =>
   import('./routes/accounts.signin.lazy').then((d) => d.Route),
 )
-const ApiLoginhistoryRoute = ApiLoginhistoryRouteImport.update({
-  id: '/api/loginhistory',
-  path: '/api/loginhistory',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const BackofficeIndexLazyRoute = BackofficeIndexLazyRouteImport.update({
   id: '/',
   path: '/',
@@ -248,7 +242,6 @@ export interface FileRoutesByFullPath {
   '/sbxpay': typeof SbxpayLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/accounts/signin': typeof AccountsSigninRoute
-  '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/audit': typeof BackofficeAuditLazyRoute
   '/backoffice/configs': typeof BackofficeConfigsLazyRoute
@@ -276,7 +269,6 @@ export interface FileRoutesByTo {
   '/sandbox': typeof SandboxLazyRoute
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/accounts/signin': typeof AccountsSigninRoute
-  '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/audit': typeof BackofficeAuditLazyRoute
   '/backoffice/configs': typeof BackofficeConfigsLazyRoute
@@ -307,7 +299,6 @@ export interface FileRoutesById {
   '/sbxpay': typeof SbxpayLazyRouteWithChildren
   '/seguros': typeof SegurosLazyRouteWithChildren
   '/accounts/signin': typeof AccountsSigninRoute
-  '/api/loginhistory': typeof ApiLoginhistoryRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/audit': typeof BackofficeAuditLazyRoute
   '/backoffice/configs': typeof BackofficeConfigsLazyRoute
@@ -339,7 +330,6 @@ export interface FileRouteTypes {
     | '/sbxpay'
     | '/seguros'
     | '/accounts/signin'
-    | '/api/loginhistory'
     | '/backoffice/alerts'
     | '/backoffice/audit'
     | '/backoffice/configs'
@@ -367,7 +357,6 @@ export interface FileRouteTypes {
     | '/sandbox'
     | '/seguros'
     | '/accounts/signin'
-    | '/api/loginhistory'
     | '/backoffice/alerts'
     | '/backoffice/audit'
     | '/backoffice/configs'
@@ -397,7 +386,6 @@ export interface FileRouteTypes {
     | '/sbxpay'
     | '/seguros'
     | '/accounts/signin'
-    | '/api/loginhistory'
     | '/backoffice/alerts'
     | '/backoffice/audit'
     | '/backoffice/configs'
@@ -428,7 +416,6 @@ export interface RootRouteChildren {
   SbxpayLazyRoute: typeof SbxpayLazyRouteWithChildren
   SegurosLazyRoute: typeof SegurosLazyRouteWithChildren
   AccountsSigninRoute: typeof AccountsSigninRoute
-  ApiLoginhistoryRoute: typeof ApiLoginhistoryRoute
   SandboxHelpLazyRoute: typeof SandboxHelpLazyRoute
 }
 
@@ -488,13 +475,6 @@ declare module '@tanstack/react-router' {
       path: '/accounts/signin'
       fullPath: '/accounts/signin'
       preLoaderRoute: typeof AccountsSigninRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/loginhistory': {
-      id: '/api/loginhistory'
-      path: '/api/loginhistory'
-      fullPath: '/api/loginhistory'
-      preLoaderRoute: typeof ApiLoginhistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/backoffice/': {
@@ -717,7 +697,6 @@ const rootRouteChildren: RootRouteChildren = {
   SbxpayLazyRoute: SbxpayLazyRouteWithChildren,
   SegurosLazyRoute: SegurosLazyRouteWithChildren,
   AccountsSigninRoute: AccountsSigninRoute,
-  ApiLoginhistoryRoute: ApiLoginhistoryRoute,
   SandboxHelpLazyRoute: SandboxHelpLazyRoute,
 }
 export const routeTree = rootRouteImport

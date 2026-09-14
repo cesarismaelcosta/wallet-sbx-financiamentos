@@ -17,7 +17,8 @@ export function useSafeCall() {
       // Se for erro de sessão, redireciona e para a execução aqui.
       if (error?.code === 'SESSION_EXPIRED' || error?.code === 'UNAUTHORIZED') {
         if (error.fallback_url) {
-          window.location.href = error.fallback_url;
+          const safeUrl = new URL(error.fallback_url, window.location.origin);
+          window.location.href = safeUrl.pathname + safeUrl.search;
           return new Promise(() => {}); // Retorna uma promise pendente para congelar o fluxo
         }
       }

@@ -23,6 +23,7 @@ import { validateRequest } from "../_shared/auth.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { Vehicle } from "../_shared/types.ts";
 import { debugLog } from "../_shared/logger.ts";
+import { getSafeRedirectUrl } from "../_shared/security.ts";
 
 const OFFER_BASE_URLS = {
   production: "https://offer-query.superbid.net",
@@ -43,8 +44,8 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
   try {
     auth = await validateRequest(req);
   } catch (err: any) {
-    const originPath = req.headers.get("x-original-url") || "/";
-    const authPath = req.headers.get("x-auth-fallback-url") || "/accounts/signin";
+    const originPath = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
+    const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/accounts/signin");
 
     let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
     let errorCode = "UNAUTHORIZED";

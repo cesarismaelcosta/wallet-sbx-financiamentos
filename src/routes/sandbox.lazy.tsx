@@ -193,7 +193,6 @@ const trocarTokenNaEdgeFunction = async (rawTokenPayload: any, environment: "sta
     },
     body: JSON.stringify({
       environment,
-      audience: window.location.origin,
     }),
   });
 

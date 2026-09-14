@@ -311,7 +311,10 @@ serve(
       const orchestratorData = await orchestratorResponse.json();
       if (!orchestratorResponse.ok) throw new Error(`ORCHESTRATOR_FAIL: ${orchestratorData.message}`);
 
-      let targetUrl = orchestratorData.url;
+      // 🛡️ [SEGURANÇA]: Reforço (defesa em profundidade) — sanitiza de novo aqui,
+      // mesmo já saneado na origem pelo orchestrator, para não depender de um
+      // único ponto de proteção.
+      let targetUrl = getSafeRedirectUrl(orchestratorData.url);
 
       // ✨ [FIX 2]: Uso da originFromUrl global (removida a local redundante)
       let frontendOrigin =

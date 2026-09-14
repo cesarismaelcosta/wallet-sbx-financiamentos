@@ -68,6 +68,7 @@ function generateCpfFromSellerId(sellerId: string | number): string {
 export async function processSimulationFandi(
   payload: any,
   trustedRules: Record<string, any>,
+  supabase: any,
 ): Promise<SimulationResponse> {
 
   // --------------------------------------------------------------------------
@@ -182,7 +183,7 @@ export async function processSimulationFandi(
       
       // ⚠️ [SERVERLESS STABILITY]: Await obrigatório.
       // Se não aguardarmos, a Edge Function morre no 'return' seguinte, descartando o alerta.
-      await sendSystemAlert({
+      await sendSystemAlert(supabase, {
         context: isVendedorErro ? "fandi-service: SELLER_NOT_FOUND" : "fandi-service: INVALID_FIPE_OR_MOLICAR",
         subject: `Alerta Fandi: ${errorTitle} ⚠️`,
         message: apiMessage,

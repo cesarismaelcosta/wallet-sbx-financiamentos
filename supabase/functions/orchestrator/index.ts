@@ -42,6 +42,7 @@ import { hydrateVisitContext, pickThin } from "../_shared/hydrate-data.ts";
 import { resolveOrchestratorConfigs } from "../_shared/orchestrator-configs.ts";
 import { persistVisitData, syncHydratedOffer } from "./persist-data.ts";
 import { debugLog } from "../_shared/logger.ts";
+import { getSafeRedirectUrl } from "../_shared/security.ts";
 
 // ✨ [INJEÇÃO ZERO-TRUST]: Ferramentas do Cartório Criptográfico S2S
 import { signSigninParameters, verifyS2SEntity } from "../_shared/s2s.ts";
@@ -183,15 +184,15 @@ const sanitizePayload = (obj: any): any => {
  */
 serve(
   withSecurity("orchestrator", async (req: Request) => {
-    const globalFallbackUrl = req.headers.get("x-original-url") || "/";
+    const globalFallbackUrl = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
 
     try {
       const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
         auth: { persistSession: false },
       });
 
-      const originPath = req.headers.get("x-original-url") || "/";
-      const authPath = req.headers.get("x-auth-fallback-url") || "/";
+      const originPath = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
+      const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/");
       const fallbacks = { origin: originPath, auth: authPath };
 
       // Leitura direta do body sem clonar a stream para evitar travamento de I/O na borda
@@ -539,11 +540,15 @@ serve(
 
           let orchestratorConfigId: number | null = null;
 
-          // Valida a URL de destino (Fast Path usa target_url simples, conversão usa Orquestrador)
+          // Valida e SANEIA a URL de destino (Fast Path usa target_url simples, conversão usa Orquestrador)
           if (NAVIGATION_ACTIONS.includes(action)) {
             if (!payload.target_url) {
               throw new Error(`Para acoes de '${action}', a target_url e obrigatoria no payload.`);
             }
+            // 🛡️ [SEGURANÇA]: Bloqueia Open Redirect (CWE-601) — um target_url absoluto
+            // fora da allowlist corporativa (ALLOWED_DOMAIN_SUFFIXES) é reduzido a
+            // path relativo aqui, na origem, antes de virar finalUrl/orchestratorData.url.
+            payload.target_url = getSafeRedirectUrl(payload.target_url);
           } else {
             // SIMULATE, CONSULT e REDIRECT necessitam resolver configurações complexas
             debugLog("[POST STEP 4] Resolvendo orchestrator configs...");
