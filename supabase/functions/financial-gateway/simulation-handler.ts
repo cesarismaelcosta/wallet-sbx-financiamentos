@@ -202,7 +202,9 @@ export async function processSimulation(
       
       try {
         debugLog("💳 INICIO SIMULAÇÃO CARTÃO: ", payload.simulation_id);
-        gatewayResult = await processSimulationCreditCard(payload);
+        // 🛡️ Passa `resolvedConfig.rules` explicitamente (nunca `payload.rules`, que pode
+        // ter sido ecoado do cliente) — o motor especializado valida contra isso.
+        gatewayResult = await processSimulationCreditCard(payload, resolvedConfig.rules ?? {});
       } catch (err: any) {
         gatewayResult = buildFallbackResult(err);
         await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, 'EXECUTE_SIMULATION', true);
@@ -222,7 +224,10 @@ export async function processSimulation(
 
       try {
         debugLog("🏢 REQUISITANDO MOTOR INTEGRADO (FANDI API): ", payload.simulation_id);
-        gatewayResult = await processSimulationFandi(payload);
+        // 🛡️ Passa `resolvedConfig.rules` explicitamente (nunca `payload.rules`, que pode
+        // ter sido ecoado do cliente) — o motor especializado valida ANTES de acionar
+        // a API real da Fandi.
+        gatewayResult = await processSimulationFandi(payload, resolvedConfig.rules ?? {});
       } catch (err: any) {
         gatewayResult = buildFallbackResult(err);
         await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, 'EXECUTE_SIMULATION', true);

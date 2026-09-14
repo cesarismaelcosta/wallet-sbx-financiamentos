@@ -22,7 +22,7 @@ import {
   Offer
 } from "../_shared/types.ts";
 
-import { 
+import {
   generateUserEmailNotificationHtml,
   generatePartnerEmailNotificationHtml
 } from "./partner-notifications.ts";
@@ -32,6 +32,7 @@ import {
  * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
 import { debugLog } from "../_shared/logger.ts";
+import { validateOfferMarginBounds } from "../_shared/simulation-bounds.ts";
 
 /**
  * Calcula a taxa de juros mensal usando o Método da Secante.
@@ -90,12 +91,20 @@ function calculateRate(pv: number, pmt: number, n: number): number {
  * @param {any} payload Dados dinâmicos enviados pelo front-end contendo regras, prazos e valores.
  * @returns {Promise<SimulationResponse>} Retorno envelopado estritamente aderente ao contrato técnico do core.
  */
-export async function processSimulationPartner(payload: any): Promise<SimulationResponse> {
+export async function processSimulationPartner(
+  payload: any,
+  trustedRules: Record<string, any>,
+): Promise<SimulationResponse> {
+  // 🛡️ ZERO-TRUST GUARD: valida requested_value/down_payment ANTES de qualquer
+  // cálculo, contra `trustedRules` (resolvido server-side em simulation-handler.ts,
+  // nunca `payload.rules` cru) — mesma barreira usada pela Fandi.
+  validateOfferMarginBounds(trustedRules, payload.offer, payload.simulation_details);
+
   // EXTRAÇÃO PADRONIZADA (Mesma estrutura do CreditCard)
   const simulation = (payload.simulation_details as SimulationFinancials) || {};
   const offer = (payload.offer as Offer) || {};
-  const rules = payload.rules;
-  const installments = simulation.installments || null; 
+  const rules = trustedRules;
+  const installments = simulation.installments || null;
 
   // Buscando valores
   const requestedValue = simulation.requested_value || 0;

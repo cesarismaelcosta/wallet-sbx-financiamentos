@@ -33,6 +33,7 @@ import { generateSignature } from '../_shared/crypto.ts';
 import { generateUserEmailNotificationHtml } from "./fandi-notifications.ts";
 import { sendSystemAlert } from "../_shared/alert.ts";
 import { debugLog } from "../_shared/logger.ts";
+import { validateOfferMarginBounds } from "../_shared/simulation-bounds.ts";
 
 /**
  * ============================================================================
@@ -64,7 +65,18 @@ function generateCpfFromSellerId(sellerId: string | number): string {
  * 🚀 ORQUESTRADOR PRINCIPAL (FANDI PIPELINE)
  * ============================================================================
  */
-export async function processSimulationFandi(payload: any): Promise<SimulationResponse> {
+export async function processSimulationFandi(
+  payload: any,
+  trustedRules: Record<string, any>,
+): Promise<SimulationResponse> {
+
+  // --------------------------------------------------------------------------
+  // 0. 🛡️ ZERO-TRUST GUARD: VALIDAÇÃO DE INTEGRIDADE FINANCEIRA
+  // --------------------------------------------------------------------------
+  // Valida requested_value/down_payment ANTES de qualquer chamada à API real da
+  // Fandi — contra `trustedRules` (resolvido server-side em simulation-handler.ts,
+  // nunca `payload.rules` cru, que pode ter sido influenciado pelo cliente).
+  validateOfferMarginBounds(trustedRules, payload.offer, payload.simulation_details);
 
   // --------------------------------------------------------------------------
   // 1. EXTRAÇÃO PADRONIZADA DE ESTADO

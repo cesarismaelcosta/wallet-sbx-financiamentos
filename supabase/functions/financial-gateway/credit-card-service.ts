@@ -28,6 +28,7 @@ import {
 import { Entity, Offer } from "../_shared/types.ts";
 import { generateUserEmailNotificationHtml } from "./credit-card-notifications.ts";
 import { debugLog } from "../_shared/logger.ts";
+import { validateCardBounds } from "../_shared/simulation-bounds.ts";
 
 /**
  * ============================================================================
@@ -91,14 +92,23 @@ function calculateRate(pv: number, pmt: number, n: number): number {
  * Itera sobre todos os prazos configurados nas regras do Orchestrator e 
  * retorna o grid financeiro completo e pré-calculado.
  */
-export async function processSimulationCreditCard(payload: SimulationPayload): Promise<SimulationResponse> {
+export async function processSimulationCreditCard(
+  payload: SimulationPayload,
+  trustedRules: Record<string, any>,
+): Promise<SimulationResponse> {
 
   // 1. EXTRAÇÃO PADRONIZADA
   const simulation = (payload.simulation_details as SimulationFinancials) || {};
-  const rules = payload.rules;
+  const rules = trustedRules;
+
+  // 🛡️ ZERO-TRUST GUARD: valida requested_value/down_payment ANTES de qualquer
+  // cálculo, contra `trustedRules` (resolvido server-side em simulation-handler.ts,
+  // nunca `payload.rules` cru).
+  validateCardBounds(rules, payload.offer, simulation);
+
   const requestedValue = simulation.requested_value || 0;
   const downPayment = simulation.down_payment_amount || 0;
-  
+
   // 2. CÁLCULOS BASE
   const amountToFinance = requestedValue - downPayment;
   const downPaymentPercent = requestedValue > 0 ? (downPayment / requestedValue) * 100 : 0;
