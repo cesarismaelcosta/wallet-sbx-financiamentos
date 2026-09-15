@@ -17,6 +17,11 @@
 
 import type { OriginDetails } from "./types.ts";
 
+// Timeout do fallback de geo (ip-api.com): teto de segurança para não travar a function
+// inteira se o serviço externo ficar indisponível — mas alto o bastante pra confiarmos que
+// só dispara em exceções raras, não no caminho normal (decisão: 2026-09-15, ver discussão).
+const GEO_TIMEOUT_MS = 10_000;
+
 /**
  * @function parseUserAgent
  * @description Extrai Sistema Operacional e Dispositivo básico do cabeçalho da requisição.
@@ -85,8 +90,16 @@ export async function captureInfrastructure(req: Request): Promise<OriginDetails
    * limpo como "N/A" (ou dados fornecidos diretamente pela CDN, se houver).
    */
   if ((!geo.country || geo.country === "XX" || !geo.city) && !isLocalIp) {
+    // 🛡️ [TIMEOUT]: telemetria não pode travar o fluxo crítico esperando um
+    // serviço externo gratuito (ip-api.com) que não tem SLA. Mesmo padrão de
+    // AbortController já usado no fetch upstream da Superbid (hydrate-data.ts).
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), GEO_TIMEOUT_MS);
+
     try {
-      const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,countryCode,regionName,city`);
+      const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,countryCode,regionName,city`, {
+        signal: controller.signal,
+      });
       const fallback = await res.json();
 
       // Validação estrita: Só aceita o payload se a API retornar status de sucesso legítimo
@@ -98,7 +111,10 @@ export async function captureInfrastructure(req: Request): Promise<OriginDetails
         };
       }
     } catch (e) {
-      console.warn("[sbX Infrastructure] Falha no fallback de Geo:", e.message);
+      const reason = (e as any)?.name === "AbortError" ? "TIMEOUT" : "NETWORK";
+      console.warn(`[sbX Infrastructure] Falha no fallback de Geo (${reason}):`, (e as any)?.message);
+    } finally {
+      clearTimeout(timer);
     }
   }
 

@@ -70,6 +70,14 @@ export async function processSimulation(
 
   if (!payload) throw new Error("INVALID_PAYLOAD: Payload não fornecido para a simulação.");
 
+  // 🚀 [PERFORMANCE]: dispara aqui SEM await — roda em paralelo com a validação
+  // de integridade e o resolveOrchestratorConfigs logo abaixo (ambos round-trips
+  // de banco), em vez de bloquear a simulação inteira esperando o fallback de
+  // geo (ip-api.com) sozinho, na frente da fila. Mesmo padrão já usado no
+  // orchestrator/index.ts. Só é `await`ado lá embaixo, no primeiro ponto onde
+  // `infra` é de fato consumido (insertSimulationData/updateSimulationData).
+  const infraPromise = captureInfrastructure(req);
+
   // =========================================================================
   // 🛡️ ZERO-TRUST GUARD: DEFESA EM PROFUNDIDADE (CROSS-TAMPERING)
   // -------------------------------------------------------------------------
@@ -120,9 +128,6 @@ export async function processSimulation(
     debugLog("⚡ [Motor Simulação] Integridade já validada pelo Gateway. Pulando roundtrip duplicado.");
   }
 
-  // Captura informações da origem da chamada (User-Agent, IP, TLS)
-  const infra = await captureInfrastructure(req);
-
   // =========================================================================
   // PASSO 1: EXTRAÇÃO SEGURA (CADA OBJETO AQUI JÁ É "TRUSTED" SERVER-SIDE)
   // =========================================================================
@@ -172,6 +177,11 @@ export async function processSimulation(
   debugLog("✅ [Motor Simulação] Payload Confiável Pronto -> ENTITY:", entity.document);
   debugLog("✅ [Motor Simulação] Payload Confiável Pronto -> OFFER:", offer.offer_id);
   debugLog("✅ [Motor Simulação] Payload Confiável Pronto -> SIMULATION:", simulation);
+
+  // 🚀 [PERFORMANCE]: só resolve aqui — depois de já ter rodado em paralelo com
+  // validateSimulationIntegrity + resolveOrchestratorConfigs acima. Na prática
+  // o `await` abaixo tende a ser imediato (a promise já deve ter resolvido).
+  const infra = await infraPromise;
 
   // =========================================================================
   // PASSO 2: SINCRONIZAÇÃO COM PARCEIROS EXTERNOS (MOTOR DE CRÉDITO)

@@ -12,7 +12,16 @@ if (!dbUrl) {
 // O export permite que você use a conexão em qualquer arquivo
 export const sql = postgres(dbUrl, {
   prepare: false,      // Mantém false (Obrigatório para o Pooler)
-  max: 1,              // 🚀 CRÍTICO: Força a Edge Function a usar 1 única conexão otimizada
+  // 🚀 [PERFORMANCE - 2026-09-15]: era `max: 1`. Motivo: persist-data.ts
+  // (insertSimulationData/updateSimulationData) dispara várias escritas em
+  // Promise.all (oferta, consultas, notificação, sincronização de visita) —
+  // com 1 conexão só, essa "paralela" ficava na fila da mesma conexão em vez
+  // de rodar de verdade. Subimos pra 5 (banco com max_connections=60, 15 em
+  // uso na checagem) pra isso valer a pena.
+  // ⚠️ Tempos observados (~3,7-3,9s no insert) vieram de teste em dev, de
+  // máquina local — validar o ganho real em produção antes de tomar esses
+  // números como referência.
+  max: 5,
   idle_timeout: 10,    // 🚀 CRÍTICO: Fecha conexões ociosas rápido para não engasgar o banco
   connect_timeout: 10  // Derruba rápido se o banco não responder
 });
