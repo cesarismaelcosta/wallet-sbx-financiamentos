@@ -79,21 +79,25 @@ export interface RequestContext {
 /**
  * Realiza uma comparação segura em tempo constante (constant-time) entre duas strings
  * para prevenir timing attacks em segredos e chaves de API.
+ * (comparação constant-time feita na mão, sem depender de API específica de runtime):
  */
 function safeCompare(actual: string, expected: string): boolean {
   const encoder = new TextEncoder();
   const actualBuf = encoder.encode(actual);
   const expectedBuf = encoder.encode(expected);
 
-  // O timingSafeEqual exige buffers de tamanhos estritamente iguais.
-  // Se os tamanhos divergirem, comparamos a entrada com ela mesma para manter
-  // o fluxo simétrico de tempo, retornando falso em seguida.
-  if (actualBuf.byteLength !== expectedBuf.byteLength) {
-    crypto.subtle.timingSafeEqual(actualBuf, actualBuf);
-    return false;
+  // Sempre iteramos até o tamanho do MAIOR dos dois buffers, sem early-return,
+  // pra não vazar (via tempo de execução) nem o tamanho nem o conteúdo do segredo.
+  const maxLength = Math.max(actualBuf.byteLength, expectedBuf.byteLength);
+  let diff = actualBuf.byteLength ^ expectedBuf.byteLength;
+
+  for (let i = 0; i < maxLength; i++) {
+    const a = i < actualBuf.byteLength ? actualBuf[i] : 0;
+    const b = i < expectedBuf.byteLength ? expectedBuf[i] : 0;
+    diff |= a ^ b;
   }
 
-  return crypto.subtle.timingSafeEqual(actualBuf, expectedBuf);
+  return diff === 0;
 }
 
 /**

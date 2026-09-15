@@ -188,7 +188,7 @@ export function generateUserEmailNotificationHtml(
     <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: ${surface}; padding: 20px 10px;">
         <tr>
         <td align="center">
-            <table width="100%" style="max-width: 95%; background-color: #ffffff; border: 1px solid ${line}; border-radius: 0; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);">
+            <table width="100%" style="width: 100%; max-width: 640px; background-color: #ffffff; border: 1px solid ${line}; border-radius: 0; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);">
             
             <tr>
                 <td align="left" style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid ${line};">

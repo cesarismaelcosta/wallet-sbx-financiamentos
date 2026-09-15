@@ -134,11 +134,14 @@ function generateSystemErrorEmailHtml(data: SystemAlertPayload): EmailTemplateRe
   const html = `
   <!DOCTYPE html>
   <html>
+  <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  </head>
   <body style="margin: 0; padding: 0; background-color: ${surface}; font-family: ${fontStack};">
     <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: ${surface}; padding: 20px 10px;">
       <tr>
         <td align="center">
-          <table width="100%" style="max-width: 95%; background-color: #ffffff; border: 1px solid ${line}; border-radius: 0; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);">
+          <table width="100%" style="width: 100%; max-width: 640px; background-color: #ffffff; border: 1px solid ${line}; border-radius: 0; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);"> overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);">
             <tr>
               <td align="left" style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid ${line};">
                 <img src="${logoSrc}" alt="Wallet sbX" width="140" style="display: block; border: 0;" />

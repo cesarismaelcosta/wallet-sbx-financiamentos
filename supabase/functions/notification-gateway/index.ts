@@ -17,6 +17,7 @@ import { withSecurity } from "../_shared/server.ts";
  * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
 import { debugLog } from "../_shared/logger.ts";
+import { sendSystemAlert } from "../_shared/alert.ts";
 
 serve(withSecurity('notification-gateway', async (req: Request) => {
   // 1. AUTENTICAÇÃO E SEGURANÇA
@@ -139,7 +140,7 @@ serve(withSecurity('notification-gateway', async (req: Request) => {
     if (targetId) {
       const { data: current } = await supabase
         .from('notification_outbox')
-        .select('retry_count, max_retries')
+        .select('retry_count, max_retries, recipient, template_slug, visit_id, visit_update_id, simulation_id, simulation_update_id')
         .eq('id', targetId)
         .single();
       
@@ -156,6 +157,24 @@ serve(withSecurity('notification-gateway', async (req: Request) => {
             updated_at: new Date().toISOString()
           })
           .eq('id', targetId);
+
+        // 10. ALERTA DE FALHA DEFINITIVA (DLQ)
+        // Sem isso, uma notificação que esgota as tentativas fica muda na
+        // Outbox até alguém notar olhando o banco manualmente (foi o que
+        // aconteceu hoje). Avisa o backoffice por e-mail assim que a
+        // notificação vira dead_letter de verdade (não a cada retry).
+        if (isDead) {
+          await sendSystemAlert(supabase, {
+            context: "notification-gateway (Dead Letter Queue)",
+            subject: `⚠️ Notificação ${targetId} caiu em Dead Letter após ${nextRetry} tentativas`,
+            message: `A notificação ${targetId} (destinatário: ${current.recipient ?? "desconhecido"}, template: ${current.template_slug ?? "desconhecido"}) esgotou o limite de tentativas (${current.max_retries || 3}) e não será mais reprocessada automaticamente. Erro final: ${err.message}`,
+            visitId: current.visit_id ?? null,
+            visitUpdateId: current.visit_update_id ?? null,
+            simulationId: current.simulation_id ?? null,
+            simulationUpdateId: current.simulation_update_id ?? null,
+            rawPayload: { targetId, retry_count: nextRetry, error: err.message },
+          });
+        }
       }
     }
     
