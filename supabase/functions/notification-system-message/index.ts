@@ -17,30 +17,28 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { withSecurity } from "../_shared/server.ts";
-import { validateRequest } from "../_shared/auth.ts";
+import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { dispatchSystemAlert } from "../_shared/alert.ts";
 import { debugLog } from "../_shared/logger.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-serve(withSecurity('notification-system-message', async (req: Request) => {
-
+serve(withSecurity('notification-system-message', async (req: Request, ctx?: RequestContext) => {
   // -----------------------------------------------------------------------
-  // [PERÍMETRO]: Exige sessão de usuário válida — checagem manual, mesmo
-  // padrão real já usado em financial-gateway/index.ts, orchestrator/index.ts,
-  // sbx-offer/index.ts, sbx-event/index.ts, sbx-offer-query/index.ts e
-  // orchestrator-configs/index.ts (a flag `requiresSession` do registry
-  // nunca é usada em nenhuma function real — não introduzimos esse caminho
-  // não-testado aqui).
+  // [PERÍMETRO]: [v2.0.0 — MIGRADA, grupo 2] sessão agora validada
+  // centralmente pelo wrapper (registry.ts: authMode.type === 'session',
+  // enforcement: 'wrapper') via `_shared/session-guard.ts` — o handler nem
+  // chega a rodar se a sessão for inválida. A checagem manual
+  // (`validateRequest`) que existia aqui foi removida.
+  //
+  // [MUDANÇA DE COMPORTAMENTO]: antes, uma sessão inválida/expirada
+  // devolvia sempre um 401 plano (`{ error: "Sessão inválida ou ausente." }`),
+  // sem fallback_url/handoff token — era a única das 7 rotas de sessão sem
+  // essa cobertura. Agora usa o mesmo formato canônico das demais
+  // (`{success, code, message, fallback_url}`) e GANHA handoff token, que
+  // nunca teve antes.
   // -----------------------------------------------------------------------
-  try {
-    await validateRequest(req);
-  } catch (err: any) {
-    debugLog("[UNAUTHORIZED]: Chamada sem sessão válida rejeitada.", err.message);
-    return { status: 401, data: { error: "Sessão inválida ou ausente." } };
-  }
 
   // -----------------------------------------------------------------------
   // [INFRAESTRUTURA]: Inicialização do Client Supabase (Service Role)
@@ -53,7 +51,10 @@ serve(withSecurity('notification-system-message', async (req: Request) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
   try {
-    const rawBody = await req.json();
+    // [v2.0.0]: corpo já lido uma vez pelo wrapper (necessário pra montar o
+    // handoff token em caso de sessão expirada) e repassado em `ctx.rawBody`
+    // — não podemos ler `req.json()` de novo aqui (stream já consumido).
+    const rawBody = JSON.parse(ctx?.rawBody || "");
     const result = await dispatchSystemAlert(supabase, rawBody);
     return { status: 200, data: result };
   } catch (err: any) {

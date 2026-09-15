@@ -239,10 +239,14 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   'financial-gateway': {
     methods: ['GET', 'POST'],
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    // [v2.0.0 — MIGRADA, grupo 2]: sessão agora validada centralmente pelo
+    // wrapper (`_shared/session-guard.ts`), não mais na mão dentro do
+    // handler. O corpo do POST (visit_id/visit_update_id/target_url) já
+    // batia exatamente com o formato que `session-guard.ts` espera — migração
+    // sem risco de regressão no handoff token.
     authMode: {
       type: 'session',
-      enforcement: 'manual',
-      reason: 'Validação de sessão feita no próprio handler (validateRequest) para permitir fallback_url e handoff token (JWT de retomada) específicos do fluxo de simulação — candidata a futura centralização.',
+      enforcement: 'wrapper',
     },
   },
   'financial-gateway-gate': {
@@ -317,11 +321,22 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   },
   'notification-system-message': {
     methods: ['POST'],
-    requiredHeaders: ['x-session-token'],
+    // [v2.0.0]: 'x-original-url'/'x-auth-fallback-url' adicionados — sem
+    // eles no CORS, o navegador bloqueia o front-end de enviar esses
+    // headers, e o handoff token (novo, ver nota abaixo) sempre cairia no
+    // fallback ("/", "/accounts/signin") em vez da página real de origem.
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    // [v2.0.0 — MIGRADA, grupo 2]: sessão agora validada centralmente pelo
+    // wrapper (`_shared/session-guard.ts`), não mais na mão dentro do
+    // handler. [MUDANÇA DE COMPORTAMENTO]: antes devolvia 401 plano, sem
+    // fallback_url/handoff token (única das 7 rotas de sessão sem essa
+    // cobertura). Agora usa o mesmo formato canônico e ganha handoff token,
+    // que nunca teve — só é útil de verdade se o chamador no front-end
+    // (`logSystemError` em `src/services/systemNotification.ts`) também
+    // passar a enviar 'x-original-url'/'x-auth-fallback-url'.
     authMode: {
       type: 'session',
-      enforcement: 'manual',
-      reason: 'Validação de sessão feita no próprio handler (validateRequest); hoje devolve 401 plano, sem fallback_url/handoff token — candidata a futura centralização.',
+      enforcement: 'wrapper',
     },
   },
 
@@ -353,7 +368,10 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   'sbx-event': {
     methods: ['GET'],
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
-    // Usa o mesmo SESSION_EXPIRED/handoff canônico das demais — só `'wrapper'`.
+    // [v2.0.0 — MIGRADA, grupo 1]: antes devolvia 401 plano, sem handoff
+    // token (única das 7 rotas de sessão sem essa cobertura). Agora usa o
+    // mesmo SESSION_EXPIRED/handoff canônico das demais — ganha a
+    // funcionalidade que nunca teve, só por virar `'wrapper'`.
     authMode: {
       type: 'session',
       enforcement: 'wrapper',

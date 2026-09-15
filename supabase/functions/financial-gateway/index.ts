@@ -39,8 +39,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Importações do ecossistema local e de parceiros
 import { processSimulation } from "./simulation-handler.ts";
-import { validateRequest } from "../_shared/auth.ts";
-import { withSecurity } from "../_shared/server.ts";
+import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { validateOfferAccess, validateSimulationIntegrity } from "../_shared/gateKeeper.ts";
 import { debugLog } from "../_shared/logger.ts";
 
@@ -49,104 +48,31 @@ import { hydrateVisitContext, pickThin } from "../_shared/hydrate-data.ts";
 import { resolveOrchestratorConfigs } from "../_shared/orchestrator-configs.ts";
 import { sql } from "../_shared/db.ts";
 
-// ✨ [INJEÇÃO ZERO-TRUST]: Ferramentas do Cartório Criptográfico S2S
-import { signSigninParameters } from "../_shared/s2s.ts";
 import { getSafeRedirectUrl } from "../_shared/security.ts";
 
-serve(withSecurity('financial-gateway', async (req: Request) => {
+serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestContext) => {
   // Descoberta da Origem da Navegação (Usado para o Fallback de Erro)
   const originPath = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
   const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/accounts/signin");
 
   // Escopo amplo para acesso nos Catchs e tratamento de sessão
   let payload: any = null;
-  let rawBodyText = "";
-  if (req.method === "POST") {
-    try { 
-      rawBodyText = await req.text(); 
-    } catch { 
-      rawBodyText = ""; 
-    }
-  }
 
   try {
     // =========================================================================
-    // 1. SEGURANÇA BÁSICA: VALIDAÇÃO DE IDENTIDADE E TOKEN
+    // 1. SEGURANÇA BÁSICA: IDENTIDADE JÁ VALIDADA PELO WRAPPER
+    // [v2.0.0]: sessão já validada centralmente pelo wrapper (registry.ts:
+    // authMode.type === 'session', enforcement: 'wrapper') via
+    // `_shared/session-guard.ts` — `secCtx.auth` chega pronto aqui.
+    // SESSION_EXPIRED/UNAUTHORIZED (com handoff token) são tratados lá; o
+    // handler nem chega a rodar se a sessão for inválida. A checagem manual
+    // que existia aqui (`validateRequest` + montagem de handoff token na
+    // mão) foi removida. [NOTA]: o parâmetro do wrapper foi nomeado
+    // `secCtx` (não `ctx`) de propósito — este arquivo já usa `ctx` como
+    // nome local pro contexto hidratado da visita (`hydrateVisitContext`,
+    // logo abaixo), e reusar o nome criaria sombreamento confuso.
     // =========================================================================
-    let auth;
-
-    try {
-        auth = await validateRequest(req);
-    } catch (err: any) {
-        // [Failsafe Padronizado de Autorização]
-        const parts = err.message.split(':');
-        const errorCode = parts[0].trim();
-
-        let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
-        let finalCode = "UNAUTHORIZED";
-        let fallbackUrl = authPath;
-        let statusCode = 401;
-
-        switch (errorCode) {
-            case "SESSION_EXPIRED": {
-                userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-                finalCode = "SESSION_EXPIRED";
-
-                let intentVisitId = null;
-                let intentUpdateId = null;
-                let intentTargetUrl = originPath;
-
-                if (req.method === "POST" && rawBodyText) {
-                    try {
-                        const thin = JSON.parse(rawBodyText);
-                        intentVisitId = thin.visit_id || null;
-                        intentUpdateId = thin.visit_update_id || null;
-                        intentTargetUrl = thin.target_url || originPath;
-                    } catch (e) {}
-                } else if (req.method === "GET") {
-                    const url = new URL(req.url);
-                    intentVisitId = url.searchParams.get("visit_id");
-                    intentUpdateId = url.searchParams.get("visit_update_id");
-                }
-
-                try {
-                    const handoffToken = await signSigninParameters({
-                        visit_id: intentVisitId,
-                        visit_update_id: intentUpdateId,
-                        target_url: intentTargetUrl,
-                        origin_url: originPath
-                    });
-                    
-                    // ✨ Isola apenas o path base (ex: /accounts/signin), ignorando lixos de redirect_uri do header
-                    const cleanAuthPath = authPath.split('?')[0] || "/accounts/signin";
-                    fallbackUrl = `${cleanAuthPath}?handoff_token=${handoffToken}`;
-                    
-                    debugLog("[Financial Gateway] Handoff Token emitido com sucesso.");
-                } catch (jwtErr) {
-                    debugLog("[Financial Gateway] Erro ao assinar Handoff Token.", jwtErr);
-                    fallbackUrl = authPath.split('?')[0] || "/accounts/signin";
-                }
-                break;
-            }
-            case "FORBIDDEN":
-                userMessage = "Você não tem permissão para acessar este recurso.";
-                finalCode = "FORBIDDEN";
-                fallbackUrl = originPath;
-                statusCode = 403;
-                break;
-            case "INTERNAL_ERROR":
-                userMessage = "Ocorreu um erro interno ao validar sua sessão.";
-                finalCode = "INTERNAL_ERROR";
-                fallbackUrl = originPath;
-                statusCode = 500;
-                break;
-        }
-
-        return {
-            status: statusCode,
-            data: { success: false, code: finalCode, message: userMessage, fallback_url: fallbackUrl }
-        };
-    }
+    const auth = secCtx?.auth;
 
     // =========================================================================
     // 2. ROTA PRINCIPAL: THIN PAYLOAD & SERVER-SIDE HYDRATION
@@ -163,7 +89,10 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
         return { status: 405, data: { error: "Método HTTP não permitido." } };
       }
 
-      const rawBody = rawBodyText;
+      // [v2.0.0]: corpo já lido uma vez pelo wrapper (necessário pra montar o
+      // handoff token em caso de sessão expirada) e repassado em `secCtx.rawBody`
+      // — não podemos ler `req.text()` de novo aqui (stream já consumido).
+      const rawBody = secCtx?.rawBody || "";
       if (!rawBody) throw new Error("INVALID_PAYLOAD: Payload ausente na requisição POST.");
 
       // 🔥 [THIN PAYLOAD ENFORCEMENT]:
@@ -192,8 +121,8 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
         visitId: thin.visit_id,
         visitUpdateId: thin.visit_update_id,
         offerId: thin.offer_id,
-        userId: auth.user_id,
-        environment: auth.environment as "staging" | "production",
+        userId: auth?.user_id,
+        environment: auth?.environment as "staging" | "production",
         mode: "full",
       });
 
@@ -258,7 +187,7 @@ serve(withSecurity('financial-gateway', async (req: Request) => {
       validateOfferAccess({
         trustedEntity: ctx.trustedEntity,
         trustedOffer: ctx.trustedOffer,
-        sessionUserId: auth.user_id,
+        sessionUserId: auth?.user_id,
       });
 
       // 3.2: Escudo Anti-Fraude e Cross-Tampering.
