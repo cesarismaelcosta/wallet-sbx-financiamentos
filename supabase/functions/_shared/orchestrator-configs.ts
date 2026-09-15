@@ -42,6 +42,41 @@
  * @version 2.0.0
  */
 
+import { debugLog } from "./logger.ts";
+
+/** Espelha as colunas reais de `public.orchestrator_configs`. */
+export interface ResolvedConfig {
+  orchestrator_config_id: number | null;
+  page_url: string | null;
+  partner_id: number | null;
+  is_integrated: boolean;
+  integration_method: string | null;
+  integration_details: Record<string, any>;
+  rules: Record<string, any>;
+  consent_configs: Record<string, any> | any[];
+  page_configs: Record<string, any>;
+  page_faqs: Record<string, any> | any[];
+  /** Qual eixo casou. Útil para auditoria e debug de roteamento. */
+  matched_by: "EVENT" | "SELLER" | "PRODUCT" | "SUBCATEGORY" | "CATEGORY" | null;
+}
+
+const EMPTY_CONFIG: ResolvedConfig = {
+  orchestrator_config_id: null,
+  page_url: null,
+  partner_id: null,
+  is_integrated: false,
+  integration_method: null,
+  integration_details: {},
+  rules: {},
+  consent_configs: {},
+  page_configs: {},
+  page_faqs: {},
+  matched_by: null,
+};
+
+const SELECT_COLS =
+  "id, page_url, partner_id, is_integrated, integration_method, integration_details, entity_type, rules, consent_configs, page_configs, page_faqs";
+  
 export async function resolveOrchestratorConfigs(args: {
   supabase: any;
   eventId?: string | number | null;
