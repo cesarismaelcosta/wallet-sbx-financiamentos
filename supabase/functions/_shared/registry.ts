@@ -353,10 +353,7 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   'sbx-event': {
     methods: ['GET'],
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
-    // [v2.0.0 — MIGRADA, grupo 1]: antes devolvia 401 plano, sem handoff
-    // token (única das 7 rotas de sessão sem essa cobertura). Agora usa o
-    // mesmo SESSION_EXPIRED/handoff canônico das demais — ganha a
-    // funcionalidade que nunca teve, só por virar `'wrapper'`.
+    // Usa o mesmo SESSION_EXPIRED/handoff canônico das demais — só `'wrapper'`.
     authMode: {
       type: 'session',
       enforcement: 'wrapper',
