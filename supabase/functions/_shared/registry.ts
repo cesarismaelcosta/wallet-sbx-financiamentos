@@ -92,9 +92,13 @@
  *       → `authMode: { type: 'session', enforcement: ... }`. Se `enforcement`
  *         for `'wrapper'`, o wrapper valida o `x-session-token` (ou
  *         cookie/Authorization) chamando `validateRequest()` de `auth.ts`.
- *         Hoje, TODA função de sessão real usa `enforcement: 'manual'` (ver
- *         nota do `authMode` acima) — sinalize `'wrapper'` só quando a
- *         centralização for de fato implementada em `server.ts`.
+ *         A centralização já está implementada em `server.ts`: use
+ *         `enforcement: 'wrapper'` como padrão para qualquer função nova de
+ *         sessão. Reserve `'manual'` apenas para os casos que o wrapper não
+ *         consegue cobrir sozinho — funções que ainda não têm sessão para
+ *         exigir (ex.: `sbx-auth`, `sbx-auth-exchange`, `financial-gateway-gate`)
+ *         ou que fazem checagem de papel/JWT específica inline (ex.:
+ *         `manage-backoffice-users`, `log-access`).
  *
  *   - Outra Edge Function ou serviço interno que PODE guardar um segredo
  *     estático em texto puro no seu próprio ambiente (ex: uma function

@@ -329,7 +329,16 @@ function SimulationsPage() {
   useEffect(() => {
     async function loadDropdowns() {
       if (!backofficeUser) return;
-      const { data: pData } = await supabase.from("partners").select("id, name").eq("is_active", true).order("name");
+
+      // ✨ [PERFORMANCE]: Dispara as duas consultas ao mesmo tempo
+      const [partnersResult, productsResult] = await Promise.all([
+        supabase.from("partners").select("id, name").eq("is_active", true).order("name"),
+        supabase.from("product_types").select("id, name").order("name"),
+      ]);
+
+      const pData = partnersResult.data;
+      const prData = productsResult.data;
+
       if (pData) {
         if (backofficeUser.role === "viewer") {
           const allowedPartners = backofficeUser.allowed_partners || [];
@@ -340,7 +349,6 @@ function SimulationsPage() {
         }
       }
 
-      const { data: prData } = await supabase.from("product_types").select("id, name").order("name");
       if (prData) {
         if (backofficeUser.role === "viewer") {
           const allowedProducts = backofficeUser.allowed_products || [];

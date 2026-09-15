@@ -4,7 +4,7 @@
  * * @description Provedor de contexto global com a API completa de motor de jornada (Engine).
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from "react";
 
 // 1. Tipagens do Estado
 export interface WizardState<T = any> {
@@ -59,33 +59,44 @@ export function WizardProvider({ children, initialData = {} }: { children: React
   }, [initialData]);
 
   // Atualiza partes mescladas do estado completo
-  const update: WizardContextValue["update"] = (patch) => {
+  const update: WizardContextValue["update"] = useCallback((patch) => {
     setState((s) => ({
       ...s,
       ...patch,
       meta: { ...s.meta, ...(patch.meta || {}) },
       data: { ...s.data, ...(patch.data || {}) },
     }));
-  };
+  }, []);
 
-  const updateData: WizardContextValue["updateData"] = (dataPatch) => {
+  const updateData: WizardContextValue["updateData"] = useCallback((dataPatch) => {
     setState((s) => ({ ...s, data: { ...s.data, ...dataPatch } }));
-  };
+  }, []);
 
-  const goTo: WizardContextValue["goTo"] = (step) =>
+  const goTo: WizardContextValue["goTo"] = useCallback((step) => {
     setState((s) => ({ ...s, meta: { ...s.meta, step } }));
+  }, []);
 
-  const next: WizardContextValue["next"] = () =>
+  const next: WizardContextValue["next"] = useCallback(() => {
     setState((s) => ({ ...s, meta: { ...s.meta, step: s.meta.step + 1 } }));
+  }, []);
 
-  const back: WizardContextValue["back"] = () =>
+  const back: WizardContextValue["back"] = useCallback(() => {
     setState((s) => ({ ...s, meta: { ...s.meta, step: Math.max(1, s.meta.step - 1) } }));
+  }, []);
 
-  const reset: WizardContextValue["reset"] = (initial = {}) =>
+  const reset: WizardContextValue["reset"] = useCallback((initial = {}) => {
     setState({ isReady: true, meta: { step: 1 }, data: { page_configs: {}, ...initial } });
+  }, []);
+
+  // 🧹 Memoização do value inteiro. Evita que todo componente filho re-renderize
+  // só porque o Provider foi reavaliado (mesmo padrão de FinancialAuthContext.tsx).
+  const contextValue = useMemo(
+    () => ({ state, update, updateData, goTo, next, back, reset }),
+    [state, update, updateData, goTo, next, back, reset],
+  );
 
   return (
-    <WizardContext.Provider value={{ state, update, updateData, goTo, next, back, reset }}>
+    <WizardContext.Provider value={contextValue}>
       {children}
     </WizardContext.Provider>
   );
