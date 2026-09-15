@@ -391,13 +391,13 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
     },
   },
   'sbx-offer-query': {
-    methods: ['POST'],
+    methods: ['GET'],
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
     // [v2.0.0 — MIGRADA, grupo 2]: sessão agora validada centralmente pelo
     // wrapper (`_shared/session-guard.ts`), não mais na mão dentro do handler.
-    // O caso específico desta rota (corpo POST sem visit_id/visit_update_id,
-    // que precisam vir do x-original-url mesmo sendo POST) é coberto pela
-    // extensão v2.0.1 do session-guard.
+    // [v2.1.0]: rota convertida de POST pra GET — é uma consulta pura de
+    // catálogo (sem efeito colateral), consistente com o restante das rotas
+    // de leitura. Parâmetros agora vêm da query string, não mais do corpo.
     authMode: {
       type: 'session',
       enforcement: 'wrapper',

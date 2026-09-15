@@ -10,7 +10,7 @@
  * 
  * ESCOPO DO SERVIÇO:
  * 1. `sbx-offer`: (GET) Retorna o payload consolidado e minificado de um lote específico.
- * 2. `sbx-offer-query`: (POST) Atua como orquestrador do catálogo Superbid, permitindo
+ * 2. `sbx-offer-query`: (GET) Atua como orquestrador do catálogo Superbid, permitindo
  *    listagens otimizadas por produto, blindando o front-end das taxonomias e 
  *    complexidades de query da API legada.
  * 
@@ -136,7 +136,7 @@ export const fetchOfferDetails = async (
 
 
 // =========================================================================
-// [SERVIÇO CORE 2]: Engine de Busca em Massa (BFF sbx-offer-query via POST)
+// [SERVIÇO CORE 2]: Engine de Busca em Massa (BFF sbx-offer-query via GET)
 // =========================================================================
 
 /**
@@ -157,7 +157,17 @@ export async function fetchOffersQuery(
   
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  const url = `${supabaseUrl}/functions/v1/sbx-offer-query`;
+
+  // [v2.1.0 — GET]: rota convertida de POST pra GET (consulta pura de
+  // catálogo, sem efeito colateral) — parâmetros agora vão na query string.
+  const queryParams = new URLSearchParams();
+  queryParams.set("productId", String(params.productId));
+  queryParams.set("sort", params.sort || "relevancia");
+  queryParams.set("pageNumber", String(params.pageNumber || 1));
+  queryParams.set("pageSize", String(params.pageSize || 20));
+  if (params.categoryFilter) queryParams.set("categoryFilter", params.categoryFilter);
+
+  const url = `${supabaseUrl}/functions/v1/sbx-offer-query?${queryParams.toString()}`;
 
   const currentUrl = originUrl || (typeof window !== "undefined" ? window.location.href : "/");
   const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(currentUrl)}`;
@@ -165,7 +175,7 @@ export async function fetchOffersQuery(
   try {
     // [NETWORK]: Acoplamento blindado de rede post-auth
     const response = await fetch(url, {
-      method: "POST",
+      method: "GET",
       signal,
       ...fetchOptions, // Permite envio seguro de Cookie HTTPOnly
       headers: {
@@ -176,13 +186,6 @@ export async function fetchOffersQuery(
         "x-original-url": currentUrl,
         "x-auth-fallback-url": loginFallbackUrl,
       },
-      body: JSON.stringify({
-        productId: params.productId,
-        sort: params.sort || "relevancia",
-        pageNumber: params.pageNumber || 1,
-        pageSize: params.pageSize || 20,
-        categoryFilter: params.categoryFilter || null,
-      }),
     });
 
     // -----------------------------------------------------------------------

@@ -74,11 +74,14 @@ serve(withSecurity('sbx-offer-query', async (req: Request, ctx?: RequestContext)
   // — `ctx.auth` chega pronto aqui. SESSION_EXPIRED/UNAUTHORIZED (com
   // handoff token) são tratados lá; o handler nem chega a rodar se a
   // sessão for inválida. A checagem manual (`validateRequest` + montagem
-  // de handoff token na mão) que existia aqui foi removida — incluindo a
-  // extração de visit_id/visit_update_id da query do x-original-url
-  // (mesmo sendo POST), que hoje é feita de forma genérica em
-  // `session-guard.ts` (extensão v2.0.1, adicionada especificamente pra
-  // cobrir esse caso desta rota).
+  // de handoff token na mão) que existia aqui foi removida.
+  //
+  // [v2.1.0]: esta rota era POST; a extração de visit_id/visit_update_id
+  // da query do x-original-url mesmo sendo POST era coberta por uma
+  // extensão específica do session-guard (v2.0.1). Agora que a rota é GET,
+  // isso já é o comportamento padrão do branch genérico (não-POST) do
+  // session-guard — a extensão v2.0.1 continua lá, só deixou de ser
+  // necessária pra esta chamada especificamente.
   // =========================================================================
   const auth = ctx?.auth;
   debugLog(`[DEBUG] ✅ Sessão validada pelo wrapper. Ambiente: ${auth?.environment || 'staging'}`);
@@ -96,22 +99,18 @@ serve(withSecurity('sbx-offer-query', async (req: Request, ctx?: RequestContext)
   // FASE 2: PARSE DO REQUEST & APLICAÇÃO DE FALLBACKS (PRODUTO)
   // =========================================================================
   try {
-    // [v2.0.0]: corpo já lido uma vez pelo wrapper (necessário pra montar o
-    // handoff token em caso de sessão expirada) e repassado em
-    // `ctx.rawBody` — não podemos ler `req.text()` de novo aqui (stream já
-    // consumido).
-    const bodyText = ctx?.rawBody || "";
-    debugLog(`[DEBUG] 📦 Raw Body recebido: ${bodyText}`);
+    // [v2.1.0 — GET]: rota convertida de POST pra GET (é uma consulta pura
+    // de catálogo, sem efeito colateral — a própria chamada upstream que
+    // ela faz mais abaixo já é um GET). Parâmetros agora vêm da query
+    // string da requisição, não mais do corpo.
+    const incomingParams = new URL(req.url).searchParams;
+    debugLog(`[DEBUG] 📦 Query recebida: ${incomingParams.toString()}`);
 
-    const body = bodyText ? JSON.parse(bodyText) : {};
-    
-    const { 
-      productId, 
-      pageNumber = 1, 
-      pageSize = 30, 
-      sort = "encerramento_proximo",
-      categoryFilter = null 
-    } = body;
+    const productId = incomingParams.get("productId");
+    const pageNumber = Number(incomingParams.get("pageNumber")) || 1;
+    const pageSize = Number(incomingParams.get("pageSize")) || 30;
+    const sort = incomingParams.get("sort") || "encerramento_proximo";
+    const categoryFilter = incomingParams.get("categoryFilter") || null;
 
     debugLog(`[DEBUG] 🔍 Parâmetros extraídos -> productId: ${productId}, sort: ${sort}, page: ${pageNumber}, size: ${pageSize}, categoryFilter: ${categoryFilter}`);
 
