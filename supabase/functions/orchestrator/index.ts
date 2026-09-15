@@ -461,7 +461,7 @@ serve(
 
           thin.action = action;
 
-          const infra = await captureInfrastructure(req);
+          const infraPromise = captureInfrastructure(req); // roda em paralelo com hydrateVisitContext e o resto do pipeline abaixo
 
           const targetVisitId = thin.visit_id || null;
           const targetOfferId = thin.offer_id || null;
@@ -661,34 +661,29 @@ serve(
           // [POST STEP 6] PERSISTÊNCIA (Fast Path ou Síncrona)
           // =====================================================================
           debugLog("[POST STEP 6] Chamando Camada de Persistência...");
-          const persistPromise = persistVisitData(
-            sql,
-            targetAction,
-            finalVisitId,
-            finalUpdateId,
-            isNewVisit,
-            isNewUpdate,
-            hasSignedEntity, // Flag repassada de forma cega
-            payload,
-            infra,
-            categoryId ?? undefined,
-            payload.origin_url,
-            payload.target_url,
-            orchestratorConfigId
-          );
+          
+          // 🚀 [PERFORMANCE]: `infra` só é resolvida aqui dentro — se a persistência for
+          // backgrounded (navegação), a chamada de geo-localização nunca chega a ser
+          // esperada pelo usuário; se for síncrona, ela já rodou em paralelo com toda a
+          // hidratação/resolução de config acima, então o `await` abaixo tende a ser imediato.
+          const buildPersistPromise = async () => {
+            const infra = await infraPromise;
+            return persistVisitData(
+              sql, targetAction, finalVisitId, finalUpdateId, isNewVisit, isNewUpdate,
+              hasSignedEntity, payload, infra, categoryId ?? undefined,
+              payload.origin_url, payload.target_url, orchestratorConfigId
+            );
+          };
 
-          // Fast Path para navegação limpa (Não trava o navegador esperando o INSERT)
           const isNavigationAction = NAVIGATION_ACTIONS.includes(targetAction) && !isNewVisit;
           const rt = (globalThis as any).EdgeRuntime;
 
           if (isNavigationAction && rt && typeof rt.waitUntil === "function") {
-            debugLog("[Orquestrador] Resolvendo acesso via Fast Path (Background Persist)...");
             rt.waitUntil(
-              persistPromise.catch((err: any) => console.error("[Background Persist Error]:", err?.message || err))
+              buildPersistPromise().catch((err: any) => console.error("[Background Persist Error]:", err?.message || err))
             );
           } else {
-            debugLog("[Orquestrador] Executando persistência Síncrona...");
-            await persistPromise;
+            await buildPersistPromise();
           }
 
           debugLog("[POST FINAL] Retornando objeto de roteamento pro front-end...");

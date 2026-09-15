@@ -204,42 +204,48 @@ export async function insertSimulationData(
 ): Promise<{ simulation_id: string, simulation_update_id: string }> {
 
   try {
-    return await sql.begin(async (t: any) => {
-      
-      const entity = (payload.entity as Entity) ?? {};
-      const manager = (payload.manager as Manager) ?? {};
-      const seller = (payload.seller as Seller) ?? {};
-      const event = (payload.event as Event) ?? {};
-      const offer = (payload.offer as Offer) ?? {};
-      const simulation = (payload.simulation_details as SimulationFinancials) ?? {};
-      const consents = payload.consents ?? [];
+    const entity = (payload.entity as Entity) ?? {};
+    const manager = (payload.manager as Manager) ?? {};
+    const seller = (payload.seller as Seller) ?? {};
+    const event = (payload.event as Event) ?? {};
+    const offer = (payload.offer as Offer) ?? {};
+    const simulation = (payload.simulation_details as SimulationFinancials) ?? {};
+    const consents = payload.consents ?? [];
 
-      const auditPayload = buildAuditPayload(payload);
-      
-      const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
-      const stageId = stageMap[step];
+    const auditPayload = buildAuditPayload(payload);
 
-      let bestConsult: Consultation = {
-        status_id: null, is_selected: null, message: null, external_operation_id: null,
-        financial_institution_id: null, financial_institution_name: null,
-        requested_value: simulation.requested_value ?? null,
-        down_payment_amount: simulation.down_payment_amount ?? null,
-        down_payment_percentage: simulation.down_payment_percentage ?? null,
-        financed_amount: simulation.financed_amount ?? null,
-        installments: simulation.installments ?? null,
-        cet_rate: simulation.cet_rate ?? null,
-        installment_value: simulation.installment_value ?? null,
-      };
-      
-      let mainResultPartnerId = null;
+    const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
+    const stageId = stageMap[step];
 
-      if (step === 'EXECUTE_SIMULATION') {
-        let selectedConsult = gatewayResult.consults.find(c => c.is_selected === true) || gatewayResult.consults[0];
-        if (selectedConsult) {
-          bestConsult = selectedConsult;
-          mainResultPartnerId = await resolvePartnerResult(t, payload.partner_id, bestConsult.status_id, bestConsult.message);
-        }
+    let bestConsult: Consultation = {
+      status_id: null, is_selected: null, message: null, external_operation_id: null,
+      financial_institution_id: null, financial_institution_name: null,
+      requested_value: simulation.requested_value ?? null,
+      down_payment_amount: simulation.down_payment_amount ?? null,
+      down_payment_percentage: simulation.down_payment_percentage ?? null,
+      financed_amount: simulation.financed_amount ?? null,
+      installments: simulation.installments ?? null,
+      cet_rate: simulation.cet_rate ?? null,
+      installment_value: simulation.installment_value ?? null,
+    };
+
+    let mainResultPartnerId = null;
+
+    if (step === 'EXECUTE_SIMULATION') {
+      let selectedConsult = gatewayResult.consults.find(c => c.is_selected === true) || gatewayResult.consults[0];
+      if (selectedConsult) {
+        bestConsult = selectedConsult;
+        // 🔒 [PERFORMANCE] Resolvido com `sql` (fora do `sql.begin()` abaixo), não com `t`:
+        // `pg_advisory_xact_lock` só libera no fim da transação em que roda. Se rodasse
+        // dentro da transação principal, o cadeado do parceiro ficaria de pé pela duração
+        // INTEIRA dela (todos os INSERTs + Promise.all + sync do funil de visita),
+        // serializando toda simulação do MESMO parceiro atrás de um único lock.
+        // Isolado aqui, o lock vive só pelo tempo da própria query CTE (milissegundos).
+        mainResultPartnerId = await resolvePartnerResult(sql, payload.partner_id, bestConsult.status_id, bestConsult.message);
       }
+    }
+
+    return await sql.begin(async (t: any) => {
 
       // INSERT MESTRE: Salva a proposta na tabela 'simulations'.
       const [sim] = await t`
@@ -481,17 +487,19 @@ export async function updateSimulationData(
   step: 'CHECK_ELIGIBILITY' | 'EXECUTE_SIMULATION' = 'EXECUTE_SIMULATION'
 ): Promise<string | number> {
   try {
+    const auditPayload = buildAuditPayload(payload);
+
+    let bestConsult = gatewayResult.consults.find(c => c.is_selected === true) || gatewayResult.consults[0];
+    if (!bestConsult.is_selected) bestConsult.is_selected = true;
+
+    const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
+    const stageId = stageMap[step];
+
+    // 🔒 [PERFORMANCE] Mesmo raciocínio do insertSimulationData: resolvido com `sql`,
+    // não com `t`, pra não prender o advisory lock do parceiro pela transação de UPDATE inteira.
+    const mainResultPartnerId = await resolvePartnerResult(sql, payload.partner_id, bestConsult.status_id, bestConsult.message);
+
     return await sql.begin(async (t: any) => {
-
-      const auditPayload = buildAuditPayload(payload);
-
-      let bestConsult = gatewayResult.consults.find(c => c.is_selected === true) || gatewayResult.consults[0];
-      if (!bestConsult.is_selected) bestConsult.is_selected = true;
-
-      const mainResultPartnerId = await resolvePartnerResult(t, payload.partner_id, bestConsult.status_id, bestConsult.message);
-
-      const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
-      const stageId = stageMap[step];
 
       // Insert do Update primeiro para pegar o ID
       const [update] = await t`

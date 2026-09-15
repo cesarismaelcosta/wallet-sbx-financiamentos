@@ -21,6 +21,11 @@
  * ~30s (proteção contra replay).
  * 4. CONCORRÊNCIA: Atualiza status para 'processing' antes de chamar o Gateway,
  * evitando que o mesmo e-mail seja enviado duas vezes se o cron disparar rápido.
+ * 5. VAZÃO: cada execução processa no máximo `BATCH_LIMIT` itens (o cron roda a
+ * cada minuto, então não há motivo pra uma única execução tentar drenar uma
+ * fila inteira acumulada), e os disparos ao Gateway rodam em paralelo com um
+ * teto de `CONCURRENCY` simultâneos em vez de um `for` sequencial — evita que
+ * uma fila grande estoure o tempo limite da Edge Function no meio do loop.
  * --------------------------------------------------------------------------------
  */
 
@@ -98,6 +103,28 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { withSecurity } from "../_shared/server.ts";
 
+// Teto de itens processados por execução do cron (roda a cada minuto —
+// não faz sentido uma única chamada tentar drenar uma fila acumulada inteira).
+const BATCH_LIMIT = 30;
+// Teto de disparos simultâneos ao notification-gateway (evita tanto serializar
+// tudo quanto abrir uma rajada descontrolada de requisições).
+const CONCURRENCY = 5;
+
+/** Executa `worker` sobre `items` respeitando um teto de concorrência. */
+async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
+  const executing: Promise<void>[] = [];
+  for (const item of items) {
+    const p = worker(item).then(() => {
+      executing.splice(executing.indexOf(p), 1);
+    });
+    executing.push(p);
+    if (executing.length >= limit) {
+      await Promise.race(executing);
+    }
+  }
+  await Promise.all(executing);
+}
+
 serve(withSecurity('notification-dispatcher', async (req: Request) => {
   // 1. REGISTRO DE ACESSO:
   debugLog("1. --- DISPATCHER INICIADO ---");
@@ -108,41 +135,43 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
   );
 
   try {
-    // 2. BUSCA DE REGISTROS PENDENTES NA FILA QUENTE:
+    // 2. BUSCA DE REGISTROS PENDENTES NA FILA QUENTE (com teto por execução —
+    //    o cron roda a cada minuto, então não há motivo pra uma única execução
+    //    tentar engolir uma fila inteira acumulada):
     debugLog("2. Buscando notificações pendentes...");
     const { data: tasks, error: fetchError } = await supabase
       .from('notification_outbox')
       .select('*')
       .eq('status', 'pending')
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .limit(BATCH_LIMIT);
 
     if (fetchError) throw fetchError;
-    
+
     // 🚨 CORREÇÃO: Usando a variável 'tasks' corretamente
     if (!tasks || tasks.length === 0) {
       debugLog("3. Nenhuma pendência encontrada.");
       return { status: 200, data: { message: "Sem pendências" } };
     }
 
-    debugLog(`4. Encontrei ${tasks.length} itens. Iniciando loop de disparo.`);
+    debugLog(`4. Encontrei ${tasks.length} itens. Iniciando disparo com concorrência ${CONCURRENCY}.`);
 
-    // 3. LOOP DE PROCESSAMENTO:
-    // 🚨 CORREÇÃO: Padronizado para 'task'
-    for (const task of tasks) {
+    // 3. PROCESSAMENTO COM CONCORRÊNCIA CONTROLADA:
+    async function processTask(task: any): Promise<void> {
       debugLog(`5. Processando ID: ${task.id}`);
 
       // 3.1. LOCK DE SEGURANÇA:
       const { error: updateError } = await supabase
         .from('notification_outbox')
-        .update({ 
-          status: 'processing', 
-          updated_at: new Date().toISOString() 
+        .update({
+          status: 'processing',
+          updated_at: new Date().toISOString()
         })
         .eq('id', task.id);
 
       if (updateError) {
         debugLog(`6. Falha ao travar o ID ${task.id}:`, updateError);
-        continue; 
+        return;
       }
 
       // 3.2. ACIONAMENTO DO GATEWAY:
@@ -156,21 +185,21 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
               "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
               "x-gateway-secret": Deno.env.get("NOTIFICATION_GATEWAY_SECRET") || ""
             },
-            body: JSON.stringify(task), 
+            body: JSON.stringify(task),
           }
         );
 
         if (!response.ok) {
           const errorText = await response.text();
           debugLog(`7. Falha no Gateway para ID ${task.id}:`, errorText);
-          
+
           // 🚨 CONTROLE DE RETENTATIVAS CORRIGIDO
           const nextRetry = (task.retry_count || 0) + 1;
           const isDead = nextRetry >= (task.max_retries || 3);
 
           await supabase
             .from('notification_outbox')
-            .update({ 
+            .update({
               status: isDead ? 'dead_letter' : 'pending',
               retry_count: nextRetry,
               error_message: `Dispatcher HTTP Error: ${response.status} - ${errorText}`,
@@ -178,7 +207,7 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
             })
             .eq('id', task.id);
         } else {
-            debugLog(`8. Gateway confirmou o envio do ID: ${task.id}`);
+          debugLog(`8. Gateway confirmou o envio do ID: ${task.id}`);
         }
 
       } catch (networkError: any) {
@@ -190,7 +219,7 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
 
         await supabase
           .from('notification_outbox')
-          .update({ 
+          .update({
             status: isDead ? 'dead_letter' : 'pending',
             retry_count: nextRetry,
             error_message: `Dispatcher Network Error: ${networkError.message}`,
@@ -199,6 +228,8 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
           .eq('id', task.id);
       }
     }
+
+    await runWithConcurrency(tasks, CONCURRENCY, processTask);
 
     return { status: 200, data: { message: "Processamento finalizado" } };
 
