@@ -22,12 +22,36 @@
  *    quanto o padrão unificado de objetos `{ status, data, headers }`.
  * 5. Fail-Safe Global: Captura exceções não tratadas na regra de negócio, garantindo
  *    resposta JSON padronizada sem vazamento de stack trace.
+ *
+ * ============================================================================
+ * [v2.0.0 — SESSÃO CENTRALIZADA (`authMode.type === 'session', enforcement: 'wrapper'`)]
+ * ============================================================================
+ * Pra rotas marcadas dessa forma no `registry.ts`, o wrapper agora chama
+ * `validateRequest()` ELE MESMO, antes do handler rodar, via
+ * `_shared/session-guard.ts` (`resolveSessionPerimeter`). Se a sessão for
+ * válida, o handler recebe o resultado pronto em `ctx.auth` — não precisa
+ * mais chamar `validateRequest` de novo. Se falhar (`SESSION_EXPIRED` ou
+ * `UNAUTHORIZED`), o wrapper já devolve a resposta padrão (com handoff token
+ * no caso de sessão expirada) e o handler nem chega a rodar.
+ *
+ * Pra rotas POST que precisam do corpo da requisição pra montar o handoff
+ * token (`visit_id`/`visit_update_id`/`target_url` vindos do payload, não da
+ * query string), o wrapper lê o corpo UMA VEZ (stream só permite uma leitura)
+ * e repassa como `ctx.rawBody` — o handler usa esse valor em vez de chamar
+ * `req.text()`/`req.json()` de novo.
+ *
+ * Handlers que NÃO usam sessão (ou que ainda estão com
+ * `enforcement: 'manual'`, migração pendente) não são afetados: o `ctx`
+ * continua sendo passado, mas fica com `auth`/`rawBody` ausentes, e o
+ * handler simplesmente não declara o segundo parâmetro — chamar uma função
+ * JS com um argumento a mais do que ela declara é inofensivo.
  */
 
 import { FUNCTION_CONFIGS } from "./registry.ts";
-import { getSafeCorsOrigin } from "./security.ts";
-import { validateRequest } from "./auth.ts";
+import { getSafeCorsOrigin, getSafeRedirectUrl } from "./security.ts";
+import { validateRequest, type AuthContext } from "./auth.ts";
 import { verifyHmacSignature } from "./hmac.ts";
+import { resolveSessionPerimeter } from "./session-guard.ts";
 
 export interface StandardResponse {
   status: number;
@@ -37,7 +61,23 @@ export interface StandardResponse {
 }
 
 /**
- * Realiza uma comparação segura em tempo constante (constant-time) entre duas strings 
+ * Contexto extra repassado ao handler quando o wrapper já fez algum trabalho
+ * de borda por ele — hoje, só preenchido pra rotas com
+ * `authMode.type === 'session'` e `enforcement: 'wrapper'`.
+ */
+export interface RequestContext {
+  /** Presente quando a sessão já foi validada centralmente pelo wrapper. */
+  auth?: AuthContext;
+  /**
+   * Corpo da requisição (POST) já lido pelo wrapper, quando aplicável.
+   * Use este valor em vez de chamar `req.text()`/`req.json()` de novo — o
+   * stream do `Request` só pode ser lido uma vez.
+   */
+  rawBody?: string;
+}
+
+/**
+ * Realiza uma comparação segura em tempo constante (constant-time) entre duas strings
  * para prevenir timing attacks em segredos e chaves de API.
  */
 function safeCompare(actual: string, expected: string): boolean {
@@ -46,7 +86,7 @@ function safeCompare(actual: string, expected: string): boolean {
   const expectedBuf = encoder.encode(expected);
 
   // O timingSafeEqual exige buffers de tamanhos estritamente iguais.
-  // Se os tamanhos divergirem, comparamos a entrada com ela mesma para manter 
+  // Se os tamanhos divergirem, comparamos a entrada com ela mesma para manter
   // o fluxo simétrico de tempo, retornando falso em seguida.
   if (actualBuf.byteLength !== expectedBuf.byteLength) {
     crypto.subtle.timingSafeEqual(actualBuf, actualBuf);
@@ -58,17 +98,18 @@ function safeCompare(actual: string, expected: string): boolean {
 
 /**
  * Envolve uma Edge Function com validações rigorosas de segurança, CORS e tratamento de erros.
- * 
+ *
  * @param {string} functionName - Identificador da função correspondente no `registry.ts`.
- * @param {Function} handler - Lógica de negócio da Edge Function.
+ * @param {Function} handler - Lógica de negócio da Edge Function. O segundo parâmetro
+ *   (`ctx`) é opcional — só é relevante pra rotas com sessão centralizada no wrapper.
  * @returns {Function} Handler compatível com o Deno `serve()`.
  */
 export const withSecurity = (
   functionName: string,
-  handler: (req: Request) => Promise<Response | StandardResponse>
+  handler: (req: Request, ctx?: RequestContext) => Promise<Response | StandardResponse>
 ) => {
   return async (req: Request): Promise<Response> => {
-    
+
     // -----------------------------------------------------------------------
     // [PASSO 1]: Recuperação e Validação do Contrato de Rota no Registry
     // -----------------------------------------------------------------------
@@ -77,7 +118,7 @@ export const withSecurity = (
     if (!config) {
       console.error(`[WRAPPER FATAL ERROR]: Função '${functionName}' não mapeada no registry.ts`);
       return new Response(
-        JSON.stringify({ error: "Configuração de segurança ausente no registro de borda." }), 
+        JSON.stringify({ error: "Configuração de segurança ausente no registro de borda." }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
@@ -87,7 +128,7 @@ export const withSecurity = (
     // -----------------------------------------------------------------------
     const defaultHeaders = ["authorization", "x-client-info", "apikey", "content-type", "x-session-token", "x-access-token", "x-exchange-token", "x-sbx-env"];
     const allAllowedHeaders = [...new Set([...defaultHeaders, ...config.requiredHeaders])].join(", ");
-    
+
     const reqOrigin = req.headers.get("Origin") || req.headers.get("Referer") || "";
     let finalAllowedOrigin = "";
 
@@ -127,7 +168,7 @@ export const withSecurity = (
     // -----------------------------------------------------------------------
     if (!config.methods.includes(req.method)) {
       return new Response(
-        JSON.stringify({ error: `Método HTTP ${req.method} não permitido para esta rota.` }), 
+        JSON.stringify({ error: `Método HTTP ${req.method} não permitido para esta rota.` }),
         { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -137,12 +178,40 @@ export const withSecurity = (
     // =======================================================================
     let perimeterAuthorized = false;
     const perimeterErrorMsg = "Unauthorized: Acesso negado.";
+    let sessionCtx: RequestContext | undefined;
+
+    // 5.0. [v2.0.0] Sessão centralizada no wrapper (authMode.type === 'session', enforcement: 'wrapper')
+    if (config.authMode?.type === "session" && config.authMode.enforcement === "wrapper") {
+      const originPath = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
+      const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/accounts/signin");
+
+      let rawBody: string | undefined;
+      if (req.method === "POST") {
+        try {
+          rawBody = await req.text();
+        } catch {
+          rawBody = "";
+        }
+      }
+
+      const result = await resolveSessionPerimeter(req, { originPath, authPath, rawBody });
+
+      if (!result.ok) {
+        return new Response(
+          JSON.stringify(result.data),
+          { status: result.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      sessionCtx = { auth: result.auth, rawBody };
+      perimeterAuthorized = true;
+    }
 
     // 5.A. Validação de Segredo Compartilhado (Server-to-Server / Cron / Dispatcher)
-    if (config.requiresSecret) {
+    if (config.requiresSecret && !perimeterAuthorized) {
       const secretHeader = req.headers.get("x-gateway-secret") || req.headers.get("authorization");
       const expectedSecret = Deno.env.get(config.requiresSecret);
-      
+
       if (expectedSecret && secretHeader) {
         const cleanHeader = secretHeader.replace(/^Bearer\s+/i, "").trim();
         if (safeCompare(cleanHeader, expectedSecret.trim())) {
@@ -152,6 +221,11 @@ export const withSecurity = (
     }
 
     // 5.B. Validação de Sessão de Usuário via validateRequest (com try/catch robusto)
+    // [Legado — pré-v2.0.0]: mantido por compatibilidade, mas hoje nenhuma função
+    // seta `requiresSession: true` no registry (todas as rotas de sessão usam
+    // `authMode.type === 'session'`, tratado no 5.0 acima quando `enforcement`
+    // é `'wrapper'`, ou continuam com checagem manual dentro do próprio handler
+    // quando `enforcement` é `'manual'`).
     if (config.requiresSession && !perimeterAuthorized) {
       try {
         const authContext = await validateRequest(req);
@@ -182,10 +256,10 @@ export const withSecurity = (
     // -----------------------------------------------------------------------
     try {
       console.log(`[withSecurity DEBUG] Iniciando handler: ${functionName}`);
-      const result = await handler(req);
-      
+      const result = await handler(req, sessionCtx);
+
       console.log(`[withSecurity DEBUG] Handler retornou. Tipo: ${typeof result}`);
-      
+
       if (result instanceof Response) {
         console.log("[withSecurity DEBUG] Retorno é instância de Response nativa.");
         Object.entries(corsHeaders).forEach(([k, v]) => result.headers.set(k, v));
@@ -193,7 +267,7 @@ export const withSecurity = (
       }
 
       console.log("[withSecurity DEBUG] Retorno é StandardResponse. status:", (result as any).status);
-      
+
       // Checagem pré-serialização para ver se o objeto não está quebrado
       try {
         const payload = JSON.stringify((result as any).data || { error: (result as any).error });
@@ -203,7 +277,7 @@ export const withSecurity = (
       }
 
       return new Response(
-        JSON.stringify((result as any).data || { error: (result as any).error }), 
+        JSON.stringify((result as any).data || { error: (result as any).error }),
         {
           status: (result as any).status,
           headers: { ...corsHeaders, "Content-Type": "application/json", ...((result as any).headers || {}) }
@@ -213,14 +287,14 @@ export const withSecurity = (
     } catch (err: any) {
       console.error(`[withSecurity FATAL ERROR em ${functionName}]:`, err);
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          code: "INTERNAL_SERVER_ERROR", 
-          message: err.message || "Erro crítico no wrapper." 
-        }), 
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        JSON.stringify({
+          success: false,
+          code: "INTERNAL_SERVER_ERROR",
+          message: err.message || "Erro crítico no wrapper."
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
         }
       );
     }

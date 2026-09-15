@@ -29,39 +29,27 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { validateRequest } from "../_shared/auth.ts";
-import { withSecurity } from "../_shared/server.ts";
+import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
-import { getSafeRedirectUrl } from "../_shared/security.ts";
 
 const EVENT_BASE_URLS = {
   production: "https://event-query.superbid.net",
   staging: "https://event-query.stage.superbid.net"
 };
 
-serve(withSecurity('sbx-event', async (req: Request) => {
-  
+serve(withSecurity('sbx-event', async (req: Request, ctx?: RequestContext) => {
+
   debugLog(`[sbx-event] 🚀 Iniciando requisição.`);
 
   // =========================================================================
-  // FASE 1: GATEKEEPER DE BORDA (Validação Stateless do JWT)
+  // FASE 1: GATEKEEPER DE BORDA
+  // [v2.0.0]: sessão já validada centralmente pelo wrapper (registry.ts:
+  // authMode.type === 'session', enforcement: 'wrapper') — `ctx.auth` chega
+  // pronto aqui. SESSION_EXPIRED/UNAUTHORIZED (com handoff token) são
+  // tratados em `_shared/session-guard.ts`; o handler nem chega a rodar se
+  // a sessão for inválida.
   // =========================================================================
-  let auth;
-  try {
-    auth = await validateRequest(req);
-  } catch (err: any) {
-    const authUrl = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/accounts/signin");
-    debugLog(`[sbx-event] ❌ Falha de autenticação: ${err.message}`);
-    return {
-      status: 401,
-      data: { 
-        success: false, 
-        code: "UNAUTHORIZED", 
-        message: "Sessão inválida ou expirada.", 
-        fallback_url: authUrl 
-      }
-    };
-  }
+  const auth = ctx?.auth;
 
   // =========================================================================
   // FASE 2: LÓGICA DE NEGÓCIO E PROXY UPSTREAM
@@ -74,7 +62,7 @@ serve(withSecurity('sbx-event', async (req: Request) => {
       throw Object.assign(new Error("O parâmetro 'event_id' é obrigatório."), { errorCode: "MISSING_EVENT_ID" });
     }
 
-    const env = auth.environment || "staging";
+    const env = auth?.environment || "staging";
     const eventBaseUrl = EVENT_BASE_URLS[env] || EVENT_BASE_URLS.staging;
 
     // Proxy para o Upstream da Superbid

@@ -19,8 +19,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { validateRequest } from "../_shared/auth.ts";
-import { withSecurity } from "../_shared/server.ts";
+import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
 import { getSafeRedirectUrl } from "../_shared/security.ts";
 
@@ -98,10 +97,9 @@ async function resolveOrchestratorConfigs(
  * HANDLER PRINCIPAL (E/S SEGURA DE CONFIGURAÇÕES DE ROTA)
  * ============================================================================
  */
-serve(withSecurity('orchestrator-configs', async (req: Request) => {
-  // Captura preventiva dos headers de rastreio e fallback no milissegundo zero
+serve(withSecurity('orchestrator-configs', async (req: Request, ctx?: RequestContext) => {
+  // Captura preventiva do header de rastreio (usado no fallback do erro interno, mais abaixo)
   const originPath = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
-  const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/");
 
   try {
     // 1. Restrição Estrita de Método HTTP (Apenas Leitura via GET)
@@ -113,76 +111,14 @@ serve(withSecurity('orchestrator-configs', async (req: Request) => {
     }
 
     // =========================================================================
-    // 2. SEGURANÇA: Validação de Identidade (Padrão SbX Core)
+    // 2. SEGURANÇA: Validação de Identidade
+    // [v2.0.0]: sessão já validada centralmente pelo wrapper (registry.ts:
+    // authMode.type === 'session', enforcement: 'wrapper') — `ctx.auth`
+    // chega pronto aqui. SESSION_EXPIRED (com handoff token) e UNAUTHORIZED
+    // são tratados em `_shared/session-guard.ts`; o handler nem chega a
+    // rodar se a sessão for inválida.
     // =========================================================================
-    let auth;
-    try {
-      auth = await validateRequest(req);
-    } catch (err: any) {
-      let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
-      let errorCode = "UNAUTHORIZED";
-      let fallbackUrl = authPath;
-      let statusCode = 401;
-
-      // ✨ [HANDOFF TOKEN / SIGNED STATE]: A Sessão Expirou. Lacramos o cofre.
-      if (err.message.includes("SESSION_EXPIRED")) {
-        userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-        errorCode = "SESSION_EXPIRED";
-        
-        let intentVisitId = null;
-        let intentUpdateId = null;
-        let intentTargetUrl = originPath; // Default para a origem
-
-        // Como o orchestrator-configs é exclusivamente GET, extraímos do Header a origem real (Front-End)
-        // e tentamos remontar os parâmetros (visit_id) caso a origem os possua.
-        try {
-          const [path, query = ""] = originPath.split("?");
-          const qParams = new URLSearchParams(query);
-          
-          intentVisitId = qParams.get("visit_id") || null;
-          intentUpdateId = qParams.get("visit_update_id") || null;
-          
-          intentTargetUrl = originPath;
-        } catch (e) {}
-
-        try {
-          // Importação em tempo de execução para evitar ciclos no topo, caso o s2s não esteja carregado
-          const { signSigninParameters } = await import("../_shared/s2s.ts");
-          
-          const handoffToken = await signSigninParameters({
-            visit_id: intentVisitId,
-            visit_update_id: intentUpdateId,
-            target_url: intentTargetUrl,
-            origin_url: originPath
-          });
-          
-          // ✨ Isola apenas o path base
-          const cleanAuthPath = authPath.split('?')[0] || "/accounts/signin";
-          fallbackUrl = `${cleanAuthPath}?handoff_token=${handoffToken}`;
-          
-          debugLog("[Orchestrator Configs] Handoff Token emitido com sucesso na interceptação passiva.");
-        } catch (jwtErr) {
-          debugLog("[Orchestrator Configs] Erro ao assinar Handoff Token. Roteando limpo.", jwtErr);
-          fallbackUrl = authPath.split('?')[0] || "/accounts/signin";
-        }
-
-      } else if (err.message.includes("FORBIDDEN")) {
-        userMessage = "Você não tem permissão para acessar este recurso.";
-        errorCode = "FORBIDDEN";
-        fallbackUrl = originPath;
-        statusCode = 403;
-      }
-
-      return { 
-        status: statusCode,
-        data: { 
-          success: false,
-          code: errorCode,
-          message: userMessage, 
-          fallback_url: fallbackUrl 
-        }
-      };
-    }
+    const auth = ctx?.auth;
 
     // =========================================================================
     // 3. EXTRACÃO DE PARÂMETROS DA URL (Contexto Multidimensional de Cards)

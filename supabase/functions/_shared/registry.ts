@@ -30,43 +30,111 @@
  * "fechado", nunca "aberto".
  *
  * ============================================================================
+ * [v2.0.0 — `authMode` OBRIGATÓRIO: FECHANDO O SEGUNDO BURACO DO FAIL-SAFE]
+ * ============================================================================
+ * A regra de ouro acima protege contra "função esquecida no registry" — mas
+ * até a v1.x não protegia contra o caso irmão: uma função REGISTRADA aqui,
+ * porém sem nenhum de `requiresSecret`/`requiresSession`/`requiresHmac`
+ * setado. Nesse estado, era impossível saber só de ler este arquivo se isso
+ * significava "aberta ao público de propósito" ou "esqueceram de configurar"
+ * — e foi exatamente assim que 7 das 15 funções ficaram anos exigindo sessão
+ * de verdade (checada na mão, dentro do próprio handler) sem que o registry
+ * documentasse isso em lugar nenhum.
+ *
+ * `authMode` fecha esse buraco: é um campo OBRIGATÓRIO (união discriminada),
+ * então o TypeScript recusa compilar uma função nova sem essa escolha. Cada
+ * mecanismo real do sistema tem seu próprio `type` nomeado — nada fica
+ * escondido atrás de um "custom" genérico:
+ *
+ *   - `'session'`             → nossa sessão sbX (JWT de `jwt.ts`/`auth.ts`).
+ *   - `'secret'`               → segredo estático server-to-server.
+ *   - `'hmac'`                 → assinatura HMAC com janela de validade.
+ *   - `'sbx-access-token'`     → token bruto OAuth da Superbid (upstream),
+ *                                usado pelas portas de entrada que EMITEM
+ *                                nossa sessão (não podem exigi-la de volta).
+ *   - `'staff-google-auth'`    → JWT do Google Auth para identidade de
+ *                                funcionário do backoffice (mecanismo
+ *                                totalmente distinto dos quatro acima).
+ *   - `'public'`               → zero credencial, por design. Exige `reason`.
+ *   - `'custom'`               → válvula de escape para um mecanismo futuro
+ *                                genuinamente único, sem padrão compartilhado
+ *                                com nenhuma outra função. Exige `reason`.
+ *                                Nenhuma das 15 funções atuais usa este tipo.
+ *
+ * O subcampo `enforcement` diz QUEM checa, não SE existe checagem:
+ *   - `'wrapper'` → o `withSecurity` já bloqueia sozinho, antes do handler
+ *                   rodar (hoje: `notification-dispatcher`, e após a
+ *                   migração desta versão, `notification-gateway`).
+ *   - `'manual'`  → o `server.ts` não faz nada por essa rota; a checagem
+ *                   inteira vive dentro do próprio `index.ts` do handler.
+ *                   Marca visivelmente as rotas candidatas a uma futura
+ *                   centralização (ex: unificar o tratamento de
+ *                   `SESSION_EXPIRED`/handoff token hoje duplicado — e já
+ *                   divergente — em até 7 arquivos).
+ *
+ * IMPORTANTE (escopo desta versão): `authMode` é, por enquanto, uma camada
+ * de DOCUMENTAÇÃO E TIPAGEM sobre o que já existe — não muda nenhum
+ * comportamento em tempo de execução. O `server.ts` continua lendo
+ * `requiresSecret`/`requiresSession`/`requiresHmac`/`origin` exatamente como
+ * antes (mantidos abaixo, inalterados) para as funções que já os usavam. A
+ * ÚNICA mudança funcional deste patch é `notification-gateway`, que ganha
+ * `requiresSecret: 'NOTIFICATION_GATEWAY_SECRET'` de verdade (ver nota na
+ * própria entrada) — todo o resto é só a foto precisa do que cada função já
+ * fazia, agora impossível de deixar em branco por esquecimento.
+ *
+ * ============================================================================
  * [COMO ESCOLHER O MECANISMO DE AUTENTICAÇÃO DE UMA NOVA FUNÇÃO]
  * ============================================================================
  * Ao adicionar uma função nova em `FUNCTION_CONFIGS`, pergunte quem a chama:
  *
  *   - Um USUÁRIO logado no app (sbXPay/Financial Hub), via browser, com um
  *     token de sessão emitido por `_shared/jwt.ts`?
- *       → use `requiresSession: true`. O wrapper valida o `x-session-token`
- *         (ou cookie/Authorization) chamando `validateRequest()` de `auth.ts`.
+ *       → `authMode: { type: 'session', enforcement: ... }`. Se `enforcement`
+ *         for `'wrapper'`, o wrapper valida o `x-session-token` (ou
+ *         cookie/Authorization) chamando `validateRequest()` de `auth.ts`.
+ *         Hoje, TODA função de sessão real usa `enforcement: 'manual'` (ver
+ *         nota do `authMode` acima) — sinalize `'wrapper'` só quando a
+ *         centralização for de fato implementada em `server.ts`.
  *
  *   - Outra Edge Function ou serviço interno que PODE guardar um segredo
  *     estático em texto puro no seu próprio ambiente (ex: uma function
  *     chamando outra function, ambas com acesso a Secrets do Supabase)?
- *       → use `requiresSecret: 'NOME_DA_ENV_VAR'`. O wrapper compara o
- *         header `x-gateway-secret` (ou `Authorization`) em tempo constante
- *         contra o valor dessa env var.
+ *       → `authMode: { type: 'secret', envVar: 'NOME_DA_ENV_VAR', enforcement: 'wrapper' }`.
+ *         O wrapper compara o header `x-gateway-secret` (ou `Authorization`)
+ *         em tempo constante contra o valor dessa env var.
  *
  *   - Um chamador que NÃO guarda segredo em texto no local de origem porque
  *     esse local não é seguro para isso — o exemplo canônico é um job do
  *     `pg_cron`, cujo comando SQL fica visível para qualquer um com acesso
  *     ao SQL Editor (`select * from cron.job`)?
- *       → use `requiresHmac: 'NOME_DA_ENV_VAR'`. O chamador calcula uma
- *         assinatura HMAC-SHA256 sobre um timestamp (usando o segredo como
- *         chave, lido do Supabase Vault em tempo de execução via `pgcrypto`)
- *         e manda só o timestamp + a assinatura (headers `x-timestamp` e
- *         `x-signature`) — o segredo em si nunca trafega nem aparece em
- *         texto puro em lugar nenhum. Ver `_shared/hmac.ts` para a lógica
- *         completa de verificação e o racional detalhado.
+ *       → `authMode: { type: 'hmac', envVar: 'NOME_DA_ENV_VAR', location: 'header', enforcement: 'wrapper' }`.
+ *         O chamador calcula uma assinatura HMAC-SHA256 sobre um timestamp
+ *         (usando o segredo como chave, lido do Supabase Vault em tempo de
+ *         execução via `pgcrypto`) e manda só o timestamp + a assinatura
+ *         (headers `x-timestamp` e `x-signature`) — o segredo em si nunca
+ *         trafega nem aparece em texto puro em lugar nenhum. Se a assinatura
+ *         vier embutida no PATH da URL em vez de headers (caso do
+ *         `financial-gateway-webhook`), use `location: 'path'` e
+ *         `enforcement: 'manual'` — `verifyHmacSignature` só sabe ler
+ *         headers hoje. Ver `_shared/hmac.ts` para a lógica completa.
  *
- *   - Aberta ao público (ex: um endpoint de login antes de existir sessão)?
- *       → não defina nenhum dos três campos acima. Mas documente aqui, com
- *         um comentário ao lado da chave, POR QUE essa função é
- *         intencionalmente pública (evita que pareça um esquecimento numa
- *         futura auditoria).
+ *   - Uma porta de entrada que recebe o token bruto OAuth da Superbid
+ *     (`sbx_access_token`) e é, ela mesma, quem EMITE nossa sessão/token de
+ *     handoff (não pode exigir de volta algo que ainda não existe)?
+ *       → `authMode: { type: 'sbx-access-token', enforcement: 'manual', reason: '...' }`.
  *
- * Os três mecanismos são checados nessa ordem em `server.ts` (5.A → 5.B →
- * 5.C) e são independentes entre si — nada impede combinar mais de um no
- * futuro (ex: aceitar sessão OU segredo), bastando setar mais de um campo.
+ *   - Um endpoint de identidade de FUNCIONÁRIO do backoffice, autenticado
+ *     via Google Auth (não é sessão sbX de cliente final)?
+ *       → `authMode: { type: 'staff-google-auth', enforcement: 'manual', reason: '...' }`.
+ *
+ *   - Aberta ao público de verdade (zero credencial — ex: um health-check)?
+ *       → `authMode: { type: 'public', reason: '...' }`. Documente SEMPRE o
+ *         motivo, pra não parecer um esquecimento numa futura auditoria.
+ *         Nenhuma das 15 funções atuais se encaixa aqui.
+ *
+ * Os mecanismos com `enforcement: 'wrapper'` são checados em `server.ts`
+ * (5.A → 5.B → 5.C) e são independentes entre si — nada impede combinar mais
+ * de um no futuro (ex: aceitar sessão OU segredo).
  *
  * ============================================================================
  * [OUTROS CAMPOS DO CONTRATO]
@@ -88,6 +156,10 @@
  *   nunca enviam `Origin`. Por isso `notification-dispatcher` usa
  *   `origin: 'self'` como camada extra, mas depende de `requiresHmac` para a
  *   proteção real.
+ *
+ * @author Cesar Ismael Pereira da Costa
+ * @author Gemini Pro
+ * @version 2.0.0 (authMode obrigatório)
  */
 
 export type FunctionConfig = {
@@ -103,61 +175,114 @@ export type FunctionConfig = {
    * Quando `'self'`, restringe o CORS a aceitar apenas requisições cuja
    * origem é o próprio projeto Supabase. É só política de CORS (proteção
    * de browser) — não autentica chamadas server-to-server, que não enviam
-   * `Origin`. Use em conjunto com `requiresSecret`/`requiresSession`/
-   * `requiresHmac` para proteção real de acesso.
+   * `Origin`. Use em conjunto com o mecanismo de `authMode` para proteção
+   * real de acesso.
    */
   origin?: string;
   /**
    * Nome da env var com o segredo estático server-to-server exigido no
    * perímetro (comparado em tempo constante contra o header
-   * `x-gateway-secret` ou `Authorization`). Use quando o chamador é capaz
-   * de guardar um segredo em texto puro no seu próprio ambiente seguro
-   * (outra Edge Function, por exemplo).
+   * `x-gateway-secret` ou `Authorization`). Mantido por compatibilidade com
+   * o enforcement já existente em `server.ts`; espelhado em `authMode`.
    */
   requiresSecret?: string;
   /**
    * Exige `x-session-token` válido (ou cookie/Authorization equivalente)
    * antes de executar o handler — valida uma sessão de usuário autenticado
    * do sbXPay/Financial Hub via `validateRequest()` (`_shared/auth.ts`).
+   * Mantido por compatibilidade com o enforcement já existente em
+   * `server.ts`; espelhado em `authMode`.
    */
   requiresSession?: boolean;
   /**
    * Nome da env var com o segredo usado para validar a assinatura HMAC
    * (headers `x-timestamp` + `x-signature`, verificados por
-   * `verifyHmacSignature` em `_shared/hmac.ts`). Use quando o chamador não
-   * pode carregar um segredo em texto puro no local de origem da chamada —
-   * o exemplo canônico é um job do `pg_cron`, cujo comando SQL fica visível
-   * a qualquer um com acesso ao SQL Editor (`select * from cron.job`). O
-   * segredo em si nunca trafega: o chamador só envia timestamp + assinatura
-   * calculada com o segredo como chave (lido do Supabase Vault em tempo de
-   * execução via `pgcrypto`, nunca escrito em texto puro no comando do job).
+   * `verifyHmacSignature` em `_shared/hmac.ts`). Mantido por
+   * compatibilidade com o enforcement já existente em `server.ts`;
+   * espelhado em `authMode`.
    */
   requiresHmac?: string;
+
+  /**
+   * [v2.0.0] OBRIGATÓRIO. Declara explicitamente qual mecanismo de
+   * autenticação esta rota usa — nunca fica em branco por esquecimento (o
+   * TypeScript recusa compilar sem essa escolha). Ver seção
+   * "[v2.0.0 — authMode OBRIGATÓRIO]" no cabeçalho deste arquivo para o
+   * racional completo, e "[COMO ESCOLHER...]" para o guia de decisão.
+   *
+   * Hoje é uma camada de documentação/tipagem sobre o enforcement real, que
+   * continua vindo de `requiresSecret`/`requiresSession`/`requiresHmac`
+   * (acima) para as rotas com `enforcement: 'wrapper'`. Para as rotas com
+   * `enforcement: 'manual'`, a checagem inteira vive no próprio handler —
+   * `authMode` aqui é o que documenta essa realidade, não o que a aplica.
+   */
+  authMode:
+    | { type: "session"; enforcement: "wrapper" | "manual"; reason?: string }
+    | { type: "secret"; envVar: string; enforcement: "wrapper" | "manual"; reason?: string }
+    | {
+        type: "hmac";
+        envVar: string;
+        location: "header" | "path";
+        enforcement: "wrapper" | "manual";
+        reason?: string;
+      }
+    | { type: "sbx-access-token"; enforcement: "manual"; reason: string }
+    | { type: "staff-google-auth"; enforcement: "manual"; reason: string }
+    | { type: "public"; reason: string }
+    | { type: "custom"; reason: string };
 };
 
 export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   // ==========================================
   // 1. HUB FINANCEIRO & ORQUESTRAÇÃO
   // ==========================================
-  'financial-gateway': { 
-    methods: ['GET', 'POST'], 
-    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url']
+  'financial-gateway': {
+    methods: ['GET', 'POST'],
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    authMode: {
+      type: 'session',
+      enforcement: 'manual',
+      reason: 'Validação de sessão feita no próprio handler (validateRequest) para permitir fallback_url e handoff token (JWT de retomada) específicos do fluxo de simulação — candidata a futura centralização.',
+    },
   },
-  'financial-gateway-gate': { 
-    methods: ['POST'], 
-    requiredHeaders: [] 
+  'financial-gateway-gate': {
+    methods: ['POST'],
+    requiredHeaders: [],
+    authMode: {
+      type: 'sbx-access-token',
+      enforcement: 'manual',
+      reason: 'Porta de entrada que recebe o sbx_access_token bruto da Superbid e é quem EMITE nossa sessão (generateSessionToken) — não pode depender de uma sessão que ainda não existe.',
+    },
   },
-  'financial-gateway-webhook': { 
-    methods: ['POST'], 
-    requiredHeaders: [] 
+  'financial-gateway-webhook': {
+    methods: ['POST'],
+    requiredHeaders: [],
+    authMode: {
+      type: 'hmac',
+      envVar: '(lido internamente via Supabase Vault, por parceiro)',
+      location: 'path',
+      enforcement: 'manual',
+      reason: 'Assinatura HMAC extraída de parâmetros no PATH da URL (simId/updateId/timestamp/signature), não de headers — formato incompatível com verifyHmacSignature, que só lê x-timestamp/x-signature.',
+    },
   },
-  'orchestrator': { 
-    methods: ['GET', 'POST'], 
-    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url']
+  'orchestrator': {
+    methods: ['GET', 'POST'],
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    authMode: {
+      type: 'session',
+      enforcement: 'manual',
+      reason: 'Validação de sessão feita no próprio handler (validateRequest) para permitir fallback_url e handoff token específicos da navegação — candidata a futura centralização.',
+    },
   },
-  'orchestrator-configs': { 
-    methods: ['GET'], 
-    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url']
+  'orchestrator-configs': {
+    methods: ['GET'],
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    // [v2.0.0 — MIGRADA, grupo 1]: sessão agora validada centralmente pelo
+    // wrapper (`_shared/session-guard.ts`), não mais na mão dentro do handler.
+    authMode: {
+      type: 'session',
+      enforcement: 'wrapper',
+    },
   },
 
   // ==========================================
@@ -168,53 +293,113 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
     requiredHeaders: ['x-timestamp', 'x-signature'],
     origin: 'self',
     requiresHmac: 'NOTIFICATION_DISPATCHER_SECRET',
+    authMode: {
+      type: 'hmac',
+      envVar: 'NOTIFICATION_DISPATCHER_SECRET',
+      location: 'header',
+      enforcement: 'wrapper',
+    },
   },
-  'notification-gateway': { 
-    methods: ['POST'], 
-    requiredHeaders: ['x-gateway-secret']
+  'notification-gateway': {
+    methods: ['POST'],
+    requiredHeaders: ['x-gateway-secret'],
+    // [v2.0.0 — MUDANÇA FUNCIONAL]: antes, o segredo era checado só na mão
+    // dentro do handler, com `!==` (não é tempo-constante). Agora o
+    // `withSecurity` valida via `safeCompare()` (tempo-constante) ANTES do
+    // handler rodar — a checagem manual que existia dentro do handler foi
+    // removida (`notification-gateway/index.ts`).
+    requiresSecret: 'NOTIFICATION_GATEWAY_SECRET',
+    authMode: {
+      type: 'secret',
+      envVar: 'NOTIFICATION_GATEWAY_SECRET',
+      enforcement: 'wrapper',
+    },
   },
-  'notification-system-message': { 
-    methods: ['POST'], 
-    requiredHeaders: ['x-session-token']
+  'notification-system-message': {
+    methods: ['POST'],
+    requiredHeaders: ['x-session-token'],
+    authMode: {
+      type: 'session',
+      enforcement: 'manual',
+      reason: 'Validação de sessão feita no próprio handler (validateRequest); hoje devolve 401 plano, sem fallback_url/handoff token — candidata a futura centralização.',
+    },
   },
 
   // ==========================================
   // 3. AUTENTICAÇÃO E SESSÃO (BFFs)
   // ==========================================
-  'sbx-auth': { 
-    methods: ['POST'], 
-    requiredHeaders: [] 
+  'sbx-auth': {
+    methods: ['POST'],
+    requiredHeaders: [],
+    authMode: {
+      type: 'sbx-access-token',
+      enforcement: 'manual',
+      reason: 'Autentica via sbx_access_token bruto (Superbid), validado no upstream /account/v2/user/me — é quem EMITE nossa sessão, não pode depender dela.',
+    },
   },
-  'sbx-auth-exchange': { 
-    methods: ['POST'], 
-    requiredHeaders: [] 
+  'sbx-auth-exchange': {
+    methods: ['POST'],
+    requiredHeaders: [],
+    authMode: {
+      type: 'sbx-access-token',
+      enforcement: 'manual',
+      reason: 'Modo "issue" aceita x-access-token (sbx_access_token bruto); modo "redeem" aceita x-exchange-token (JWT efêmero próprio, 60s) — handshake de duas pontas sobre a mesma credencial raiz da Superbid.',
+    },
   },
 
   // ==========================================
   // 4. OFERTAS & NEGÓCIO
   // ==========================================
-  'sbx-event': { 
-    methods: ['GET'], 
-    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'] 
+  'sbx-event': {
+    methods: ['GET'],
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    // [v2.0.0 — MIGRADA, grupo 1]: antes devolvia 401 plano, sem handoff
+    // token (única das 7 rotas de sessão sem essa cobertura). Agora usa o
+    // mesmo SESSION_EXPIRED/handoff canônico das demais — ganha a
+    // funcionalidade que nunca teve, só por virar `'wrapper'`.
+    authMode: {
+      type: 'session',
+      enforcement: 'wrapper',
+    },
   },
-  'sbx-offer': { 
-    methods: ['GET'], 
-    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url']
+  'sbx-offer': {
+    methods: ['GET'],
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    // [v2.0.0 — MIGRADA, grupo 1]
+    authMode: {
+      type: 'session',
+      enforcement: 'wrapper',
+    },
   },
-  'sbx-offer-query': { 
-    methods: ['POST'], 
-    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url']
+  'sbx-offer-query': {
+    methods: ['POST'],
+    requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    authMode: {
+      type: 'session',
+      enforcement: 'manual',
+      reason: 'Validação de sessão feita no próprio handler (validateRequest) para permitir fallback_url e handoff token — candidata a futura centralização.',
+    },
   },
-  
+
   // ==========================================
   // 5. ADMINISTRAÇÃO E LOGS
   // ==========================================
-  'manage-backoffice-users': { 
-    methods: ['POST'], 
-    requiredHeaders: []
+  'manage-backoffice-users': {
+    methods: ['POST'],
+    requiredHeaders: [],
+    authMode: {
+      type: 'staff-google-auth',
+      enforcement: 'manual',
+      reason: 'Identidade de funcionário do backoffice via JWT do Google Auth (ensureAdmin) — mecanismo distinto de sessão sbX de cliente final, segredo estático ou HMAC.',
+    },
   },
-  'log-access': { 
-    methods: ['POST'], 
-    requiredHeaders: [] 
+  'log-access': {
+    methods: ['POST'],
+    requiredHeaders: [],
+    authMode: {
+      type: 'staff-google-auth',
+      enforcement: 'manual',
+      reason: 'Mesmo mecanismo do manage-backoffice-users — JWT do Google Auth para identidade de funcionário do backoffice.',
+    },
   },
 };

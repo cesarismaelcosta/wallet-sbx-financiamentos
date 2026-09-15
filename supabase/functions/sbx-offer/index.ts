@@ -8,22 +8,23 @@
  * BFF responsável por obter os detalhes completos de uma oferta e leilão no ecossistema Superbid.
  * 
  * [MUDANÇAS CRÍTICAS DA ARQUITETURA STATELESS]:
- * 1. Segurança de Borda: Exige obrigatoriamente o nosso JWT interno via `validateRequest`.
- * 2. Imunidade a Cross-Environment: O ambiente (`staging` | `production`) é extraído 
+ * 1. Segurança de Borda: Exige obrigatoriamente o nosso JWT interno — validado
+ *    centralmente pelo wrapper `withSecurity` (registry.ts: authMode.type ===
+ *    'session', enforcement: 'wrapper'), não mais chamando `validateRequest`
+ *    aqui dentro. O resultado chega pronto via `ctx.auth`.
+ * 2. Imunidade a Cross-Environment: O ambiente (`staging` | `production`) é extraído
  *    diretamente do payload criptografado do JWT. Ninguém pode adulterar a rota via Query String.
- * 3. Catálogo Público Upstream: Como a Superbid permite leitura pública de ofertas, a função 
+ * 3. Catálogo Público Upstream: Como a Superbid permite leitura pública de ofertas, a função
  *    realiza o proxy de forma anônima e limpa, eliminando a dependência de tokens opacos no banco.
  *
  * @author César Ismael Pereira da Costa
- * @version 4.0.0 (Stateless & Environment Sealed)
+ * @version 4.1.0 (Sessão centralizada no wrapper — v2.0.0 do registry/server)
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { validateRequest } from "../_shared/auth.ts";
-import { withSecurity } from "../_shared/server.ts";
+import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { Vehicle } from "../_shared/types.ts";
 import { debugLog } from "../_shared/logger.ts";
-import { getSafeRedirectUrl } from "../_shared/security.ts";
 
 const OFFER_BASE_URLS = {
   production: "https://offer-query.superbid.net",
@@ -35,77 +36,17 @@ const EVENT_BASE_URLS = {
   staging: "https://event-query.stage.superbid.net"
 };
 
-serve(withSecurity('sbx-offer', async (req: Request) => {
-  
+serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
+
   // =========================================================================
-  // FASE 1: GATEKEEPER DE BORDA (Validação Stateless do JWT)
+  // FASE 1: GATEKEEPER DE BORDA
+  // [v2.0.0]: sessão já validada centralmente pelo wrapper (registry.ts:
+  // authMode.type === 'session', enforcement: 'wrapper') — `ctx.auth` chega
+  // pronto aqui. SESSION_EXPIRED (com handoff token) e UNAUTHORIZED são
+  // tratados em `_shared/session-guard.ts`; o handler nem chega a rodar se
+  // a sessão for inválida.
   // =========================================================================
-  let auth;
-  try {
-    auth = await validateRequest(req);
-  } catch (err: any) {
-    const originPath = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
-    const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/accounts/signin");
-
-    let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
-    let errorCode = "UNAUTHORIZED";
-    let fallbackUrl = authPath;
-    let statusCode = 401;
-
-    // ✨ [HANDOFF TOKEN / SIGNED STATE]: A Sessão Expirou. Lacramos o cofre.
-    if (err.message.includes("SESSION_EXPIRED")) {
-      userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-      errorCode = "SESSION_EXPIRED";
-
-      let intentVisitId = null;
-      let intentUpdateId = null;
-      let intentTargetUrl = originPath;
-
-      // Sendo um GET estrito, tentamos catar o visit_id da URL de origem se o front mandou
-      try {
-        const [path, query = ""] = originPath.split("?");
-        const qParams = new URLSearchParams(query);
-        
-        intentVisitId = qParams.get("visit_id") || null;
-        intentUpdateId = qParams.get("visit_update_id") || null;
-      } catch (e) {}
-
-      try {
-        // Importação em runtime para evitar bloqueios de escopo no Edge
-        const { signSigninParameters } = await import("../_shared/s2s.ts");
-        
-        const handoffToken = await signSigninParameters({
-          visit_id: intentVisitId,
-          visit_update_id: intentUpdateId,
-          target_url: intentTargetUrl,
-          origin_url: originPath
-        });
-        
-        const cleanAuthPath = authPath.split('?')[0] || "/accounts/signin";
-        fallbackUrl = `${cleanAuthPath}?handoff_token=${handoffToken}`;
-        
-        debugLog("[sbx-offer] Handoff Token emitido na interceptação de borda.");
-      } catch (jwtErr) {
-        debugLog("[sbx-offer] Erro ao assinar Handoff Token.", jwtErr);
-        fallbackUrl = authPath.split('?')[0] || "/accounts/signin";
-      }
-    } else if (err.message.includes("FORBIDDEN")) {
-      userMessage = "Você não tem permissão para acessar este recurso.";
-      errorCode = "FORBIDDEN";
-      fallbackUrl = originPath;
-      statusCode = 403;
-    }
-
-    return {
-      status: statusCode,
-      data: { 
-        success: false, 
-        code: errorCode, 
-        message: userMessage, 
-        fallback_url: fallbackUrl 
-      }
-    };
-  }
+  const auth = ctx?.auth;
 
   // =========================================================================
   // FASE 2: LÓGICA DE NEGÓCIO E PROXY UPSTREAM
@@ -119,7 +60,7 @@ serve(withSecurity('sbx-offer', async (req: Request) => {
     }
 
     // O ambiente é lido estritamente do token lacrado, impedindo adulteração externa
-    const env = auth.environment || "staging";
+    const env = auth?.environment || "staging";
     const offerBaseUrl = OFFER_BASE_URLS[env] || OFFER_BASE_URLS.staging;
     const eventBaseUrl = EVENT_BASE_URLS[env] || EVENT_BASE_URLS.staging;
 

@@ -20,14 +20,11 @@ import { debugLog } from "../_shared/logger.ts";
 
 serve(withSecurity('notification-gateway', async (req: Request) => {
   // 1. AUTENTICAÇÃO E SEGURANÇA
-  // Valida o header da requisição contra o secret de ambiente para evitar disparos indevidos
-  const receivedSecret = req.headers.get('x-gateway-secret');
-  const expectedSecret = Deno.env.get('NOTIFICATION_GATEWAY_SECRET');
-
-  if (!receivedSecret || receivedSecret !== expectedSecret) {
-    debugLog("ERRO [AUTH]: Acesso negado. Secret inválido ou ausente.");
-    return { status: 401, data: { error: "Unauthorized" } };
-  }
+  // [v2.0.0]: validado centralmente pelo wrapper (registry.ts: authMode.type
+  // === 'secret', enforcement: 'wrapper') via safeCompare() em tempo
+  // constante, ANTES do handler rodar — o handler nem chega a ser chamado
+  // se o header x-gateway-secret vier ausente ou inválido. A checagem
+  // manual que existia aqui (`!==`, não é tempo-constante) foi removida.
 
   // 2. INICIALIZAÇÃO DO SUPABASE
   // Utiliza a Service Role Key para ignorar RLS durante as operações de sistema (Outbox/Histórico)
