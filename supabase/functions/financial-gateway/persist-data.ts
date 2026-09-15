@@ -287,7 +287,7 @@ export async function insertSimulationData(
       const parallelTasks = [];
 
       // 📦 PERSISTÊNCIA DA OFERTA COM O SEU ON CONFLICT INTACTO
-      if (offer && Object.keys(offer).length > 0) {
+      if (offer && offer.offer_id) {
         parallelTasks.push(t`
           INSERT INTO simulation_offers (
             simulation_id, category_id, subcategory_id, subcategory, manager_name, manager_details, seller_id, legal_name, 
@@ -405,7 +405,7 @@ export async function insertSimulationData(
 
             // Se atualizou com sucesso, garante que a oferta está vinculada
             if (updatedVisitLog.length > 0) {
-              if (payload.offer && Object.keys(payload.offer).length > 0) {
+              if (payload.offer && payload.offer.offer_id) {
                 await t`
                   INSERT INTO visit_offers (
                     visit_id, visit_update_id, manager_name, manager_details, seller_id, legal_name, 
@@ -450,10 +450,33 @@ export async function insertSimulationData(
             )
           `;
 
-          if (payload.offer && Object.keys(payload.offer).length > 0) {
-            // ... (Mesmo INSERT em visit_offers do seu código original) ...
+          if (payload.offer && payload.offer.offer_id) {
+            // [BUGFIX]: este bloco só existia como comentário-placeholder —
+            // a oferta nunca era gravada em visit_offers quando o fluxo
+            // criava um visit_update NOVO (ao contrário do caminho acima,
+            // que evolui um CONSULT existente e já fazia esse INSERT).
+            // Mesma query do bloco irmão (linha ~409), só trocando
+            // payload.visit_update_id pelo finalVisitUpdateId recém-criado.
+            await t`
+              INSERT INTO visit_offers (
+                visit_id, visit_update_id, manager_name, manager_details, seller_id, legal_name,
+                economic_group, trade_name, seller_details, event_id, event_description,
+                event_start_date, event_end_date, event_details, offer_id, offer_description,
+                offer_value, category_id, subcategory_id, subcategory, offer_details, created_at
+              ) VALUES (
+                ${payload.visit_id}, ${finalVisitUpdateId}, ${manager.manager_name ?? null}, ${manager}::jsonb,
+                ${seller.seller_id ?? null}, ${seller.legal_name ?? null}, ${seller.economic_group ?? null},
+                ${seller.trade_name ?? null}, ${seller}::jsonb, ${event.event_id ?? null}, ${event.event_description ?? null},
+                ${event.event_start_date ?? null}, ${event.event_end_date ?? null}, ${event}::jsonb,
+                ${offer.offer_id ?? null}, ${offer.offer_description ?? null}, ${offer.offer_value ?? null},
+                ${offer.category_id ?? null}, ${offer.subcategory_id ? Number(offer.subcategory_id) : null},
+                ${offer.subcategory ?? null}, ${offer}::jsonb, NOW()
+              )
+              ON CONFLICT (visit_id, visit_update_id, offer_id) DO UPDATE SET
+                offer_value = EXCLUDED.offer_value, manager_details = EXCLUDED.manager_details, seller_details = EXCLUDED.seller_details
+            `;
           }
-          
+
           payload.visit_update_id = finalVisitUpdateId;
         })());
       }

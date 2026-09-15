@@ -94,37 +94,63 @@
  * -------------------------------------------------------------------------
  * PROCEDURE 2: Detalhes Profundos da Simulação (Modal)
  * -------------------------------------------------------------------------
- * CREATE OR REPLACE FUNCTION get_backoffice_simulation_details(p_simulation_id UUID) 
- * RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$ 
- * DECLARE 
- *   v_result JSONB; 
- * BEGIN 
+ * [SECURITY FIX - 2026-09-15]: Esta função só checava "é algum usuário
+ * backoffice ativo?" (via current_backoffice_actor()), sem restringir o
+ * registro ao partner_id/product_id do usuário — ao contrário da PROCEDURE 1
+ * acima, que já filtrava por allowed_partners/allowed_products. Um "viewer"
+ * restrito a um parceiro conseguia puxar PII completa (nome, CPF, telefone,
+ * e-mail) de simulações de OUTROS parceiros, bastando saber o UUID. Corrigido
+ * replicando o mesmo filtro de escopo usado na listagem. Migration:
+ * 20260915180000_fix_backoffice_detail_rpc_scope.sql — aplicar em dev e homologação.
+ * CREATE OR REPLACE FUNCTION public.get_backoffice_simulation_details(p_simulation_id uuid)
+ * RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_temp' AS $$
+ * DECLARE
+ *   v_result JSONB;
+ *   v_actor RECORD;
+ *   v_allowed_partners JSONB;
+ *   v_allowed_products JSONB;
+ * BEGIN
+ *   SELECT * INTO v_actor FROM public.current_backoffice_actor();
+ *   IF v_actor.role IS NULL THEN
+ *       RETURN jsonb_build_object('error', 'forbidden');
+ *   END IF;
+ *
+ *   v_allowed_partners := v_actor.allowed_partners;
+ *   v_allowed_products := v_actor.allowed_products;
+ *   IF v_actor.role IN ('admin', 'manager') THEN
+ *     v_allowed_partners := '["*"]'::jsonb;
+ *     v_allowed_products := '["*"]'::jsonb;
+ *   END IF;
+ *
  *   SELECT jsonb_build_object(
- *     'id', s.id, 'created_at', s.created_at, 'updated_at', s.updated_at, 'name', s.name, 'document', s.document, 'phone', s.phone, 'email', s.email, 'financed_amount', s.financed_amount, 'installment_value', s.installment_value, 'installments', s.installments, 'down_payment_percentage', s.down_payment_percentage, 'raw_payload', s.raw_payload, 'entity_details', s.entity_details, 'birth_date', s.birth_date, 'gender', s.gender, 'entity_type', s.entity_type, 'requested_value', s.requested_value, 'cet_rate', s.cet_rate, 'simulation_details', s.simulation_details, 
- *     'partners', CASE WHEN p.id IS NOT NULL THEN jsonb_build_object('id', p.id, 'name', p.name, 'logo_url', p.logo_url) ELSE NULL END, 
- *     'product_types', CASE WHEN pt.id IS NOT NULL THEN jsonb_build_object('id', pt.id, 'name', pt.name) ELSE NULL END, 
- *     'stage_types', CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id', st.id, 'name', st.name) ELSE NULL END, 
- *     'status_types', CASE WHEN stt.id IS NOT NULL THEN jsonb_build_object('id', stt.id, 'name', stt.name) ELSE NULL END, 
- *     'financial_institutions', CASE WHEN fi.id IS NOT NULL THEN jsonb_build_object('id', fi.id, 'name', fi.name, 'logo_url', fi.logo_url) ELSE NULL END, 
- *     'result_partner_types', CASE WHEN rpt.id IS NOT NULL THEN jsonb_build_object('id', rpt.id, 'description', rpt.description) ELSE NULL END, 
- *     'visits', CASE WHEN v.id IS NOT NULL THEN jsonb_build_object('id', v.id, 'created_at', v.created_at, 'utm_source', v.utm_source, 'utm_campaign', v.utm_campaign, 'country', v.country, 'state', v.state, 'city', v.city, 'ip_address', v.ip_address, 'operating_system', v.operating_system, 'device_type', v.device_type, 'origin_url', v.origin_url, 'target_url', v.target_url) ELSE NULL END, 
- *     'simulation_offers', (SELECT jsonb_agg(jsonb_build_object('id', so.id, 'simulation_id', so.simulation_id, 'manager_name', so.manager_name, 'seller_id', so.seller_id, 'legal_name', so.legal_name, 'trade_name', so.trade_name, 'event_id', so.event_id, 'event_description', so.event_description, 'event_end_date', so.event_end_date, 'event_start_date', so.event_start_date, 'offer_id', so.offer_id, 'offer_description', so.offer_description, 'offer_value', so.offer_value, 'category_id', so.category_id, 'subcategory_id', so.subcategory_id, 'subcategory', so.subcategory, 'offer_details', so.offer_details, 'event_details', so.event_details, 'manager_details', so.manager_details, 'category_types', CASE WHEN ct.id IS NOT NULL THEN jsonb_build_object('id', ct.id, 'name', ct.name) ELSE NULL END)) FROM simulation_offers so LEFT JOIN category_types ct ON so.category_id = ct.id WHERE so.simulation_id = s.id), 
- *     'simulation_consents', (SELECT jsonb_agg(jsonb_build_object('id', sc.id, 'consent_id', sc.consent_id, 'accepted', sc.accepted, 'accepted_at', sc.accepted_at, 'created_at', sc.created_at, 'ip_address', sc.ip_address, 'country', sc.country, 'state', sc.state, 'city', sc.city, 'operating_system', sc.operating_system, 'device_type', sc.device_type, 'origin_details', sc.origin_details, 'page_snapshot', sc.page_snapshot)) FROM simulation_consents sc WHERE sc.simulation_id = s.id), 
- *     'simulation_updates', (SELECT jsonb_agg(jsonb_build_object('id', su.id, 'operation', su.operation, 'created_at', su.created_at, 'ip_address', su.ip_address, 'country', su.country, 'state', su.state, 'city', su.city, 'user_agent', su.user_agent, 'device_type', su.device_type, 'operating_system', su.operating_system, 'origin_details', su.origin_details)) FROM simulation_updates su WHERE su.simulation_id = s.id), 
+ *     'id', s.id, 'created_at', s.created_at, 'updated_at', s.updated_at, 'name', s.name, 'document', s.document, 'phone', s.phone, 'email', s.email, 'financed_amount', s.financed_amount, 'installment_value', s.installment_value, 'installments', s.installments, 'down_payment_percentage', s.down_payment_percentage, 'raw_payload', s.raw_payload, 'entity_details', s.entity_details, 'birth_date', s.birth_date, 'gender', s.gender, 'entity_type', s.entity_type, 'requested_value', s.requested_value, 'cet_rate', s.cet_rate, 'simulation_details', s.simulation_details,
+ *     'partners', CASE WHEN p.id IS NOT NULL THEN jsonb_build_object('id', p.id, 'name', p.name, 'logo_url', p.logo_url) ELSE NULL END,
+ *     'product_types', CASE WHEN pt.id IS NOT NULL THEN jsonb_build_object('id', pt.id, 'name', pt.name) ELSE NULL END,
+ *     'stage_types', CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id', st.id, 'name', st.name) ELSE NULL END,
+ *     'status_types', CASE WHEN stt.id IS NOT NULL THEN jsonb_build_object('id', stt.id, 'name', stt.name) ELSE NULL END,
+ *     'financial_institutions', CASE WHEN fi.id IS NOT NULL THEN jsonb_build_object('id', fi.id, 'name', fi.name, 'logo_url', fi.logo_url) ELSE NULL END,
+ *     'result_partner_types', CASE WHEN rpt.id IS NOT NULL THEN jsonb_build_object('id', rpt.id, 'description', rpt.description) ELSE NULL END,
+ *     'visits', CASE WHEN v.id IS NOT NULL THEN jsonb_build_object('id', v.id, 'created_at', v.created_at, 'utm_source', v.utm_source, 'utm_campaign', v.utm_campaign, 'country', v.country, 'state', v.state, 'city', v.city, 'ip_address', v.ip_address, 'operating_system', v.operating_system, 'device_type', v.device_type, 'origin_url', v.origin_url, 'target_url', v.target_url) ELSE NULL END,
+ *     'simulation_offers', (SELECT jsonb_agg(jsonb_build_object('id', so.id, 'simulation_id', so.simulation_id, 'manager_name', so.manager_name, 'seller_id', so.seller_id, 'legal_name', so.legal_name, 'trade_name', so.trade_name, 'event_id', so.event_id, 'event_description', so.event_description, 'event_end_date', so.event_end_date, 'event_start_date', so.event_start_date, 'offer_id', so.offer_id, 'offer_description', so.offer_description, 'offer_value', so.offer_value, 'category_id', so.category_id, 'subcategory_id', so.subcategory_id, 'subcategory', so.subcategory, 'offer_details', so.offer_details, 'event_details', so.event_details, 'manager_details', so.manager_details, 'category_types', CASE WHEN ct.id IS NOT NULL THEN jsonb_build_object('id', ct.id, 'name', ct.name) ELSE NULL END)) FROM simulation_offers so LEFT JOIN category_types ct ON so.category_id = ct.id WHERE so.simulation_id = s.id),
+ *     'simulation_consents', (SELECT jsonb_agg(jsonb_build_object('id', sc.id, 'consent_id', sc.consent_id, 'accepted', sc.accepted, 'accepted_at', sc.accepted_at, 'created_at', sc.created_at, 'ip_address', sc.ip_address, 'country', sc.country, 'state', sc.state, 'city', sc.city, 'operating_system', sc.operating_system, 'device_type', sc.device_type, 'origin_details', sc.origin_details, 'page_snapshot', sc.page_snapshot)) FROM simulation_consents sc WHERE sc.simulation_id = s.id),
+ *     'simulation_updates', (SELECT jsonb_agg(jsonb_build_object('id', su.id, 'operation', su.operation, 'created_at', su.created_at, 'ip_address', su.ip_address, 'country', su.country, 'state', su.state, 'city', su.city, 'user_agent', su.user_agent, 'device_type', su.device_type, 'operating_system', su.operating_system, 'origin_details', su.origin_details)) FROM simulation_updates su WHERE su.simulation_id = s.id),
  *     'simulation_consults', (SELECT jsonb_agg(jsonb_build_object('id', sc.id, 'installments', sc.installments, 'installment_value', sc.installment_value, 'cet_rate', sc.cet_rate, 'created_at', sc.created_at, 'financial_institution_id', sc.financial_institution_id)) FROM simulation_consults sc WHERE sc.simulation_id = s.id)
- *   ) INTO v_result 
- *   FROM simulations s 
- *   LEFT JOIN partners p ON s.partner_id = p.id 
- *   LEFT JOIN product_types pt ON s.product_id = pt.id 
- *   LEFT JOIN stage_types st ON s.stage_id = st.id 
- *   LEFT JOIN status_types stt ON s.status_id = stt.id 
- *   LEFT JOIN financial_institutions fi ON s.financial_institution_id = fi.id 
- *   LEFT JOIN result_partner_types rpt ON s.result_partner_id = rpt.id 
- *   LEFT JOIN visits v ON s.visit_id = v.id 
- *   WHERE s.id = p_simulation_id; 
- *   
- *   RETURN v_result; 
- * END; 
+ *   ) INTO v_result
+ *   FROM simulations s
+ *   LEFT JOIN partners p ON s.partner_id = p.id
+ *   LEFT JOIN product_types pt ON s.product_id = pt.id
+ *   LEFT JOIN stage_types st ON s.stage_id = st.id
+ *   LEFT JOIN status_types stt ON s.status_id = stt.id
+ *   LEFT JOIN financial_institutions fi ON s.financial_institution_id = fi.id
+ *   LEFT JOIN result_partner_types rpt ON s.result_partner_id = rpt.id
+ *   LEFT JOIN visits v ON s.visit_id = v.id
+ *   WHERE s.id = p_simulation_id
+ *     -- [FIX]: registro tem que estar dentro do escopo do usuário logado.
+ *     AND (v_allowed_partners IS NULL OR v_allowed_partners ? '*' OR v_allowed_partners ? s.partner_id::TEXT)
+ *     AND (v_allowed_products IS NULL OR v_allowed_products ? '*' OR v_allowed_products ? s.product_id::TEXT);
+ *
+ *   RETURN v_result;
+ * END;
  * $$;
  * ============================================================================
  *

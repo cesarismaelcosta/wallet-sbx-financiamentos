@@ -110,16 +110,33 @@
  * do lead (nome, CPF/CNPJ, telefone, e-mail, data de nascimento, IP, geo).
  * Corrigido adicionando o mesmo gate usado em get_backoffice_simulation_details.
  * Aplicado em dev e homologação.
- * CREATE OR REPLACE FUNCTION get_backoffice_consult_details(p_visit_update_id UUID)
- * RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
+ * [SECURITY FIX - 2026-09-15]: O gate acima só checava "é algum usuário
+ * backoffice ativo?", sem restringir o registro ao partner_id/product_id do
+ * usuário — ao contrário de get_backoffice_consults (PROCEDURE 1), que já
+ * filtrava por allowed_partners/allowed_products. Um "viewer" restrito a um
+ * parceiro conseguia puxar PII completa de consultas de OUTROS parceiros,
+ * bastando saber o UUID. Corrigido replicando o mesmo filtro de escopo usado
+ * na listagem. Migration: 20260915180000_fix_backoffice_detail_rpc_scope.sql
+ * — aplicar em dev e homologação.
+ * CREATE OR REPLACE FUNCTION public.get_backoffice_consult_details(p_visit_update_id uuid)
+ * RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
  * SET search_path TO 'public', 'pg_temp' AS $$
  * DECLARE
  *   v_result JSONB;
  *   v_actor RECORD;
+ *   v_allowed_partners JSONB;
+ *   v_allowed_products JSONB;
  * BEGIN
  *   SELECT * INTO v_actor FROM public.current_backoffice_actor();
  *   IF v_actor.role IS NULL THEN
  *       RETURN jsonb_build_object('error', 'forbidden');
+ *   END IF;
+ *
+ *   v_allowed_partners := v_actor.allowed_partners;
+ *   v_allowed_products := v_actor.allowed_products;
+ *   IF v_actor.role IN ('admin', 'manager') THEN
+ *     v_allowed_partners := '["*"]'::jsonb;
+ *     v_allowed_products := '["*"]'::jsonb;
  *   END IF;
  *
  *   SELECT jsonb_build_object(
@@ -141,7 +158,11 @@
  *            SELECT jsonb_agg(jsonb_build_object('id', vc.id, 'consent_id', vc.consent_id, 'accepted', vc.accepted, 'accepted_at', vc.accepted_at, 'created_at', vc.created_at, 'ip_address', vc.ip_address, 'country', vc.country, 'state', vc.state, 'city', vc.city, 'operating_system', vc.operating_system, 'device_type', vc.device_type, 'origin_details', vc.origin_details, 'page_snapshot', vc.page_snapshot, 'visit_update_id', vc.visit_update_id)) FROM visit_consents vc WHERE vc.visit_id = v.id
  *         )
  *     ))
- *   ) INTO v_result FROM visit_updates vu JOIN visits v ON vu.visit_id = v.id LEFT JOIN partners p ON vu.partner_id = p.id LEFT JOIN product_types pt ON vu.product_id = pt.id WHERE vu.id = p_visit_update_id;
+ *   ) INTO v_result FROM visit_updates vu JOIN visits v ON vu.visit_id = v.id LEFT JOIN partners p ON vu.partner_id = p.id LEFT JOIN product_types pt ON vu.product_id = pt.id
+ *   WHERE vu.id = p_visit_update_id
+ *     -- [FIX]: registro tem que estar dentro do escopo do usuário logado.
+ *     AND (v_allowed_partners IS NULL OR v_allowed_partners ? '*' OR v_allowed_partners ? vu.partner_id::TEXT)
+ *     AND (v_allowed_products IS NULL OR v_allowed_products ? '*' OR v_allowed_products ? vu.product_id::TEXT);
  *   RETURN v_result;
  * END;
  * $$;
