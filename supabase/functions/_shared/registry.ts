@@ -272,10 +272,14 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   'orchestrator': {
     methods: ['GET', 'POST'],
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    // [v2.0.0 — MIGRADA, grupo 2]: sessão agora validada centralmente pelo
+    // wrapper (`_shared/session-guard.ts`), não mais na mão dentro do handler.
+    // O caso específico desta rota (GET com visit_id/visit_update_id na
+    // query string da própria chamada à API, não no x-original-url) é
+    // coberto pela extensão v2.0.1 do session-guard.
     authMode: {
       type: 'session',
-      enforcement: 'manual',
-      reason: 'Validação de sessão feita no próprio handler (validateRequest) para permitir fallback_url e handoff token específicos da navegação — candidata a futura centralização.',
+      enforcement: 'wrapper',
     },
   },
   'orchestrator-configs': {
@@ -389,10 +393,14 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   'sbx-offer-query': {
     methods: ['POST'],
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
+    // [v2.0.0 — MIGRADA, grupo 2]: sessão agora validada centralmente pelo
+    // wrapper (`_shared/session-guard.ts`), não mais na mão dentro do handler.
+    // O caso específico desta rota (corpo POST sem visit_id/visit_update_id,
+    // que precisam vir do x-original-url mesmo sendo POST) é coberto pela
+    // extensão v2.0.1 do session-guard.
     authMode: {
       type: 'session',
-      enforcement: 'manual',
-      reason: 'Validação de sessão feita no próprio handler (validateRequest) para permitir fallback_url e handoff token — candidata a futura centralização.',
+      enforcement: 'wrapper',
     },
   },
 

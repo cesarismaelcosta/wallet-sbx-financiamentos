@@ -33,10 +33,9 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { validateRequest } from "../_shared/auth.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { sql } from "../_shared/db.ts";
-import { withSecurity } from "../_shared/server.ts";
+import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { validateOfferAccess } from "../_shared/gateKeeper.ts";
 import { hydrateVisitContext, pickThin } from "../_shared/hydrate-data.ts";
 import { resolveOrchestratorConfigs } from "../_shared/orchestrator-configs.ts";
@@ -45,7 +44,7 @@ import { debugLog } from "../_shared/logger.ts";
 import { getSafeRedirectUrl } from "../_shared/security.ts";
 
 // ✨ [INJEÇÃO ZERO-TRUST]: Ferramentas do Cartório Criptográfico S2S
-import { signSigninParameters, verifyS2SEntity } from "../_shared/s2s.ts";
+import { verifyS2SEntity } from "../_shared/s2s.ts";
 
 import type { OrchestratorPayload, ThinPayload } from "../_shared/types.ts";
 
@@ -183,7 +182,7 @@ const sanitizePayload = (obj: any): any => {
  * ============================================================================
  */
 serve(
-  withSecurity("orchestrator", async (req: Request) => {
+  withSecurity("orchestrator", async (req: Request, secCtx?: RequestContext) => {
     const globalFallbackUrl = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
 
     try {
@@ -195,103 +194,23 @@ serve(
       const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/");
       const fallbacks = { origin: originPath, auth: authPath };
 
-      // Leitura direta do body sem clonar a stream para evitar travamento de I/O na borda
-      let rawBodyText = "";
-      if (req.method === "POST") {
-        try {
-          rawBodyText = await req.text();
-        } catch {
-          rawBodyText = "";
-        }
-      }
+      // [v2.0.0]: sessão já validada centralmente pelo wrapper (registry.ts:
+      // authMode.type === 'session', enforcement: 'wrapper') via
+      // `_shared/session-guard.ts` — `secCtx.auth` chega pronto aqui.
+      // SESSION_EXPIRED/UNAUTHORIZED (com handoff token) são tratados lá; o
+      // handler nem chega a rodar se a sessão for inválida. A checagem
+      // manual (`validateRequest` + montagem de handoff token na mão) que
+      // existia aqui foi removida — incluindo a extração de visit_id/
+      // visit_update_id da query da própria API no caminho GET, que hoje é
+      // feita de forma genérica em `session-guard.ts` (extensão v2.0.1,
+      // adicionada especificamente pra cobrir esse caso do orchestrator).
+      //
+      // [NOTA]: o parâmetro do wrapper foi nomeado `secCtx` (não `ctx`) de
+      // propósito — este arquivo já usa `ctx` como nome local pro contexto
+      // hidratado da visita (`hydrateVisitContext`, mais abaixo).
+      const auth = secCtx?.auth;
 
-      let auth;
-      try {
-        auth = await validateRequest(req);
-      } catch (err: any) {
-        const raw = String(err?.message || "");
-        let userMessage = "Falha de autenticacao. Por favor, faca login novamente.";
-        let errorCode = "UNAUTHORIZED";
-        let fallbackUrl = authPath;
-        let statusCode = 401;
-
-        // ✨ [HANDOFF TOKEN / SIGNED STATE]: A Sessão Expirou. Lacramos o cofre.
-        // Criptografamos o estado da visita atual e blindamos o login contra Open Redirect
-        if (raw.includes("SESSION_EXPIRED")) {
-          userMessage = "Sua sessao expirou. Por favor, faca login novamente.";
-          errorCode = "SESSION_EXPIRED";
-
-          let intentVisitId = null;
-          let intentUpdateId = null;
-          let intentTargetUrl = originPath; // Default para a origem
-
-          // Extraímos as memórias da requisição interceptada
-          if (req.method === "GET") {
-            const url = new URL(req.url); // A URL aqui é a da API (ex: /orchestrator)
-            intentVisitId = url.searchParams.get("visit_id");
-            intentUpdateId = url.searchParams.get("visit_update_id");
-
-            // ✨ CORREÇÃO DO BUG: Ignora o url.pathname da API.
-            // Usa o originPath (header x-original-url com a rota do Front-end).
-            const [path] = originPath.split("?");
-            const qParams = new URLSearchParams(url.search);
-
-            if (intentVisitId) qParams.set("visit_id", intentVisitId);
-            if (intentUpdateId) qParams.set("visit_update_id", intentUpdateId);
-
-            const queryStr = qParams.toString();
-            intentTargetUrl = queryStr ? `${path}?${queryStr}` : path;
-          } else if (req.method === "POST" && rawBodyText) {
-            try {
-              const thin = JSON.parse(rawBodyText);
-              intentVisitId = thin.visit_id || null;
-              intentUpdateId = thin.visit_update_id || thin.origin_visit_update_id || null;
-
-              // ✨ O POST já estava perfeito: retorna para a página donde partiu o clique.
-              const rawOrigin = thin.origin_url || originPath;
-              const [path, query = ""] = rawOrigin.split("?");
-              const qParams = new URLSearchParams(query);
-
-              if (intentVisitId) qParams.set("visit_id", intentVisitId);
-              if (intentUpdateId) qParams.set("visit_update_id", intentUpdateId);
-
-              const queryStr = qParams.toString();
-              intentTargetUrl = queryStr ? `${path}?${queryStr}` : path;
-            } catch (e) {}
-          }
-
-          try {
-            const handoffToken = await signSigninParameters({
-              visit_id: intentVisitId,
-              visit_update_id: intentUpdateId,
-              target_url: intentTargetUrl, // Agora aponta para a origem segura com os IDs
-              origin_url: originPath,
-            });
-            fallbackUrl = `/accounts/signin?handoff_token=${handoffToken}`;
-            debugLog(`[Orquestrador] Sessao Expirada. Handoff Token emitido com sucesso.`);
-          } catch (e) {
-            debugLog(`[Orquestrador] Erro ao assinar Handoff Token. Roteando limpo.`);
-            fallbackUrl = `/accounts/signin`;
-          }
-        } else if (raw.includes("FORBIDDEN")) {
-          userMessage = "Voce nao tem permissao para acessar este recurso.";
-          errorCode = "FORBIDDEN";
-          fallbackUrl = originPath;
-          statusCode = 403;
-        } else if (raw.includes("INTERNAL_ERROR")) {
-          userMessage = "Ocorreu um erro interno ao validar sua sessao.";
-          errorCode = "INTERNAL_ERROR";
-          fallbackUrl = originPath;
-          statusCode = 500;
-        }
-
-        return {
-          status: statusCode,
-          data: { success: false, code: errorCode, message: userMessage, fallback_url: fallbackUrl },
-        };
-      }
-
-      const sessionUserId = auth?.user_id || auth?.userId || auth?.sub || auth?.payload?.sub || null;
+      const sessionUserId = auth?.user_id || (auth as any)?.userId || (auth as any)?.sub || (auth as any)?.payload?.sub || null;
 
       // =====================================================================
       // PIPELINE DE LEITURA (GET): Hidratação do Front-End
@@ -447,7 +366,11 @@ serve(
       if (req.method === "POST") {
         try {
           debugLog("[POST STEP 1] Iniciando parsing do body...");
-          const rawPayload = JSON.parse(rawBodyText || "{}");
+          // [v2.0.0]: corpo já lido uma vez pelo wrapper (necessário pra montar o
+          // handoff token em caso de sessão expirada) e repassado em
+          // `secCtx.rawBody` — não podemos ler `req.text()` de novo aqui
+          // (stream já consumido).
+          const rawPayload = JSON.parse(secCtx?.rawBody || "{}");
           
           // 🔒 ZERO-TRUST: 1º allowlist (descarta chaves fora do contrato),
           // 2º normalização (undefined -> null) e remoção de segredos.

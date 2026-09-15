@@ -33,10 +33,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { validateRequest } from "../_shared/auth.ts";
-import { withSecurity } from "../_shared/server.ts";
+import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
-import { getSafeRedirectUrl } from "../_shared/security.ts";
 
 const OFFER_BASE_URLS = {
   production: "https://offer-query.superbid.net",
@@ -65,89 +63,25 @@ const SORT_MAP: Record<string, string> = {
   "mais_visitados": "visits:desc"
 };
 
-serve(withSecurity('sbx-offer-query', async (req: Request) => {
-  
+serve(withSecurity('sbx-offer-query', async (req: Request, ctx?: RequestContext) => {
+
   debugLog(`[DEBUG] 🚀 Requisição recebida na Edge Function sbx-offer-query`);
 
   // =========================================================================
-  // FASE 1: GATEKEEPER DE BORDA (Validação Stateless do JWT & Headers)
+  // FASE 1: [v2.0.0] SESSÃO JÁ VALIDADA PELO WRAPPER
+  // Sessão validada centralmente pelo wrapper (registry.ts: authMode.type
+  // === 'session', enforcement: 'wrapper') via `_shared/session-guard.ts`
+  // — `ctx.auth` chega pronto aqui. SESSION_EXPIRED/UNAUTHORIZED (com
+  // handoff token) são tratados lá; o handler nem chega a rodar se a
+  // sessão for inválida. A checagem manual (`validateRequest` + montagem
+  // de handoff token na mão) que existia aqui foi removida — incluindo a
+  // extração de visit_id/visit_update_id da query do x-original-url
+  // (mesmo sendo POST), que hoje é feita de forma genérica em
+  // `session-guard.ts` (extensão v2.0.1, adicionada especificamente pra
+  // cobrir esse caso desta rota).
   // =========================================================================
-  const originPath = getSafeRedirectUrl(req.headers.get("x-original-url") || "/");
-  const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || "/accounts/signin");
-
-  const incomingHeaders = {
-    auth: req.headers.get("authorization") ? "Presente" : "Ausente",
-    sessionToken: req.headers.get("x-session-token") ? "Presente" : "Ausente",
-    originalUrl: originPath,
-    fallbackUrl: authPath,
-  };
-  debugLog(`[DEBUG] 📥 Headers recebidos: ${JSON.stringify(incomingHeaders)}`);
-
-  let auth;
-  try {
-    auth = await validateRequest(req);
-    debugLog(`[DEBUG] ✅ Autenticação validada com sucesso. Ambiente: ${auth?.environment || 'staging'}`);
-  } catch (err: any) {
-    let userMessage = "Falha de autenticação. Por favor, faça login novamente.";
-    let errorCode = "UNAUTHORIZED";
-    let fallbackUrl = authPath;
-    let statusCode = 401;
-
-    debugLog(`[DEBUG] ❌ Falha de autenticação na borda: ${err.message}`);
-
-    // ✨ [HANDOFF TOKEN / SIGNED STATE]: A Sessão Expirou. Lacramos o cofre.
-    if (err.message.includes("SESSION_EXPIRED")) {
-      userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-      errorCode = "SESSION_EXPIRED";
-
-      let intentVisitId = null;
-      let intentUpdateId = null;
-      let intentTargetUrl = originPath;
-
-      // Sendo uma query, tentamos extrair da origem (URL onde a vitrine está)
-      try {
-        const [path, query = ""] = originPath.split("?");
-        const qParams = new URLSearchParams(query);
-        
-        intentVisitId = qParams.get("visit_id") || null;
-        intentUpdateId = qParams.get("visit_update_id") || null;
-      } catch (e) {}
-
-      try {
-        const { signSigninParameters } = await import("../_shared/s2s.ts");
-        
-        const handoffToken = await signSigninParameters({
-          visit_id: intentVisitId,
-          visit_update_id: intentUpdateId,
-          target_url: intentTargetUrl,
-          origin_url: originPath
-        });
-        
-        const cleanAuthPath = authPath.split('?')[0] || "/accounts/signin";
-        fallbackUrl = `${cleanAuthPath}?handoff_token=${handoffToken}`;
-        
-        debugLog("[sbx-offer-query] Handoff Token emitido na interceptação de borda.");
-      } catch (jwtErr) {
-        debugLog("[sbx-offer-query] Erro ao assinar Handoff Token.", jwtErr);
-        fallbackUrl = authPath.split('?')[0] || "/accounts/signin";
-      }
-    } else if (err.message.includes("FORBIDDEN")) {
-      userMessage = "Você não tem permissão para acessar este recurso.";
-      errorCode = "FORBIDDEN";
-      fallbackUrl = originPath;
-      statusCode = 403;
-    }
-
-    return {
-      status: statusCode,
-      data: {
-        success: false, 
-        code: errorCode, 
-        message: userMessage, 
-        fallback_url: fallbackUrl 
-      }
-    };
-  }
+  const auth = ctx?.auth;
+  debugLog(`[DEBUG] ✅ Sessão validada pelo wrapper. Ambiente: ${auth?.environment || 'staging'}`);
 
   // =========================================================================
   // ✨ INSTANCIAÇÃO DO CLIENTE SUPABASE (Escopo Global da Edge Function)
@@ -157,14 +91,18 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { persistSession: false } }
   );
-  
+
   // =========================================================================
   // FASE 2: PARSE DO REQUEST & APLICAÇÃO DE FALLBACKS (PRODUTO)
   // =========================================================================
   try {
-    const bodyText = await req.text();
+    // [v2.0.0]: corpo já lido uma vez pelo wrapper (necessário pra montar o
+    // handoff token em caso de sessão expirada) e repassado em
+    // `ctx.rawBody` — não podemos ler `req.text()` de novo aqui (stream já
+    // consumido).
+    const bodyText = ctx?.rawBody || "";
     debugLog(`[DEBUG] 📦 Raw Body recebido: ${bodyText}`);
-    
+
     const body = bodyText ? JSON.parse(bodyText) : {};
     
     const { 
@@ -308,7 +246,7 @@ serve(withSecurity('sbx-offer-query', async (req: Request) => {
               offer_id
             )
           `)
-          .eq("entity_id", auth.user_id)
+          .eq("entity_id", auth?.user_id)
           .eq("product_id", Number(productId))
           .in("simulation_offers.offer_id", offerIds);
 

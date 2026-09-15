@@ -101,6 +101,23 @@ export async function resolveSessionPerimeter(
         intentVisitId = thin.visit_id || null;
         intentUpdateId = thin.visit_update_id || thin.origin_visit_update_id || null;
 
+        // [v2.0.1]: fallback pra chamadores (ex: sbx-offer-query) cujo
+        // corpo POST nunca carrega visit_id/visit_update_id (payload de
+        // negócio sem relação com a visita, ex: paginação/filtros) — só
+        // entra aqui se o corpo não tiver NENHUM dos dois. Não muda em
+        // nada o comportamento já validado em produção pro
+        // financial-gateway, cujo corpo sempre carrega os dois.
+        if (!intentVisitId && !intentUpdateId) {
+          try {
+            const [, originQuery = ""] = originPath.split("?");
+            const originParams = new URLSearchParams(originQuery);
+            intentVisitId = originParams.get("visit_id") || null;
+            intentUpdateId = originParams.get("visit_update_id") || null;
+          } catch (_e2) {
+            // Segue sem os IDs — pior caso, o target_url cai no default.
+          }
+        }
+
         const rawOrigin = thin.origin_url || thin.target_url || originPath;
         const [path, query = ""] = String(rawOrigin).split("?");
         const qParams = new URLSearchParams(query);
@@ -119,6 +136,30 @@ export async function resolveSessionPerimeter(
         intentVisitId = qParams.get("visit_id") || null;
         intentUpdateId = qParams.get("visit_update_id") || null;
         intentTargetUrl = originPath;
+
+        // [v2.0.1]: fallback pra chamadores (ex: orchestrator) que mandam
+        // visit_id/visit_update_id na query string da própria chamada à
+        // API (req.url), não embutido no x-original-url — só entra aqui
+        // se o originPath não tiver NENHUM dos dois. Não muda em nada o
+        // comportamento já validado em produção pro sbx-event/sbx-offer/
+        // orchestrator-configs, que sempre acham os dois no originPath.
+        if (!intentVisitId && !intentUpdateId) {
+          try {
+            const apiParams = new URL(req.url).searchParams;
+            const apiVisitId = apiParams.get("visit_id");
+            const apiUpdateId = apiParams.get("visit_update_id");
+            if (apiVisitId || apiUpdateId) {
+              intentVisitId = apiVisitId;
+              intentUpdateId = apiUpdateId;
+              if (apiVisitId) qParams.set("visit_id", apiVisitId);
+              if (apiUpdateId) qParams.set("visit_update_id", apiUpdateId);
+              const queryStr = qParams.toString();
+              intentTargetUrl = queryStr ? `${path}?${queryStr}` : path;
+            }
+          } catch (_e2) {
+            // Segue com o originPath verbatim já default.
+          }
+        }
       } catch (_e) {}
     }
 
