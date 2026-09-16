@@ -1,11 +1,18 @@
 // @deno-types="https://deno.land/x/postgresjs/mod.js"
 import postgres from 'https://deno.land/x/postgresjs/mod.js';
 
-// Lê a URL do banco das variáveis de ambiente do projeto
-const dbUrl = Deno.env.get('SUPABASE_DB_URL');
+// 🛡️ [FIX]: `SUPABASE_DB_URL` é reservado — injetado automaticamente pela
+// própria plataforma (aponta para a conexão DIRETA ao Postgres, conforme a
+// doc oficial: "The URL for your Postgres database. You can use this to
+// connect directly to your database") e não pode ser sobrescrito via
+// `supabase secrets set` (a CLI recusa qualquer nome com prefixo SUPABASE_).
+// Usamos um nome próprio para apontar explicitamente para o Transaction
+// Pooler (Supavisor) — compatível com o uso stateless de Edge Function e
+// com o `prepare: false` já exigido abaixo.
+const dbUrl = Deno.env.get('DB_POOLER_URL');
 
 if (!dbUrl) {
-  throw new Error("Erro de Configuração: A variável SUPABASE_DB_URL não está definida.");
+  throw new Error("Erro de Configuração: A variável DB_POOLER_URL não está definida.");
 }
 
 // Inicializa o cliente uma única vez

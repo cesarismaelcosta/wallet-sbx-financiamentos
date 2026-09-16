@@ -13,11 +13,12 @@
  *    headers exigidos e restrições de origem (CORS).
  * 2. Handshake de Borda (Preflight): Responde automaticamente a requisições CORS `OPTIONS`.
  * 3. Blindagem de Perímetro (Zero-Trust): Valida de forma declarativa e centralizada
- *    se a rota exige autenticação por sessão de usuário (`requiresSession`), segredo
- *    estático server-to-server (`requiresSecret`) ou assinatura HMAC com janela de
- *    validade (`requiresHmac` — para chamadores que não guardam segredo em texto,
- *    como jobs do `pg_cron` calculando a assinatura via `pgcrypto`/Vault), bloqueando
- *    acessos anônimos (`401`) em qualquer um dos três casos.
+ *    se a rota exige segredo estático server-to-server (`requiresSecret`) ou
+ *    assinatura HMAC com janela de validade (`requiresHmac` — para chamadores
+ *    que não guardam segredo em texto, como jobs do `pg_cron` calculando a
+ *    assinatura via `pgcrypto`/Vault), bloqueando acessos anônimos (`401`) em
+ *    qualquer um dos dois casos. Sessão de usuário (`authMode.type === 'session'`)
+ *    é tratada à parte, no PASSO 5.0 abaixo, via `session-guard.ts`.
  * 4. Retrocompatibilidade de Resposta: Aceita tanto instâncias nativas de `Response`
  *    quanto o padrão unificado de objetos `{ status, data, headers }`.
  * 5. Fail-Safe Global: Captura exceções não tratadas na regra de negócio, garantindo
@@ -26,13 +27,14 @@
  * ============================================================================
  * [v2.0.0 — SESSÃO CENTRALIZADA (`authMode.type === 'session', enforcement: 'wrapper'`)]
  * ============================================================================
- * Pra rotas marcadas dessa forma no `registry.ts`, o wrapper agora chama
- * `validateRequest()` ELE MESMO, antes do handler rodar, via
- * `_shared/session-guard.ts` (`resolveSessionPerimeter`). Se a sessão for
- * válida, o handler recebe o resultado pronto em `ctx.auth` — não precisa
- * mais chamar `validateRequest` de novo. Se falhar (`SESSION_EXPIRED` ou
- * `UNAUTHORIZED`), o wrapper já devolve a resposta padrão (com handoff token
- * no caso de sessão expirada) e o handler nem chega a rodar.
+ * Pra rotas marcadas dessa forma no `registry.ts`, o wrapper valida a sessão
+ * ELE MESMO, antes do handler rodar, via `_shared/session-guard.ts`
+ * (`resolveSessionPerimeter`). Se a sessão for válida, o handler recebe o
+ * resultado pronto em `ctx.auth` — não precisa validar de novo. Se falhar
+ * (`SESSION_EXPIRED` ou `UNAUTHORIZED`), o wrapper já devolve a resposta
+ * padrão (com handoff token no caso de sessão expirada) e o handler nem chega
+ * a rodar. O caminho legado `requiresSession`, que existia em paralelo a este,
+ * foi removido: hoje existe UM único caminho de sessão.
  *
  * Pra rotas POST que precisam do corpo da requisição pra montar o handoff
  * token (`visit_id`/`visit_update_id`/`target_url` vindos do payload, não da
@@ -49,9 +51,10 @@
 
 import { FUNCTION_CONFIGS } from "./registry.ts";
 import { getSafeCorsOrigin, getSafeRedirectUrl } from "./security.ts";
-import { validateRequest, type AuthContext } from "./auth.ts";
+import { type AuthContext } from "./auth.ts";
 import { verifyHmacSignature } from "./hmac.ts";
 import { resolveSessionPerimeter } from "./session-guard.ts";
+import { debugLog } from "./logger.ts";
 
 export interface StandardResponse {
   status: number;
@@ -110,10 +113,9 @@ function safeCompare(actual: string, expected: string): boolean {
  */
 export const withSecurity = (
   functionName: string,
-  handler: (req: Request, ctx?: RequestContext) => Promise<Response | StandardResponse>
+  handler: (req: Request, ctx?: RequestContext) => Promise<Response | StandardResponse>,
 ) => {
   return async (req: Request): Promise<Response> => {
-
     // -----------------------------------------------------------------------
     // [PASSO 1]: Recuperação e Validação do Contrato de Rota no Registry
     // -----------------------------------------------------------------------
@@ -121,40 +123,49 @@ export const withSecurity = (
 
     if (!config) {
       console.error(`[WRAPPER FATAL ERROR]: Função '${functionName}' não mapeada no registry.ts`);
-      return new Response(
-        JSON.stringify({ error: "Configuração de segurança ausente no registro de borda." }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Configuração de segurança ausente no registro de borda." }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // -----------------------------------------------------------------------
     // [PASSO 2]: Montagem Dinâmica de Políticas CORS e Origem
     // -----------------------------------------------------------------------
-    const defaultHeaders = ["authorization", "x-client-info", "apikey", "content-type", "x-session-token", "x-access-token", "x-exchange-token", "x-sbx-env"];
+    const defaultHeaders = [
+      "authorization",
+      "x-client-info",
+      "apikey",
+      "content-type",
+      "x-session-token",
+      "x-access-token",
+      "x-exchange-token",
+      "x-sbx-env",
+    ];
     const allAllowedHeaders = [...new Set([...defaultHeaders, ...config.requiredHeaders])].join(", ");
 
     const reqOrigin = req.headers.get("Origin") || req.headers.get("Referer") || "";
     let finalAllowedOrigin = "";
 
-    if (config.origin === 'self') {
-        const projectUrl = Deno.env.get('SUPABASE_URL');
-        if (projectUrl) {
-            try {
-                const parsedProject = new URL(projectUrl);
-                if (reqOrigin.startsWith(parsedProject.origin)) {
-                    finalAllowedOrigin = parsedProject.origin;
-                }
-            } catch {
-                finalAllowedOrigin = "";
-            }
+    if (config.origin === "self") {
+      const projectUrl = Deno.env.get("SUPABASE_URL");
+      if (projectUrl) {
+        try {
+          const parsedProject = new URL(projectUrl);
+          if (reqOrigin.startsWith(parsedProject.origin)) {
+            finalAllowedOrigin = parsedProject.origin;
+          }
+        } catch {
+          finalAllowedOrigin = "";
         }
+      }
     } else {
-        finalAllowedOrigin = getSafeCorsOrigin(reqOrigin);
+      finalAllowedOrigin = getSafeCorsOrigin(reqOrigin);
     }
 
     const corsHeaders = {
       "Access-Control-Allow-Origin": finalAllowedOrigin,
-      "Vary": "Origin",
+      Vary: "Origin",
       "Access-Control-Allow-Methods": [...config.methods, "OPTIONS"].join(", "),
       "Access-Control-Allow-Headers": allAllowedHeaders,
       "Access-Control-Allow-Credentials": "true",
@@ -171,10 +182,10 @@ export const withSecurity = (
     // [PASSO 4]: Validação de Verbo HTTP (White-list declarada no Registry)
     // -----------------------------------------------------------------------
     if (!config.methods.includes(req.method)) {
-      return new Response(
-        JSON.stringify({ error: `Método HTTP ${req.method} não permitido para esta rota.` }),
-        { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: `Método HTTP ${req.method} não permitido para esta rota.` }), {
+        status: 405,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // =======================================================================
@@ -183,6 +194,17 @@ export const withSecurity = (
     let perimeterAuthorized = false;
     const perimeterErrorMsg = "Unauthorized: Acesso negado.";
     let sessionCtx: RequestContext | undefined;
+
+    // 5.0.a Trilho de configuração: rota de sessão só existe pelo caminho central.
+    // Se alguém registrar sessão com enforcement manual, recusamos por configuração
+    // inválida em vez de deixar a rota subir sem nenhuma exigência de credencial.
+    if (config.authMode?.type === "session" && (config.authMode as { enforcement?: string }).enforcement !== "wrapper") {
+      console.error(`[withSecurity] Configuração inválida em ${functionName}: sessão exige enforcement 'wrapper'.`);
+      return new Response(
+        JSON.stringify({ success: false, code: "INVALID_ROUTE_CONFIG", message: "Configuração de rota inválida." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // 5.0. [v2.0.0] Sessão centralizada no wrapper (authMode.type === 'session', enforcement: 'wrapper')
     if (config.authMode?.type === "session" && config.authMode.enforcement === "wrapper") {
@@ -201,10 +223,10 @@ export const withSecurity = (
       const result = await resolveSessionPerimeter(req, { originPath, authPath, rawBody });
 
       if (!result.ok) {
-        return new Response(
-          JSON.stringify(result.data),
-          { status: result.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify(result.data), {
+          status: result.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       sessionCtx = { auth: result.auth, rawBody };
@@ -224,82 +246,55 @@ export const withSecurity = (
       }
     }
 
-    // 5.B. Validação de Sessão de Usuário via validateRequest (com try/catch robusto)
-    // [Legado — pré-v2.0.0]: mantido por compatibilidade, mas hoje nenhuma função
-    // seta `requiresSession: true` no registry (todas as rotas de sessão usam
-    // `authMode.type === 'session'`, tratado no 5.0 acima quando `enforcement`
-    // é `'wrapper'`, ou continuam com checagem manual dentro do próprio handler
-    // quando `enforcement` é `'manual'`).
-    if (config.requiresSession && !perimeterAuthorized) {
-      try {
-        const authContext = await validateRequest(req);
-        if (authContext && authContext.session_token) {
-          perimeterAuthorized = true;
-        }
-      } catch (authErr: any) {
-        console.warn(`[Perimeter Auth Warning em ${functionName}]:`, authErr.message);
-        perimeterAuthorized = false;
-      }
-    }
-
-    // 5.C. Validação de assinatura HMAC (Cron / Server-to-Server sem sessão nem segredo em texto)
+    // 5.B. Validação de assinatura HMAC (Cron / Server-to-Server sem sessão nem segredo em texto)
     if (config.requiresHmac && !perimeterAuthorized) {
       perimeterAuthorized = await verifyHmacSignature(req, config.requiresHmac);
     }
 
-    // Se a função exige explicitamente autenticação (por sessão, segredo ou HMAC) e falhou em todas:
-    if ((config.requiresSession || config.requiresSecret || config.requiresHmac) && !perimeterAuthorized) {
-      return new Response(
-        JSON.stringify({ error: perimeterErrorMsg }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Se a função exige explicitamente autenticação (por segredo ou HMAC) e falhou em todas:
+    if ((config.requiresSecret || config.requiresHmac) && !perimeterAuthorized) {
+      return new Response(JSON.stringify({ error: perimeterErrorMsg }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // -----------------------------------------------------------------------
     // [PASSO 6]: Execução Isolada da Regra de Negócio
     // -----------------------------------------------------------------------
     try {
-      console.log(`[withSecurity DEBUG] Iniciando handler: ${functionName}`);
+      debugLog(`[withSecurity] Iniciando handler: ${functionName}`);
       const result = await handler(req, sessionCtx);
 
-      console.log(`[withSecurity DEBUG] Handler retornou. Tipo: ${typeof result}`);
-
       if (result instanceof Response) {
-        console.log("[withSecurity DEBUG] Retorno é instância de Response nativa.");
+        debugLog("[withSecurity] Retorno é instância de Response nativa.");
         Object.entries(corsHeaders).forEach(([k, v]) => result.headers.set(k, v));
         return result;
       }
 
-      console.log("[withSecurity DEBUG] Retorno é StandardResponse. status:", (result as any).status);
+      const std = result as StandardResponse;
+      debugLog("[withSecurity] Retorno é StandardResponse. status:", std.status);
 
-      // Checagem pré-serialização para ver se o objeto não está quebrado
-      try {
-        const payload = JSON.stringify((result as any).data || { error: (result as any).error });
-        console.log("[withSecurity DEBUG] JSON.stringify do data funcionou. Tamanho:", payload.length);
-      } catch (e) {
-        console.error("[withSecurity DEBUG] ERRO NO JSON.STRINGIFY:", e);
-      }
+      // `data` pode ser legitimamente vazio (null, 0, ""), por isso testamos
+      // presença explícita em vez de usar `||`, que trocaria o dado por erro.
+      const body = std.data !== undefined && std.data !== null ? std.data : { error: std.error };
 
-      return new Response(
-        JSON.stringify((result as any).data || { error: (result as any).error }),
-        {
-          status: (result as any).status,
-          headers: { ...corsHeaders, "Content-Type": "application/json", ...((result as any).headers || {}) }
-        }
-      );
-
+      return new Response(JSON.stringify(body), {
+        status: std.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json", ...(std.headers || {}) },
+      });
     } catch (err: any) {
       console.error(`[withSecurity FATAL ERROR em ${functionName}]:`, err);
       return new Response(
         JSON.stringify({
           success: false,
           code: "INTERNAL_SERVER_ERROR",
-          message: err.message || "Erro crítico no wrapper."
+          message: err.message || "Erro crítico no wrapper.",
         }),
         {
           status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        }
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
   };

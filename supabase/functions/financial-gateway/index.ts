@@ -232,7 +232,8 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
 
       // REGRA DE OURO DE FALLBACK:
       // Se a jornada for abortada, enviamos o cliente de volta para o item de origem
-      let finalFallback = payload?.origin_url || originPath || "/";
+      // 🛡️ Previne Open Redirect: origin_url vem do payload do cliente e precisa ser saneado.
+      let finalFallback = getSafeRedirectUrl(payload?.origin_url || originPath);
 
       if (err.message.includes("OFFER_NOT_AVAILABLE") || err.message.includes("OFFER_NOT_FOUND")) {
           userMessage = "Esta oferta não está mais disponível ou não foi encontrada para simulação.";
@@ -240,10 +241,6 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
       } else if (err.message.includes("INVALID_RELATIONSHIP") || err.message.includes("FORBIDDEN_OFFER_ACCESS")) {
           userMessage = "Você não tem permissão para simular nesta oferta (Operação Bloqueada).";
           errorCode = "INVALID_RELATIONSHIP";
-      } else if (err.message.includes("SESSION_EXPIRED")) {
-          userMessage = "Sua sessão expirou. Por favor, faça login novamente.";
-          errorCode = "SESSION_EXPIRED";
-          finalFallback = authPath; // Única exceção: Manda para a porta de entrada (Login)
       } else if (err.message.includes("UPSTREAM_CONNECTION_ERROR")) {
           userMessage = "O serviço de ofertas está instável. Tente novamente em instantes.";
           errorCode = "UPSTREAM_CONNECTION_ERROR";
@@ -280,7 +277,7 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
             success: false,
             code: "INTERNAL_SERVER_ERROR",
             message: "Ocorreu um erro interno inesperado no Gateway. Tente novamente.",
-            fallback_url: payload?.origin_url || originPath || "/"
+            fallback_url: getSafeRedirectUrl(payload?.origin_url || originPath)
         }
     };
   }

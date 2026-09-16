@@ -134,10 +134,14 @@ export async function verifySessionToken(token: string): Promise<SessionValidati
     }
 
     // DEBUG: Vamos ver o que o JWT diz sobre a vida dele
+    // 🛡️ Dados passados via `data` (não interpolados na mensagem) para manter
+    // consistência com o mecanismo de mascaramento do logger.
     const now = Math.floor(Date.now() / 1000);
-    debugLog(
-      `[DEBUG] Token Verificado | exp: ${payload.exp} | agora: ${now} | expira em: ${Number(payload.exp) - now}s`,
-    );
+    debugLog("[DEBUG] Token Verificado", {
+      exp: payload.exp,
+      agora: now,
+      expira_em_segundos: Number(payload.exp) - now,
+    });
 
     // Assegura a tipagem estrita do ambiente extraído da memória criptografada
     const safeEnv = payload.environment === "production" ? "production" : "staging";

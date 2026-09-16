@@ -103,7 +103,7 @@ serve(
         400,
         "BAD_REQUEST",
         "Payload inválido ou vazio.",
-        payload?.return_uri || originPath,
+        getSafeRedirectUrl(payload?.return_uri || originPath),
         req,
         payload || {},
       );
@@ -141,7 +141,7 @@ serve(
         400,
         "BAD_REQUEST",
         "Credencial de acesso SBX ausente (Headers e Payload vazios).",
-        return_uri,
+        getSafeRedirectUrl(return_uri),
         req,
         payload,
       );

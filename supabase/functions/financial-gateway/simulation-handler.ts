@@ -26,6 +26,7 @@ import { insertSimulationData, updateSimulationData } from "./persist-data.ts";
 import { sql } from '../_shared/db.ts';
 import { validateSimulationIntegrity } from "../_shared/gateKeeper.ts"
 import { debugLog } from "../_shared/logger.ts";
+import { getSafeRedirectUrl } from "../_shared/security.ts";
 
 import { 
   Entity,
@@ -105,7 +106,8 @@ export async function processSimulation(
 
     let userMessage = "Ocorreu um erro ao processar sua simulação.";
     let errorCode = "UNKNOWN_ERROR";
-    const targetFallback = payload.interaction_context?.origin_url || "/";
+    // 🛡️ Previne Open Redirect: origin_url vem do payload do cliente e precisa ser saneado.
+    const targetFallback = getSafeRedirectUrl(payload.interaction_context?.origin_url);
 
     if (err.message.includes("OFFER_NOT_FOUND") || err.message.includes("OFFER_NOT_AVAILABLE")) {
         userMessage = "Esta oferta não está mais disponível ou não foi encontrada.";
@@ -337,7 +339,9 @@ export async function processSimulation(
     }
   };
 
-  debugLog("📡 [Motor Simulação] JSON FINAL DESPACHADO PARA O GATEWAY HTTP:", JSON.stringify(payloadFinal));
+  // 🛡️ Não serializar aqui: passar o objeto puro deixa o deepRedact do logger
+  // mascarar CPF/nome/etc. Se virar string antes, o mascaramento não enxerga os campos.
+  debugLog("📡 [Motor Simulação] JSON FINAL DESPACHADO PARA O GATEWAY HTTP:", payloadFinal);
 
   return payloadFinal;
 }

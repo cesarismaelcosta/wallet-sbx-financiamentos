@@ -281,7 +281,13 @@ export function SbXPAYLayOut() {
                 return;
               } else if (postData?.fallback_url) {
                 // 🛡️ Handoff Token: O Backend exigiu reautenticação
-                navigate({ to: postData.fallback_url as any, replace: true });
+                // 🛡️ Previne Open Redirect: extrai só pathname+search, igual ao resto do app.
+                const fallbackUrlObj = new URL(postData.fallback_url, window.location.origin);
+                navigate({
+                  to: fallbackUrlObj.pathname as any,
+                  search: Object.fromEntries(fallbackUrlObj.searchParams.entries()) as any,
+                  replace: true,
+                });
                 // 👇 DESTRAVAR OS BOTÕES 👇
                 if (isMounted) setIsVerifying(false);                
                 return;
@@ -330,7 +336,13 @@ export function SbXPAYLayOut() {
           const fallbackUrl = err?.fallback_url || err?.response?.data?.fallback_url || err?.data?.fallback_url;
 
           if (fallbackUrl) {
-            navigate({ to: fallbackUrl as any, replace: true });
+            // 🛡️ Extrai só pathname+search, igual ao resto do app (useOrchestrator/useSafeCall/PanelHeader).
+            const fallbackUrlObj = new URL(fallbackUrl, window.location.origin);
+            navigate({
+              to: fallbackUrlObj.pathname as any,
+              search: Object.fromEntries(fallbackUrlObj.searchParams.entries()) as any,
+              replace: true,
+            });
           } else {
             navigate({ to: "/accounts/signin", replace: true });
           }
