@@ -86,8 +86,14 @@
  *   SELECT jsonb_agg(jsonb_build_object(
  *       'id', v.id, 'action', v.action, 'utm_source', v.utm_source, 'created_at', v.created_at, 'ip_address', v.ip_address,
  *       'visit_entities', (SELECT jsonb_agg(jsonb_build_object('document', ve.document)) FROM visit_entities ve WHERE ve.visit_id = v.id),
- *       'visit_updates', (SELECT jsonb_agg(jsonb_build_object('id', vu.id, 'partner_id', vu.partner_id, 'product_id', vu.product_id, 'action', vu.action)) FROM visit_updates vu WHERE vu.visit_id = v.id)
- *   )) INTO v_result FROM visits v 
+ *       'visit_updates', (
+ *         SELECT jsonb_agg(jsonb_build_object('id', vu.id, 'partner_id', vu.partner_id, 'product_id', vu.product_id, 'action', vu.action))
+ *         FROM visit_updates vu
+ *         WHERE vu.visit_id = v.id
+ *           AND (v_allowed_partners IS NULL OR v_allowed_partners ? '*' OR v_allowed_partners ? vu.partner_id::TEXT)
+ *           AND (v_allowed_products IS NULL OR v_allowed_products ? '*' OR v_allowed_products ? vu.product_id::TEXT)
+ *       )
+ *   )) INTO v_result FROM visits v
  *   WHERE v.created_at >= p_start AND v.created_at <= p_end
  *   AND (v_allowed_partners IS NULL OR v_allowed_partners ? '*' OR EXISTS (SELECT 1 FROM visit_updates vu2 WHERE vu2.visit_id = v.id AND v_allowed_partners ? vu2.partner_id::TEXT))
  *   AND (v_allowed_products IS NULL OR v_allowed_products ? '*' OR EXISTS (SELECT 1 FROM visit_updates vu3 WHERE vu3.visit_id = v.id AND v_allowed_products ? vu3.product_id::TEXT))

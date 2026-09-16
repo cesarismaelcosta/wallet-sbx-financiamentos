@@ -19,11 +19,17 @@
  * Para que este componente funcione, a seguinte Stored Procedure DEVE existir:
  * 
  * -------------------------------------------------------------------------
- * PROCEDURE: Listagem Blindada de Auditoria
+ * PROCEDURE 1: Listagem Blindada de Auditoria
  * -------------------------------------------------------------------------
- * CREATE OR REPLACE FUNCTION get_backoffice_audit(p_limit INT DEFAULT 50, p_offset INT DEFAULT 0, p_date_from TIMESTAMPTZ DEFAULT NULL, p_date_to TIMESTAMPTZ DEFAULT NULL, p_status TEXT DEFAULT 'all', p_event TEXT DEFAULT 'all', p_search TEXT DEFAULT NULL) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+ * [FIX F6 - 2026-09-16]: sem teto em p_limit, uma chamada direta ao RPC
+ * podia extrair qualquer volume de login_history (ip_address, geo,
+ * user_agent) numa única página. Adicionado
+ * p_limit := LEAST(GREATEST(COALESCE(p_limit, 50), 1), 200) no início.
+ * CREATE OR REPLACE FUNCTION get_backoffice_audit(p_limit INT DEFAULT 50, ...) ... AS $$
  * DECLARE v_result JSONB;
  * BEGIN
+ *   p_limit := LEAST(GREATEST(COALESCE(p_limit, 50), 1), 200);
+ *
  *   WITH paginated_audit AS (
  *     SELECT lh.id, lh.email, lh.event, lh.success, lh.failure_reason, lh.ip_address, lh.country, lh.state, lh.city, lh.user_agent, lh.device_type, lh.operating_system, lh.origin_details, lh.created_at, lh.origin_page, lh.origin_function
  *     FROM login_history lh WHERE (p_date_from IS NULL OR lh.created_at >= p_date_from) AND (p_date_to IS NULL OR lh.created_at <= p_date_to) AND (p_status = 'all' OR (p_status = 'success' AND lh.success = true) OR (p_status = 'fail' AND lh.success = false)) AND (p_event = 'all' OR lh.event = p_event) AND (p_search IS NULL OR p_search = '' OR lh.email ILIKE '%' || p_search || '%' OR lh.ip_address ILIKE '%' || p_search || '%') ORDER BY lh.created_at DESC LIMIT p_limit OFFSET p_offset

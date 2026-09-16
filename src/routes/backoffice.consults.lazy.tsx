@@ -44,42 +44,21 @@
  * A resolução de permissões agora é feita inteiramente dentro da função,
  * via current_backoffice_actor() (mesmo padrão do restante do backoffice),
  * fechando a possibilidade de um cliente malicioso forjar esses arrays.
- * CREATE OR REPLACE FUNCTION get_backoffice_consults(
- *   p_limit INT DEFAULT 50, p_offset INT DEFAULT 0, p_date_from TIMESTAMPTZ DEFAULT NULL,
- *   p_date_to TIMESTAMPTZ DEFAULT NULL, p_partner_ids INT[] DEFAULT NULL,
- *   p_product_ids INT[] DEFAULT NULL, p_allowed_partners TEXT[] DEFAULT NULL, p_allowed_products TEXT[] DEFAULT NULL
- * ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER
- * SET search_path TO 'public', 'pg_temp' AS $$
- * DECLARE
- *   v_result JSONB;
- *   v_actor RECORD;
- *   v_effective_partners TEXT[];
- *   v_effective_products TEXT[];
- * BEGIN
- *   SELECT * INTO v_actor FROM public.current_backoffice_actor();
- *   IF v_actor.role IS NULL THEN
- *       RETURN '[]'::jsonb;
- *   END IF;
+ * [FIX F6 - 2026-09-16]: sem teto em p_limit, uma chamada direta ao RPC
+ * podia extrair qualquer volume de PII numa única página. Adicionado
+ * p_limit := LEAST(GREATEST(COALESCE(p_limit, 50), 1), 200) no início.
  *
- *   IF v_actor.role IN ('admin', 'manager') THEN
- *       v_effective_partners := ARRAY['*'];
- *       v_effective_products := ARRAY['*'];
- *   ELSE
- *       SELECT ARRAY_AGG(value::TEXT) INTO v_effective_partners FROM jsonb_array_elements_text(v_actor.allowed_partners);
- *       SELECT ARRAY_AGG(value::TEXT) INTO v_effective_products FROM jsonb_array_elements_text(v_actor.allowed_products);
- *   END IF;
- *
+ * [SECURITY FIX F8 - 2026-09-16]: a tela fazia um segundo
+ * supabase.from("visit_updates") direto (só visit_id/action, sem PII, mas
+ * ainda uma leitura crua, protegida só por "é do backoffice", sem escopo de
+ * parceiro) para descobrir quais visitas tiveram contato. Corrigido
+ * calculando "has_contact" aqui dentro, já escopado pela mesma CTE
+ * (paginated_results só contém visitas dentro do allowed_partners/
+ * allowed_products do usuário) — elimina essa última leitura direta na tela.
+ * CREATE FUNCTION get_backoffice_consults(
+ *   ...
  *   WITH paginated_results AS (
- *     SELECT v.id AS v_id, vu.id AS vu_id, vu.action, vu.created_at, vu.partner_id, vu.product_id,
- *            vu.raw_payload, v.utm_source, v.state, p.id AS p_id, p.name AS p_name, p.logo_url AS p_logo_url, pt.id AS pt_id, pt.name AS pt_name
- *     FROM visit_updates vu JOIN visits v ON vu.visit_id = v.id
- *     LEFT JOIN partners p ON vu.partner_id = p.id LEFT JOIN product_types pt ON vu.product_id = pt.id
- *     WHERE vu.action IN ('SIMULATE', 'CONSULT', 'REDIRECT')
- *       AND (p_date_from IS NULL OR vu.created_at >= p_date_from) AND (p_date_to IS NULL OR vu.created_at <= p_date_to)
- *       AND (p_partner_ids IS NULL OR vu.partner_id = ANY(p_partner_ids)) AND (p_product_ids IS NULL OR vu.product_id = ANY(p_product_ids))
- *       AND (v_effective_partners IS NULL OR '{"*"}'::TEXT[] <@ v_effective_partners OR vu.partner_id::TEXT = ANY(v_effective_partners))
- *       AND (v_effective_products IS NULL OR '{"*"}'::TEXT[] <@ v_effective_products OR vu.product_id::TEXT = ANY(v_effective_products))
- *     ORDER BY vu.created_at DESC LIMIT p_limit OFFSET p_offset
+ *     ...
  *   )
  *   SELECT jsonb_agg(jsonb_build_object(
  *       'id', pr.v_id, 'row_id', pr.vu_id, 'action', pr.action, 'created_at', pr.created_at,
@@ -95,6 +74,10 @@
  *            'event_start_date', vo.event_start_date, 'event_end_date', vo.event_end_date, 'created_at', vo.created_at,
  *            'category_types', jsonb_build_object('name', ct.name)
  *          )) FROM visit_offers vo LEFT JOIN category_types ct ON vo.category_id = ct.id WHERE vo.visit_id = pr.v_id
+ *       ),
+ *       'has_contact', EXISTS (
+ *         SELECT 1 FROM visit_updates vuc
+ *         WHERE vuc.visit_id = pr.v_id AND UPPER(vuc.action) LIKE '%CONTACT%'
  *       )
  *   )) INTO v_result FROM paginated_results pr;
  *   RETURN COALESCE(v_result, '[]'::jsonb);
@@ -407,15 +390,12 @@ function ConsultsPage() {
       const slicedData = hasMore ? visitsData.slice(0, PAGE_SIZE) : visitsData;
       setTotalPages(hasMore ? targetPage + 2 : targetPage + 1);
 
-      const visitIds = slicedData.map((v: Record<string, unknown>) => String(v.id));
-      const { data: updatesData } = await supabase
-        .from("visit_updates")
-        .select("visit_id, action")
-        .in("visit_id", visitIds);
-      const contactSet = new Set(
-        updatesData?.filter((u) => (u.action || "").toUpperCase().includes("CONTACT")).map((u) => u.visit_id) || [],
-      );
-
+      // [SECURITY FIX F8]: antes fazia supabase.from("visit_updates") direto
+      // (só visit_id/action, sem PII, mas ainda uma leitura crua na tabela,
+      // protegida só por "é do backoffice", sem escopo de parceiro) para
+      // descobrir quais visitas tiveram contato. Corrigido: get_backoffice_consults
+      // agora já devolve "has_contact" calculado internamente (mesmo escopo da
+      // CTE principal), eliminando essa última leitura direta na tela.
       const normalized = slicedData.map((u: Record<string, unknown>) => {
         const entity = safeArray(u.visit_entities)[0] || null;
 
@@ -454,7 +434,7 @@ function ConsultsPage() {
           partners: u.partners,
           product_types: u.product_types,
           raw_payload: eventPayload,
-          has_contact: contactSet.has(u.id),
+          has_contact: Boolean(u.has_contact),
         };
       });
 
@@ -486,42 +466,31 @@ function ConsultsPage() {
       else if (dateRange === "90") dateLimit.setDate(dateLimit.getDate() - 90);
       else if (dateRange === "all") dateLimit = new Date("2020-01-01");
 
-      let query = supabase
-        .from("visit_updates")
-        .select(
-          `
-          id, action, created_at, partner_id, product_id, raw_payload,
-          partners(name, logo_url), product_types(name),
-          visits!visit_updates_visit_id_fkey!inner(
-            id, created_at, utm_source, state,
-            visit_entities(name, document, phone, email),
-            visit_offers(visit_update_id, offer_id, offer_description, offer_value, event_id, event_description, event_start_date, event_end_date, created_at, category_types(name))
-          )
-        `,
-        )
-        .in("action", ["SIMULATE", "CONSULT", "REDIRECT"]);
+      const p_from =
+        dateRange === "custom" && customRange?.from ? customRange.from.toISOString() : dateLimit.toISOString();
+      const p_to =
+        dateRange === "custom" && customRange?.to ? customRange.to.toISOString() : new Date().toISOString();
 
-      if (dateRange !== "all" && dateRange !== "custom")
-        query = query.gte("visits.created_at", dateLimit.toISOString());
-      else if (dateRange === "custom" && customRange?.from && customRange?.to)
-        query = query
-          .gte("visits.created_at", customRange.from.toISOString())
-          .lte("visits.created_at", customRange.to.toISOString());
-
-      if (selectedPartners.length > 0) query = query.in("partner_id", selectedPartners);
-      if (selectedProducts.length > 0) query = query.in("product_id", selectedProducts);
-
-      const { data: updates, error } = await query;
+      // [SECURITY FIX F7]: antes fazia supabase.from("visit_updates") direto, com
+      // join trazendo visit_entities(name, document, phone, email) — PII crua —
+      // sem nenhuma restrição de parceiro/produto na RLS (que só exige "é do
+      // backoffice", não escopo por parceiro). Corrigido chamando a RPC
+      // visit_stats, que aplica o mesmo escopo de allowed_partners/allowed_products
+      // usado no resto do backoffice e devolve só contagens agregadas, nunca PII.
+      const { data, error } = await supabase.rpc("visit_stats", {
+        p_from,
+        p_to,
+        p_partner_ids: selectedPartners.length > 0 ? selectedPartners.map(Number) : null,
+        p_product_ids: selectedProducts.length > 0 ? selectedProducts.map(Number) : null,
+      });
       if (error) throw error;
 
-      const items = updates || [];
-      const uniqueVisits = new Set(items.map((i) => (i as { visit_id?: string }).visit_id)).size;
-
+      const s = data?.[0] ?? { total: 0, consultas: 0, sites_parceiros: 0, simulacoes: 0 };
       setStats({
-        total: uniqueVisits,
-        consultas: items.filter((u) => (u.action || "").toUpperCase().includes("CONSULT")).length,
-        sites_parceiros: items.filter((u) => (u.action || "").toUpperCase().includes("REDIRECT")).length,
-        simulacoes: items.filter((u) => (u.action || "").toUpperCase().includes("SIMULATE")).length,
+        total: Number(s.total) || 0,
+        consultas: Number(s.consultas) || 0,
+        sites_parceiros: Number(s.sites_parceiros) || 0,
+        simulacoes: Number(s.simulacoes) || 0,
       });
     } catch (e) {
       console.error("Erro ao calcular estatísticas com filtros:", e);

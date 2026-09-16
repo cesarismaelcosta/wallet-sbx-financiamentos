@@ -41,15 +41,17 @@
  *   p_search TEXT DEFAULT NULL, 
  *   p_partner_ids INT[] DEFAULT NULL, 
  *   p_product_ids INT[] DEFAULT NULL
- * ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$ 
- * DECLARE 
- *   v_result JSONB; 
- *   v_caller_email TEXT := auth.jwt() ->> 'email'; 
- *   v_role TEXT; 
- *   v_allowed_partners JSONB; 
- *   v_allowed_products JSONB; 
- * BEGIN 
- *   SELECT role, allowed_partners, allowed_products 
+ * ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+ * DECLARE
+ *   v_result JSONB;
+ *   v_caller_email TEXT := auth.jwt() ->> 'email';
+ *   v_role TEXT;
+ *   v_allowed_partners JSONB;
+ *   v_allowed_products JSONB;
+ * BEGIN
+ *   p_limit := LEAST(GREATEST(COALESCE(p_limit, 50), 1), 200);
+ *
+ *   SELECT role, allowed_partners, allowed_products
  *   INTO v_role, v_allowed_partners, v_allowed_products 
  *   FROM backoffice_users 
  *   WHERE LOWER(email) = LOWER(v_caller_email) AND is_active = true; 
