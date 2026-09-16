@@ -166,7 +166,12 @@ export async function processSimulationFandi(
       headers: { 'Content-Type': 'application/json', 'fandi-tipo-servico': 'checkout' }, 
       body: JSON.stringify(bodyGuid) 
     });
+    // ✨ [OBSERVABILIDADE]: sem isso, uma rejeição de negócio do Fandi (retorno falsy)
+    // não deixa nenhum rastro do HTTP status nem do corpo cru da resposta — só o
+    // texto genérico que devolvemos pro cliente. Loga ANTES do .json() poder falhar.
+    debugLog(`[Fandi GUID] HTTP ${guidResponse.status}`, { url: GUID_URL, bodyGuid });
     guidResult = await guidResponse.json();
+    debugLog("[Fandi GUID] Resposta bruta recebida.", guidResult);
   } catch (error: any) {
     debugLog("Erro de comunicação com Fandi (GUID).", bodyGuid);
     return buildErrorResponse(8, "Erro de comunicação com Fandi (GUID).", simulation, error);
@@ -175,6 +180,9 @@ export async function processSimulationFandi(
   // Tratamento específico de Regras de Negócio na geração do GUID
   if (!guidResult.retorno) {
     const apiMessage = guidResult.message || "Falha ao gerar GUID.";
+    // ✨ [OBSERVABILIDADE]: captura o payload completo que enviamos e a resposta
+    // completa que o Fandi devolveu, pra próxima falha vir com o motivo real.
+    debugLog("[Fandi GUID] Rejeitado pelo Fandi (retorno falsy).", { bodyGuid, guidResult });
     const isVendedorErro = apiMessage.includes("Problema ao consultar o CPF do Vendedor pela API: Usuário não existe.");
     const isModeloMolicarErro = apiMessage.includes("Código do modelo (Fandi) ou Molicar inválido(s).");
 

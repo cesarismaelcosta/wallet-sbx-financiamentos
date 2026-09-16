@@ -31,7 +31,7 @@
  * @author Gemini Pro
  */
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import { MapPin, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, ExternalLink, Gavel, Mail, Tag, Handshake, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -40,10 +40,11 @@ import { Button } from "@/components/ui/button";
 // =========================================================================
 interface CardOfferVProps {
   item: any;
+  idx: number;
   isCartao: boolean;
   loading: boolean;
   disabled?: boolean;
-  onSimulate: (item: any) => void;
+  onSimulate: (item: any, idx: number) => void;
 }
 
 const getSuperbidUrl = (offerData: any) => {
@@ -127,7 +128,7 @@ function ModalityTag({ modalityDesc, endDateStr, offerTypeId, modalityId, isShop
 // =========================================================================
 // [COMPONENTE PRINCIPAL]: CardOfferV
 // =========================================================================
-export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: CardOfferVProps) {
+function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulate }: CardOfferVProps) {
   const offerData = item.offer || {};
   const eventData = item.event || {};
   const sellerData = item.seller || {};
@@ -142,10 +143,16 @@ export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: Ca
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
 
-  const rawPhotos = offerData.photos || [];
-  const sortedPhotos = [...rawPhotos]
-    .sort((a: any, b: any) => (a.highlight === b.highlight ? 0 : a.highlight ? -1 : 1))
-    .map((p: any) => p.link);
+  // 🚀 [PERFORMANCE]: antes rodava (sort + map) em TODA renderização do card,
+  // inclusive nas que nada têm a ver com fotos (troca de slide via swipe,
+  // reset de `imageError`). Como `offerData.photos` só muda quando o item em
+  // si muda, memoiza por essa dependência.
+  const sortedPhotos = useMemo(() => {
+    const rawPhotos = offerData.photos || [];
+    return [...rawPhotos]
+      .sort((a: any, b: any) => (a.highlight === b.highlight ? 0 : a.highlight ? -1 : 1))
+      .map((p: any) => p.link);
+  }, [offerData.photos]);
 
   const mainPhoto = sortedPhotos.length > 0 ? sortedPhotos[photoIndex % sortedPhotos.length] : "https://placehold.co/300x200?text=Sem+Foto";
   const hasError = imageError || !sortedPhotos.length;
@@ -331,8 +338,8 @@ export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: Ca
       {/* CALL TO ACTION (CTA)                                             */}
       {/* ================================================================ */}
       <div className="p-4 pt-0">
-        <Button 
-          onClick={() => onSimulate(item)} 
+        <Button
+          onClick={() => onSimulate(item, idx)}
           disabled={loading || disabled}
           variant="outline" 
           className="group flex items-center justify-center gap-2 w-full rounded-none shadow-xs bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 font-medium text-[13px] h-11 cursor-pointer transition-all duration-300 ease-out"
@@ -353,3 +360,10 @@ export function CardOfferV({ item, isCartao, loading, disabled, onSimulate }: Ca
     </div>
   );
 }
+
+// 🚀 [PERFORMANCE]: memoiza o card — sem isso, qualquer mudança de estado no
+// pai (abrir dropdown, trocar página, scroll infinito acrescentando itens)
+// re-renderizava a grade inteira (até 24+ cards), mesmo os que não mudaram
+// nada. Só funciona porque `onSimulate` agora chega estável (useCallback no
+// pai) em vez de uma arrow function nova por item a cada render.
+export const CardOfferV = React.memo(CardOfferVComponent);

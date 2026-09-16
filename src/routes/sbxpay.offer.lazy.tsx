@@ -32,7 +32,7 @@
  * @version 9.2.1 (Neutral Purity & Self-Contained Shelf Architecture)
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
 import { ArrowLeft, ChevronDown, SlidersHorizontal, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -332,7 +332,10 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isMobile, loading, pageNumber, totalPages]);
 
-  const handleSimulacao = async (offerItem: any, idx: number) => {
+  // 🚀 [PERFORMANCE]: useCallback — precisa chegar estável em CardOfferV pra
+  // que o React.memo do card funcione (ver CardOfferV.tsx). Sem isso, cada
+  // render do pai criava uma função nova e o memo nunca "pegava".
+  const handleSimulacao = useCallback(async (offerItem: any, idx: number) => {
     setSimulatingIndex(idx);
 
     try {
@@ -391,7 +394,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       }
       setSimulatingIndex(null);
     }
-  };
+  }, [currentFlow.product_id, flowKey, navigate]);
 
   // =========================================================================
   // RENDERIZAÇÃO: Estado Crítico (Catastrófico)
@@ -559,10 +562,11 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
               <CardOfferV
                 key={item?.offer?.offer_id || idx}
                 item={item}
+                idx={idx}
                 isCartao={isCartao}
                 loading={simulatingIndex === idx}
                 disabled={simulatingIndex !== null}
-                onSimulate={() => handleSimulacao(item, idx)}
+                onSimulate={handleSimulacao}
               />
             ))}
           </div>

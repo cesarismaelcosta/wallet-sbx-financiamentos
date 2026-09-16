@@ -464,36 +464,42 @@ function SandboxPage() {
       setError(null);
 
       try {
-        try {
-          const offer = await fetchOfferDetails(customOfferId);
-          setApiOfferData(offer);
-        } catch (e) {
-          console.error("Erro na inspeção principal:", e);
+        // ✨ [PERFORMANCE]: fetchOfferDetails e a query da vitrine (FLOW_OFFERS) não dependem
+        // uma da outra — dispara as duas ao mesmo tempo em vez de esperar a primeira terminar
+        // para só então começar a segunda.
+        const [offerResult, vitrineResults] = await Promise.all([
+          fetchOfferDetails(customOfferId).catch((e) => {
+            console.error("Erro na inspeção principal:", e);
+            return null;
+          }),
+          Promise.all(
+            FLOW_OFFERS.map(async (item) => {
+              if (item.disabled || !item.product_id) return { key: item.key, data: null };
+
+              try {
+                const data = await fetchOffersQuery({
+                  productId: item.product_id,
+                  sort: "relevancia",
+                  pageNumber: 1,
+                  pageSize: 1,
+                });
+
+                const firstOffer = data?.offers?.[0] || null;
+                return { key: item.key, data: firstOffer };
+              } catch (err: any) {
+                console.error(`Falha na query de ${item.key}:`, err);
+                return { key: item.key, data: null };
+              }
+            }),
+          ),
+        ]);
+
+        if (offerResult) {
+          setApiOfferData(offerResult);
         }
 
-        const promises = FLOW_OFFERS.map(async (item) => {
-          if (item.disabled || !item.product_id) return { key: item.key, data: null };
-
-          try {
-            const data = await fetchOffersQuery({
-              productId: item.product_id,
-              sort: "relevancia",
-              pageNumber: 1,
-              pageSize: 1,
-            });
-
-            const firstOffer = data?.offers?.[0] || null;
-            return { key: item.key, data: firstOffer };
-          } catch (err: any) {
-            console.error(`Falha na query de ${item.key}:`, err);
-            return { key: item.key, data: null };
-          }
-        });
-
-        const results = await Promise.all(promises);
         const newVitrine: Record<string, any> = {};
-
-        results.forEach((res) => {
+        vitrineResults.forEach((res) => {
           if (res && res.data) {
             newVitrine[res.key] = res.data;
           }

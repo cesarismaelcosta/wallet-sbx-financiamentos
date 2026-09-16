@@ -15,27 +15,13 @@
  * 4. Margens Dinâmicas (`right`): Ajustadas dinamicamente para não cortar labels.
  */
 
-import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, LabelList } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
-
-// ============================================================================
-// [HOOK LOCAL]: Garantia de responsividade sem depender de arquivos externos
-// ============================================================================
-export function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
-  
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile(); // Checagem inicial de viewport
-    
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
-  
-  return isMobile;
-}
+// ✨ [PERFORMANCE]: Hook canônico do projeto (matchMedia + evento "change"), em vez de uma
+// definição local ouvindo "resize" bruto — que disparava um re-render (incluindo os BarChart
+// do Recharts) a cada pixel arrastado ao redimensionar a janela.
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // ============================================================================
 // [CONSTANTES E HELPERS]
