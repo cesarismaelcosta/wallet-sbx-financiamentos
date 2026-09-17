@@ -17,7 +17,6 @@ const urlForcada = "postgresql://service_role.ldzutiojmcawhwdhojlo:3OQ8qkLbkxhz2
 // Inicializa o cliente uma única vez
 // O export permite que você use a conexão em qualquer arquivo
 export const sql = postgres(urlForcada, {
-  user: "postgres.ldzutiojmcawhwdhojlo", // 🔥 OVERRIDE ABSOLUTO: Ignora o que o parser leu e força o usuário correto
   prepare: false,
   prepare: false, // Mantém false (Obrigatório para o Pooler)
   ssl: "require", // <-- Obrigatório para o pooler
