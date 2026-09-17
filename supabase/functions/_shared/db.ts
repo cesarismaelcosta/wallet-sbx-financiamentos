@@ -13,6 +13,7 @@ if (!dbPoolerUrl) {
 // O export permite que você use a conexão em qualquer arquivo
 export const sql = postgres(dbPoolerUrl, {
   prepare: false, // Mantém false (Obrigatório para o Pooler)
+  ssl: "require", // <-- Obrigatório para o pooler
   max: 1, // 🚀 CRÍTICO: Edge Function usa 1 conexão otimizada
   idle_timeout: 10, // 🚀 CRÍTICO: Fecha conexões ociosas rápido para não engasgar o banco
   connect_timeout: 10, // Derruba rápido se o banco não responder
