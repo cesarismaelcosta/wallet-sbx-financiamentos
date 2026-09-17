@@ -65,27 +65,40 @@ function shouldLogEvent(emailHash: string, event: LoginHistoryEvent): boolean {
 
 
 /**
- * Envia o evento mapeando EXATAMENTE para o que a Edge Function espera
+ * Envia o evento mapeando EXATAMENTE para o que a RPC espera
+ *
+ * 🛡️ [MIGRADO - 2026-09-17]: antes chamava a Edge Function `log-access` via
+ * fetch cru (só com header Authorization). Essa function foi reaproveitada
+ * para outro papel (worker de geo, ver `supabase/functions/log-access/index.ts`)
+ * e o registro de evento passou pra RPC Postgres `public.log_access_event`
+ * (migration `20260917120000_create_log_access_event_rpc.sql`), que lê
+ * IP/país direto dos headers da própria requisição PostgREST e a identidade
+ * via `auth.email()` — não depende mais de nenhuma Edge Function no meio do
+ * caminho. Mantido como fetch cru (sem importar o client completo do
+ * Supabase) pra preservar o isolamento de token que este arquivo já tinha —
+ * só que agora contra o endpoint REST de RPC do PostgREST, que exige o
+ * header `apikey` além do `Authorization` (diferente da Edge Function
+ * antiga, que só exigia o Bearer).
  */
 async function postEvent(payload: LogLoginHistoryInput, accessToken: string): Promise<boolean> {
   try {
-    // MAPEAMENTO CORRETO PARA O BACKEND (Edge Function `log-access`)
-    const backendPayload = {
-      event: payload.event,
-      success: payload.success,
-      failureReason: payload.failureReason, // a function log-access lê `body.failureReason`, não `body.reason`
-      origin_page: typeof window !== "undefined" ? window.location.pathname : null,
-      origin_function: "logLoginHistoryEvent",
+    // MAPEAMENTO CORRETO PARA A RPC (parâmetros nomeados `p_*`)
+    const rpcPayload = {
+      p_event: payload.event,
+      p_success: payload.success,
+      p_origin_page: typeof window !== "undefined" ? window.location.pathname : null,
+      p_origin_function: "logLoginHistoryEvent",
+      p_failure_reason: payload.failureReason,
     };
 
-    // A Edge Function deployada se chama `log-access` (não `login-history`)
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/log-access`, {
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/log_access_event`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, // exigido pelo Kong/PostgREST da Supabase
         Authorization: `Bearer ${accessToken}`, // Token isolado e seguro no Header
       },
-      body: JSON.stringify(backendPayload), // Envia SEM o email (backend lê do JWT)
+      body: JSON.stringify(rpcPayload), // Envia SEM o email (RPC lê de auth.email())
     });
     return res.ok;
   } catch {

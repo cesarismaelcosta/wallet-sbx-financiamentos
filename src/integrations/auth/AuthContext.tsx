@@ -10,9 +10,11 @@
  * [DIRETRIZES DE SEGURANÇA E HIGIENE]:
  * 1. {Schema Obfuscation}: O frontend NUNCA consulta a tabela `backoffice_users`
  *    diretamente para evitar vazamento de estrutura (Nomes de Colunas/Tipos).
- * 2. {Auditoria Híbrida via Borda}: O front-end valida a sessão de forma blindada 
- *    via RPC (Cofre) e delega o registro de telemetria geográfica completa 
- *    (País, Estado, Cidade, IP e Dispositivo) para a Edge Function `log-access`.
+ * 2. {Auditoria Híbrida via Borda}: O front-end valida a sessão de forma blindada
+ *    via RPC (Cofre) e delega o registro de telemetria geográfica completa
+ *    (País, Estado, Cidade, IP e Dispositivo) para a RPC `log_access_event`
+ *    [2026-09-17: migrado da Edge Function `log-access`, que foi reaproveitada
+ *    para outro papel — ver `supabase/functions/log-access/index.ts`].
  * 3. {Memory Cache}: O `sessionStorage` atua como sentinela para impedir 
  *    remounts do React (Lazy Loading) de bombardearem o banco de dados.
  * 
@@ -165,16 +167,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("🚨 [AuthGuard] - Acesso Recusado:", errorMsg);
       setDomainError(errorMsg?.includes('user_inactive') ? "Usuário inativo." : "Acesso corporativo negado.");
       
-      // 2. Auditoria de Falha via Edge Function (Captura Geolocalização Completa na Borda)
+      // 2. Auditoria de Falha via RPC (Captura Geolocalização Completa na Borda)
       if (!hasLoggedThisSession.current) {
-        supabase.functions.invoke('log-access', {
-          body: {
-            origin_page: window.location.pathname,
-            origin_function: "validateUserAccess",
-            event: eventType,
-            success: false,
-            failureReason: errorMsg
-          }
+        supabase.rpc('log_access_event', {
+          p_event: eventType,
+          p_success: false,
+          p_origin_page: window.location.pathname,
+          p_origin_function: "validateUserAccess",
+          p_failure_reason: errorMsg
         }).catch(console.error);
         hasLoggedThisSession.current = true;
       }
@@ -184,16 +184,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsBackofficeAllowed(false);
       sessionStorage.removeItem('auth_validated_once');
     } else if (userData) {  
-      // 2. Auditoria de Sucesso via Edge Function (Captura Geolocalização Completa na Borda)
+      // 2. Auditoria de Sucesso via RPC (Captura Geolocalização Completa na Borda)
       if (!hasLoggedThisSession.current) {
-        supabase.functions.invoke('log-access', {
-          body: {
-            origin_page: window.location.pathname,
-            origin_function: "validateUserAccess",
-            event: eventType,
-            success: true,
-            failureReason: null
-          }
+        supabase.rpc('log_access_event', {
+          p_event: eventType,
+          p_success: true,
+          p_origin_page: window.location.pathname,
+          p_origin_function: "validateUserAccess",
+          p_failure_reason: null
         }).catch(console.error);
         hasLoggedThisSession.current = true;
       }
@@ -219,15 +217,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    // Registra o logout na Edge Function preservando a geolocalização
-    supabase.functions.invoke('log-access', {
-      body: {
-        origin_page: window.location.pathname,
-        origin_function: "signOut",
-        event: "logout",
-        success: true,
-        failureReason: null
-      }
+    // Registra o logout via RPC preservando a geolocalização
+    supabase.rpc('log_access_event', {
+      p_event: "logout",
+      p_success: true,
+      p_origin_page: window.location.pathname,
+      p_origin_function: "signOut",
+      p_failure_reason: null
     }).catch(console.error);
 
     hasLoggedThisSession.current = false;
