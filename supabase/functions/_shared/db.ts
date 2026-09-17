@@ -12,9 +12,11 @@ if (!dbPoolerUrl) {
 // 🔥 INCLUA ESTA LINHA: Ela vai imprimir qual é o usuário que a URL está realmente montando (sem vazar a senha)
 console.log("⚠️ DEBUG DA URL: O usuário lido da variável é ->", dbPoolerUrl.split(':')[1].replace(/\/\/|@.*/g, '').split(':')[0]);
 
+const urlForcada = "postgresql://service_role.ldzutiojmcawhwdhojlo:3OQ8qkLbkxhz2uxS@aws-1-us-west-1.pooler.supabase.com:6543/postgres"
+
 // Inicializa o cliente uma única vez
 // O export permite que você use a conexão em qualquer arquivo
-export const sql = postgres(dbPoolerUrl, {
+export const sql = postgres(urlForcada, {
   user: "postgres.ldzutiojmcawhwdhojlo", // 🔥 OVERRIDE ABSOLUTO: Ignora o que o parser leu e força o usuário correto
   prepare: false,
   prepare: false, // Mantém false (Obrigatório para o Pooler)
