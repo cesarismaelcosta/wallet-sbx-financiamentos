@@ -1,26 +1,9 @@
-// @deno-types="https://deno.land/x/postgresjs/mod.js"
 import postgres from "https://deno.land/x/postgresjs/mod.js";
 
-// Lê a URL do banco das variáveis de ambiente do projeto
-// const dbUrl = Deno.env.get("SUPABASE_DB_URL");
-const dbPoolerUrl = Deno.env.get("DB_POOLER_URL");
+const poolerUrl = "postgresql://edge_worker.ldzutiojmcawhwdhojlo:SenhaForte123@aws-1-us-west-1.pooler.supabase.com:6543/postgres";
 
-if (!dbPoolerUrl) {
-  throw new Error("Erro de Configuração: A variável DB_POOLER_URL não está definida.");
-}
-
-// 🔥 INCLUA ESTA LINHA: Ela vai imprimir qual é o usuário que a URL está realmente montando (sem vazar a senha)
-console.log("⚠️ DEBUG DA URL: O usuário lido da variável é ->", dbPoolerUrl.split(':')[1].replace(/\/\/|@.*/g, '').split(':')[0]);
-
-const urlForcada = "postgresql://service_role.ldzutiojmcawhwdhojlo:3OQ8qkLbkxhz2uxS@aws-1-us-west-1.pooler.supabase.com:6543/postgres"
-
-// Inicializa o cliente uma única vez
-// O export permite que você use a conexão em qualquer arquivo
-export const sql = postgres(urlForcada, {
+export const sql = postgres(poolerUrl, {
   prepare: false,
-  prepare: false, // Mantém false (Obrigatório para o Pooler)
-  ssl: "require", // <-- Obrigatório para o pooler
-  max: 1, // 🚀 CRÍTICO: Edge Function usa 1 conexão otimizada
-  idle_timeout: 10, // 🚀 CRÍTICO: Fecha conexões ociosas rápido para não engasgar o banco
-  connect_timeout: 10, // Derruba rápido se o banco não responder
+  ssl: "require",
+  max: 1
 });
