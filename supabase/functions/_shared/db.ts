@@ -9,7 +9,10 @@
  * --    (ex: `openssl rand -hex 24`, ou gerado no próprio SQL Editor com
  * --    `encode(gen_random_bytes(24), 'hex')`) — NUNCA a senha real deve
  * --    ficar neste arquivo nem em nenhum arquivo versionado.
- * SELECT gen_random_bytes(0); -- garante pgcrypto carregado, se ainda não estiver
+ * --    (pgcrypto já vem habilitado por padrão no projeto Supabase — não é
+ * --    preciso "garantir" isso rodando gen_random_bytes(0): essa chamada,
+ * --    aliás, dá erro ["Length not in range"], porque o pgcrypto exige um
+ * --    tamanho > 0. Use gen_random_bytes(24) diretamente, como no passo 2.)
  *
  * CREATE ROLE db_edge_worker WITH LOGIN PASSWORD '<senha-gerada-aleatoriamente>' BYPASSRLS;
  *
