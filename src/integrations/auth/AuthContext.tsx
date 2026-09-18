@@ -169,13 +169,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // 2. Auditoria de Falha via RPC (Captura Geolocalização Completa na Borda)
       if (!hasLoggedThisSession.current) {
+        // 🛡️ [FIX - 2026-09-17]: `supabase.rpc(...)` NÃO devolve uma Promise
+        // de verdade — é um query builder que só implementa `.then()`
+        // (thenable), sem `.catch()`. Chamar `.catch()` nele lança
+        // "TypeError: ...catch is not a function" de forma SÍNCRONA, o que
+        // interrompia validateUserAccess antes de setBackofficeUser/
+        // setAuthLoading(false) rodarem — página presa em loading pra
+        // sempre. Erro (se houver) é tratado dentro do próprio `.then()`.
         supabase.rpc('log_access_event', {
           p_event: eventType,
           p_success: false,
           p_origin_page: window.location.pathname,
           p_origin_function: "validateUserAccess",
           p_failure_reason: errorMsg
-        }).catch(console.error);
+        }).then(({ error }) => { if (error) console.error(error); });
         hasLoggedThisSession.current = true;
       }
 
@@ -186,13 +193,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else if (userData) {  
       // 2. Auditoria de Sucesso via RPC (Captura Geolocalização Completa na Borda)
       if (!hasLoggedThisSession.current) {
+        // 🛡️ [FIX - 2026-09-17]: mesmo motivo do bloco de falha acima —
+        // `.catch()` não existe no builder de `supabase.rpc(...)`.
         supabase.rpc('log_access_event', {
           p_event: eventType,
           p_success: true,
           p_origin_page: window.location.pathname,
           p_origin_function: "validateUserAccess",
           p_failure_reason: null
-        }).catch(console.error);
+        }).then(({ error }) => { if (error) console.error(error); });
         hasLoggedThisSession.current = true;
       }
       
@@ -218,13 +227,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     // Registra o logout via RPC preservando a geolocalização
+    // 🛡️ [FIX - 2026-09-17]: `.catch()` não existe no builder de
+    // `supabase.rpc(...)` (só implementa `.then()`) — ver nota em
+    // validateUserAccess acima.
     supabase.rpc('log_access_event', {
       p_event: "logout",
       p_success: true,
       p_origin_page: window.location.pathname,
       p_origin_function: "signOut",
       p_failure_reason: null
-    }).catch(console.error);
+    }).then(({ error }) => { if (error) console.error(error); });
 
     hasLoggedThisSession.current = false;
     await supabase.auth.signOut();
