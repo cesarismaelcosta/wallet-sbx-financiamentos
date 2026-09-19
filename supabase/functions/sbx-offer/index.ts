@@ -59,12 +59,8 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
       throw Object.assign(new Error("ID da oferta não informado."), { errorCode: "MISSING_OFFER_ID" });
     }
 
-    // O ambiente é lido estritamente do token lacrado
-    const env = auth?.environment || "staging";
-    const offerBaseUrl = OFFER_BASE_URLS[env as keyof typeof OFFER_BASE_URLS] || OFFER_BASE_URLS.staging;
-
-    // Endpoint do Gateway S4B (Imune ao bloqueio da Cloudflare)
-    const upstreamUrl = `${offerBaseUrl}/offerpanel/api/app-context?offerId=${offerId}&timeZoneId=America%2FSao_Paulo`;
+    // URL com parâmetros padrão exigidos pelo painel da Superbid
+    const upstreamUrl = `${offerBaseUrl}/offerpanel/api/app-context?offerId=${offerId}&timeZoneId=America%2FSao_Paulo&locale=pt_BR`;
 
     debugLog(`[sbx-offer] Buscando oferta ID: ${offerId} no ambiente seguro: ${env} -> ${upstreamUrl}`);
 
@@ -80,6 +76,15 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
     };
 
     const response = await fetch(upstreamUrl, fetchOptions);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      debugLog(`[sbx-offer] Resposta Upstream S4B (${response.status}): ${errorText}`);
+      throw Object.assign(
+        new Error(`Falha no Gateway S4B (${response.status})`), 
+        { errorCode: "UPSTREAM_ERROR" }
+      );
+    }
 
     if (!response.ok) {
       throw Object.assign(
