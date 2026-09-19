@@ -63,8 +63,8 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
     const env = auth?.environment || "staging";
     const offerBaseUrl = OFFER_BASE_URLS[env as keyof typeof OFFER_BASE_URLS] || OFFER_BASE_URLS.staging;
 
-    // URL com parâmetros padrão exigidos pelo painel da Superbid
-    const upstreamUrl = `${offerBaseUrl}/offerpanel/api/app-context?offerId=${offerId}&timeZoneId=America%2FSao_Paulo&locale=pt_BR`;
+    // URL idêntica à requisição funcional do seu navegador
+    const upstreamUrl = `${offerBaseUrl}/offerpanel/api/app-context?offerId=${offerId}&timeZoneId=America%2FSao_Paulo`;
 
     debugLog(`[sbx-offer] Buscando oferta ID: ${offerId} no ambiente seguro: ${env} -> ${upstreamUrl}`);  
 
@@ -84,13 +84,6 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
     if (!response.ok) {
       const errorText = await response.text();
       debugLog(`[sbx-offer] Resposta Upstream S4B (${response.status}): ${errorText}`);
-      throw Object.assign(
-        new Error(`Falha no Gateway S4B (${response.status})`), 
-        { errorCode: "UPSTREAM_ERROR" }
-      );
-    }
-
-    if (!response.ok) {
       throw Object.assign(
         new Error(`Falha no Gateway S4B (${response.status})`), 
         { errorCode: "UPSTREAM_ERROR" }
