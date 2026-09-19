@@ -68,15 +68,19 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
 
     debugLog(`[sbx-offer] Buscando oferta ID: ${offerId} no ambiente seguro: ${env} -> ${upstreamUrl}`);
 
-    const response = await fetch(upstreamUrl, {
+    const fetchOptions = {
       method: "GET",
-      headers: { 
-        "Accept": "application/json", 
+      headers: {
+        "Accept": "application/json, text/plain, */*",
         "Content-Type": "application/json",
-        "User-Agent": req.headers.get("user-agent") ?? "Mozilla/5.0",
-        ...(auth?.token && { "Authorization": `Bearer ${auth.token}` })
+        "User-Agent": req.headers.get("user-agent") ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Origin": "https://www.superbid.net",
+        "Referer": "https://www.superbid.net/",
       },
-    });
+    };
+
+    const upstreamUrl = `${offerBaseUrl}/offerpanel/api/app-context?offerId=${offerId}&timeZoneId=America%2FSao_Paulo`;
+    const response = await fetch(upstreamUrl, fetchOptions);
 
     if (!response.ok) {
       throw Object.assign(
