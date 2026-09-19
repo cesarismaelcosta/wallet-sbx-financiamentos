@@ -218,8 +218,41 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  const dynamicReturnUri = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
   const totalPages = Math.max(Math.ceil(totalElements / pageSize), 1);
+
+  // 🧭 [FIX: Cursor de Visita Resiliente]: guarda o último visit_id/visit_update_id
+  // válido visto pelo componente (via searchParams do router). handleSimulacao lê
+  // daqui em vez de reparsear window.location.search na hora do clique — evita que
+  // uma URL momentaneamente sem esses params (ex: navegação intermediária, retry
+  // após erro) derrube o payload do CONSULT e estoure PROFILE_UNAVAILABLE no Edge.
+  const visitCursorRef = useRef<{ visitId: string | null; visitUpdateId: string | null }>({
+    visitId: null,
+    visitUpdateId: null,
+  });
+
+  useEffect(() => {
+    if (searchParams?.visit_id) visitCursorRef.current.visitId = String(searchParams.visit_id);
+    if (searchParams?.visit_update_id) visitCursorRef.current.visitUpdateId = String(searchParams.visit_update_id);
+  }, [searchParams?.visit_id, searchParams?.visit_update_id]);
+
+  // 🧭 [FIX: Retorno com Contexto Preservado]: dynamicReturnUri não pode mais
+  // devolver o usuário pra uma origem "limpa" (sem visit_id/visit_update_id) só
+  // porque redirect_uri/return_uri não vieram na URL. Sempre que o cursor de
+  // visita tiver IDs válidos, eles são anexados ao destino — a visita continua
+  // viva mesmo quando o retorno (auto ou manual) acontece.
+  const dynamicReturnUri = (() => {
+    const base = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
+    try {
+      const url = new URL(base, window.location.origin);
+      const { visitId, visitUpdateId } = visitCursorRef.current;
+      if (visitId && !url.searchParams.has("visit_id")) url.searchParams.set("visit_id", visitId);
+      if (visitUpdateId && !url.searchParams.has("visit_update_id")) url.searchParams.set("visit_update_id", visitUpdateId);
+      return `${url.pathname}${url.search}`;
+    } catch {
+      return base;
+    }
+  })();
+
   const mainPaddingTop = isMobile && isCartao ? "pt-[136px]" : "pt-[80px]";
 
   const handleSortChange = (value: string) => {
@@ -341,9 +374,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     try {
       const currentHref = window.location.href;
 
-      const urlParams = new URLSearchParams(window.location.search);
-      const cartVisitId = urlParams.get("visit_id");
-      const cartVisitUpdateId = urlParams.get("visit_update_id");
+      const cartVisitId = visitCursorRef.current.visitId;
+      const cartVisitUpdateId = visitCursorRef.current.visitUpdateId;
 
       const rawOffer = offerItem?.offer || offerItem;
       const targetOfferId = rawOffer?.offer_id || rawOffer?.id;
@@ -402,6 +434,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   if (fetchError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white p-6 text-center text-neutral-900 rounded-none">
+        <img src="/assets/error/error.webp" alt="Erro" className="w-34 h-34 object-contain mb-6" />
         <p className="text-neutral-900 font-semibold text-lg mb-2">Ops! Falha ao carregar ofertas.</p>
         <p className="text-neutral-500 font-normal text-sm mb-4">Redirecionando em {countdown}s...</p>
         <Button
