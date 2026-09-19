@@ -72,7 +72,6 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
       method: "GET",
       headers: {
         "Accept": "application/json, text/plain, */*",
-        "Content-Type": "application/json",
         "User-Agent": req.headers.get("user-agent") ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Origin": "https://www.superbid.net",
         "Referer": "https://www.superbid.net/",
@@ -92,11 +91,11 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
     
     const rawData = await response.json();
 
-    // ATENÇÃO: Verifique a chave raiz da resposta do app-context
-    // Se os dados da oferta vierem direto na raiz ou em rawData.offer:
-    const rawOffer = rawData.offer || rawData;
+    // Extração segura das raízes do app-context
+    const lote = rawData.refreshResult?.lote;
+    const leilao = rawData.leilao || {};
 
-    if (!rawOffer || !rawOffer.id) {
+    if (!lote || !lote.ofertaId) {
       throw Object.assign(new Error(`Oferta não encontrada (ID: ${offerId}).`), { errorCode: "OFFER_NOT_FOUND" });
     }
 
@@ -124,6 +123,12 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
       };
     }
 
+    // Formatador de moeda para manter o campo price_formatted
+    const formatCurrency = (val: number) => 
+      new Intl.NumberFormat("pt-BR", { style: "currency", currency: leilao.currency || "BRL" }).format(val);
+
+    const offerValue = lote.lanceAtualValor || lote.lanceInicialValor || 0;
+
     // =========================================================================
     // FASE 3: MONTAGEM DO CONTRATO DE RESPOSTA BFF
     // =========================================================================
@@ -131,55 +136,56 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
       status: 200,
       data: {
         offer: {
-          offer_id: String(rawOffer.id),
-          lot_number: rawOffer.lotNumber || 1,
-          offer_description: rawOffer.product?.shortDesc || rawOffer.offerDescription?.offerDescription || "",
-          offer_detailed_description: rawOffer.offerDescription?.offerDescription || "",
-          offer_value: rawOffer.price || rawOffer.offerDetail?.referenceValue || 0,
-          price_formatted: rawOffer.priceFormatted || rawOffer.offerDetail?.referenceValueFormatted || "",          system_metric: rawOffer.systemMetric || null,
-          category_id: rawOffer.product?.productType?.id || 0,
-          category: rawOffer.product?.productType?.description || "",
-          subcategory_id: rawOffer.product?.subCategory?.id || "",
-          subcategory: rawOffer.product?.subCategory?.description || "",
-          offer_status_available: Boolean(rawOffer.offerStatus?.available),
-          offer_status_sold: Boolean(rawOffer.offerStatus?.sold),
-          end_date: rawOffer.endDate || "",
-          is_shopping: rawOffer.isShopping || false, 
-          offer_type_id: rawOffer.offerTypeId ?? null,
+          offer_id: String(lote.ofertaId),
+          lot_number: Number(lote.loteNumero?.numLote || lote.loteNumero?.label || 1),
+          offer_description: lote.descricao || `Lote ${lote.loteNumero?.label || ""}`,
+          offer_detailed_description: lote.descricaoDetalhada || lote.descricao || "",
+          offer_value: offerValue,
+          price_formatted: formatCurrency(offerValue),
+          system_metric: lote.sistemaMetrico || "un",
+          category_id: lote.categoryId || 0,
+          category: lote.categoryName || "",
+          subcategory_id: lote.subCategoryId || "",
+          subcategory: lote.subCategoryName || "",
+          offer_status_available: !lote.fechado && !lote.retirado,
+          offer_status_sold: lote.fechado && !lote.semLance,
+          end_date: lote.endDateTime || lote.endDate || "",
+          is_shopping: false, 
+          offer_type_id: lote.offerType ?? null,
           location: {
-            neighborhood: rawOffer.product?.location?.neighborhood || "Não informado",
-            city: rawOffer.product?.location?.city || "Não informado",
-            state: rawOffer.product?.location?.state || "Não informado",
-            country: rawOffer.product?.location?.country || "Brasil"
+            neighborhood: lote.bairro || "Não informado",
+            city: lote.cidade || "Não informado",
+            state: lote.uf || "Não informado",
+            country: "Brasil"
           },
           ...(vehicleData && { vehicle_details: vehicleData }),
-          photos: rawOffer.product?.galleryJson?.map((p: any) => ({
-            highlight: p.highlight || false,
-            link: p.link,
-            thumbnail: p.thumbnailUrl,
-            file_name: p.originalFileName,
-            type: p.type || "photo",
-            content_type: p.contentType || "image/jpeg"
-          })) || []
+          photos: (lote.photos || []).map((p: any, idx: number) => ({
+            highlight: idx === 0,
+            link: p.url || p.link || p,
+            thumbnail: p.thumbnailUrl || p.url || p,
+            file_name: p.fileName || `foto_${idx + 1}.jpg`,
+            type: "photo",
+            content_type: "image/jpeg"
+          }))
         },
         manager: {
-          manager_id: rawOffer.manager?.id || 0,
-          manager_name: rawOffer.manager?.name || "N/A"
+          manager_id: 0,
+          manager_name: "Superbid Marketplace"
         },
         event: {
-          event_id: String(eventData.id || ""),
-          event_description: eventData.desc || "",
-          event_start_date: eventData.beginDate || "",
-          event_end_date: eventData.endDate || "",
-          modality_id: eventData.modalityId ?? null,
-          modality_desc: eventData.modalityDesc || "",
-          status_id: eventData.statusId ?? null
+          event_id: String(leilao.id || lote.auctionId || ""),
+          event_description: leilao.nome || "",
+          event_start_date: lote.beginDateTime || lote.startDate || "",
+          event_end_date: lote.endDateTime || lote.endDate || "",
+          modality_id: lote.lotAuctionTypeId ?? null,
+          modality_desc: leilao.locale || "Leilão Oficial",
+          status_id: lote.status ?? null
         },
         seller: {
-          seller_id: String(rawOffer.seller?.id || ""),
-          legal_name: rawOffer.seller?.name || "N/A",
-          trade_name: rawOffer.seller?.company?.[0]?.fantasyName || "N/A",
-          economic_group: rawOffer.seller?.company?.[0]?.fantasyName || "N/A"
+          seller_id: String(leilao.comitenteId || ""),
+          legal_name: leilao.nome || "Comitente",
+          trade_name: leilao.nome || "Comitente",
+          economic_group: leilao.nome || "Comitente"
         }
       }
     };
