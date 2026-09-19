@@ -27,8 +27,8 @@ import { Vehicle } from "../_shared/types.ts";
 import { debugLog } from "../_shared/logger.ts";
 
 const OFFER_BASE_URLS = {
-  production: "https://offer-query.superbid.net",
-  staging: "https://offer-query.stage.superbid.net"
+  production: "https://api.s4bdigital.net",
+  staging: "https://stgapi.s4bdigital.net",
 };
 
 const EVENT_BASE_URLS = {
@@ -59,35 +59,40 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
       throw Object.assign(new Error("ID da oferta não informado."), { errorCode: "MISSING_OFFER_ID" });
     }
 
-    // O ambiente é lido estritamente do token lacrado, impedindo adulteração externa
+    // O ambiente é lido estritamente do token lacrado
     const env = auth?.environment || "staging";
-    const offerBaseUrl = OFFER_BASE_URLS[env] || OFFER_BASE_URLS.staging;
-    const eventBaseUrl = EVENT_BASE_URLS[env] || EVENT_BASE_URLS.staging;
+    const offerBaseUrl = OFFER_BASE_URLS[env as keyof typeof OFFER_BASE_URLS] || OFFER_BASE_URLS.staging;
 
-    const upstreamUrl = `${offerBaseUrl}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${offerId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
+    // Endpoint do Gateway S4B (Imune ao bloqueio da Cloudflare)
+    const upstreamUrl = `${offerBaseUrl}/offerpanel/api/app-context?offerId=${offerId}&timeZoneId=America%2FSao_Paulo`;
 
-    debugLog(`[sbx-offer] Buscando oferta ID: ${offerId} no ambiente seguro: ${env}`);
+    debugLog(`[sbx-offer] Buscando oferta ID: ${offerId} no ambiente seguro: ${env} -> ${upstreamUrl}`);
 
-    // Requisição limpa e pública para a Superbid (Sem necessidade de Bearer Token do usuário)
     const response = await fetch(upstreamUrl, {
       method: "GET",
       headers: { 
         "Accept": "application/json", 
         "Content-Type": "application/json",
-        "Origin": "https://www.superbid.net",
-        "Referer": "https://www.superbid.net/"
+        "User-Agent": req.headers.get("user-agent") ?? "Mozilla/5.0",
+        ...(auth?.token && { "Authorization": `Bearer ${auth.token}` })
       },
     });
 
     if (!response.ok) {
-      throw Object.assign(new Error(`Falha na API da Superbid (${response.status})`), { errorCode: "UPSTREAM_ERROR" });
+      throw Object.assign(
+        new Error(`Falha no Gateway S4B (${response.status})`), 
+        { errorCode: "UPSTREAM_ERROR" }
+      );
     }
     
-    const data = await response.json();
-    const rawOffer = data.offers?.[0];
+    const rawData = await response.json();
 
-    if (!rawOffer) {
-      throw Object.assign(new Error(`Oferta não encontrada (Lote: ${offerId}).`), { errorCode: "OFFER_NOT_FOUND" });
+    // ATENÇÃO: Verifique a chave raiz da resposta do app-context
+    // Se os dados da oferta vierem direto na raiz ou em rawData.offer:
+    const rawOffer = rawData.offer || rawData;
+
+    if (!rawOffer || !rawOffer.id) {
+      throw Object.assign(new Error(`Oferta não encontrada (ID: ${offerId}).`), { errorCode: "OFFER_NOT_FOUND" });
     }
 
     // -----------------------------------------------------------------------
