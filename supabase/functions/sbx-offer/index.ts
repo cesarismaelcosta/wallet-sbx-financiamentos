@@ -59,10 +59,14 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
       throw Object.assign(new Error("ID da oferta não informado."), { errorCode: "MISSING_OFFER_ID" });
     }
 
+    // Resolução de ambiente e URL base a partir do contexto
+    const env = auth?.environment || "staging";
+    const offerBaseUrl = OFFER_BASE_URLS[env as keyof typeof OFFER_BASE_URLS] || OFFER_BASE_URLS.staging;
+
     // URL com parâmetros padrão exigidos pelo painel da Superbid
     const upstreamUrl = `${offerBaseUrl}/offerpanel/api/app-context?offerId=${offerId}&timeZoneId=America%2FSao_Paulo&locale=pt_BR`;
 
-    debugLog(`[sbx-offer] Buscando oferta ID: ${offerId} no ambiente seguro: ${env} -> ${upstreamUrl}`);
+    debugLog(`[sbx-offer] Buscando oferta ID: ${offerId} no ambiente seguro: ${env} -> ${upstreamUrl}`);  
 
     const fetchOptions = {
       method: "GET",
