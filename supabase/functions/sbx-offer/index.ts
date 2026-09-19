@@ -68,7 +68,7 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
 
     debugLog(`[sbx-offer] Buscando oferta ID: ${offerId} no ambiente seguro: ${env} -> ${upstreamUrl}`);  
 
-const fetchOptions = {
+    const fetchOptions = {
       method: "GET",
       headers: {
         "Accept": "application/json, text/plain, */*",
@@ -83,7 +83,9 @@ const fetchOptions = {
         "Sec-Ch-Ua-Platform": "\"Windows\"",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "cross-site"
+        "Sec-Fetch-Site": "cross-site",
+        // Envia um cookie genérico/anônimo caso o Spring Boot exija o header de cookies presente
+        "Cookie": "JSESSIONID=node01.anonymous;"
       },
     };
 
