@@ -1,0 +1,2493 @@
+{
+  "meta": {
+    "name": "SBX Design System",
+    "package": "@ws-lzdaukzktcwz7ix4ppew/658f49c8-598b-4bd4-809c-97221cacc676",
+    "version": "1.4.0",
+    "framework": "react",
+    "css_framework": "tailwind",
+    "starter_template": "custom_design_system_tailwind",
+    "theme_files": [
+      "src/index.css"
+    ],
+    "source_type": "local",
+    "source_manifest": {
+      "#enrichment": "d3b1f8ff4203e07fb329f97dd7ff9c3338174e2f4f179f0a8d0ed8667dfd26d3",
+      ".gitignore": "d9566700e8535935d03c1583474d790c",
+      ".lovable/meta.yaml": "954a981e8847ec1692669dbb04ae9ae9",
+      ".lovable/plan/accent-azul-no-design-system-2026-08-24.md": "faa5153ae7e2ed512fd55582e4031eda",
+      ".lovable/plan/aplicar-o-azul-ao-sistema-card-dark-1a1d2f-accent-nos-exempl-2026-08-24.md": "acdeffde4c54a32322500233e04cc5b8",
+      ".lovable/plan/aumentar-o-wordmark-designsystem-2026-08-24.md": "46fdb1b27a69f0fe3329a44622d93c3e",
+      ".lovable/plan/azuis-levemente-mais-escuros-na-seção-brand-accent-colors-2026-08-24.md": "0567ce1f68a451865b733845fb2248be",
+      ".lovable/plan/azuis-mais-escuros-no-card-gradiente-destaque-azul-colors-2026-08-24.md": "324381266dae5f781202312224b8870f",
+      ".lovable/plan/bloco-de-destaque-do-gradiente-em-colors-2026-08-24.md": "247a850ef95939fba963e6d16150c68e",
+      ".lovable/plan/botões-gradiente-como-padrão-secundário-com-contorno-2026-08-24.md": "68460752f137e454ec9c9bf006fd4a2b",
+      ".lovable/plan/brand-testes-de-nome-de-produto-2026-08-24.md": "a625b16fb831216d211751178ae17495",
+      ".lovable/plan/brand-testes-de-nome-em-menu-real-2026-08-24.md": "3645bb7981713be58bf7db2f4741bc06",
+      ".lovable/plan/card-de-títulos-com-gradiente-em-typography-2026-08-24.md": "636eeb22be307f789bb94f44bec02bf3",
+      ".lovable/plan/colors-nenhuma-mudança-pendente-2026-08-24.md": "6e47f30744507d2e83a9852bae9185cd",
+      ".lovable/plan/componentes-shadcn-que-ainda-faltam-2026-08-27.md": "9cbdf3f5267cdcf03d1ee90bf073382e",
+      ".lovable/plan/contraste-sobre-gradiente-sempre-branco-2026-08-27.md": "1581e3e9045ecbd1c2a17400ecaf173a",
+      ".lovable/plan/cores-e-tipografia-do-manual-da-marca-grupo-superbid-2026-08-21.md": "8aaa683a78c35cc1d7e0ee39b15290fe",
+      ".lovable/plan/correções-do-logo-de-produto-brand-marca-no-topo-2026-08-21.md": "2a8c6579b855ecce50d59861bcf7b197",
+      ".lovable/plan/corrigir-o-tema-light-nas-maquetes-de-sidebar-brand-2026-08-24.md": "70f0c9cb4cfd2641e8e79603956ccaf6",
+      ".lovable/plan/cta-com-gradiente-e-ícones-sempre-em-gradiente-azul-2026-08-24.md": "e50e7a0b9a37205591b17ae47bf00986",
+      ".lovable/plan/decisões-que-ainda-faltam-para-fechar-o-design-system-2026-08-24.md": "9aa309463d4b2cfbabd4927ac7abe604",
+      ".lovable/plan/enriquecer-o-sbx-design-system-com-o-vocabulário-das-lps-2026-08-21.md": "e3af7f0bab2693da52a400d9a6adeb74",
+      ".lovable/plan/fechar-a-regra-do-logo-em-menu-corrigir-tema-light-2026-08-24.md": "1f726387c8c5be3a4a6594857597f52c",
+      ".lovable/plan/fotografia-título-com-serifa-e-aba-brand-2026-08-21.md": "0517a127c14323c970d69deee965b8db",
+      ".lovable/plan/gradiente-accent-em-todos-os-componentes-2026-08-24.md": "e0259adf491c3d9453009a7bd7c808ca",
+      ".lovable/plan/gradiente-azul-nos-blocos-de-exemplo-2026-08-24.md": "9136cd4c2f5668694154d6f6ebd33918",
+      ".lovable/plan/gradiente-azul-nos-exemplos-de-effects-2026-08-24.md": "057ef1626b074e1368da01770b03eb01",
+      ".lovable/plan/gradiente-nas-variantes-do-spinner-2026-08-24.md": "bbcf2382834e1f65034cf2e6503cd6b2",
+      ".lovable/plan/gradiente-nos-detalhes-de-components-2026-08-24.md": "b643362d9796d684c65228a692f82960",
+      ".lovable/plan/gradiente-somente-em-títulos-nunca-em-caixas-2026-08-24.md": "333be275c51f6a8c79473a644a79b490",
+      ".lovable/plan/hover-suave-como-padrão-em-todos-os-botões-2026-08-24.md": "84405eeab20c4b53a7f06d8addd1c6d5",
+      ".lovable/plan/incluir-os-azuis-na-aba-semantic-de-colors-2026-08-24.md": "870401d6d6c94fa20d481d1b0db180e8",
+      ".lovable/plan/limpeza-de-wiring-do-design-system-2026-08-27.md": "5afd81cff45da341dd21bb5dd5735e34",
+      ".lovable/plan/novos-azuis-globais-big-numbers-em-gradiente-2026-08-24.md": "0f54d2e391ca087faad0f1bc2930eb59",
+      ".lovable/plan/page-header-azul-para-páginas-de-produto-2026-08-24.md": "841a76eb4535e2cc928d9c9e3fdb56f5",
+      ".lovable/plan/reduzir-a-altura-da-foto-institucional-em-assets-2026-08-24.md": "1de263c6644f83eeaa44f7455c848491",
+      ".lovable/plan/reescrever-a-abertura-de-colors-2026-08-24.md": "1092b7d966bd8d7d7af1d0d6f4c28cd5",
+      ".lovable/plan/reforçar-3-regras-de-aplicação-em-projetos-consumidores-2026-08-26.md": "1f2cfe5c20691f5f65a71cce441c6e90",
+      ".lovable/plan/reforçar-logo-e-cta-na-adoção-inclusive-tela-de-login-2026-09-03.md": "ede7a95465417a75e4f745b249930b66",
+      ".lovable/plan/regra-obrigatória-de-favicon-na-adoção-do-design-system-2026-08-27.md": "e529cde2ac702b5f7b7efaf3895faa06",
+      ".lovable/plan/remover-logo-sbx-do-topo-tornar-o-logo-mark-uma-regra-obriga-2026-08-24.md": "f4340e0ec64fddbdfeeb7764abcbdc63",
+      ".lovable/plan/remover-o-azul-1a1d2f-dos-cards-2026-08-24.md": "236b1b154bf0122241f9ce8ca684a8df",
+      ".lovable/plan/remover-o-chip-sólido-da-demo-de-accent-2026-08-24.md": "d4e482d645e112b493947fa6c09881a3",
+      ".lovable/plan/remover-variantes-institutional-e-outline-do-button-2026-08-24.md": "e08c2cee622313b828466994ad80b732",
+      ".lovable/plan/revisão-dos-números-da-home-2026-08-24.md": "d03b63380d718fcf9fdaf3d7f03c9926",
+      ".lovable/plan/revisão-final-do-gradiente-no-design-system-2026-08-24.md": "4206608ad2ee3728b48aeafb91a24c78",
+      ".lovable/plan/sbx-design-system-rebrand-e-limpeza-do-roxo-2026-08-21.md": "073e2330bb6ade9c166f8505927affef",
+      ".lovable/plan/tema-escuro-como-padrão-2026-08-24.md": "bb21631ca9104ddf09ffdf9c6a0586f5",
+      ".lovable/plan/toggle-de-tema-sem-contorno-2026-08-24.md": "6040d31bf305afb74e89b5c4b2910c77",
+      ".lovable/plan/transição-suave-no-hover-do-cta-gradiente-2026-08-24.md": "11c73026437435d25b3c04e020127ce6",
+      ".lovable/plan/zebra-nas-listas-de-select-e-dropdown-menu-2026-08-24.md": "5d5f9bc1625877eb535283605f2c8bf4",
+      ".lovable/sources.yaml": "85650baf848ef209adbcf704cd10bef1",
+      ".lovable/system.md": "417ac9b7cf62b6cc7f257596a82fca7a",
+      "README.md": "f4883400a888785b401ba15288cda0f7",
+      "components.json": "a547944ace00dc5d5373aaca70a40bc4",
+      "eslint.config.js": "31c0881fdd8500aa4d0aa963079713ae",
+      "index.html": "0e52bdeaf3f7eecb2e30481b7d9f99e6",
+      "package.json": "c66a8d87aa188d8df1bed262155fa9e4",
+      "postcss.config.js": "c735540bb63936a123bc867d950c9f69",
+      "public/favicon.png": "8bc78fb1a5dc8145c0e79a709aac5454",
+      "public/robots.txt": "f9dff89adf98833e676de2205921996a",
+      "src/App.tsx": "c14d732c87287163e5e000faef2a4926",
+      "src/assets/fotografia-01.png.asset.json": "46e3463a7870daa293f48c679234cb3a",
+      "src/assets/sbx-e-trade-black.png.asset.json": "e92e30f346a63ff6b46bb8cb21b7c871",
+      "src/assets/sbx-e-trade-white.png.asset.json": "570113221fa814cb1ba2008266dbef98",
+      "src/components/Layout.tsx": "6dba7d203cc6f7ba4c143a391554a64a",
+      "src/components/NavLink.tsx": "994d07b665720a4dbbb454fc4656d011",
+      "src/components/PageHeader.tsx": "efa55f7824c56e9e487c7a2232478ab8",
+      "src/components/ScrollToTop.tsx": "147dbd8527a54095dffa97ebb5bdd9f8",
+      "src/components/ThemeProvider.tsx": "6c08bdae02f468651cc83c8acb59e6c7",
+      "src/components/ThemeToggle.tsx": "ac522ae6619e09fd64a6bf653caf3ccf",
+      "src/components/ui/accordion.tsx": "49eb166f67bbd070dceb9ac637b8180f",
+      "src/components/ui/alert-dialog.tsx": "b651e1d3f5d1210ec92048aac003ebf2",
+      "src/components/ui/alert.tsx": "a142a261b6e218765bd2c4d11e48c1a9",
+      "src/components/ui/aspect-ratio.tsx": "c5c364545e1b25a94e9e752cd67ad048",
+      "src/components/ui/avatar.tsx": "c77b7c8d5989aa96cf8f9f7d76f72ec0",
+      "src/components/ui/badge.tsx": "6466f377a7cd5e5c0461e648d48f63d2",
+      "src/components/ui/breadcrumb.tsx": "2eec2af17f28a77b9dc2d7c491b0b766",
+      "src/components/ui/button-group.tsx": "f99a5a94be5230d957ccd763a4e9c031",
+      "src/components/ui/button.tsx": "ba6c5abfb04be7225b88cb087e1ffc3d",
+      "src/components/ui/calendar.tsx": "6019d0e2c689d712da36b626f2a0fd55",
+      "src/components/ui/card.tsx": "a2aa1d16caf9aec1af1cdcbe02a59d76",
+      "src/components/ui/carousel.tsx": "d3216f9710fdeb430e16e4e7c91c9082",
+      "src/components/ui/chart.tsx": "2b4c9395b7a783011e40e02f2e29ab38",
+      "src/components/ui/checkbox.tsx": "1eeb1b2848695710e9b65487495c2a8f",
+      "src/components/ui/collapsible.tsx": "934b00582dae08af749fb55469081de6",
+      "src/components/ui/command.tsx": "45ab2598d3b5b744a533237663d47ef0",
+      "src/components/ui/context-menu.tsx": "7ed0eacd29ddb848e491a2cb98ddf46f",
+      "src/components/ui/dialog.tsx": "54c71e79b90a3ce94cafb6d83579feab",
+      "src/components/ui/drawer.tsx": "040604cbeda2d2ac017ad7070b6f114b",
+      "src/components/ui/dropdown-menu.tsx": "e4415064178969e8d70fc06a5b417d18",
+      "src/components/ui/empty.tsx": "c377d78dd571d7f0a7578dfa4eb0834e",
+      "src/components/ui/field.tsx": "8591c561c776dd5d869e636970b4ad92",
+      "src/components/ui/form.tsx": "7d3882843480a72027826316416a8442",
+      "src/components/ui/gradient-icon.tsx": "e3f08c6ab6364a3fc3a6c7fd29abfbfb",
+      "src/components/ui/hover-card.tsx": "fe90e6a6c30fb0c29cf88bd874007c45",
+      "src/components/ui/input-group.tsx": "60b082c610c5e00c910a6fded4267733",
+      "src/components/ui/input-otp.tsx": "7dfd18f21a97854f5b3852376a637e4e",
+      "src/components/ui/input.tsx": "621c98cd84c8dc3e96bfb90baf4e8e0b",
+      "src/components/ui/item.tsx": "dfd432f862f896ee9fc14974682e9fe2",
+      "src/components/ui/kbd.tsx": "2bbb19755cc7c4449c99a5b69b958ae6",
+      "src/components/ui/label.tsx": "234a45c9c32f7cf7e51daffbdf8d6c53",
+      "src/components/ui/menubar.tsx": "e503a332981fb1e0ece448e042139635",
+      "src/components/ui/navigation-menu.tsx": "52383b391164a608ec402202d6de0349",
+      "src/components/ui/pagination.tsx": "47af412a1f97b5a988e33fc8f3c336a4",
+      "src/components/ui/popover.tsx": "01e8429ee6239c7661760edcba6a3f20",
+      "src/components/ui/progress.tsx": "5aff8516675663df0493888dc7cdbed6",
+      "src/components/ui/radio-group.tsx": "e6b15dbd2a3759ac9bf4364aebcd4991",
+      "src/components/ui/resizable.tsx": "e85c52bfb5f0ff0b63ca446cdef50bc1",
+      "src/components/ui/scroll-area.tsx": "046e1fc9e383f54fa2a614958f727ad4",
+      "src/components/ui/select.tsx": "c05abcd5fac889ceb000ec52ec9ea7b4",
+      "src/components/ui/separator.tsx": "5d2ce22dcad3e168bef59bf19e367609",
+      "src/components/ui/sheet.tsx": "500d166714a6f221d66a9dff4097d333",
+      "src/components/ui/sidebar.tsx": "1804c203d8f463b5dcc9262601b14fd3",
+      "src/components/ui/skeleton.tsx": "1b3321e31e84f96e963da6d33e893874",
+      "src/components/ui/slider.tsx": "dd4ca17974e7d6d31f8b9525780e428d",
+      "src/components/ui/sonner.tsx": "45f8926d7042688e151b0e4e1d77f69d",
+      "src/components/ui/spinner.tsx": "28605af9b5abaffe126480f7a4469251",
+      "src/components/ui/stepper.tsx": "4474f3397583e2e2d69b76dc7d82ef07",
+      "src/components/ui/switch.tsx": "08685e11e388f92a2cad5870ec0276e3",
+      "src/components/ui/table.tsx": "07608052e41e0916c5c21f5ffceea8f4",
+      "src/components/ui/tabs.tsx": "36ffeb0673b05199dd5c88a9367eb7dd",
+      "src/components/ui/textarea.tsx": "d5749c025d531cafe4b473a934e9ec78",
+      "src/components/ui/toast.tsx": "5a7549bcd6bf5b05f80b55d71a9f49d2",
+      "src/components/ui/toaster.tsx": "d37c458f0a0084717704210c978a34ee",
+      "src/components/ui/toggle-group.tsx": "1fabe086138543572a2125e1f85a0eec",
+      "src/components/ui/toggle.tsx": "b0dad8978d10362b22157fac9df1da02",
+      "src/components/ui/tooltip.tsx": "77add68baa95d0c97c8da42fdc1a5389",
+      "src/hooks/use-mobile.tsx": "c0a0bdd4638c391a1dd06ac82074e60b",
+      "src/hooks/use-toast.ts": "fbd1981c01b701dcf166964fcea3c01c",
+      "src/index.css": "44737e62a32d7eea9a45c9ed8f0aa09b",
+      "src/index.ts": "058186007a58036349a370207c74c740",
+      "src/lib/utils.ts": "d9837f38cc05303254571985e3164050",
+      "src/main.tsx": "092c6937f28c1dff19a7d561f5f98360",
+      "src/pages/Assets.tsx": "0b5707eb900d95d3fdc4fc95a4e516ac",
+      "src/pages/Brand.tsx": "cf70a1c3821404a33d4c78e589e97aac",
+      "src/pages/Colors.tsx": "c316b6816cd7a62d47e0016017f2cd4a",
+      "src/pages/Components.tsx": "f226d4938f41e011989fdf8b630d82da",
+      "src/pages/Effects.tsx": "0cc018e2db30c69f729a818f6f9d8dc7",
+      "src/pages/Foundations.tsx": "f514339af7c39131422c0c97d8eff113",
+      "src/pages/Index.tsx": "170cb2370fda33f50bbb26dbcd83601d",
+      "src/pages/NotFound.tsx": "ef6f51be16fdff8ae47c7f9146319543",
+      "src/pages/Patterns.tsx": "61175ca168152b96ab5340c0beab8bb6",
+      "src/pages/Spacing.tsx": "7134f931f3763432dd3d10bc31006c37",
+      "src/pages/Typography.tsx": "89b14b8668fd02aab8cd89ad857a30a6",
+      "src/vite-env.d.ts": "0352474ba2918efe13895edbc3780d94",
+      "tailwind.config.ts": "14dfe441fdaa475d8046176c4d75a9f9",
+      "tsconfig.app.json": "8712c60b1f86eac1daa91619eb776efd",
+      "tsconfig.json": "bb72695c901d34a52a46196ba258371d",
+      "tsconfig.node.json": "1417fb05378a1d1102f085e60b20db0e",
+      "vite.config.ts": "eea8e578ebca550761c5c0e19be01385"
+    },
+    "pipeline_version": 8
+  },
+  "tokens": {
+    "color": [
+      {
+        "name": "--z-popover",
+        "raw": "60",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--gradient-start",
+        "raw": "#1D1D1B",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--gradient-end",
+        "raw": "#1D1D1B",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--gradient-primary",
+        "raw": "hsl(var(--primary))",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--gradient-accent",
+        "raw": "linear-gradient(135deg, #64A1E7 0%, #2246A7 100%)",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--gradient-accent-hover",
+        "raw": "linear-gradient(135deg, #4B8CD5 0%, #1B3781 100%)",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--background",
+        "raw": "0 0% 100%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--foreground",
+        "raw": "60 4% 11%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--surface-alt",
+        "raw": "0 0% 98%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--card",
+        "raw": "0 0% 100%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--card-foreground",
+        "raw": "60 4% 11%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--popover",
+        "raw": "0 0% 100%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--popover-foreground",
+        "raw": "60 4% 11%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--primary",
+        "raw": "60 4% 11%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--primary-foreground",
+        "raw": "0 0% 100%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--secondary",
+        "raw": "60 3% 96%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--secondary-foreground",
+        "raw": "60 4% 11%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--muted",
+        "raw": "60 3% 96%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--muted-foreground",
+        "raw": "60 3% 44%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--accent",
+        "raw": "60 3% 96%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--accent-foreground",
+        "raw": "60 4% 11%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--destructive",
+        "raw": "0 84% 60%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--destructive-foreground",
+        "raw": "0 0% 100%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--success",
+        "raw": "142 71% 45%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--success-foreground",
+        "raw": "0 0% 100%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--warning",
+        "raw": "38 92% 50%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--warning-foreground",
+        "raw": "0 0% 100%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--info",
+        "raw": "224 66% 39%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--info-foreground",
+        "raw": "0 0% 100%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--brand-accent",
+        "raw": "224 66% 39%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--brand-accent-foreground",
+        "raw": "0 0% 100%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--brand-accent-muted",
+        "raw": "210 87% 95%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--border",
+        "raw": "60 3% 90%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--input",
+        "raw": "60 3% 90%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--ring",
+        "raw": "224 66% 39%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--chart-1",
+        "raw": "224 66% 39%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--chart-2",
+        "raw": "216 74% 52%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--chart-3",
+        "raw": "211 74% 65%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--chart-4",
+        "raw": "206 62% 80%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--chart-5",
+        "raw": "220 24% 55%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--sidebar-background",
+        "raw": "0 0% 100%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--sidebar-foreground",
+        "raw": "60 3% 32%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--sidebar-primary",
+        "raw": "60 4% 11%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--sidebar-primary-foreground",
+        "raw": "0 0% 100%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--sidebar-accent",
+        "raw": "60 3% 96%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--sidebar-accent-foreground",
+        "raw": "60 4% 11%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--sidebar-border",
+        "raw": "60 3% 90%",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--sidebar-ring",
+        "raw": "60 4% 11%",
+        "source": "src/index.css"
+      }
+    ],
+    "spacing": [
+      {
+        "name": "--spacing-xs",
+        "raw": "4px",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--spacing-sm",
+        "raw": "8px",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--spacing-md",
+        "raw": "16px",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--spacing-lg",
+        "raw": "24px",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--spacing-xl",
+        "raw": "32px",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--spacing-2xl",
+        "raw": "48px",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--spacing-3xl",
+        "raw": "64px",
+        "source": "src/index.css"
+      }
+    ],
+    "typography": [
+      {
+        "name": "--font-sans",
+        "raw": "'Inter', system-ui, -apple-system, sans-serif",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--font-heading",
+        "raw": "'Inter', system-ui, -apple-system, sans-serif",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--font-serif",
+        "raw": "'Instrument Serif', Georgia, serif",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--font-mono",
+        "raw": "'JetBrains Mono', ui-monospace, 'SF Mono', monospace",
+        "source": "src/index.css"
+      }
+    ],
+    "radius": [
+      {
+        "name": "--radius",
+        "raw": "0",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--radius-sm",
+        "raw": "0",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--radius-md",
+        "raw": "0",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--radius-lg",
+        "raw": "0",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--radius-xl",
+        "raw": "0",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--radius-full",
+        "raw": "9999px",
+        "source": "src/index.css"
+      }
+    ],
+    "shadow": [
+      {
+        "name": "--shadow-sm",
+        "raw": "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--shadow-md",
+        "raw": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--shadow-lg",
+        "raw": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--shadow-card",
+        "raw": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--shadow-soft",
+        "raw": "0 1px 0 hsl(0 0% 90%)",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--shadow-elevated",
+        "raw": "0 24px 60px -20px hsl(0 0% 0% / 0.18)",
+        "source": "src/index.css"
+      }
+    ],
+    "other": [
+      {
+        "name": "--tracking-display",
+        "raw": "-0.035em",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--tracking-h1",
+        "raw": "-0.035em",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--tracking-h2",
+        "raw": "-0.035em",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--tracking-h3",
+        "raw": "-0.02em",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--tracking-serif",
+        "raw": "-0.01em",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--tracking-eyebrow",
+        "raw": "0.18em",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--z-base",
+        "raw": "0",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--z-dropdown",
+        "raw": "10",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--z-sticky",
+        "raw": "20",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--z-fixed",
+        "raw": "30",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--z-modal-backdrop",
+        "raw": "40",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--z-modal",
+        "raw": "50",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--z-tooltip",
+        "raw": "70",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--z-toast",
+        "raw": "80",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--duration-fast",
+        "raw": "150ms",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--duration-normal",
+        "raw": "250ms",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--duration-slow",
+        "raw": "400ms",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--ease-default",
+        "raw": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--ease-in",
+        "raw": "cubic-bezier(0.4, 0, 1, 1)",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--ease-out",
+        "raw": "cubic-bezier(0, 0, 0.2, 1)",
+        "source": "src/index.css"
+      },
+      {
+        "name": "--ease-bounce",
+        "raw": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        "source": "src/index.css"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Layout",
+      "file": "src/components/Layout",
+      "import_path": "",
+      "props": [
+        {
+          "name": "children",
+          "type": "any",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "NavLink",
+      "file": "src/components/NavLink",
+      "import_path": ""
+    },
+    {
+      "name": "PageHeader",
+      "file": "src/components/PageHeader",
+      "import_path": "",
+      "props": [
+        {
+          "name": "eyebrow",
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "type": "any",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "any"
+        },
+        {
+          "name": "className",
+          "type": "string",
+          "default": "page-header-eyebrow"
+        }
+      ]
+    },
+    {
+      "name": "ScrollToTop",
+      "file": "src/components/ScrollToTop",
+      "import_path": ""
+    },
+    {
+      "name": "ThemeProvider",
+      "file": "src/components/ThemeProvider",
+      "import_path": "",
+      "props": [
+        {
+          "name": "children",
+          "type": "any",
+          "required": true
+        },
+        {
+          "name": "defaultTheme",
+          "type": "enum",
+          "values": [
+            "dark",
+            "light",
+            "system"
+          ],
+          "default": "dark"
+        },
+        {
+          "name": "storageKey",
+          "type": "string",
+          "default": "sbx-theme"
+        }
+      ]
+    },
+    {
+      "name": "ThemeToggle",
+      "file": "src/components/ThemeToggle",
+      "import_path": ""
+    },
+    {
+      "name": "Accordion",
+      "file": "src/components/ui/accordion",
+      "import_path": ""
+    },
+    {
+      "name": "AccordionItem",
+      "file": "src/components/ui/accordion",
+      "import_path": ""
+    },
+    {
+      "name": "AccordionTrigger",
+      "file": "src/components/ui/accordion",
+      "import_path": ""
+    },
+    {
+      "name": "AccordionContent",
+      "file": "src/components/ui/accordion",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDialog",
+      "file": "src/components/ui/alert-dialog",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDialogPortal",
+      "file": "src/components/ui/alert-dialog",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDialogOverlay",
+      "file": "src/components/ui/alert-dialog",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDialogTrigger",
+      "file": "src/components/ui/alert-dialog",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDialogContent",
+      "file": "src/components/ui/alert-dialog",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDialogHeader",
+      "file": "src/components/ui/alert-dialog",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDialogFooter",
+      "file": "src/components/ui/alert-dialog",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDialogTitle",
+      "file": "src/components/ui/alert-dialog",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDialogDescription",
+      "file": "src/components/ui/alert-dialog",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDialogAction",
+      "file": "src/components/ui/alert-dialog",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDialogCancel",
+      "file": "src/components/ui/alert-dialog",
+      "import_path": ""
+    },
+    {
+      "name": "Alert",
+      "file": "src/components/ui/alert",
+      "import_path": "",
+      "props": [
+        {
+          "name": "variant",
+          "type": "enum",
+          "values": [
+            "default",
+            "destructive"
+          ],
+          "default": "default"
+        }
+      ]
+    },
+    {
+      "name": "AlertTitle",
+      "file": "src/components/ui/alert",
+      "import_path": ""
+    },
+    {
+      "name": "AlertDescription",
+      "file": "src/components/ui/alert",
+      "import_path": ""
+    },
+    {
+      "name": "AspectRatio",
+      "file": "src/components/ui/aspect-ratio",
+      "import_path": ""
+    },
+    {
+      "name": "Avatar",
+      "file": "src/components/ui/avatar",
+      "import_path": ""
+    },
+    {
+      "name": "AvatarImage",
+      "file": "src/components/ui/avatar",
+      "import_path": ""
+    },
+    {
+      "name": "AvatarFallback",
+      "file": "src/components/ui/avatar",
+      "import_path": ""
+    },
+    {
+      "name": "Badge",
+      "file": "src/components/ui/badge",
+      "import_path": "",
+      "props": [
+        {
+          "name": "variant",
+          "type": "enum",
+          "values": [
+            "default",
+            "secondary",
+            "destructive",
+            "outline",
+            "outline-gradient"
+          ],
+          "default": "default"
+        }
+      ]
+    },
+    {
+      "name": "Breadcrumb",
+      "file": "src/components/ui/breadcrumb",
+      "import_path": ""
+    },
+    {
+      "name": "BreadcrumbList",
+      "file": "src/components/ui/breadcrumb",
+      "import_path": ""
+    },
+    {
+      "name": "BreadcrumbItem",
+      "file": "src/components/ui/breadcrumb",
+      "import_path": ""
+    },
+    {
+      "name": "BreadcrumbLink",
+      "file": "src/components/ui/breadcrumb",
+      "import_path": ""
+    },
+    {
+      "name": "BreadcrumbPage",
+      "file": "src/components/ui/breadcrumb",
+      "import_path": ""
+    },
+    {
+      "name": "BreadcrumbSeparator",
+      "file": "src/components/ui/breadcrumb",
+      "import_path": ""
+    },
+    {
+      "name": "BreadcrumbEllipsis",
+      "file": "src/components/ui/breadcrumb",
+      "import_path": ""
+    },
+    {
+      "name": "ButtonGroup",
+      "file": "src/components/ui/button-group",
+      "import_path": "",
+      "props": [
+        {
+          "name": "orientation",
+          "type": "enum",
+          "values": [
+            "horizontal",
+            "vertical"
+          ],
+          "default": "horizontal"
+        }
+      ],
+      "usage": "Agrupa botões relacionados em um bloco contínuo: split button, toolbar de formatação ou ações em lote.",
+      "examples": [
+        {
+          "label": "Split button",
+          "code": "\u003cButtonGroup\u003e\n  \u003cButton\u003ePublicar\u003c/Button\u003e\n  \u003cButton size=\"icon\" aria-label=\"Mais opções\"\u003e\u003cChevronDown /\u003e\u003c/Button\u003e\n\u003c/ButtonGroup\u003e"
+        }
+      ],
+      "antipatterns": [
+        "Misturar variantes diferentes no mesmo grupo (ex.: default + secondary lado a lado).",
+        "Usar para botões sem relação entre si — prefira um flex com gap."
+      ]
+    },
+    {
+      "name": "ButtonGroupText",
+      "file": "src/components/ui/button-group",
+      "import_path": ""
+    },
+    {
+      "name": "ButtonGroupSeparator",
+      "file": "src/components/ui/button-group",
+      "import_path": ""
+    },
+    {
+      "name": "Button",
+      "file": "src/components/ui/button",
+      "import_path": "",
+      "props": [
+        {
+          "name": "variant",
+          "type": "enum",
+          "values": [
+            "default",
+            "destructive",
+            "secondary",
+            "ghost",
+            "link"
+          ],
+          "default": "default"
+        },
+        {
+          "name": "size",
+          "type": "enum",
+          "values": [
+            "default",
+            "sm",
+            "lg",
+            "icon"
+          ],
+          "default": "default"
+        },
+        {
+          "name": "asChild",
+          "type": "boolean",
+          "default": "false"
+        }
+      ]
+    },
+    {
+      "name": "Calendar",
+      "file": "src/components/ui/calendar",
+      "import_path": ""
+    },
+    {
+      "name": "Card",
+      "file": "src/components/ui/card",
+      "import_path": ""
+    },
+    {
+      "name": "CardHeader",
+      "file": "src/components/ui/card",
+      "import_path": ""
+    },
+    {
+      "name": "CardFooter",
+      "file": "src/components/ui/card",
+      "import_path": ""
+    },
+    {
+      "name": "CardTitle",
+      "file": "src/components/ui/card",
+      "import_path": ""
+    },
+    {
+      "name": "CardDescription",
+      "file": "src/components/ui/card",
+      "import_path": ""
+    },
+    {
+      "name": "CardContent",
+      "file": "src/components/ui/card",
+      "import_path": ""
+    },
+    {
+      "name": "Carousel",
+      "file": "src/components/ui/carousel",
+      "import_path": "",
+      "props": [
+        {
+          "name": "opts",
+          "type": "any"
+        },
+        {
+          "name": "plugins",
+          "type": "any"
+        },
+        {
+          "name": "orientation",
+          "type": "enum",
+          "values": [
+            "horizontal",
+            "vertical"
+          ],
+          "default": "horizontal"
+        },
+        {
+          "name": "setApi",
+          "type": "function"
+        }
+      ]
+    },
+    {
+      "name": "CarouselContent",
+      "file": "src/components/ui/carousel",
+      "import_path": ""
+    },
+    {
+      "name": "CarouselItem",
+      "file": "src/components/ui/carousel",
+      "import_path": ""
+    },
+    {
+      "name": "CarouselPrevious",
+      "file": "src/components/ui/carousel",
+      "import_path": ""
+    },
+    {
+      "name": "CarouselNext",
+      "file": "src/components/ui/carousel",
+      "import_path": ""
+    },
+    {
+      "name": "ChartContainer",
+      "file": "src/components/ui/chart",
+      "import_path": ""
+    },
+    {
+      "name": "ChartTooltip",
+      "file": "src/components/ui/chart",
+      "import_path": ""
+    },
+    {
+      "name": "ChartTooltipContent",
+      "file": "src/components/ui/chart",
+      "import_path": ""
+    },
+    {
+      "name": "ChartLegend",
+      "file": "src/components/ui/chart",
+      "import_path": ""
+    },
+    {
+      "name": "ChartLegendContent",
+      "file": "src/components/ui/chart",
+      "import_path": ""
+    },
+    {
+      "name": "ChartStyle",
+      "file": "src/components/ui/chart",
+      "import_path": ""
+    },
+    {
+      "name": "Checkbox",
+      "file": "src/components/ui/checkbox",
+      "import_path": ""
+    },
+    {
+      "name": "Collapsible",
+      "file": "src/components/ui/collapsible",
+      "import_path": ""
+    },
+    {
+      "name": "CollapsibleTrigger",
+      "file": "src/components/ui/collapsible",
+      "import_path": ""
+    },
+    {
+      "name": "CollapsibleContent",
+      "file": "src/components/ui/collapsible",
+      "import_path": ""
+    },
+    {
+      "name": "Command",
+      "file": "src/components/ui/command",
+      "import_path": ""
+    },
+    {
+      "name": "CommandDialog",
+      "file": "src/components/ui/command",
+      "import_path": ""
+    },
+    {
+      "name": "CommandInput",
+      "file": "src/components/ui/command",
+      "import_path": ""
+    },
+    {
+      "name": "CommandList",
+      "file": "src/components/ui/command",
+      "import_path": ""
+    },
+    {
+      "name": "CommandEmpty",
+      "file": "src/components/ui/command",
+      "import_path": ""
+    },
+    {
+      "name": "CommandGroup",
+      "file": "src/components/ui/command",
+      "import_path": ""
+    },
+    {
+      "name": "CommandItem",
+      "file": "src/components/ui/command",
+      "import_path": ""
+    },
+    {
+      "name": "CommandShortcut",
+      "file": "src/components/ui/command",
+      "import_path": ""
+    },
+    {
+      "name": "CommandSeparator",
+      "file": "src/components/ui/command",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenu",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuTrigger",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuContent",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuItem",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuCheckboxItem",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuRadioItem",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuLabel",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuSeparator",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuShortcut",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuGroup",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuPortal",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuSub",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuSubContent",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuSubTrigger",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "ContextMenuRadioGroup",
+      "file": "src/components/ui/context-menu",
+      "import_path": ""
+    },
+    {
+      "name": "Dialog",
+      "file": "src/components/ui/dialog",
+      "import_path": ""
+    },
+    {
+      "name": "DialogPortal",
+      "file": "src/components/ui/dialog",
+      "import_path": ""
+    },
+    {
+      "name": "DialogOverlay",
+      "file": "src/components/ui/dialog",
+      "import_path": ""
+    },
+    {
+      "name": "DialogClose",
+      "file": "src/components/ui/dialog",
+      "import_path": ""
+    },
+    {
+      "name": "DialogTrigger",
+      "file": "src/components/ui/dialog",
+      "import_path": ""
+    },
+    {
+      "name": "DialogContent",
+      "file": "src/components/ui/dialog",
+      "import_path": ""
+    },
+    {
+      "name": "DialogHeader",
+      "file": "src/components/ui/dialog",
+      "import_path": ""
+    },
+    {
+      "name": "DialogFooter",
+      "file": "src/components/ui/dialog",
+      "import_path": ""
+    },
+    {
+      "name": "DialogTitle",
+      "file": "src/components/ui/dialog",
+      "import_path": ""
+    },
+    {
+      "name": "DialogDescription",
+      "file": "src/components/ui/dialog",
+      "import_path": ""
+    },
+    {
+      "name": "Drawer",
+      "file": "src/components/ui/drawer",
+      "import_path": ""
+    },
+    {
+      "name": "DrawerPortal",
+      "file": "src/components/ui/drawer",
+      "import_path": ""
+    },
+    {
+      "name": "DrawerOverlay",
+      "file": "src/components/ui/drawer",
+      "import_path": ""
+    },
+    {
+      "name": "DrawerTrigger",
+      "file": "src/components/ui/drawer",
+      "import_path": ""
+    },
+    {
+      "name": "DrawerClose",
+      "file": "src/components/ui/drawer",
+      "import_path": ""
+    },
+    {
+      "name": "DrawerContent",
+      "file": "src/components/ui/drawer",
+      "import_path": ""
+    },
+    {
+      "name": "DrawerHeader",
+      "file": "src/components/ui/drawer",
+      "import_path": ""
+    },
+    {
+      "name": "DrawerFooter",
+      "file": "src/components/ui/drawer",
+      "import_path": ""
+    },
+    {
+      "name": "DrawerTitle",
+      "file": "src/components/ui/drawer",
+      "import_path": ""
+    },
+    {
+      "name": "DrawerDescription",
+      "file": "src/components/ui/drawer",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenu",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuTrigger",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuContent",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuItem",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuCheckboxItem",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuRadioItem",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuLabel",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuSeparator",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuShortcut",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuGroup",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuPortal",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuSub",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuSubContent",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuSubTrigger",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "DropdownMenuRadioGroup",
+      "file": "src/components/ui/dropdown-menu",
+      "import_path": ""
+    },
+    {
+      "name": "Empty",
+      "file": "src/components/ui/empty",
+      "import_path": "",
+      "props": [
+        {
+          "name": "size",
+          "type": "enum",
+          "values": [
+            "sm",
+            "default",
+            "lg"
+          ],
+          "default": "default"
+        }
+      ],
+      "usage": "Estado vazio padronizado: mídia, título, descrição e ação. Vale também para 'sem resultados' após filtro.",
+      "examples": [
+        {
+          "label": "Lista vazia",
+          "code": "\u003cEmpty\u003e\n  \u003cEmptyMedia\u003e\u003cFileText /\u003e\u003c/EmptyMedia\u003e\n  \u003cEmptyTitle\u003eNenhum lote cadastrado\u003c/EmptyTitle\u003e\n  \u003cEmptyDescription\u003eCrie o primeiro lote para receber lances.\u003c/EmptyDescription\u003e\n  \u003cEmptyContent\u003e\u003cButton\u003eNovo lote\u003c/Button\u003e\u003c/EmptyContent\u003e\n\u003c/Empty\u003e"
+        }
+      ],
+      "antipatterns": [
+        "Estado vazio sem ação quando existe uma ação óbvia de saída.",
+        "Ilustração colorida ou emoji no lugar do ícone Lucide monocromático."
+      ]
+    },
+    {
+      "name": "EmptyMedia",
+      "file": "src/components/ui/empty",
+      "import_path": ""
+    },
+    {
+      "name": "EmptyTitle",
+      "file": "src/components/ui/empty",
+      "import_path": ""
+    },
+    {
+      "name": "EmptyDescription",
+      "file": "src/components/ui/empty",
+      "import_path": ""
+    },
+    {
+      "name": "EmptyContent",
+      "file": "src/components/ui/empty",
+      "import_path": ""
+    },
+    {
+      "name": "Field",
+      "file": "src/components/ui/field",
+      "import_path": "",
+      "props": [
+        {
+          "name": "orientation",
+          "type": "enum",
+          "values": [
+            "vertical",
+            "horizontal"
+          ],
+          "default": "vertical"
+        }
+      ],
+      "usage": "Estrutura de campo de formulário — rótulo, controle, texto de apoio e erro — sem depender de react-hook-form. Use Form quando houver validação integrada.",
+      "examples": [
+        {
+          "label": "Campo com erro",
+          "code": "\u003cField\u003e\n  \u003cFieldLabel htmlFor=\"email\"\u003eE-mail\u003c/FieldLabel\u003e\n  \u003cInput id=\"email\" aria-invalid /\u003e\n  \u003cFieldError\u003eInforme um e-mail válido.\u003c/FieldError\u003e\n\u003c/Field\u003e"
+        }
+      ],
+      "antipatterns": [
+        "Sinalizar erro só pela cor da borda, sem FieldError com texto.",
+        "Rótulo sem htmlFor apontando para o id do controle."
+      ]
+    },
+    {
+      "name": "FieldGroup",
+      "file": "src/components/ui/field",
+      "import_path": ""
+    },
+    {
+      "name": "FieldLegend",
+      "file": "src/components/ui/field",
+      "import_path": ""
+    },
+    {
+      "name": "FieldLabel",
+      "file": "src/components/ui/field",
+      "import_path": ""
+    },
+    {
+      "name": "FieldDescription",
+      "file": "src/components/ui/field",
+      "import_path": ""
+    },
+    {
+      "name": "FieldError",
+      "file": "src/components/ui/field",
+      "import_path": ""
+    },
+    {
+      "name": "FieldSeparator",
+      "file": "src/components/ui/field",
+      "import_path": ""
+    },
+    {
+      "name": "Form",
+      "file": "src/components/ui/form",
+      "import_path": ""
+    },
+    {
+      "name": "FormItem",
+      "file": "src/components/ui/form",
+      "import_path": ""
+    },
+    {
+      "name": "FormLabel",
+      "file": "src/components/ui/form",
+      "import_path": ""
+    },
+    {
+      "name": "FormControl",
+      "file": "src/components/ui/form",
+      "import_path": ""
+    },
+    {
+      "name": "FormDescription",
+      "file": "src/components/ui/form",
+      "import_path": ""
+    },
+    {
+      "name": "FormMessage",
+      "file": "src/components/ui/form",
+      "import_path": ""
+    },
+    {
+      "name": "FormField",
+      "file": "src/components/ui/form",
+      "import_path": ""
+    },
+    {
+      "name": "GradientIcon",
+      "file": "src/components/ui/gradient-icon",
+      "import_path": "",
+      "props": [
+        {
+          "name": "icon",
+          "type": "any",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "HoverCard",
+      "file": "src/components/ui/hover-card",
+      "import_path": ""
+    },
+    {
+      "name": "HoverCardTrigger",
+      "file": "src/components/ui/hover-card",
+      "import_path": ""
+    },
+    {
+      "name": "HoverCardContent",
+      "file": "src/components/ui/hover-card",
+      "import_path": ""
+    },
+    {
+      "name": "InputGroup",
+      "file": "src/components/ui/input-group",
+      "import_path": "",
+      "usage": "Campo de texto com prefixo, sufixo ou ação acoplada — busca com atalho, moeda, unidade, botão de envio.",
+      "examples": [
+        {
+          "label": "Busca com atalho",
+          "code": "\u003cInputGroup\u003e\n  \u003cInputGroupAddon\u003e\u003cSearch /\u003e\u003c/InputGroupAddon\u003e\n  \u003cInputGroupInput placeholder=\"Buscar...\" aria-label=\"Buscar\" /\u003e\n  \u003cInputGroupButtonGroup\u003e\u003cKbdGroup\u003e\u003cKbd\u003eCtrl\u003c/Kbd\u003e\u003cKbd\u003eK\u003c/Kbd\u003e\u003c/KbdGroup\u003e\u003c/InputGroupButtonGroup\u003e\n\u003c/InputGroup\u003e"
+        }
+      ],
+      "antipatterns": [
+        "Colocar um \u003cInput\u003e dentro do grupo — use InputGroupInput, que não tem borda própria.",
+        "Usar o addon como rótulo do campo; o rótulo é responsabilidade do Label/Field."
+      ]
+    },
+    {
+      "name": "InputGroupAddon",
+      "file": "src/components/ui/input-group",
+      "import_path": "",
+      "props": [
+        {
+          "name": "align",
+          "type": "enum",
+          "values": [
+            "start",
+            "end"
+          ],
+          "default": "start"
+        }
+      ]
+    },
+    {
+      "name": "InputGroupInput",
+      "file": "src/components/ui/input-group",
+      "import_path": ""
+    },
+    {
+      "name": "InputGroupButtonGroup",
+      "file": "src/components/ui/input-group",
+      "import_path": ""
+    },
+    {
+      "name": "InputOTP",
+      "file": "src/components/ui/input-otp",
+      "import_path": ""
+    },
+    {
+      "name": "InputOTPGroup",
+      "file": "src/components/ui/input-otp",
+      "import_path": ""
+    },
+    {
+      "name": "InputOTPSlot",
+      "file": "src/components/ui/input-otp",
+      "import_path": ""
+    },
+    {
+      "name": "InputOTPSeparator",
+      "file": "src/components/ui/input-otp",
+      "import_path": ""
+    },
+    {
+      "name": "Input",
+      "file": "src/components/ui/input",
+      "import_path": ""
+    },
+    {
+      "name": "Item",
+      "file": "src/components/ui/item",
+      "import_path": "",
+      "props": [
+        {
+          "name": "variant",
+          "type": "enum",
+          "values": [
+            "default",
+            "outline",
+            "muted"
+          ],
+          "default": "default"
+        },
+        {
+          "name": "size",
+          "type": "enum",
+          "values": [
+            "sm",
+            "default",
+            "lg"
+          ],
+          "default": "default"
+        },
+        {
+          "name": "asChild",
+          "type": "boolean",
+          "default": "false"
+        }
+      ],
+      "usage": "Linha de lista com mídia, título, descrição e ação. Base para listas de configurações, resultados de busca e opções.",
+      "examples": [
+        {
+          "label": "Lista de integrações",
+          "code": "\u003cItemGroup className=\"border border-border\"\u003e\n  \u003cItem\u003e\n    \u003cItemMedia\u003e\u003cBell /\u003e\u003c/ItemMedia\u003e\n    \u003cItemContent\u003e\n      \u003cItemTitle\u003eNotificações\u003c/ItemTitle\u003e\n      \u003cItemDescription\u003eAlertas de encerramento.\u003c/ItemDescription\u003e\n    \u003c/ItemContent\u003e\n    \u003cItemActions\u003e\u003cBadge\u003eAtivo\u003c/Badge\u003e\u003c/ItemActions\u003e\n  \u003c/Item\u003e\n\u003c/ItemGroup\u003e"
+        }
+      ],
+      "antipatterns": [
+        "Usar Card por item de lista — o hairline do ItemGroup é o separador padrão.",
+        "Tornar a linha clicável com \u003cdiv onClick\u003e; use asChild com \u003cbutton\u003e ou \u003ca\u003e."
+      ]
+    },
+    {
+      "name": "ItemGroup",
+      "file": "src/components/ui/item",
+      "import_path": ""
+    },
+    {
+      "name": "ItemMedia",
+      "file": "src/components/ui/item",
+      "import_path": ""
+    },
+    {
+      "name": "ItemContent",
+      "file": "src/components/ui/item",
+      "import_path": ""
+    },
+    {
+      "name": "ItemTitle",
+      "file": "src/components/ui/item",
+      "import_path": ""
+    },
+    {
+      "name": "ItemDescription",
+      "file": "src/components/ui/item",
+      "import_path": ""
+    },
+    {
+      "name": "ItemActions",
+      "file": "src/components/ui/item",
+      "import_path": ""
+    },
+    {
+      "name": "ItemHeader",
+      "file": "src/components/ui/item",
+      "import_path": ""
+    },
+    {
+      "name": "ItemFooter",
+      "file": "src/components/ui/item",
+      "import_path": ""
+    },
+    {
+      "name": "ItemSeparator",
+      "file": "src/components/ui/item",
+      "import_path": ""
+    },
+    {
+      "name": "Kbd",
+      "file": "src/components/ui/kbd",
+      "import_path": "",
+      "usage": "Representa uma tecla ou atalho de teclado, em mono uppercase. Use KbdGroup para combinações.",
+      "examples": [
+        {
+          "label": "Atalho",
+          "code": "\u003cKbdGroup\u003e\u003cKbd\u003eCtrl\u003c/Kbd\u003e\u003cKbd\u003eK\u003c/Kbd\u003e\u003c/KbdGroup\u003e"
+        }
+      ],
+      "antipatterns": [
+        "Escrever o atalho como texto simples ('Ctrl+K') em vez de usar Kbd.",
+        "Usar Kbd como badge de status."
+      ]
+    },
+    {
+      "name": "KbdGroup",
+      "file": "src/components/ui/kbd",
+      "import_path": ""
+    },
+    {
+      "name": "Label",
+      "file": "src/components/ui/label",
+      "import_path": ""
+    },
+    {
+      "name": "Menubar",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarMenu",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarTrigger",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarContent",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarItem",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarSeparator",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarLabel",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarCheckboxItem",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarRadioGroup",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarRadioItem",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarPortal",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarSubContent",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarSubTrigger",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarGroup",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarSub",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "MenubarShortcut",
+      "file": "src/components/ui/menubar",
+      "import_path": ""
+    },
+    {
+      "name": "NavigationMenu",
+      "file": "src/components/ui/navigation-menu",
+      "import_path": ""
+    },
+    {
+      "name": "NavigationMenuList",
+      "file": "src/components/ui/navigation-menu",
+      "import_path": ""
+    },
+    {
+      "name": "NavigationMenuItem",
+      "file": "src/components/ui/navigation-menu",
+      "import_path": ""
+    },
+    {
+      "name": "NavigationMenuContent",
+      "file": "src/components/ui/navigation-menu",
+      "import_path": ""
+    },
+    {
+      "name": "NavigationMenuTrigger",
+      "file": "src/components/ui/navigation-menu",
+      "import_path": ""
+    },
+    {
+      "name": "NavigationMenuLink",
+      "file": "src/components/ui/navigation-menu",
+      "import_path": ""
+    },
+    {
+      "name": "NavigationMenuIndicator",
+      "file": "src/components/ui/navigation-menu",
+      "import_path": ""
+    },
+    {
+      "name": "NavigationMenuViewport",
+      "file": "src/components/ui/navigation-menu",
+      "import_path": ""
+    },
+    {
+      "name": "Pagination",
+      "file": "src/components/ui/pagination",
+      "import_path": ""
+    },
+    {
+      "name": "PaginationContent",
+      "file": "src/components/ui/pagination",
+      "import_path": ""
+    },
+    {
+      "name": "PaginationEllipsis",
+      "file": "src/components/ui/pagination",
+      "import_path": ""
+    },
+    {
+      "name": "PaginationItem",
+      "file": "src/components/ui/pagination",
+      "import_path": ""
+    },
+    {
+      "name": "PaginationLink",
+      "file": "src/components/ui/pagination",
+      "import_path": "",
+      "props": [
+        {
+          "name": "isActive",
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "name": "PaginationNext",
+      "file": "src/components/ui/pagination",
+      "import_path": ""
+    },
+    {
+      "name": "PaginationPrevious",
+      "file": "src/components/ui/pagination",
+      "import_path": ""
+    },
+    {
+      "name": "Popover",
+      "file": "src/components/ui/popover",
+      "import_path": ""
+    },
+    {
+      "name": "PopoverTrigger",
+      "file": "src/components/ui/popover",
+      "import_path": ""
+    },
+    {
+      "name": "PopoverContent",
+      "file": "src/components/ui/popover",
+      "import_path": ""
+    },
+    {
+      "name": "Progress",
+      "file": "src/components/ui/progress",
+      "import_path": ""
+    },
+    {
+      "name": "RadioGroup",
+      "file": "src/components/ui/radio-group",
+      "import_path": ""
+    },
+    {
+      "name": "RadioGroupItem",
+      "file": "src/components/ui/radio-group",
+      "import_path": ""
+    },
+    {
+      "name": "ResizablePanelGroup",
+      "file": "src/components/ui/resizable",
+      "import_path": ""
+    },
+    {
+      "name": "ResizablePanel",
+      "file": "src/components/ui/resizable",
+      "import_path": ""
+    },
+    {
+      "name": "ResizableHandle",
+      "file": "src/components/ui/resizable",
+      "import_path": ""
+    },
+    {
+      "name": "ScrollArea",
+      "file": "src/components/ui/scroll-area",
+      "import_path": ""
+    },
+    {
+      "name": "ScrollBar",
+      "file": "src/components/ui/scroll-area",
+      "import_path": ""
+    },
+    {
+      "name": "Select",
+      "file": "src/components/ui/select",
+      "import_path": ""
+    },
+    {
+      "name": "SelectGroup",
+      "file": "src/components/ui/select",
+      "import_path": ""
+    },
+    {
+      "name": "SelectValue",
+      "file": "src/components/ui/select",
+      "import_path": ""
+    },
+    {
+      "name": "SelectTrigger",
+      "file": "src/components/ui/select",
+      "import_path": ""
+    },
+    {
+      "name": "SelectContent",
+      "file": "src/components/ui/select",
+      "import_path": ""
+    },
+    {
+      "name": "SelectLabel",
+      "file": "src/components/ui/select",
+      "import_path": ""
+    },
+    {
+      "name": "SelectItem",
+      "file": "src/components/ui/select",
+      "import_path": ""
+    },
+    {
+      "name": "SelectSeparator",
+      "file": "src/components/ui/select",
+      "import_path": ""
+    },
+    {
+      "name": "SelectScrollUpButton",
+      "file": "src/components/ui/select",
+      "import_path": ""
+    },
+    {
+      "name": "SelectScrollDownButton",
+      "file": "src/components/ui/select",
+      "import_path": ""
+    },
+    {
+      "name": "Separator",
+      "file": "src/components/ui/separator",
+      "import_path": ""
+    },
+    {
+      "name": "Sheet",
+      "file": "src/components/ui/sheet",
+      "import_path": "",
+      "props": [
+        {
+          "name": "side",
+          "type": "enum",
+          "values": [
+            "top",
+            "bottom",
+            "left",
+            "right"
+          ],
+          "default": "right"
+        }
+      ]
+    },
+    {
+      "name": "SheetClose",
+      "file": "src/components/ui/sheet",
+      "import_path": ""
+    },
+    {
+      "name": "SheetContent",
+      "file": "src/components/ui/sheet",
+      "import_path": ""
+    },
+    {
+      "name": "SheetDescription",
+      "file": "src/components/ui/sheet",
+      "import_path": ""
+    },
+    {
+      "name": "SheetFooter",
+      "file": "src/components/ui/sheet",
+      "import_path": ""
+    },
+    {
+      "name": "SheetHeader",
+      "file": "src/components/ui/sheet",
+      "import_path": ""
+    },
+    {
+      "name": "SheetOverlay",
+      "file": "src/components/ui/sheet",
+      "import_path": ""
+    },
+    {
+      "name": "SheetPortal",
+      "file": "src/components/ui/sheet",
+      "import_path": ""
+    },
+    {
+      "name": "SheetTitle",
+      "file": "src/components/ui/sheet",
+      "import_path": ""
+    },
+    {
+      "name": "SheetTrigger",
+      "file": "src/components/ui/sheet",
+      "import_path": ""
+    },
+    {
+      "name": "Sidebar",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarContent",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarFooter",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarGroup",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarGroupAction",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarGroupContent",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarGroupLabel",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarHeader",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarInput",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarInset",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarMenu",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarMenuAction",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarMenuBadge",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarMenuButton",
+      "file": "src/components/ui/sidebar",
+      "import_path": "",
+      "props": [
+        {
+          "name": "variant",
+          "type": "enum",
+          "values": [
+            "default",
+            "outline"
+          ],
+          "default": "default"
+        },
+        {
+          "name": "size",
+          "type": "enum",
+          "values": [
+            "default",
+            "sm",
+            "lg"
+          ],
+          "default": "default"
+        }
+      ]
+    },
+    {
+      "name": "SidebarMenuItem",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarMenuSkeleton",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarMenuSub",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarMenuSubButton",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarMenuSubItem",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarProvider",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarRail",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarSeparator",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "SidebarTrigger",
+      "file": "src/components/ui/sidebar",
+      "import_path": ""
+    },
+    {
+      "name": "Skeleton",
+      "file": "src/components/ui/skeleton",
+      "import_path": ""
+    },
+    {
+      "name": "Slider",
+      "file": "src/components/ui/slider",
+      "import_path": ""
+    },
+    {
+      "name": "Toaster",
+      "file": "src/components/ui/sonner",
+      "import_path": ""
+    },
+    {
+      "name": "Spinner",
+      "file": "src/components/ui/spinner",
+      "import_path": "",
+      "props": [
+        {
+          "name": "size",
+          "type": "enum",
+          "values": [
+            "sm",
+            "md",
+            "lg",
+            "xl"
+          ],
+          "default": "md"
+        },
+        {
+          "name": "variant",
+          "type": "enum",
+          "values": [
+            "default",
+            "circle",
+            "pinwheel",
+            "gradient"
+          ],
+          "default": "gradient"
+        },
+        {
+          "name": "solid",
+          "type": "boolean",
+          "default": "false"
+        },
+        {
+          "name": "className",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Stepper",
+      "file": "src/components/ui/stepper",
+      "import_path": "",
+      "props": [
+        {
+          "name": "steps",
+          "type": "any",
+          "required": true
+        },
+        {
+          "name": "currentStep",
+          "type": "number",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "Switch",
+      "file": "src/components/ui/switch",
+      "import_path": ""
+    },
+    {
+      "name": "Table",
+      "file": "src/components/ui/table",
+      "import_path": ""
+    },
+    {
+      "name": "TableHeader",
+      "file": "src/components/ui/table",
+      "import_path": ""
+    },
+    {
+      "name": "TableBody",
+      "file": "src/components/ui/table",
+      "import_path": ""
+    },
+    {
+      "name": "TableFooter",
+      "file": "src/components/ui/table",
+      "import_path": ""
+    },
+    {
+      "name": "TableHead",
+      "file": "src/components/ui/table",
+      "import_path": ""
+    },
+    {
+      "name": "TableRow",
+      "file": "src/components/ui/table",
+      "import_path": ""
+    },
+    {
+      "name": "TableCell",
+      "file": "src/components/ui/table",
+      "import_path": ""
+    },
+    {
+      "name": "TableCaption",
+      "file": "src/components/ui/table",
+      "import_path": ""
+    },
+    {
+      "name": "Tabs",
+      "file": "src/components/ui/tabs",
+      "import_path": ""
+    },
+    {
+      "name": "TabsList",
+      "file": "src/components/ui/tabs",
+      "import_path": ""
+    },
+    {
+      "name": "TabsTrigger",
+      "file": "src/components/ui/tabs",
+      "import_path": ""
+    },
+    {
+      "name": "TabsContent",
+      "file": "src/components/ui/tabs",
+      "import_path": ""
+    },
+    {
+      "name": "Textarea",
+      "file": "src/components/ui/textarea",
+      "import_path": ""
+    },
+    {
+      "name": "ToastProvider",
+      "file": "src/components/ui/toast",
+      "import_path": ""
+    },
+    {
+      "name": "ToastViewport",
+      "file": "src/components/ui/toast",
+      "import_path": ""
+    },
+    {
+      "name": "Toast",
+      "file": "src/components/ui/toast",
+      "import_path": "",
+      "props": [
+        {
+          "name": "variant",
+          "type": "enum",
+          "values": [
+            "default",
+            "destructive"
+          ],
+          "default": "default"
+        }
+      ]
+    },
+    {
+      "name": "ToastTitle",
+      "file": "src/components/ui/toast",
+      "import_path": ""
+    },
+    {
+      "name": "ToastDescription",
+      "file": "src/components/ui/toast",
+      "import_path": ""
+    },
+    {
+      "name": "ToastClose",
+      "file": "src/components/ui/toast",
+      "import_path": ""
+    },
+    {
+      "name": "ToastAction",
+      "file": "src/components/ui/toast",
+      "import_path": ""
+    },
+    {
+      "name": "ToggleGroup",
+      "file": "src/components/ui/toggle-group",
+      "import_path": ""
+    },
+    {
+      "name": "ToggleGroupItem",
+      "file": "src/components/ui/toggle-group",
+      "import_path": ""
+    },
+    {
+      "name": "Toggle",
+      "file": "src/components/ui/toggle",
+      "import_path": "",
+      "props": [
+        {
+          "name": "variant",
+          "type": "enum",
+          "values": [
+            "default",
+            "outline"
+          ],
+          "default": "default"
+        },
+        {
+          "name": "size",
+          "type": "enum",
+          "values": [
+            "default",
+            "sm",
+            "lg"
+          ],
+          "default": "default"
+        }
+      ]
+    },
+    {
+      "name": "Tooltip",
+      "file": "src/components/ui/tooltip",
+      "import_path": ""
+    },
+    {
+      "name": "TooltipTrigger",
+      "file": "src/components/ui/tooltip",
+      "import_path": ""
+    },
+    {
+      "name": "TooltipContent",
+      "file": "src/components/ui/tooltip",
+      "import_path": ""
+    },
+    {
+      "name": "TooltipProvider",
+      "file": "src/components/ui/tooltip",
+      "import_path": ""
+    }
+  ],
+  "assets": [
+    {
+      "file": "src/assets/fotografia-01.png.asset.json",
+      "kind": "image",
+      "format": "png",
+      "pointer": true
+    },
+    {
+      "file": "src/assets/sbx-e-trade-black.png.asset.json",
+      "kind": "image",
+      "format": "png",
+      "pointer": true
+    },
+    {
+      "file": "src/assets/sbx-e-trade-white.png.asset.json",
+      "kind": "image",
+      "format": "png",
+      "pointer": true
+    }
+  ],
+  "constraints": [
+    "ADOÇÃO — LOGO (OBRIGATÓRIO, sem pedido do usuário): ao aplicar o design system a um projeto novo ou existente, reescreva TODO logotipo textual (sidebar, header, login, splash, footer) no padrão Mitr: caixa alta, sem espaço, ExtraLight (200) na primeira parte e Regular (400) na segunda (palavra única = 200 inteira), cor pelo token foreground. Instale o @import da Mitr (family=Mitr:wght@200;400), fontFamily.mitr no tailwind.config.ts e as classes .logo-mark/.logo-mark-light/.logo-mark-regular. A tela de login/splash entra no mesmo passo. PROIBIDO gradiente no logo (text-gradient, .cta-gradient, bg-clip-text, azul) — o logo é apenas tipografia Mitr por token foreground. PROIBIDO manter \u003cimg\u003e, \u003csvg\u003e ou caixa de logo herdada ao lado do wordmark: remova, fica só o wordmark textual. PROIBIDO font-bold, font-heading, cor fixa ou espaço entre as palavras no logo.",
+    "ADOÇÃO — ÍCONES (OBRIGATÓRIO, sem pedido do usuário): substitua TODA a iconografia herdada (react-icons, Heroicons, Material Icons, Font Awesome, SVGs legados, emojis) por lucide-react com strokeWidth={1.5} e tamanhos 16/20/24. Menu lateral usa 20; item ativo usa GradientIcon; inativos são monocromáticos por token. Remova as dependências de ícones antigas. Se os ícones do menu continuam iguais aos de antes da adoção, a migração não foi feita.",
+    "ADOÇÃO — TEMA (OBRIGATÓRIO, sem pedido do usuário): aplique o tema no bootstrap do app — ThemeProvider do design system em App.tsx com defaultTheme=\"dark\", classe .dark/.light no \u003chtml\u003e antes da primeira pintura (sem flash), preferência persistida em localStorage, tokens completos em :root e .dark (incluindo --sidebar-*) e ThemeToggle ghost com aria-label no header. Remova providers e variáveis de tema herdados do projeto anterior. Light e dark devem funcionar imediatamente.",
+    "ADOÇÃO — FAVICON (OBRIGATÓRIO, sem pedido do usuário): ao aplicar o design system a um projeto existente, o favicon herdado é sempre substituído. Gere o ícone a partir da marca do produto no padrão do design system (wordmark Mitr caixa alta, marca clara sobre fundo escuro, quadrado com padding, nunca esticado), grave em public/favicon.png (arquivo real, nunca pointer .asset.json) e aponte o index.html com \u003clink rel=\"icon\" href=\"/favicon.png\" type=\"image/png\"\u003e. REMOVA public/favicon.ico e todo \u003clink rel=\"icon\"\u003e legado — o browser pede /favicon.ico por padrão e ele sobrescreve o ícone novo, causa nº 1 do favicon antigo persistir. Atualize também apple-touch-icon, ícones de manifest/webmanifest e og:image herdados.",
+    "Cores, espaçamentos, raios e sombras vêm sempre dos tokens do design system. PROIBIDO hex/rgb ou classes Tailwind genéricas (bg-slate-900, text-gray-500).",
+    "Cards não têm borda: usar shadow-card dark:shadow-none.",
+    "Todo \u003ch1\u003e usa gradiente via \u003cspan className=\"text-gradient\"\u003e.",
+    "Botões apenas de ícone usam variant=\"ghost\" (sem contorno) e exigem aria-label.",
+    "Transição de hover em qualquer botão: 150ms (--duration-fast) com --ease-out; gradiente animado por camada (::before com opacity 0→1), nunca trocando background-image.",
+    "CONTRASTE SOBRE GRADIENTE (OBRIGATÓRIO): sobre qualquer fundo em gradiente azul (cta-gradient, fill-gradient, surface-gradient, botão default, badge default, paginação ativa, avatar fallback, checkbox/radio marcado, stepper, dia selecionado no calendário, action de toast) TODO o conteúdo é branco — texto, ícone, iniciais, contador. PROIBIDO text-foreground, text-primary, text-muted-foreground, text-black, token de tema ou hex sobre gradiente, inclusive em hover, active, disabled e no tema light.",
+    "BOTÃO COLORIDO (OBRIGATÓRIO): a variante default do Button é sempre o gradiente accent com texto branco. PROIBIDO azul chapado (bg-brand-accent, bg-blue-*, hex) como fundo de botão e PROIBIDO rótulo ou ícone escuro sobre ele. Remapeie qualquer botão azul sólido herdado do projeto anterior para a variante default.",
+    "LOGO SEM GRADIENTE E SEM IMAGEM (OBRIGATÓRIO): o logotipo é apenas tipografia Mitr com cor pelo token foreground. PROIBIDO text-gradient, .cta-gradient, bg-clip-text ou qualquer azul no wordmark, e PROIBIDO manter imagem/símbolo/quadrado de logo herdado do projeto anterior ao lado do nome. Sintoma de contrato quebrado: nome do produto em gradiente azul, em fonte que não é Mitr, ou com um bloco de imagem ao lado.",
+    "CTA DE LOGIN (OBRIGATÓRIO): a ação primária de qualquer formulário de autenticação (Entrar, Criar conta, Redefinir senha) usa \u003cButton\u003e na variante default — gradiente accent + texto branco. PROIBIDO CTA branco ou preto chapado (bg-white, bg-background, bg-foreground, hex) e PROIBIDO azul liso. Ações secundárias como \"Esqueci minha senha\" usam variant=\"link\" ou ghost, nunca o CTA."
+  ]
+}

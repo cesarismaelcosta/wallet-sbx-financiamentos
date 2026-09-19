@@ -83,7 +83,7 @@ export function Step3Vehicle() {
               className={`${commonInputClass} uppercase`}
             />
             {err.licensePlate && (
-              <p className="text-xs text-red-600 font-medium">{err.licensePlate.message}</p>
+              <p className="text-xs text-destructive font-medium">{err.licensePlate.message}</p>
             )}
           </div>
 
@@ -117,7 +117,7 @@ export function Step3Vehicle() {
               </SelectContent>
             </Select>
             {err.ownerKinshipDegree && (
-              <p className="text-xs text-red-600 font-medium">{err.ownerKinshipDegree.message}</p>
+              <p className="text-xs text-destructive font-medium">{err.ownerKinshipDegree.message}</p>
             )}
           </div>
         </div>

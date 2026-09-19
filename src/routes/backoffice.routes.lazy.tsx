@@ -122,7 +122,7 @@ function PaymentFactorsBuilder({ factors = {}, onChange }: { factors: Record<str
             <div key={idx} className="flex items-center gap-2">
               <div className="w-1/3"><Input placeholder="Prazo" value={entry.term} onChange={(e) => updateEntry(idx, "term", e.target.value)} className="h-8 text-xs font-mono bg-white rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
               <div className="flex-1"><Input type="number" step="0.00000001" placeholder="Fator" value={entry.factor} onChange={(e) => updateEntry(idx, "factor", e.target.value)} className="h-8 text-xs font-mono bg-white rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
-              <button type="button" onClick={() => removeEntry(idx)} className="text-neutral-400 hover:text-red-600 transition-colors p-1" title="Remover"><X size={14} /></button>
+              <button type="button" onClick={() => removeEntry(idx)} className="text-neutral-400 hover:text-destructive transition-colors p-1" title="Remover"><X size={14} /></button>
             </div>
           ))}
         </div>
@@ -163,7 +163,7 @@ function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: any; onU
 
   return (
     <div className="bg-white border border-neutral-200 rounded-none p-4 shadow-sm relative group">
-      <button onClick={onRemove} className="absolute top-3 right-3 text-neutral-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Remover Termo"><X size={16} /></button>
+      <button onClick={onRemove} className="absolute top-3 right-3 text-neutral-300 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" title="Remover Termo"><X size={16} /></button>
       <div className="grid gap-4">
         <div className="flex gap-4 items-end">
           <div className="flex-1 space-y-1.5">
@@ -236,7 +236,7 @@ function TextPartsBuilder({ label, parts = [], onChange }: { label: string; part
                 <SelectItem value="highlight" className="rounded-none cursor-pointer">Destaque Cor</SelectItem>
               </SelectContent>
             </Select>
-            <button onClick={() => onChange(parts.filter((_, i) => i !== idx))} className="text-neutral-400 hover:text-red-600"><X size={14} /></button>
+            <button onClick={() => onChange(parts.filter((_, i) => i !== idx))} className="text-neutral-400 hover:text-destructive"><X size={14} /></button>
           </div>
         ))}
         <Button type="button" onClick={() => onChange([...parts, { text: "", type: "normal" }])} variant="ghost" size="sm" className="h-8 text-[10px] font-medium text-neutral-900 w-full mt-1 border border-dashed border-neutral-300 hover:bg-neutral-100 rounded-none">
@@ -253,7 +253,7 @@ function BenefitsBuilder({ benefits = [], onChange }: { benefits: any[]; onChang
     <div className="space-y-3">
       {benefits.map((ben, idx) => (
         <div key={idx} className="bg-neutral-50 p-3 rounded-none border border-neutral-200 relative group space-y-3">
-          <button onClick={() => onChange(benefits.filter((_, i) => i !== idx))} className="absolute top-2 right-2 text-neutral-300 hover:text-red-600 opacity-0 group-hover:opacity-100"><X size={14} /></button>
+          <button onClick={() => onChange(benefits.filter((_, i) => i !== idx))} className="absolute top-2 right-2 text-neutral-300 hover:text-destructive opacity-0 group-hover:opacity-100"><X size={14} /></button>
           <div className="flex gap-3">
             <div className="w-1/3 space-y-1">
               <label className="text-[9px] font-medium text-neutral-400 uppercase">Ícone</label>
@@ -485,7 +485,7 @@ function OrchestratorConfigEditor({
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-medium text-neutral-400 uppercase">Lookup ID <span className="text-red-600">*</span></label>
+                    <label className="text-[10px] font-medium text-neutral-400 uppercase">Lookup ID <span className="text-destructive">*</span></label>
                     {formData.config_type === "PRODUCT" ? (
                       <Select value={String(formData.lookup_id || "")} onValueChange={(v) => setFormData({ ...formData, lookup_id: v })}>
                         <SelectTrigger className="h-10 rounded-none border-neutral-200 text-xs"><SelectValue placeholder="Selecione o produto..." /></SelectTrigger>
@@ -539,7 +539,7 @@ function OrchestratorConfigEditor({
                     <Input value={formData.page_url} onChange={(e) => setFormData({ ...formData, page_url: e.target.value })} className="h-10 rounded-none font-mono text-xs border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" />
                   </div>
                   <div className="space-y-1.5 col-span-2">
-                    <label className="text-[10px] font-medium text-neutral-400 uppercase flex items-center gap-1.5">Vincular Parceiro <span className="text-red-600">*</span></label>
+                    <label className="text-[10px] font-medium text-neutral-400 uppercase flex items-center gap-1.5">Vincular Parceiro <span className="text-destructive">*</span></label>
                     <Select value={String(formData.partner_id || "")} onValueChange={(v) => setFormData({ ...formData, partner_id: v })}>
                       <SelectTrigger className="h-10 rounded-none border-neutral-200 text-xs"><SelectValue placeholder="Selecione um parceiro..." /></SelectTrigger>
                       <SelectContent className="max-h-60 rounded-none border-neutral-200 text-xs">
@@ -576,7 +576,7 @@ function OrchestratorConfigEditor({
                           <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase">URL do WhatsApp</label><Input value={integration.urlWhatsApp || ""} onChange={(e) => updateIntegration({ ...integration, urlWhatsApp: e.target.value })} className="h-8 text-xs font-mono rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
                         </div>
                         {formData.integration_method === "EMAIL" && (
-                          <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase flex items-center gap-1.5">E-mail de Destino <span className="text-red-600">*</span></label><Input type="email" value={integration.email || ""} onChange={(e) => updateIntegration({ ...integration, email: e.target.value })} className="h-8 text-xs font-mono border-neutral-200 bg-neutral-50 rounded-none focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
+                          <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase flex items-center gap-1.5">E-mail de Destino <span className="text-destructive">*</span></label><Input type="email" value={integration.email || ""} onChange={(e) => updateIntegration({ ...integration, email: e.target.value })} className="h-8 text-xs font-mono border-neutral-200 bg-neutral-50 rounded-none focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
                         )}
                       </div>
                       <div className="bg-white p-4 rounded-none border border-neutral-200 shadow-sm space-y-3">
@@ -653,7 +653,7 @@ function OrchestratorConfigEditor({
                     ) : (
                       parsedPreview.page_faqs.map((faq: any, index: number) => (
                         <div key={index} className="bg-white border border-neutral-200 rounded-none p-3.5 shadow-sm relative group">
-                          <button onClick={() => { const updated = parsedPreview.page_faqs.filter((_: any, i: number) => i !== index); setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="absolute top-3 right-3 text-neutral-300 hover:text-red-600 opacity-0 group-hover:opacity-100"><X size={14} /></button>
+                          <button onClick={() => { const updated = parsedPreview.page_faqs.filter((_: any, i: number) => i !== index); setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="absolute top-3 right-3 text-neutral-300 hover:text-destructive opacity-0 group-hover:opacity-100"><X size={14} /></button>
                           <div className="grid gap-3 pr-5">
                             <Input value={faq.question} onChange={(e) => { const updated = [...parsedPreview.page_faqs]; updated[index].question = e.target.value; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="h-8 text-xs font-medium rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" placeholder="Pergunta..." />
                             <textarea value={faq.answer} onChange={(e) => { const updated = [...parsedPreview.page_faqs]; updated[index].answer = e.target.value; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="w-full h-14 border border-neutral-200 rounded-none p-2 text-xs outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 resize-none bg-neutral-50" placeholder="Resposta..." />

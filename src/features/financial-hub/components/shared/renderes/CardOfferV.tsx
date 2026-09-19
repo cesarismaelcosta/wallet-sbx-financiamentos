@@ -82,25 +82,25 @@ function ModalityTag({ modalityDesc, endDateStr, offerTypeId, modalityId, isShop
   if (isShopping === true) {
     if (offerTypeId === 10) {
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
-          <Handshake size={13} className="text-slate-700" strokeWidth={2.5} />
-          <Plus size={10} className="text-slate-700" strokeWidth={3} />
-          <Tag size={13} className="text-slate-700" strokeWidth={2.5} />
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-chart-1/15 text-chart-1">
+          <Handshake size={13} className="text-chart-1" strokeWidth={2.5} />
+          <Plus size={10} className="text-chart-1" strokeWidth={3} />
+          <Tag size={13} className="text-chart-1" strokeWidth={2.5} />
           <span className="tracking-tight">Mercado Balcão ou Compre Já</span>
         </div>
       );
     }
     if (offerTypeId === 8) {
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
-          <Tag size={13} className="text-slate-700" strokeWidth={2.5} />
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-chart-1/15 text-chart-1">
+          <Tag size={13} className="text-chart-1" strokeWidth={2.5} />
           <span className="tracking-tight">Compre já</span>
         </div>
       );
     }
     return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
-        <Handshake size={13} className="text-slate-700" strokeWidth={2.5} />
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-chart-1/15 text-chart-1">
+        <Handshake size={13} className="text-chart-1" strokeWidth={2.5} />
         <span className="tracking-tight">Mercado Balcão</span>
       </div>
     );
@@ -108,8 +108,8 @@ function ModalityTag({ modalityDesc, endDateStr, offerTypeId, modalityId, isShop
 
   if (modalityId === 5 || modalityDesc === "Tomada de preço") {
     return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-sky-100 text-[#003B73]">
-        <Mail size={13} className="text-slate-700" strokeWidth={2.5} />
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-chart-3/15 text-chart-3">
+        <Mail size={13} className="text-chart-3" strokeWidth={2.5} />
         <span className="tracking-tight">Tomada de preço</span>
       </div>
     );
@@ -118,8 +118,8 @@ function ModalityTag({ modalityDesc, endDateStr, offerTypeId, modalityId, isShop
   if (formattedDate === "—") return <div />;
   
   return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-orange-100 text-[#003B73]">
-      <Gavel size={13} className="text-slate-700" strokeWidth={2.5} />
+    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-chart-5/20 text-chart-5">
+      <Gavel size={13} className="text-chart-5" strokeWidth={2.5} />
       <span className="tracking-tight">{formattedDate}</span>
     </div>
   );

@@ -267,7 +267,7 @@ function AuditoriaPage() {
         <StatCard label="E-mails únicos" value={stats.emails_unicos} highlight />
       </div>
 
-      {error && <div className="rounded-none border border-red-200 bg-red-50 p-4 text-sm text-red-600"><strong>Erro:</strong> {error}</div>}
+      {error && <div className="rounded-none border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"><strong>Erro:</strong> {error}</div>}
 
       <div className="rounded-none border border-neutral-200 bg-white flex flex-col overflow-hidden shadow-xs">
         
@@ -435,9 +435,9 @@ function AuditoriaPage() {
                       <td className="px-3 py-2.5 w-[140px] text-neutral-600 font-medium">{EVENT_LABEL[r.event] || r.event}</td>
                       <td className="px-3 py-2.5 w-[120px]">
                         {r.success ? (
-                          <span className="text-emerald-600 font-bold">Sucesso</span>
+                          <span className="text-success font-bold">Sucesso</span>
                         ) : (
-                          <span className="text-rose-600 font-bold">Falha</span>
+                          <span className="text-destructive font-bold">Falha</span>
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-neutral-500">
@@ -628,9 +628,9 @@ function StatCard({ label, value, tone = "default", highlight = false }: {
 }) {
   const toneClass = { 
     default: "text-neutral-900", 
-    success: "text-emerald-600", 
-    danger: "text-rose-600", 
-    warn: "text-amber-600" 
+    success: "text-success", 
+    danger: "text-destructive", 
+    warn: "text-warning" 
   }[tone];
   
   const formattedValue = typeof value === "number" ? value.toLocaleString("pt-BR") : value;

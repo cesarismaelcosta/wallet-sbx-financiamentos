@@ -102,7 +102,7 @@ export function Step2PersonalData() {
               }
             />
             {err.monthlyIncome && (
-              <p className="mt-1 text-xs text-red-600 font-medium">{err.monthlyIncome.message}</p>
+              <p className="mt-1 text-xs text-destructive font-medium">{err.monthlyIncome.message}</p>
             )}
           </div>
 

@@ -24,6 +24,16 @@
   --color-brand-accent: hsl(var(--brand-accent));
   --color-brand-accent-foreground: hsl(var(--brand-accent-foreground));
   --color-brand-accent-muted: hsl(var(--brand-accent-muted));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+  --color-status-approved: hsl(var(--status-approved));
+  --color-status-pending: hsl(var(--status-pending));
+  --color-status-rejected: hsl(var(--status-rejected));
+  --color-status-neutral: hsl(var(--status-neutral));
   
   /* Cores do Sidebar */
   --color-sidebar: hsl(var(--sidebar-background));
@@ -58,6 +68,12 @@
 
 @layer base {
   :root {
+    /* ========== STATUS DE SIMULAÇÃO/PROPOSTA · aliases sobre tokens do DS ========== */
+    --status-approved: var(--success);
+    --status-pending: var(--warning);
+    --status-rejected: var(--destructive);
+    --status-neutral: var(--muted-foreground);
+
     /* ========== TYPOGRAPHY · MANUAL DA MARCA GRUPO SUPERBID ========== */
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
     --font-heading: 'Inter', system-ui, -apple-system, sans-serif;

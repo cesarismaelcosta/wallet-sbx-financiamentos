@@ -416,7 +416,7 @@ export function CustomLogin() {
                   } disabled:bg-surface-alt disabled:text-neutral-400 ${isLoading ? "cursor-wait" : "cursor-text"}`}
                   placeholder={loginLabelText}
                 />
-                {loginError && <span className="text-red-600 text-[11px] pl-4 font-medium mt-0.5">{loginError}</span>}
+                {loginError && <span className="text-destructive text-[11px] pl-4 font-medium mt-0.5">{loginError}</span>}
               </div>
 
               {/* Campo Senha com Alternador de Visibilidade */}
@@ -447,7 +447,7 @@ export function CustomLogin() {
                   </button>
                 </div>
                 {passwordError && (
-                  <span className="text-red-600 text-[11px] pl-4 font-medium mt-0.5">{passwordError}</span>
+                  <span className="text-destructive text-[11px] pl-4 font-medium mt-0.5">{passwordError}</span>
                 )}
               </div>
             </>

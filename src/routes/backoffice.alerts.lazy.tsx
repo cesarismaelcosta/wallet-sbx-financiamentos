@@ -318,7 +318,7 @@ function AlertsPage() {
                     <td className="px-4 py-2.5 whitespace-nowrap">
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                          r.is_active ? "bg-emerald-500/10 text-emerald-600" : "bg-neutral-200 text-neutral-600"
+                          r.is_active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {r.is_active ? <BellRing className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
@@ -332,7 +332,7 @@ function AlertsPage() {
                           <Button variant="ghost" size="sm" onClick={() => toggleActive(r)} className="h-8 px-2 text-xs rounded-none hover:bg-neutral-100 text-neutral-900 font-medium">
                             {r.is_active ? "Pausar" : "Ativar"}
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(r.id)} className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-none">
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(r.id)} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-none">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

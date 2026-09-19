@@ -1264,7 +1264,7 @@ function SandboxPage() {
       {/* CONTEÚDO PRINCIPAL DA ROTA */}
       <main className="max-w-7xl mx-auto px-6 pt-28 md:pt-32 space-y-8">
         {error && (
-          <div className="bg-red-50 p-4 text-red-700 rounded-none border border-red-200 text-sm font-medium">{error}</div>
+          <div className="bg-destructive/10 p-4 text-destructive rounded-none border border-destructive/30 text-sm font-medium">{error}</div>
         )}
 
         {!activeToken ? (
@@ -1274,7 +1274,7 @@ function SandboxPage() {
               {/* Mantivemos apenas a tag de STAGE alinhada à direita (se estiver em staging) */}
               {ambienteAtivo === "staging" && (
                 <div className="flex justify-end mb-6">
-                  <span className="text-[10px] uppercase font-bold px-2 py-1 rounded-none border bg-amber-50 text-amber-700 border-amber-200">
+                  <span className="text-[10px] uppercase font-bold px-2 py-1 rounded-none border bg-warning/10 text-warning border-warning/30">
                     STAGE
                   </span>
                 </div>
@@ -1341,7 +1341,7 @@ function SandboxPage() {
                 </div>
 
                 {generalError && (
-                  <div className="bg-red-50 text-red-600 text-sm p-3 rounded-none border border-red-100 text-center font-medium">
+                  <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-none border border-destructive/20 text-center font-medium">
                     {generalError}
                   </div>
                 )}
@@ -1359,10 +1359,10 @@ function SandboxPage() {
                       );
                       if (loginError) setLoginError("");
                     }}
-                    className={`w-full h-12 border rounded-none px-5 text-sm outline-none transition-all ${loginError ? "border-red-500" : "border-neutral-300 focus:border-neutral-900"}`}
+                    className={`w-full h-12 border rounded-none px-5 text-sm outline-none transition-all ${loginError ? "border-destructive" : "border-neutral-300 focus:border-neutral-900"}`}
                     placeholder={loginLabelText}
                   />
-                  {loginError && <span className="text-red-500 text-[11px] pl-5 font-medium mt-1">{loginError}</span>}
+                  {loginError && <span className="text-destructive text-[11px] pl-5 font-medium mt-1">{loginError}</span>}
                 </div>
 
                 <div className="flex flex-col gap-1.5">
@@ -1375,7 +1375,7 @@ function SandboxPage() {
                         setPasswordCred(e.target.value);
                         if (passwordError) setPasswordError("");
                       }}
-                      className={`w-full h-12 border rounded-none pl-5 pr-12 text-sm outline-none transition-all ${passwordError ? "border-red-500" : "border-neutral-300 focus:border-neutral-900"}`}
+                      className={`w-full h-12 border rounded-none pl-5 pr-12 text-sm outline-none transition-all ${passwordError ? "border-destructive" : "border-neutral-300 focus:border-neutral-900"}`}
                       placeholder="Senha"
                     />
                     <button
@@ -1387,7 +1387,7 @@ function SandboxPage() {
                     </button>
                   </div>
                   {passwordError && (
-                    <span className="text-red-500 text-[11px] pl-5 font-medium mt-1">{passwordError}</span>
+                    <span className="text-destructive text-[11px] pl-5 font-medium mt-1">{passwordError}</span>
                   )}
                 </div>
 

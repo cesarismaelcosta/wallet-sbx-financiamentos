@@ -67,7 +67,7 @@ export function PanelAcceptedConsents({ consents }: { consents: any | any[] }) {
             <div key={consent.id || index} className="p-4 space-y-3 break-inside-avoid hover:bg-neutral-50 transition-colors">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 pb-1">
                 <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
                   <span className="text-[11px] font-bold text-neutral-900 uppercase tracking-wide break-words">
                     {consent.consent_id || "Termo de Aceite"}
                   </span>

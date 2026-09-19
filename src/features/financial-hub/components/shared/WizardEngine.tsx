@@ -51,7 +51,7 @@ export function WizardEngine({ manifest }: WizardEngineProps) {
       {ActiveComponent ? (
         <ActiveComponent />
       ) : (
-        <div className="p-4 text-red-500">
+        <div className="p-4 text-destructive">
           Erro: Componente do passo {currentStep} não encontrado no manifesto.
         </div>
       )}

@@ -233,10 +233,10 @@ const safeArray = <T,>(data: T | T[] | null | undefined): T[] => {
 
 // Cores originais mantidas
 const STATUS_STYLES: Record<string, string> = {
-  visita: "bg-purple-500/10 text-purple-600",
+  visita: "bg-chart-2/10 text-chart-2",
   simulacao: "bg-primary/10 text-primary",
-  consulta: "bg-blue-500/10 text-blue-600",
-  parceiro: "bg-amber-500/10 text-amber-600",
+  consulta: "bg-chart-3/10 text-chart-3",
+  parceiro: "bg-chart-5/10 text-chart-5",
   default: "bg-muted text-muted-foreground",
 };
 

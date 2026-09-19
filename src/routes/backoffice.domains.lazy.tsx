@@ -200,7 +200,7 @@ function DominiosPage() {
                 <tr key={d.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
                   <td className="px-3 py-2.5 font-medium text-neutral-900">{d.domain}</td>
                   <td className="px-3 py-2.5">
-                    <span className={`inline-flex items-center gap-1.5 rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${d.is_active ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600"}`}>
+                    <span className={`inline-flex items-center gap-1.5 rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${d.is_active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
                       {d.is_active ? <UserCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
                       {d.is_active ? "Ativo" : "Inativo"}
                     </span>
@@ -211,11 +211,11 @@ function DominiosPage() {
                       <Button variant="ghost" size="sm" className="h-7 text-xs px-2 rounded-none hover:bg-neutral-100 text-neutral-900 font-medium" onClick={() => toggleStatus(d)}>
                         {d.is_active ? (
                           <>
-                            <ToggleLeft className="mr-1 h-4 w-4 text-rose-500" /> Inativar
+                            <ToggleLeft className="mr-1 h-4 w-4 text-destructive" /> Inativar
                           </>
                         ) : (
                           <>
-                            <ToggleRight className="mr-1 h-4 w-4 text-emerald-600" /> Ativar
+                            <ToggleRight className="mr-1 h-4 w-4 text-success" /> Ativar
                           </>
                         )}
                       </Button>

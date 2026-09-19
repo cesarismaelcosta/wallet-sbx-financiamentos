@@ -401,8 +401,8 @@ function UsuariosPage() {
                           </div>
                           Todos (Acesso Total)
                         </CommandItem>
-                        <CommandItem onSelect={() => setregisterData({ ...registerData, partners: [] })} className="cursor-pointer font-medium text-rose-600 rounded-none hover:bg-neutral-100">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${registerData.partners.length === 0 ? "bg-rose-600 text-white border-rose-600" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => setregisterData({ ...registerData, partners: [] })} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-neutral-100">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${registerData.partners.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
                             {registerData.partners.length === 0 && "✓"}
                           </div>
                           Nenhum (Bloqueado)
@@ -462,8 +462,8 @@ function UsuariosPage() {
                           </div>
                           Todos (Acesso Total)
                         </CommandItem>
-                        <CommandItem onSelect={() => setregisterData({ ...registerData, products: [] })} className="cursor-pointer font-medium text-rose-600 rounded-none hover:bg-neutral-100">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${registerData.products.length === 0 ? "bg-rose-600 text-white border-rose-600" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => setregisterData({ ...registerData, products: [] })} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-neutral-100">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${registerData.products.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
                             {registerData.products.length === 0 && "✓"}
                           </div>
                           Nenhum (Bloqueado)
@@ -544,8 +544,8 @@ function UsuariosPage() {
                       </div>
                       Todos (Acesso Total)
                     </CommandItem>
-                    <CommandItem onSelect={() => setEditPartners([])} className="cursor-pointer font-medium text-rose-600 rounded-none hover:bg-neutral-100">
-                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${editPartners.length === 0 ? "bg-rose-600 text-white border-rose-600" : "opacity-50"}`}>
+                    <CommandItem onSelect={() => setEditPartners([])} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-neutral-100">
+                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${editPartners.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
                         {editPartners.length === 0 && "✓"}
                       </div>
                       Nenhum (Bloqueado)
@@ -605,8 +605,8 @@ function UsuariosPage() {
                       </div>
                       Todos (Acesso Total)
                     </CommandItem>
-                    <CommandItem onSelect={() => setEditProducts([])} className="cursor-pointer font-medium text-rose-600 rounded-none hover:bg-neutral-100">
-                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${editProducts.length === 0 ? "bg-rose-600 text-white border-rose-600" : "opacity-50"}`}>
+                    <CommandItem onSelect={() => setEditProducts([])} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-neutral-100">
+                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${editProducts.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
                         {editProducts.length === 0 && "✓"}
                       </div>
                       Nenhum (Bloqueado)
@@ -743,7 +743,7 @@ function UsuariosPage() {
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <span
-                        className={`inline-flex items-center gap-1 rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${u.is_active ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600"}`}
+                        className={`inline-flex items-center gap-1 rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${u.is_active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
                       >
                         {u.is_active ? <ShieldCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
                         {u.is_active ? "Ativo" : "Inativo"}
@@ -759,9 +759,9 @@ function UsuariosPage() {
                           )}
                           <Button variant="ghost" size="sm" onClick={() => toggleActive(u)} disabled={isMe} className="rounded-none hover:bg-neutral-100 text-neutral-900 font-medium text-xs h-8">
                             {u.is_active ? (
-                              <><UserX className="mr-1 h-3 w-3 text-rose-500" /> Desativar</>
+                              <><UserX className="mr-1 h-3 w-3 text-destructive" /> Desativar</>
                             ) : (
-                              <><UserCheck className="mr-1 h-3 w-3 text-emerald-500" /> Ativar</>
+                              <><UserCheck className="mr-1 h-3 w-3 text-success" /> Ativar</>
                             )}
                           </Button>
                         </div>

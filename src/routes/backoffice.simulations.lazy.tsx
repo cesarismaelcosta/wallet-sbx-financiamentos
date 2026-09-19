@@ -255,11 +255,11 @@ const safeArray = <T,>(data: T | T[] | null | undefined): T[] => {
 // ============================================================================
 const STATUS_STYLES: Record<string, string> = {
   simulacao: "bg-primary/10 text-primary",
-  "em análise": "bg-amber-500/10 text-amber-600",
-  analise: "bg-amber-500/10 text-amber-600",
-  aprovada: "bg-emerald-500/15 text-emerald-600",
-  recusada: "bg-rose-500/10 text-rose-600",
-  falha: "bg-rose-500/10 text-rose-600",
+  "em análise": "bg-status-pending/10 text-status-pending",
+  analise: "bg-status-pending/10 text-status-pending",
+  aprovada: "bg-status-approved/15 text-status-approved",
+  recusada: "bg-status-rejected/10 text-status-rejected",
+  falha: "bg-status-rejected/10 text-status-rejected",
   "pendente docs": "bg-muted text-muted-foreground",
   default: "bg-muted text-muted-foreground",
 };

@@ -307,7 +307,7 @@ export function sbXPAYHome() {
         disabled={isLocked}
         onClick={() => handleProductClick(configKey)}
         // Mantém a mesma base, aplica as cores "ativas" e lida com o lock de loading
-        className={`${baseButtonClasses} border border-neutral-200 bg-white text-neutral-900 hover:bg-neutral-50 shadow-xs ${isLocked ? "opacity-50 cursor-not-allowed shadow-none" : ""}`}
+        className={`${baseButtonClasses} border border-neutral-200 bg-white text-neutral-900 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 shadow-xs ${isLocked ? "opacity-50 cursor-not-allowed shadow-none" : ""}`}
       >
         {isCurrentLoading && (
           <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.25} />
@@ -376,14 +376,14 @@ export function sbXPAYHome() {
                               alt="Segurança sbX Wallet"
                               fetchPriority="high"
                               decoding="async"
-                              className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
+                              className="mix-blend-multiply w-full h-auto object-contain relative"
                             />
                           </div>
                         </div>
                       )}
 
                       <div className="space-y-2 flex-1 text-left">
-                        <div className="inline-flex items-center space-x-2 bg-neutral-100 px-3 py-1 rounded-none text-neutral-800 text-[10px] font-bold uppercase tracking-wider border border-neutral-200">
+                        <div className="inline-flex items-center space-x-2 bg-brand-accent px-3 py-1 rounded-full text-brand-accent-foreground text-[10px] font-bold uppercase tracking-wider">
                           <span>Conta sbXPAY</span>
                         </div>
                         <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-neutral-900 leading-[1.15]">
@@ -443,7 +443,7 @@ export function sbXPAYHome() {
                           }, 400);
                         }}
                         // AQUI ESTÁ A CORREÇÃO: Usando baseButtonClasses e as cores do botão ativo
-                        className={`${baseButtonClasses} border border-neutral-200 bg-white text-neutral-900 hover:bg-neutral-50 shadow-xs ${(loginLoading || loading) ? "opacity-50 cursor-not-allowed shadow-none" : ""}`}
+                        className={`${baseButtonClasses} border border-neutral-200 bg-white text-neutral-900 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 shadow-xs ${(loginLoading || loading) ? "opacity-50 cursor-not-allowed shadow-none" : ""}`}
                       >
                         {loginLoading ? (
                           <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.25} />
@@ -477,7 +477,7 @@ export function sbXPAYHome() {
                           alt="Segurança sbX Wallet"
                           fetchPriority="high"
                           decoding="async"
-                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative saturate-[10%]"
+                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                         />
                       </div>
                     </div>
@@ -513,13 +513,13 @@ export function sbXPAYHome() {
                               alt="Cartão"
                               loading="lazy"
                               decoding="async"
-                              className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
+                              className="mix-blend-multiply w-full h-auto object-contain relative"
                             />
                           </div>
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-neutral-100 px-3 py-1 rounded-none text-neutral-800 text-[10px] font-bold uppercase tracking-wider border border-neutral-200">
+                        <div className="inline-flex items-center space-x-2 bg-brand-accent px-3 py-1 rounded-full text-brand-accent-foreground text-[10px] font-bold uppercase tracking-wider">
                           <span>Até R$ 120 mil</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 tracking-tight leading-snug">
@@ -580,7 +580,7 @@ export function sbXPAYHome() {
                           alt="Cartão"
                           loading="lazy"
                           decoding="async"
-                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative saturate-[10%]"
+                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                         />
                       </div>
                     </div>
@@ -611,13 +611,13 @@ export function sbXPAYHome() {
                               alt="Veículos"
                               loading="lazy"
                               decoding="async"
-                              className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
+                              className="mix-blend-multiply w-full h-auto object-contain relative"
                             />
                           </div>
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-neutral-100 px-3 py-1 rounded-none text-neutral-800 text-[10px] font-bold uppercase tracking-wider border border-neutral-200">
+                        <div className="inline-flex items-center space-x-2 bg-brand-accent px-3 py-1 rounded-full text-brand-accent-foreground text-[10px] font-bold uppercase tracking-wider">
                           <span>EM ATÉ 60x</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 tracking-tight leading-snug">
@@ -680,7 +680,7 @@ export function sbXPAYHome() {
                           alt="Veículos"
                           loading="lazy"
                           decoding="async"
-                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative saturate-[10%]"
+                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                         />
                       </div>
                     </div>
@@ -711,13 +711,13 @@ export function sbXPAYHome() {
                               alt="Imóveis"
                               loading="lazy"
                               decoding="async"
-                              className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
+                              className="mix-blend-multiply w-full h-auto object-contain relative"
                             />
                           </div>
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-neutral-100 px-3 py-1 rounded-none text-neutral-800 text-[10px] font-bold uppercase tracking-wider border border-neutral-200">
+                        <div className="inline-flex items-center space-x-2 bg-brand-accent px-3 py-1 rounded-full text-brand-accent-foreground text-[10px] font-bold uppercase tracking-wider">
                           <span>EM ATÉ 240 MESES</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 tracking-tight leading-snug">
@@ -752,7 +752,7 @@ export function sbXPAYHome() {
                           alt="Imóveis"
                           loading="lazy"
                           decoding="async"
-                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative saturate-[10%]"
+                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                         />
                       </div>
                     </div>
@@ -783,13 +783,13 @@ export function sbXPAYHome() {
                               alt="Rentabilize Ativos"
                               loading="lazy"
                               decoding="async"
-                              className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
+                              className="mix-blend-multiply w-full h-auto object-contain relative"
                             />
                           </div>
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-neutral-100 px-3 py-1 rounded-none text-neutral-800 text-[10px] font-bold uppercase tracking-wider border border-neutral-200">
+                        <div className="inline-flex items-center space-x-2 bg-brand-accent px-3 py-1 rounded-full text-brand-accent-foreground text-[10px] font-bold uppercase tracking-wider">
                           <span>TAXAS DIFERENCIADAS</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 tracking-tight leading-snug">
@@ -826,7 +826,7 @@ export function sbXPAYHome() {
                           alt="Rentabilize Ativos"
                           loading="lazy"
                           decoding="async"
-                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative saturate-[10%]"
+                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                         />
                       </div>
                     </div>
@@ -857,13 +857,13 @@ export function sbXPAYHome() {
                               alt="Floor Plan"
                               loading="lazy"
                               decoding="async"
-                              className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
+                              className="mix-blend-multiply w-full h-auto object-contain relative"
                             />
                           </div>
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-neutral-100 px-3 py-1 rounded-none text-neutral-800 text-[10px] font-bold uppercase tracking-wider border border-neutral-200">
+                        <div className="inline-flex items-center space-x-2 bg-brand-accent px-3 py-1 rounded-full text-brand-accent-foreground text-[10px] font-bold uppercase tracking-wider">
                           <span>Lojistas AutoArremate</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 tracking-tight leading-snug">
@@ -897,7 +897,7 @@ export function sbXPAYHome() {
                           alt="Floor Plan"
                           loading="lazy"
                           decoding="async"
-                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative saturate-[10%]"
+                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                         />
                       </div>
                     </div>
@@ -928,13 +928,13 @@ export function sbXPAYHome() {
                               alt="Proteção sbX"
                               loading="lazy"
                               decoding="async"
-                              className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
+                              className="mix-blend-multiply w-full h-auto object-contain relative"
                             />
                           </div>
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-neutral-100 px-3 py-1 rounded-none text-neutral-800 text-[10px] font-bold uppercase tracking-wider border border-neutral-200">
+                        <div className="inline-flex items-center space-x-2 bg-brand-accent px-3 py-1 rounded-full text-brand-accent-foreground text-[10px] font-bold uppercase tracking-wider">
                           <span>9 SEGURADORAS</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 tracking-tight leading-snug">
@@ -983,7 +983,7 @@ export function sbXPAYHome() {
                           alt="Proteção sbX"
                           loading="lazy"
                           decoding="async"
-                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative saturate-[10%]"
+                          className="mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"
                         />
                       </div>
                     </div>

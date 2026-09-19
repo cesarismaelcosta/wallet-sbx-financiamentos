@@ -124,7 +124,7 @@ function BackofficeLogin() {
 
           {/* Área de Erro Forense (Domínio/Whitelist) */}
           {visibleDomainError && (
-            <div className="mt-5 flex items-start gap-2 rounded-none border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+            <div className="mt-5 flex items-start gap-2 rounded-none border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>{visibleDomainError}</div>
             </div>
@@ -132,7 +132,7 @@ function BackofficeLogin() {
 
           {/* Área de Erro Geral (Timeout/API) */}
           {error && (
-            <div className="mt-5 flex items-start gap-2 rounded-none border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+            <div className="mt-5 flex items-start gap-2 rounded-none border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>{error}</div>
             </div>
