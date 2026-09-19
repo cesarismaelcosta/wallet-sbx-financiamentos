@@ -79,7 +79,6 @@ serve(withSecurity('sbx-offer', async (req: Request, ctx?: RequestContext) => {
       },
     };
 
-    const upstreamUrl = `${offerBaseUrl}/offerpanel/api/app-context?offerId=${offerId}&timeZoneId=America%2FSao_Paulo`;
     const response = await fetch(upstreamUrl, fetchOptions);
 
     if (!response.ok) {
