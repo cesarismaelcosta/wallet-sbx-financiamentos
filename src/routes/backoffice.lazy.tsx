@@ -32,6 +32,7 @@ import {
   Layers,
   TriangleAlert,
   Menu,
+  type LucideIcon,
 } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Button } from "@/components/ui/button";
@@ -162,7 +163,7 @@ function BackofficeLayout() {
     ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
     : (nameParts[0]?.[0] || "?").toUpperCase();
 
-  const renderNavItem = (item: { to: string; label: string; icon: React.ComponentType<{ className?: string }> }) => {
+  const renderNavItem = (item: { to: string; label: string; icon: LucideIcon }) => {
     const active = pathname === item.to;
     const Icon = item.icon;
     return (

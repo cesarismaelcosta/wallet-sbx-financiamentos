@@ -32,7 +32,18 @@
  */
 
 import React, { useState, useRef, useMemo } from "react";
-import { MapPin, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, ExternalLink, Gavel, Mail, Tag, Handshake, Plus, Loader2 } from "lucide-react";
+import {
+  MapPin,
+  ArrowLeft,
+  ArrowRight,
+  ExternalLink,
+  Gavel,
+  Mail,
+  Tag,
+  Handshake,
+  Plus,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // =========================================================================
@@ -51,10 +62,10 @@ const getSuperbidUrl = (offerData: any) => {
   if (!offerData?.offer_id) return "#";
   const slug = (offerData.offer_description || "")
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   return `https://www.superbid.net/oferta/${slug}-${offerData.offer_id}`;
 };
 
@@ -63,10 +74,10 @@ const formatEventDate = (dateString?: string) => {
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return "—";
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
     return `${day}/${month} - ${hours}:${minutes}`;
   } catch {
     return "—";
@@ -74,55 +85,79 @@ const formatEventDate = (dateString?: string) => {
 };
 
 // =========================================================================
+// [CLASSIFICAÇÃO DA OFERTA]: fonte única, usada pela tag E pelo painel de
+// preço -- antes cada um tinha sua própria condição escrita à mão
+// (isLeilao/isTomadaDePreco no componente principal vs. os ifs do
+// ModalityTag) e podiam discordar entre si quando `is_shopping` chegava
+// `null`/`undefined` em vez de `false`, mostrando uma tag "Tomada de preço"
+// junto com o rótulo de preço errado, por exemplo.
+// =========================================================================
+type OfferCategory =
+  | "compre_ja_balcao"
+  | "compre_ja"
+  | "mercado_balcao"
+  | "tomada_de_preco"
+  | "leilao_tradicional"
+  | "sem_categoria";
+
+const getOfferCategory = (offerData: any, eventData: any, formattedDate: string): OfferCategory => {
+  if (offerData?.is_shopping === true) {
+    if (offerData.offer_type_id === 10) return "compre_ja_balcao";
+    if (offerData.offer_type_id === 8) return "compre_ja";
+    return "mercado_balcao";
+  }
+  if (eventData?.modality_id === 5 || eventData?.modality_desc === "Tomada de preço") {
+    return "tomada_de_preco";
+  }
+  if (formattedDate === "—") return "sem_categoria";
+  return "leilao_tradicional";
+};
+
+// =========================================================================
 // [COMPONENTE SECUNDÁRIO]: ModalityTag
 // =========================================================================
-function ModalityTag({ modalityDesc, endDateStr, offerTypeId, modalityId, isShopping }: any) {
-  const formattedDate = formatEventDate(endDateStr);
-  
-  if (isShopping === true) {
-    if (offerTypeId === 10) {
+function ModalityTag({ category, formattedDate }: { category: OfferCategory; formattedDate: string }) {
+  switch (category) {
+    case "compre_ja_balcao":
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-chart-1/15 text-chart-1">
-          <Handshake size={13} className="text-chart-1" strokeWidth={2.5} />
-          <Plus size={10} className="text-chart-1" strokeWidth={3} />
-          <Tag size={13} className="text-chart-1" strokeWidth={2.5} />
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
+          <Handshake size={13} className="text-slate-700" strokeWidth={2.5} />
+          <Plus size={10} className="text-slate-700" strokeWidth={3} />
+          <Tag size={13} className="text-slate-700" strokeWidth={2.5} />
           <span className="tracking-tight">Mercado Balcão ou Compre Já</span>
         </div>
       );
-    }
-    if (offerTypeId === 8) {
+    case "compre_ja":
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-chart-1/15 text-chart-1">
-          <Tag size={13} className="text-chart-1" strokeWidth={2.5} />
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
+          <Tag size={13} className="text-slate-700" strokeWidth={2.5} />
           <span className="tracking-tight">Compre já</span>
         </div>
       );
-    }
-    return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-chart-1/15 text-chart-1">
-        <Handshake size={13} className="text-chart-1" strokeWidth={2.5} />
-        <span className="tracking-tight">Mercado Balcão</span>
-      </div>
-    );
+    case "mercado_balcao":
+      return (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
+          <Handshake size={13} className="text-slate-700" strokeWidth={2.5} />
+          <span className="tracking-tight">Mercado Balcão</span>
+        </div>
+      );
+    case "tomada_de_preco":
+      return (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-sky-100 text-[#003B73]">
+          <Mail size={13} className="text-slate-700" strokeWidth={2.5} />
+          <span className="tracking-tight">Tomada de preço</span>
+        </div>
+      );
+    case "leilao_tradicional":
+      return (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-orange-100 text-[#003B73]">
+          <Gavel size={13} className="text-slate-700" strokeWidth={2.5} />
+          <span className="tracking-tight">{formattedDate}</span>
+        </div>
+      );
+    default:
+      return <div />;
   }
-
-  if (modalityId === 5 || modalityDesc === "Tomada de preço") {
-    return (
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-chart-3/15 text-chart-3">
-        <Mail size={13} className="text-chart-3" strokeWidth={2.5} />
-        <span className="tracking-tight">Tomada de preço</span>
-      </div>
-    );
-  }
-
-  if (formattedDate === "—") return <div />;
-  
-  return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-chart-5/20 text-chart-5">
-      <Gavel size={13} className="text-chart-5" strokeWidth={2.5} />
-      <span className="tracking-tight">{formattedDate}</span>
-    </div>
-  );
 }
 
 // =========================================================================
@@ -154,18 +189,25 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
       .map((p: any) => p.link);
   }, [offerData.photos]);
 
-  const mainPhoto = sortedPhotos.length > 0 ? sortedPhotos[photoIndex % sortedPhotos.length] : "https://placehold.co/300x200?text=Sem+Foto";
+  const mainPhoto =
+    sortedPhotos.length > 0
+      ? sortedPhotos[photoIndex % sortedPhotos.length]
+      : "https://placehold.co/300x200?text=Sem+Foto";
   const hasError = imageError || !sortedPhotos.length;
 
   // ✨ [ACTION]: Avançar e Recuar limpando estado de erro anterior
+  // (guard de `sortedPhotos.length === 0` evita `(prev ± 1) % 0` -> NaN
+  // preso no estado, caso o swipe dispare numa foto sem álbum)
   const handleNextPhoto = (e?: React.SyntheticEvent) => {
     if (e) e.stopPropagation();
+    if (sortedPhotos.length === 0) return;
     setPhotoIndex((prev) => (prev + 1) % sortedPhotos.length);
     setImageError(false);
   };
 
   const handlePrevPhoto = (e?: React.SyntheticEvent) => {
     if (e) e.stopPropagation();
+    if (sortedPhotos.length === 0) return;
     setPhotoIndex((prev) => (prev - 1 + sortedPhotos.length) % sortedPhotos.length);
     setImageError(false);
   };
@@ -173,7 +215,7 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
   // -------------------------------------------------------------------------
   // MÓDULO DE INTERATIVIDADE TOUCH (SWIPE)
   // -------------------------------------------------------------------------
-  const minSwipeDistance = 40; 
+  const minSwipeDistance = 40;
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchEndX.current = null;
@@ -185,10 +227,12 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
   };
 
   const onTouchEnd = () => {
-    if (!touchStartX.current || !touchEndX.current) return;
+    // `=== null` (não `!valor`) -- um swipe começando/terminando exatamente
+    // no pixel x=0 é uma posição válida, e `!0` seria `true` por engano.
+    if (touchStartX.current === null || touchEndX.current === null) return;
     const distance = touchStartX.current - touchEndX.current;
-    
-    if (distance > minSwipeDistance) handleNextPhoto(); 
+
+    if (distance > minSwipeDistance) handleNextPhoto();
     else if (distance < -minSwipeDistance) handlePrevPhoto();
   };
 
@@ -201,54 +245,57 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
   const offerDesc = offerData.offer_description || "Produto sem descrição";
   const sellerName = sellerData.trade_name;
 
-  const isLeilao = offerData.offer_type_id === 1;
-  const isTomadaDePreco = eventData.modality_id === 5 && offerData.is_shopping === false;
+  const formattedDate = formatEventDate(eventData.event_end_date);
+  const offerCategory = getOfferCategory(offerData, eventData, formattedDate);
+  const isLeilao = offerCategory === "leilao_tradicional";
+  const isTomadaDePreco = offerCategory === "tomada_de_preco";
 
   let priceLabel = "Valor de venda:";
-  if (isLeilao) priceLabel = "Lance atual:"; 
-  else if (isTomadaDePreco) priceLabel = "Valor de referência:"; 
-  else if (offerData.is_shopping === true) priceLabel = "Valor de venda por unidade:"; 
+  if (isLeilao) priceLabel = "Lance atual:";
+  else if (isTomadaDePreco) priceLabel = "Valor de referência:";
+  else if (offerData.is_shopping === true) priceLabel = "Valor de venda por unidade:";
 
-  const priceFormatted = offerData.price_formatted || `R$ ${(offerData.offer_value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+  const priceFormatted =
+    offerData.price_formatted ||
+    `R$ ${(offerData.offer_value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
   const showMetric = !isLeilao && !isTomadaDePreco && !!offerData.system_metric;
 
   return (
-    <div className="rounded-none border border-neutral-200 bg-white overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group">
+    <div className="rounded-none border border-border bg-card overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group">
       <div className="flex flex-col h-full">
-        
         {/* ================================================================ */}
         {/* RENDERIZAÇÃO DA MÍDIA (CARROSSEL)                                */}
         {/* ================================================================ */}
-        <div 
-          className="relative h-44 w-full bg-neutral-100 overflow-hidden shrink-0 rounded-none touch-pan-y"
+        <div
+          className="relative h-44 w-full bg-muted overflow-hidden shrink-0 rounded-none touch-pan-y"
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
         >
           {hasError ? (
-            <div className="absolute inset-0 bg-neutral-100 flex items-center justify-center text-neutral-400 text-xs font-bold uppercase tracking-wider">
+            <div className="absolute inset-0 bg-muted flex items-center justify-center text-muted-foreground text-xs font-bold uppercase tracking-wider">
               Foto Indisponível
             </div>
           ) : (
-            <img 
-              key={mainPhoto} 
-              src={mainPhoto} 
-              alt={offerDesc} 
+            <img
+              key={mainPhoto}
+              src={mainPhoto}
+              alt={offerDesc}
               loading="lazy"
               decoding="async"
               width="400"
               height="300"
-              className="h-full w-full object-cover transition-opacity duration-300" 
-              onError={() => setImageError(true)} 
+              className="h-full w-full object-cover transition-opacity duration-300"
+              onError={() => setImageError(true)}
             />
           )}
-          
-          <span className="absolute bottom-2 left-2 bg-neutral-900/80 backdrop-blur-sm text-white font-mono text-[9px] font-light uppercase tracking-[0.18em] px-2 py-1 rounded-none z-10">
+
+          <span className="absolute bottom-2 left-2 bg-primary/80 backdrop-blur-sm text-primary-foreground font-mono text-[9px] font-light uppercase tracking-[0.18em] px-2 py-1 rounded-none z-10">
             Lote #{offerData.lot_number || offerData.offer_id}
           </span>
 
           {item.is_simulated && (
-            <span className="absolute bottom-2 right-2 bg-white text-neutral-900 text-[10px] font-normal px-2.5 py-0.5 rounded-none z-10 shadow lowercase">
+            <span className="absolute bottom-2 right-2 bg-card text-foreground text-[10px] font-normal px-2.5 py-0.5 rounded-none z-10 shadow lowercase">
               com simulação
             </span>
           )}
@@ -256,15 +303,19 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
           {/* ✨ [UNBREAKABLE ARROWS]: Mostra os botões se houver mais de uma foto, ignorando erros da imagem atual */}
           {sortedPhotos.length > 1 && (
             <>
-              <button 
-                onClick={handlePrevPhoto} 
-                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 backdrop-blur-sm text-white p-1.5 rounded-none transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
+              <button
+                type="button"
+                onClick={handlePrevPhoto}
+                aria-label="Foto anterior"
+                className="absolute left-2 top-1/2 -translate-y-1/2 bg-primary/40 hover:bg-primary/60 backdrop-blur-sm text-primary-foreground p-1.5 rounded-none transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
               >
                 <ArrowLeft size={16} strokeWidth={1.5} />
               </button>
-              <button 
-                onClick={handleNextPhoto} 
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 backdrop-blur-sm text-white p-1.5 rounded-none transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
+              <button
+                type="button"
+                onClick={handleNextPhoto}
+                aria-label="Próxima foto"
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary/40 hover:bg-primary/60 backdrop-blur-sm text-primary-foreground p-1.5 rounded-none transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
               >
                 <ArrowRight size={16} strokeWidth={1.5} />
               </button>
@@ -272,7 +323,7 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
           )}
         </div>
 
-        <div className="h-px w-full bg-neutral-200" />
+        <div className="h-px w-full bg-border" />
 
         {/* ================================================================ */}
         {/* METADADOS E INFORMAÇÕES DA OFERTA                                */}
@@ -281,34 +332,27 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
           <div className="space-y-3">
             {/* Tag e Link Intactos no mesmo lugar */}
             <div className="flex items-center justify-between w-full">
-              <ModalityTag 
-                modalityDesc={eventData.modality_desc} 
-                endDateStr={eventData.event_end_date}
-                offerTypeId={offerData.offer_type_id}
-                modalityId={eventData.modality_id}
-                isShopping={offerData.is_shopping}
-              />
-              <a 
-                href={getSuperbidUrl(offerData)} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-neutral-400 hover:text-neutral-700 transition-colors p-1 ml-auto" 
+              <ModalityTag category={offerCategory} formattedDate={formattedDate} />
+              <a
+                href={getSuperbidUrl(offerData)}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Ver oferta no Superbid"
+                className="text-muted-foreground hover:text-foreground transition-colors p-1 ml-auto"
                 onClick={(e) => e.stopPropagation()}
               >
                 <ExternalLink size={18} strokeWidth={1.5} />
               </a>
             </div>
 
-            <h3 className="font-normal text-[13px] md:text-sm text-neutral-900 leading-snug line-clamp-2 uppercase min-h-[2.5rem]">
+            <h3 className="font-normal text-[13px] md:text-sm text-foreground leading-snug line-clamp-2 uppercase min-h-[2.5rem]">
               {offerDesc}
             </h3>
-            
+
             {/* AQUI: Vendedor primeiro (text-xs), Localização depois (text-[11px]) */}
             <div className="space-y-1 mt-2">
-              <div className="text-xs text-neutral-500 truncate uppercase">
-                {sellerName || "\u00A0"}
-              </div>
-              <div className="flex items-center gap-1 text-[11px] text-neutral-400 truncate">
+              <div className="text-xs text-muted-foreground truncate uppercase">{sellerName ||" "}</div>
+              <div className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
                 <MapPin size={12} strokeWidth={1.5} className="shrink-0" />
                 <span className="truncate">{locationDisplay}</span>
               </div>
@@ -318,14 +362,12 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
           {/* ================================================================ */}
           {/* PAINEL DE PRECIFICAÇÃO                                           */}
           {/* ================================================================ */}
-          <div className="pt-3 border-t border-neutral-300 mt-auto">
-            <div className="text-[10px] text-neutral-400 font-normal uppercase mb-1">
-              {priceLabel}
-            </div>
-            <div className="text-lg md:text-xl font-bold tracking-tight text-neutral-900">
+          <div className="pt-3 border-t border-border mt-auto">
+            <div className="text-[10px] text-muted-foreground font-normal uppercase mb-1">{priceLabel}</div>
+            <div className="text-lg md:text-xl font-bold tracking-tight text-foreground">
               {priceFormatted}
               {showMetric && (
-                <span className="text-[11px] font-medium text-neutral-500 ml-1 uppercase">
+                <span className="text-[11px] font-medium text-muted-foreground ml-1 uppercase">
                   /{offerData.system_metric}
                 </span>
               )}
@@ -341,8 +383,8 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
         <Button
           onClick={() => onSimulate(item, idx)}
           disabled={loading || disabled}
-          variant="outline" 
-          className="group flex items-center justify-center gap-2 w-full rounded-none shadow-xs bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 font-medium text-[13px] h-11 cursor-pointer transition-all duration-300 ease-out"
+          variant="outline"
+          className="group flex items-center justify-center gap-2 w-full rounded-none shadow-xs bg-card text-foreground border border-border hover:bg-primary hover:text-primary-foreground hover:border-primary font-medium text-[13px] h-11 cursor-pointer transition-all duration-300 ease-out"
         >
           {loading ? (
             <>
@@ -351,8 +393,14 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
             </>
           ) : (
             <>
-              <span>{item.is_simulated ? "Refazer Simulação" : (isCartao ? "Simular parcelamento" : "Simular financiamento")}</span>
-              <ArrowRight size={15} strokeWidth={1.5} className="transition-transform duration-300 group-hover:translate-x-1" />
+              <span>
+                {item.is_simulated ? "Refazer Simulação" : isCartao ? "Simular parcelamento" : "Simular financiamento"}
+              </span>
+              <ArrowRight
+                size={15}
+                strokeWidth={1.5}
+                className="transition-transform duration-300 group-hover:translate-x-1"
+              />
             </>
           )}
         </Button>

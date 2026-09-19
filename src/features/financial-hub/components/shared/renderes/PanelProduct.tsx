@@ -20,6 +20,7 @@
 import React from "react";
 import { Layers, CheckCircle2 } from "lucide-react";
 import { ICON_MAP } from "@/features/financial-hub/components/shared/icons-map";
+import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
 
 export function PanelProduct({ config }: { config: any }) {
   const panel = config?.offer_panel || config;
@@ -82,8 +83,8 @@ export function PanelProduct({ config }: { config: any }) {
               const IconComponent = ICON_MAP[b.icon] || ICON_MAP[b.icon?.toLowerCase()] || CheckCircle2;
               return (
                 <li key={i} className="flex items-start gap-2.5">
-                  <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-none border border-neutral-200 bg-neutral-100 text-neutral-700">
-                    <IconComponent className="h-3 w-3" />
+                  <span className="mt-0.5 shrink-0 inline-flex items-center justify-center">
+                    <GradientIcon icon={IconComponent} size={16} />
                   </span>
                   <div className="space-y-0.5">
                     <p className="text-xs font-medium text-neutral-900 leading-tight">{b.title}</p>

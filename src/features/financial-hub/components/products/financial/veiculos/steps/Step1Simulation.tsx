@@ -54,6 +54,7 @@ export function Step1Simulation() {
   // =========================================================================
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
+  const [entradaFocused, setEntradaFocused] = useState(false); // controla o badge do slider de Entrada enquanto o input está em foco
   const { state, updateData, update } = useWizard<any>();
   const [loadingMessage, setLoadingMessage] = useState("Consultando ofertas...");
 
@@ -218,7 +219,7 @@ export function Step1Simulation() {
             <img
               src="/assets/home/financiamentoveiculossimulacao.webp"
               alt="Veículos"
-              className="w-full h-full object-contain relative saturate-[10%]"
+              className="w-full h-full object-contain relative"
             />
           </div>
 
@@ -272,7 +273,7 @@ export function Step1Simulation() {
                   setLocalValorVeiculo(rawValue);
                   updateData({ valorVeiculo: rawValue });
                 }}
-                className={`h-10 rounded-none bg-white border-neutral-200 font-semibold disabled:bg-neutral-100 disabled:text-neutral-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
+                className={`h-10 rounded-none bg-white border-neutral-200 text-brand-accent font-semibold disabled:bg-neutral-100 disabled:text-neutral-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
               />
               <div className="pt-1 px-1">
                 <SliderCustomizado
@@ -307,7 +308,9 @@ export function Step1Simulation() {
                   setLocalPercentualEntrada(newPerc);
                   updateData({ valorEntrada: rawValue });
                 }}
-                className={`h-10 rounded-none bg-white border-neutral-200 font-semibold disabled:bg-neutral-100 disabled:text-neutral-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
+                onFocus={() => setEntradaFocused(true)}
+                onBlur={() => setEntradaFocused(false)}
+                className={`h-10 rounded-none bg-white border-neutral-200 text-brand-accent font-semibold disabled:bg-neutral-100 disabled:text-neutral-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
               />
               <div className="pt-1 px-1">
                 <SliderCustomizado
@@ -324,6 +327,7 @@ export function Step1Simulation() {
                   max={rules?.max_down_payment_percentage}
                   step={1}
                   disabled={loading}
+                  active={entradaFocused}
                 />
               </div>
             </div>
@@ -341,17 +345,24 @@ export function Step1Simulation() {
               }}
               className="flex flex-wrap gap-2"
             >
-              {(state.data?.rules?.installment_options ?? []).map((p: number) => (
-                <div key={p} className="flex-1">
-                  <RadioGroupItem value={String(p)} id={`p-${p}`} className="peer sr-only" disabled={loading} />
-                  <Label
-                    htmlFor={`p-${p}`}
-                    className={`flex items-center justify-center p-2 border border-neutral-300 rounded-none bg-surface-alt hover:bg-neutral-100 peer-data-[state=checked]:border-neutral-900 peer-data-[state=checked]:bg-white transition-all shadow-xs ${loading ? "!cursor-wait opacity-50" : "cursor-pointer"}`}
-                  >
-                    <span className="font-bold text-xs text-neutral-900">{p}x</span>
-                  </Label>
-                </div>
-              ))}
+              {(state.data?.rules?.installment_options ?? []).map((p: number) => {
+                const isSelected = localParcelas === p;
+                return (
+                  <div key={p} className="flex-1">
+                    <RadioGroupItem value={String(p)} id={`p-${p}`} className="peer sr-only" disabled={loading} />
+                    <Label
+                      htmlFor={`p-${p}`}
+                      className={`flex items-center justify-center p-2 border rounded-none transition-all shadow-xs ${
+                        isSelected
+                          ? "border-transparent fill-gradient"
+                          : "border-neutral-300 bg-surface-alt hover:bg-neutral-100"
+                      } ${loading ? "!cursor-wait opacity-50" : "cursor-pointer"}`}
+                    >
+                      <span className={`font-bold text-xs ${isSelected ? "text-white" : "text-brand-accent/60"}`}>{p}x</span>
+                    </Label>
+                  </div>
+                );
+              })}
             </RadioGroup>
           </div>
         </div>

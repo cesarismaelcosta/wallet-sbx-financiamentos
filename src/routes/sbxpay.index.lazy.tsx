@@ -307,7 +307,7 @@ export function sbXPAYHome() {
         disabled={isLocked}
         onClick={() => handleProductClick(configKey)}
         // Mantém a mesma base, aplica as cores "ativas" e lida com o lock de loading
-        className={`${baseButtonClasses} border border-neutral-200 bg-white text-neutral-900 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 shadow-xs ${isLocked ? "opacity-50 cursor-not-allowed shadow-none" : ""}`}
+        className={`group ${baseButtonClasses} border border-neutral-200 bg-white text-neutral-900 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 shadow-xs ${isLocked ? "opacity-50 cursor-not-allowed shadow-none" : ""}`}
       >
         {isCurrentLoading && (
           <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.25} />
@@ -318,7 +318,7 @@ export function sbXPAYHome() {
         </span>
 
         {!isCurrentLoading && !isVerifying && (
-          <ArrowRight className="w-4 h-4" strokeWidth={1.25} />
+          <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" strokeWidth={1.25} />
         )}
       </button>
     );
@@ -400,7 +400,7 @@ export function sbXPAYHome() {
                     <div className="border-t border-neutral-200 pt-5 space-y-4 text-left max-w-xl mx-auto lg:mx-0">
                       <div className="flex items-start space-x-3">
                         <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
-                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-neutral-400" strokeWidth={2} />
+                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-brand-accent" strokeWidth={2} />
                         </div>
                         <div>
                           <h4 className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 mt-1.5 md:mt-1">
@@ -415,7 +415,7 @@ export function sbXPAYHome() {
 
                       <div className="flex items-start space-x-3">
                         <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
-                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-neutral-400" strokeWidth={2} />
+                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-brand-accent" strokeWidth={2} />
                         </div>
                         <div>
                           <h4 className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 mt-1.5 md:mt-1">
@@ -534,7 +534,7 @@ export function sbXPAYHome() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                       <div className="bg-neutral-50 border border-neutral-200 rounded-none p-4 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50">
                         <div className="flex items-center gap-2">
-                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-neutral-400" strokeWidth={2} />
+                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-brand-accent" strokeWidth={2} />
                           <span className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 mt-0.5">
                             Para PF e PJ
                           </span>
@@ -545,7 +545,7 @@ export function sbXPAYHome() {
                       </div>
                       <div className="bg-neutral-50 border border-neutral-200 rounded-none p-4 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50">
                         <div className="flex items-center gap-2">
-                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-neutral-400" strokeWidth={2} />
+                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-brand-accent" strokeWidth={2} />
                           <span className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 mt-0.5">
                             Segurança com 3DS
                           </span>
@@ -632,7 +632,7 @@ export function sbXPAYHome() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 w-full max-w-2xl">
                       <div className="bg-neutral-50 border border-neutral-200 rounded-none p-4 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50">
                         <div className="flex items-center gap-2">
-                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-neutral-400" strokeWidth={2} />
+                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-brand-accent" strokeWidth={2} />
                           <span className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 mt-0.5">
                             Para PF e PJ
                           </span>
@@ -644,7 +644,7 @@ export function sbXPAYHome() {
                       </div>
                       <div className="bg-neutral-50 border border-neutral-200 rounded-none p-4 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50">
                         <div className="flex items-center gap-2">
-                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-neutral-400" strokeWidth={2} />
+                          <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-brand-accent" strokeWidth={2} />
                           <span className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 mt-0.5">
                             Facilidade
                           </span>
@@ -948,7 +948,7 @@ export function sbXPAYHome() {
                     </p>
                     <div className="bg-neutral-50 p-5 rounded-none border border-neutral-200 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50">
                       <div className="flex items-center gap-2">
-                        <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-neutral-400 shrink-0" strokeWidth={2} />
+                        <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-brand-accent shrink-0" strokeWidth={2} />
                         <h3 className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 mt-0.5">
                           Cotação Online, sem compromisso
                         </h3>

@@ -32,6 +32,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { WalletLogo } from "@/components/brand/WalletLogo";
+import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
 import { LogOut, AppWindow, Settings, Home } from "lucide-react";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import type { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
@@ -263,7 +264,7 @@ export function PanelHeader({
                             onClick={() => handleLogoClick()}
                             className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors cursor-pointer"
                           >
-                            <Home className="h-4 w-4 text-neutral-500" /> Início
+                            <GradientIcon icon={Home} size={16} /> Início
                           </button>
 
                           <div className="h-px bg-neutral-200 my-1 mx-1" />
@@ -276,7 +277,7 @@ export function PanelHeader({
                                 rel="noopener noreferrer" 
                                 className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
                               >
-                                <AppWindow className="h-4 w-4 text-neutral-500" /> Backoffice
+                                <GradientIcon icon={AppWindow} size={16} /> Backoffice
                               </a>
                               <a 
                                 href="/sandbox" 
@@ -284,7 +285,7 @@ export function PanelHeader({
                                 rel="noopener noreferrer" 
                                 className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
                               >
-                                <Settings className="h-4 w-4 text-neutral-500" /> Sandbox
+                                <GradientIcon icon={Settings} size={16} /> Sandbox
                               </a>
                               <div className="h-px bg-neutral-200 my-1 mx-1" />
                             </>
@@ -294,7 +295,7 @@ export function PanelHeader({
                             onClick={onLogout} 
                             className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors cursor-pointer"
                           >
-                            <LogOut className="h-4 w-4 text-neutral-500" /> Sair
+                            <GradientIcon icon={LogOut} size={16} /> Sair
                           </button>
                         </PopoverContent>
                       </Popover>
@@ -343,7 +344,7 @@ export function PanelHeader({
                               }}
                               className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors text-left w-full cursor-pointer"
                             >
-                              <Home className="h-4 w-4 text-neutral-500" /> Início
+                              <GradientIcon icon={Home} size={16} /> Início
                             </button>
                             
                             <div className="h-px bg-neutral-200 my-1 mx-1" />
@@ -357,7 +358,7 @@ export function PanelHeader({
                                   onClick={() => setIsMobileMenuOpen(false)}
                                   className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
                                 >
-                                  <AppWindow className="h-4 w-4 text-neutral-500" /> Backoffice
+                                  <GradientIcon icon={AppWindow} size={16} /> Backoffice
                                 </a>
                                 <a
                                   href="/sandbox"
@@ -366,7 +367,7 @@ export function PanelHeader({
                                   onClick={() => setIsMobileMenuOpen(false)}
                                   className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
                                 >
-                                  <Settings className="h-4 w-4 text-neutral-500" /> Sandbox
+                                  <GradientIcon icon={Settings} size={16} /> Sandbox
                                 </a>
                                 <div className="h-px bg-neutral-200 my-1 mx-1" />
                               </>
@@ -380,7 +381,7 @@ export function PanelHeader({
                                 }}
                                 className="flex w-full items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 bg-neutral-50 border border-neutral-200 hover:bg-neutral-100 transition-colors cursor-pointer"
                               >
-                                <LogOut className="h-4 w-4 text-neutral-500" /> 
+                                <GradientIcon icon={LogOut} size={16} /> 
                                 <span>Sair da Conta</span>
                               </button>
                             </div>

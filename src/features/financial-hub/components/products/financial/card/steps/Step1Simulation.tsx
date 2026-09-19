@@ -209,7 +209,7 @@ export function Step1Simulation() {
         <div className="flex items-start gap-4">
           {/* Imagem totalmente solta sem nenhum box */}
           <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
-            <img src="/assets/home/cartao.webp" alt="Cartão" className="w-full h-full object-contain relative saturate-[10%]" />
+            <img src="/assets/home/cartao.webp" alt="Cartão" className="w-full h-full object-contain relative" />
           </div>
 
           <div className="space-y-0.5 flex-1 w-0 min-w-0">
@@ -290,7 +290,7 @@ export function Step1Simulation() {
                         {qtdParcelas}x
                       </span>
 
-                      <span className="text-lg md:text-xl font-bold tracking-tight text-neutral-900 shrink-0">
+                      <span className="text-lg md:text-xl font-bold tracking-tight text-brand-accent shrink-0">
                         {BRL(valorParcela)}
                       </span>
                     </div>

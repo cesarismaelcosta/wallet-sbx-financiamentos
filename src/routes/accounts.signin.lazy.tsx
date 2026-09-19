@@ -290,13 +290,11 @@ export function CustomLogin() {
       {/* Contêiner do Card Flutuante Centralizado com Zero-Radius Strict Governance */}
       <div className="w-full max-w-[440px] bg-card rounded-none shadow-xs border border-neutral-200 p-6 sm:p-10">
         
-        {/* Cabeçalho da Marca com Contenção Dimensional Descomprimida e Badge de Stage */}
-        <div className="flex justify-between items-start mb-6">
-          <div className="min-w-fit">
-            <WalletLogo size="md" withTagline />
-          </div>
+        {/* Cabeçalho da Marca: logo centralizado, badge de Stage fora do fluxo (absolute) */}
+        <div className="relative flex justify-center items-start mb-6">
+          <WalletLogo size="md" withTagline centered />
           <span
-            className={`text-[10px] uppercase font-mono tracking-[0.18em] px-2.5 py-1 rounded-none bg-surface-alt text-neutral-600 border border-neutral-200 transition-opacity duration-150 ${
+            className={`absolute right-0 top-0 text-[10px] uppercase font-mono tracking-[0.18em] px-2.5 py-1 rounded-none bg-surface-alt text-neutral-600 border border-neutral-200 transition-opacity duration-150 ${
               showStageBadge ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
             aria-hidden={!showStageBadge}

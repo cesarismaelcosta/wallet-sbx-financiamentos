@@ -38,9 +38,11 @@ const SIZE_MAP: Record<NonNullable<WalletLogoProps["size"]>, string> = {
 };
 
 const TAGLINE_SIZE: Record<NonNullable<WalletLogoProps["size"]>, string> = {
-  sm: "text-[8px] tracking-[0.18em]",
-  md: "text-[9px] sm:text-[10px] tracking-[0.22em]",
-  lg: "text-[10px] sm:text-[11px] tracking-[0.25em]",
+  // mr negativo cancela o rastro invisível do letter-spacing após o último
+  // caractere, que senão empurra o texto centralizado visualmente p/ a esquerda.
+  sm: "text-[8px] tracking-[0.18em] mr-[-0.18em]",
+  md: "text-[9px] sm:text-[10px] tracking-[0.22em] mr-[-0.22em]",
+  lg: "text-[10px] sm:text-[11px] tracking-[0.25em] mr-[-0.25em]",
 };
 
 export function WalletLogo({

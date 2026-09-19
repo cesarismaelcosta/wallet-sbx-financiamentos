@@ -122,7 +122,7 @@ export function Step2Confirm() {
                 
                 {/* Símbolo R$ no mesmo nível */}
                 <span 
-                  className="font-bold text-neutral-900 tracking-tight shrink-0 mr-1"
+                  className="font-bold text-brand-accent tracking-tight shrink-0 mr-1"
                   style={{ fontSize: "clamp(1.2rem, 5.25vw, 1.68rem)" }}
                 >
                   R$
@@ -130,7 +130,7 @@ export function Step2Confirm() {
 
                 {/* Valor Principal (Diretamente no mesmo nível) */}
                 <span 
-                  className="font-bold text-neutral-900 tracking-tight shrink-0"
+                  className="font-bold text-brand-accent tracking-tight shrink-0"
                   style={{ fontSize: "clamp(1.6rem, 7vw, 2.25rem)" }}
                 >
                   {BRL(mainConsult?.installment_value || 0).replace("R$", "").trim()}

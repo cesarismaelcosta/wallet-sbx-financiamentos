@@ -105,15 +105,15 @@ function BackofficeLogin() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-neutral-100 px-4">
       <div className="w-full max-w-md">
-        <div className="mb-8 flex justify-center">
-          <WalletLogo size="lg" withTagline centered asLink />
-        </div>
-
         <div className="rounded-none border border-neutral-200 bg-white p-8 shadow-md">
+          <div className="mb-6 flex justify-center">
+            <WalletLogo size="lg" withTagline centered asLink />
+          </div>
+
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-neutral-900">
             <ShieldCheck className="h-3.5 w-3.5" /> Backoffice
           </div>
-          <h1 className="mt-3 text-2xl font-bold tracking-tight text-neutral-900">
+          <h1 className="mt-3 page-header-title">
             Acesso restrito
           </h1>
           <p className="mt-2 text-sm text-neutral-600 leading-relaxed">
@@ -182,10 +182,6 @@ function BackofficeLogin() {
               Forçar saída desta conta
             </Button>
           )}
-
-          <p className="mt-6 text-center text-[10px] text-neutral-400 leading-relaxed uppercase tracking-wider">
-            Ao entrar você concorda com a <br/> Política de Uso da Wallet sbX. <br/>Acessos são monitorados via Audit Trail.
-          </p>
         </div>
       </div>
     </div>

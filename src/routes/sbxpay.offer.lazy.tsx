@@ -582,9 +582,9 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
                   size="sm"
                   disabled={pageNumber === 1 || loading}
                   onClick={() => setPageNumber((p) => Math.max(p - 1, 1))}
-                  className="border-neutral-200 text-neutral-900 hover:bg-neutral-100 text-xs rounded-none"
+                  className="group border-neutral-200 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary text-xs rounded-none"
                 >
-                  ← Anterior
+                  <span className="inline-block transition-transform duration-300 group-hover:-translate-x-1">←</span> Anterior
                 </Button>
                 <span className="text-xs text-neutral-500 px-2 font-normal tabular-nums">
                   Página {pageNumber} de {totalPages}
@@ -594,9 +594,9 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
                   size="sm"
                   disabled={pageNumber >= totalPages || loading}
                   onClick={() => setPageNumber((p) => Math.min(p + 1, totalPages))}
-                  className="border-neutral-200 text-neutral-900 hover:bg-neutral-100 text-xs rounded-none"
+                  className="group border-neutral-200 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary text-xs rounded-none"
                 >
-                  Próxima →
+                  Próxima <span className="inline-block transition-transform duration-300 group-hover:translate-x-1">→</span>
                 </Button>
               </div>
             )}

@@ -109,7 +109,7 @@ export function Step1PartnersPanel() {
             <img
               src="/assets/home/seguros.webp"
               alt="Segurança"
-              className="w-full h-full object-contain relative saturate-[10%]"
+              className="w-full h-full object-contain relative"
               onError={(e) => {
                 (e.currentTarget as HTMLElement).style.display = 'none';
               }}
@@ -122,7 +122,7 @@ export function Step1PartnersPanel() {
           </div>
         </div>
 
-        <div className="bg-surface-alt text-neutral-900 border border-neutral-200 px-3 py-1.5 rounded-none text-xs font-bold whitespace-nowrap shrink-0 shadow-xs">
+        <div className="bg-brand-accent text-brand-accent-foreground px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
           Cotação gratuita
         </div>
       </div>

@@ -24,6 +24,7 @@
  */
 
 import { ICON_MAP } from "../shared/icons-map";
+import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
 import { PanelProductOfferSkeleton } from "./PanelProductOfferSkeleton";
 
 interface PanelProductOfferProps {
@@ -93,8 +94,8 @@ export function PanelProductOffer({ config }: PanelProductOfferProps) {
             const Icon = ICON_MAP[b.icon];
             return (
               <li key={i} className="flex items-start gap-3">
-                <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-none border border-neutral-200 bg-neutral-100 text-neutral-700">
-                  {Icon && <Icon className="h-4 w-4 text-neutral-700" />}
+                <span className="mt-0.5 shrink-0 inline-flex items-center justify-center">
+                  {Icon && <GradientIcon icon={Icon} size={20} />}
                 </span>
                 <div className="space-y-0.5">
                   <p className="text-sm font-medium text-neutral-900">{b.title}</p>

@@ -97,7 +97,7 @@ export function Step2Confirm() {
                 <img
                   src="/assets/home/financiamentoveiculossimulacao.webp"
                   alt="Veículos"
-                  className="w-full h-full object-contain relative saturate-[10%]"
+                  className="w-full h-full object-contain relative"
                 />
               </div>
               
@@ -161,7 +161,7 @@ export function Step2Confirm() {
                 
                 {/* Valor Principal */}
                 <span 
-                  className="font-bold text-neutral-900 tracking-tight shrink-0 flex items-baseline gap-0.5"
+                  className="font-bold text-brand-accent tracking-tight shrink-0 flex items-baseline gap-0.5"
                   style={{ fontSize: "clamp(1.6rem, 7vw, 2.25rem)" }}
                 >
                   <span className="text-[0.75em] font-bold">R$</span>
@@ -221,7 +221,7 @@ export function Step2Confirm() {
               <img
                 src="/assets/home/financiamentocreditonegada.webp"
                 alt="Nenhuma oferta disponível"
-                className="w-full h-full object-contain relative saturate-[10%]"
+                className="w-full h-full object-contain relative"
               />
             </div>
 

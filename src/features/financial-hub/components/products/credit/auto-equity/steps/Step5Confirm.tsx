@@ -81,7 +81,7 @@ export function Step5Confirm() {
                 <img
                   src="/assets/home/carhomeequity.webp"
                   alt="Proposta enviada"
-                  className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
+                  className="mix-blend-multiply w-full h-auto object-contain relative"
                 />
               </div>
 
@@ -109,7 +109,7 @@ export function Step5Confirm() {
                 <img
                   src="/assets/home/financiamentocreditonegada.webp"
                   alt="Proposta não aprovada"
-                  className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
+                  className="mix-blend-multiply w-full h-auto object-contain relative"
                 />
               </div>
 
@@ -129,7 +129,7 @@ export function Step5Confirm() {
                 <img
                   src="/assets/home/financiamentoveiculosnegada.png"
                   alt="Erro na comunicação"
-                  className="mix-blend-multiply w-full h-auto object-contain relative saturate-[10%]"
+                  className="mix-blend-multiply w-full h-auto object-contain relative"
                 />
               </div>
 

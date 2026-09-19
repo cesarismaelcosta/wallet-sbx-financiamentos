@@ -75,16 +75,20 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
       <div className="flex flex-col border border-neutral-200 bg-neutral-50/60 p-2.5 space-y-1 rounded-none">
         {[...configs]
           .sort((a, b) => a.position - b.position)
-          .map((opt) => (
+          .map((opt) => {
+            const isChecked = !!value[opt.id];
+            return (
             <div key={opt.id} className="flex gap-2.5 items-start py-1 px-1 group">
               
               {/* Contêiner do Checkbox: Geometria institucional (cantos retos e neutral styling) */}
               <div className="flex items-center pt-0.5">
                 <Checkbox
                   id={`consent-${opt.id}`}
-                  checked={!!value[opt.id]}
+                  checked={isChecked}
                   onCheckedChange={(checked) => onChange({ ...value, [opt.id]: !!checked })}
-                  className="h-4 w-4 shrink-0 rounded-none border border-neutral-300 transition-colors focus-visible:ring-1 focus-visible:ring-neutral-900 data-[state=checked]:bg-neutral-900 data-[state=checked]:text-white data-[state=checked]:border-neutral-900"
+                  className={`h-4 w-4 shrink-0 rounded-none border transition-colors focus-visible:ring-1 focus-visible:ring-neutral-900 ${
+                    isChecked ? "border-transparent fill-gradient" : "border-neutral-300"
+                  }`}
                 />
               </div>
 
@@ -117,7 +121,7 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                             href={linkConfig.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-semibold text-neutral-900 underline underline-offset-2 hover:text-neutral-700 inline mx-0.5 transition-colors"
+                            className="font-semibold text-brand-accent underline underline-offset-2 hover:opacity-70 inline mx-0.5 transition-colors"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {cleanText}
@@ -132,7 +136,7 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                             <TooltipTrigger asChild>
                               <button
                                 type="button"
-                                className="font-semibold text-neutral-900 underline underline-offset-2 border-b border-dashed border-neutral-400 cursor-help inline mx-0.5 hover:text-neutral-700 bg-transparent p-0 text-left outline-none transition-colors"
+                                className="font-semibold text-brand-accent underline underline-offset-2 border-b border-dashed border-brand-accent/40 cursor-help inline mx-0.5 hover:opacity-70 bg-transparent p-0 text-left outline-none transition-colors"
                                 onClick={(e) => {
                                   // Impede que o clique de abertura do tooltip acione o checkbox pai
                                   e.preventDefault();
@@ -180,7 +184,8 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                 )}
               </label>
             </div>
-          ))}
+            );
+          })}
       </div>
     </TooltipProvider>
   );
