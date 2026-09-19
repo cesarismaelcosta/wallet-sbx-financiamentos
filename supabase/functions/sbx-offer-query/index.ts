@@ -207,7 +207,7 @@ serve(withSecurity('sbx-offer-query', async (req: Request, ctx?: RequestContext)
       headers: { 
         "Accept": "application/json", 
         "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        "User-Agent": req.headers.get("user-agent") ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         "Origin": "https://www.superbid.net",
         "Referer": "https://www.superbid.net/"
       },
