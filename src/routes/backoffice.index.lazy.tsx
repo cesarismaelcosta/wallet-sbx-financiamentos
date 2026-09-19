@@ -151,6 +151,7 @@ import {
 
 // Componentes da Interface (Design System)
 import { Button } from "@/components/ui/button";
+import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -673,7 +674,7 @@ function DashboardPage() {
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Visão geral</h1>
+            <h1 className="page-header-title">Visão geral</h1>
             <p className="text-sm text-neutral-600">Métricas integradas de acessos e concessão de crédito.</p>
           </div>
         </div>
@@ -683,9 +684,9 @@ function DashboardPage() {
             <Button
               variant="outline"
               onClick={() => setMobileFilterOpen(true)}
-              className="w-full h-11 rounded-none gap-2 justify-start bg-white border-neutral-200 text-neutral-900 shadow-xs text-xs"
+              className="w-full h-11 rounded-none gap-2 justify-start bg-white border-neutral-200 text-neutral-900 shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
             >
-              <Filter className="h-4 w-4 text-neutral-900" /> Filtros
+              <GradientIcon icon={Filter} size={16} /> Filtros
             </Button>
           </div>
 
@@ -695,7 +696,7 @@ function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs text-xs"
+                  className="h-10 w-[175px] rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
                 >
                   <span className="flex items-center gap-2 truncate">
                     <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -760,7 +761,7 @@ function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs text-xs"
+                  className="h-10 w-[175px] rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
                 >
                   <span className="flex items-center gap-2 truncate">
                     <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -824,7 +825,7 @@ function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs text-xs"
+                  className="h-10 w-[175px] rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
                 >
                   <span className="flex items-center gap-2 truncate">
                     <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -896,7 +897,7 @@ function DashboardPage() {
       <div className="space-y-6">
         <div className="border-b border-neutral-200 pb-2">
           <div className="flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-neutral-900" />
+            <GradientIcon icon={Briefcase} size={20} />
             <h2 className="text-xl font-bold tracking-tight text-neutral-900">1. Simulações e Negócios</h2>
           </div>
           <p className="text-sm text-neutral-600 mt-1">
@@ -919,7 +920,7 @@ function DashboardPage() {
                     <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
                       {k.label}
                     </span>
-                    <k.icon className="h-3.5 w-3.5 text-neutral-400" />
+                    <GradientIcon icon={k.icon} size={14} />
                   </div>
                   <span className="text-[10px] font-normal text-neutral-400">{k.subLabel}</span>
                 </div>
@@ -947,7 +948,7 @@ function DashboardPage() {
       <div className="space-y-6 pt-6">
         <div className="border-b border-neutral-200 pb-2">
           <div className="flex items-center gap-2">
-            <Funnel className="h-5 w-5 text-neutral-900" />
+            <GradientIcon icon={Funnel} size={20} />
             <h2 className="text-xl font-bold tracking-tight text-neutral-900">2. Tráfego e Topo de Funil</h2>
           </div>
           <p className="text-sm text-neutral-600 mt-1">
@@ -970,7 +971,7 @@ function DashboardPage() {
                       <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
                         {k.label}
                       </span>
-                      <k.icon className="h-3.5 w-3.5 text-neutral-400" />
+                      <GradientIcon icon={k.icon} size={14} />
                     </div>
                     <span className="text-[10px] font-normal text-neutral-400">{k.subLabel}</span>
                   </div>
@@ -1007,10 +1008,10 @@ function DashboardPage() {
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="h-11 w-full rounded-none justify-between gap-2 bg-surface-alt text-neutral-900 border-neutral-200"
+                    className="h-11 w-full rounded-none justify-between gap-2 bg-surface-alt text-neutral-900 border-neutral-200 hover:bg-primary hover:text-primary-foreground hover:border-primary"
                   >
                     <span className="flex items-center gap-2 truncate">
-                      <CalendarIcon className="h-4 w-4 shrink-0 text-neutral-600" />
+                      <CalendarIcon className="h-4 w-4 shrink-0 text-brand-accent" />
                       Período:{" "}
                       {dateRange === "custom"
                         ? "Personalizado"
@@ -1022,7 +1023,7 @@ function DashboardPage() {
                               ? "15 dias"
                               : "Tudo"}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-600" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-brand-accent" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
@@ -1079,14 +1080,14 @@ function DashboardPage() {
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="h-11 w-full rounded-none justify-between gap-2 bg-surface-alt text-neutral-900 border-neutral-200"
+                    className="h-11 w-full rounded-none justify-between gap-2 bg-surface-alt text-neutral-900 border-neutral-200 hover:bg-primary hover:text-primary-foreground hover:border-primary"
                   >
                     <span className="truncate">
                       {selectedPartners.length === 0
                         ? "Todos Parceiros"
                         : `${selectedPartners.length} parceiro(s) sel.`}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-600" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-brand-accent" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
@@ -1144,12 +1145,12 @@ function DashboardPage() {
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="h-11 w-full rounded-none justify-between gap-2 bg-surface-alt text-neutral-900 border-neutral-200"
+                    className="h-11 w-full rounded-none justify-between gap-2 bg-surface-alt text-neutral-900 border-neutral-200 hover:bg-primary hover:text-primary-foreground hover:border-primary"
                   >
                     <span className="truncate">
                       {selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-600" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-brand-accent" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
@@ -1203,7 +1204,7 @@ function DashboardPage() {
 
             <Button
               onClick={() => setMobileFilterOpen(false)}
-              className="w-full h-11 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-semibold mt-2 shadow-xs cursor-pointer"
+              className="cta-gradient border-0 w-full h-11 rounded-none text-white font-semibold mt-2 cursor-pointer"
             >
               Aplicar Filtros
             </Button>

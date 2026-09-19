@@ -43,10 +43,11 @@
 
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw, Search, ChevronDown, Filter } from "lucide-react";
+import { Loader2, RefreshCw, Search, ChevronDown, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
 import { Button } from "@/components/ui/button";
+import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -246,13 +247,13 @@ function AuditoriaPage() {
       
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Auditoria</h1>
+          <h1 className="page-header-title">Auditoria</h1>
           <p className="text-sm text-neutral-600">
             Monitore o histórico de acessos, eventos de autenticação e segurança do sistema.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => load(page)} disabled={loading} className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white shadow-xs">
+          <Button onClick={() => load(page)} disabled={loading} className="cta-gradient border-0 rounded-none text-white">
             <RefreshCw className={`mr-2 h-4 w-4 shrink-0 ${loading ? "animate-spin" : ""}`} /> 
             Atualizar
           </Button>
@@ -277,9 +278,9 @@ function AuditoriaPage() {
             <Button 
               variant="outline" 
               onClick={() => setMobileFilterOpen(true)}
-              className="w-full h-11 rounded-none gap-2 justify-start bg-white border-neutral-200 text-neutral-900 shadow-xs"
+              className="w-full h-11 rounded-none gap-2 justify-start bg-white border-neutral-200 text-neutral-900 shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
             >
-              <Filter className="h-4 w-4 text-neutral-900" /> Filtros
+              <GradientIcon icon={Filter} size={16} /> Filtros
             </Button>
           </div>
 
@@ -299,7 +300,7 @@ function AuditoriaPage() {
               
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[170px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 text-neutral-900 justify-between shadow-xs">
+                  <Button variant="outline" size="sm" className="h-10 w-[170px] rounded-none gap-2 bg-white border-neutral-200 text-neutral-900 justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">Evento: {eventFilter === "all" ? "Todos" : EVENT_LABEL[eventFilter as LoginRow["event"]]}</span>
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
@@ -330,7 +331,7 @@ function AuditoriaPage() {
 
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[150px] rounded-none gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-neutral-50 justify-between shadow-xs">
+                  <Button variant="outline" size="sm" className="h-10 w-[150px] rounded-none gap-2 bg-white text-neutral-900 border-neutral-200 justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">Status: {statusFilter === "all" ? "Todos" : statusFilter === "success" ? "Sucessos" : "Falhas"}</span>
                     <ChevronDown className="h-3 w-3 shrink-0 opacity-40" />
                   </Button>
@@ -361,7 +362,7 @@ function AuditoriaPage() {
 
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[160px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 text-neutral-900 justify-between shadow-xs">
+                  <Button variant="outline" size="sm" className="h-10 w-[160px] rounded-none gap-2 bg-white border-neutral-200 text-neutral-900 justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">Período: {period === "custom" ? "Personalizado" : PERIOD_OPTIONS.find(p => p.id === period)?.label}</span>
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
@@ -412,7 +413,7 @@ function AuditoriaPage() {
                 <tr>
                   <td colSpan={7} className="p-10 text-center text-neutral-500">
                     <div className="flex items-center justify-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-neutral-900" /> Carregando informações...
+                      <Loader2 className="h-4 w-4 animate-spin text-brand-accent" /> Carregando informações...
                     </div>
                   </td>
                 </tr>
@@ -479,8 +480,9 @@ function AuditoriaPage() {
                   load(prev);
                 }}
                 disabled={page === 0 || loading}
-                className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100"
+                className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary"
               >
+                <ChevronLeft className="mr-1 h-3.5 w-3.5" />
                 Anterior
               </Button>
               <Button
@@ -492,9 +494,10 @@ function AuditoriaPage() {
                   load(next);
                 }}
                 disabled={page >= totalPages - 1 || loading}
-                className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100"
+                className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary"
               >
                 Próxima
+                <ChevronRight className="ml-1 h-3.5 w-3.5" />
               </Button>
            </div>
           </div>
@@ -518,7 +521,7 @@ function AuditoriaPage() {
               <span className="text-xs font-medium text-neutral-500 mb-1 block">Evento</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white border-neutral-200 text-neutral-900 shadow-xs">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white border-neutral-200 text-neutral-900 shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">Evento: {eventFilter === "all" ? "Todos" : EVENT_LABEL[eventFilter as LoginRow["event"]]}</span>
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
@@ -550,7 +553,7 @@ function AuditoriaPage() {
               <span className="text-xs font-medium text-neutral-500 mb-1 block">Status</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 shadow-xs">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">Status: {statusFilter === "all" ? "Todos" : statusFilter === "success" ? "Sucessos" : "Falhas"}</span>
                     <ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
@@ -582,7 +585,7 @@ function AuditoriaPage() {
               <span className="text-xs font-medium text-neutral-500 mb-1 block">Período</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white border-neutral-200 text-neutral-900 shadow-xs">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white border-neutral-200 text-neutral-900 shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">Período: {period === "custom" ? "Personalizado" : PERIOD_OPTIONS.find(p => p.id === period)?.label}</span>
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
@@ -608,7 +611,7 @@ function AuditoriaPage() {
 
             </div>
 
-            <Button onClick={() => setMobileFilterOpen(false)} className="w-full h-11 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-bold mt-2 shadow-xs cursor-pointer">
+            <Button onClick={() => setMobileFilterOpen(false)} className="cta-gradient border-0 w-full h-11 rounded-none text-white font-bold mt-2 cursor-pointer">
               Aplicar Filtros
             </Button>
 

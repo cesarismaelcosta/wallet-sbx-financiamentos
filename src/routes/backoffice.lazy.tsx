@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { Button } from "@/components/ui/button";
+import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { AuthProvider, useAuth } from "@/integrations/auth/AuthContext";
 import { logLoginHistoryEvent } from "@/lib/login-history";
@@ -171,11 +172,15 @@ function BackofficeLayout() {
         onClick={() => setMobileMenuOpen(false)}
         className={`group flex items-center gap-2.5 rounded-none px-3 py-0.5 text-[13px] transition-colors ${
           active 
-            ? "bg-neutral-100 text-neutral-900 font-semibold border-r-2 border-neutral-900" 
+            ? "bg-neutral-100 text-neutral-900 font-semibold border-r-2 border-brand-accent" 
             : "text-neutral-600 font-normal hover:bg-neutral-50 hover:text-neutral-900"
         }`}
       >
-        <Icon className={`h-3.5 w-3.5 ${active ? "text-neutral-900" : "text-neutral-400"}`} />
+        {active ? (
+          <GradientIcon icon={Icon} size={14} />
+        ) : (
+          <Icon className="h-3.5 w-3.5 text-[#a7b5db]" />
+        )}
         {item.label}
       </Link>
     );
@@ -270,7 +275,7 @@ function BackofficeLayout() {
             className="rounded-none border border-neutral-200 hover:bg-neutral-100"
             onClick={() => setMobileMenuOpen(true)}
           >
-            <Menu className="h-5 w-5 text-neutral-900" />
+            <GradientIcon icon={Menu} size={20} />
           </Button>
         </header>
 

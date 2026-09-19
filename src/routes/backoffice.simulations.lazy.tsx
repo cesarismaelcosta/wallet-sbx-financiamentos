@@ -161,11 +161,12 @@
 
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useRef } from "react";
-import { RefreshCw, Search, Filter, Download, ChevronDown, Camera, Printer, Loader2 } from "lucide-react";
+import { RefreshCw, Search, Filter, Download, ChevronDown, ChevronLeft, ChevronRight, Camera, Printer, Loader2 } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { useAuth } from "@/integrations/auth/AuthContext";
 
 import { Button } from "@/components/ui/button";
+import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -519,12 +520,12 @@ function SimulationsPage() {
     <div className="font-sans space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Monitor de Simulações</h1>
+          <h1 className="page-header-title">Monitor de Simulações</h1>
           <p className="text-sm text-neutral-600">Acompanhe simulações, análises e aprovações em tempo real.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleExportExcel} className="rounded-none hover:bg-neutral-100 hover:text-neutral-900 border-neutral-200 text-neutral-900 transition-colors shadow-xs"><Download className="mr-2 h-4 w-4" /> Exportar Excel</Button>
-          <Button onClick={() => load(0)} disabled={loading} className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white shadow-xs"><RefreshCw className={`mr-2 h-4 w-4 shrink-0 ${loading ? "animate-spin" : ""}`} /> Atualizar</Button>
+          <Button variant="outline" onClick={handleExportExcel} className="rounded-none border-neutral-200 text-neutral-900 transition-colors shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"><Download className="mr-2 h-4 w-4" /> Exportar Excel</Button>
+          <Button onClick={() => load(0)} disabled={loading} className="cta-gradient border-0 rounded-none text-white"><RefreshCw className={`mr-2 h-4 w-4 shrink-0 ${loading ? "animate-spin" : ""}`} /> Atualizar</Button>
         </div>
       </div>
 
@@ -557,7 +558,7 @@ function SimulationsPage() {
       <div className="rounded-none border border-neutral-200 bg-white flex flex-col shadow-xs">
         <div className="flex flex-col gap-3 border-b border-neutral-200 p-4 bg-neutral-50/50">
           <div className="lg:hidden">
-            <Button variant="outline" onClick={() => setMobileFilterOpen(true)} className="w-full h-11 rounded-none gap-2 justify-start bg-white border-neutral-200 text-neutral-900 shadow-xs"><Filter className="h-4 w-4 text-neutral-900" /> Filtros</Button>
+            <Button variant="outline" onClick={() => setMobileFilterOpen(true)} className="w-full h-11 rounded-none gap-2 justify-start bg-white border-neutral-200 text-neutral-900 shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"><GradientIcon icon={Filter} size={16} /> Filtros</Button>
           </div>
           <div className="flex flex-col lg:flex-row lg:items-center gap-4">
             <div className="relative w-full lg:flex-1 lg:max-w-md">
@@ -568,7 +569,7 @@ function SimulationsPage() {
             <div className="hidden lg:flex lg:items-center lg:gap-2 lg:ml-auto">
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs">
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span></span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
@@ -585,7 +586,7 @@ function SimulationsPage() {
 
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs">
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span></span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
@@ -602,7 +603,7 @@ function SimulationsPage() {
 
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-neutral-50 transition-colors justify-between shadow-xs">
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white text-neutral-900 border-neutral-200 transition-colors justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 shrink-0" /><span className="truncate">Situação: {selectedStatus.length === 0 ? "Todos" : selectedStatus.includes("Qualificadas") && selectedStatus.length === 1 ? "Qualificadas" : `${selectedStatus.length} sel.`}</span></span><ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
                 </PopoverTrigger>
@@ -619,7 +620,7 @@ function SimulationsPage() {
 
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs">
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span></span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
@@ -709,8 +710,8 @@ function SimulationsPage() {
           <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-200 bg-neutral-50">
             <div className="text-xs text-neutral-500 font-medium">{rows.length === 0 ? "Nenhum resultado" : `${page * PAGE_SIZE + 1} a ${page * PAGE_SIZE + rows.length}`}</div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => { const prev = Math.max(0, page - 1); setPage(prev); load(prev); }} disabled={page === 0 || loading} className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100">Anterior</Button>
-              <Button variant="outline" size="sm" onClick={() => { const next = Math.min(totalPages - 1, page + 1); setPage(next); load(next); }} disabled={page >= totalPages - 1 || loading} className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100">Próxima</Button>
+              <Button variant="outline" size="sm" onClick={() => { const prev = Math.max(0, page - 1); setPage(prev); load(prev); }} disabled={page === 0 || loading} className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary"><ChevronLeft className="mr-1 h-3.5 w-3.5" />Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => { const next = Math.min(totalPages - 1, page + 1); setPage(next); load(next); }} disabled={page >= totalPages - 1 || loading} className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary">Próxima<ChevronRight className="ml-1 h-3.5 w-3.5" /></Button>
             </div>
           </div>
         )}
@@ -763,7 +764,7 @@ function SimulationsPage() {
                           </div>
                           <span className="text-xs font-bold text-slate-700 uppercase tracking-wide truncate">{sim.partners?.name || "Parceiro N/A"}</span>
                         </div>
-                        {detailLoading && <div className="flex items-center gap-1.5 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-none"><Loader2 className="h-3 w-3 animate-spin text-neutral-900" /> Carregando detalhes...</div>}
+                        {detailLoading && <div className="flex items-center gap-1.5 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-none"><Loader2 className="h-3 w-3 animate-spin text-brand-accent" /> Carregando detalhes...</div>}
                       </div>
 
                       <div className="space-y-1 pr-8 text-left w-full">
@@ -797,8 +798,8 @@ function SimulationsPage() {
                   </div>
 
                   <div className="p-4 bg-white border-t border-neutral-200 flex items-center justify-between gap-3 shrink-0 shadow-xs">
-                    <Button variant="outline" onClick={handlePrintSheet} className="flex-1 rounded-none text-xs gap-2 border-neutral-200 text-neutral-900 hover:bg-neutral-100 h-10 font-bold"><Printer className="h-4 w-4" /> Imprimir / PDF</Button>
-                    <Button onClick={() => setActiveSimulation(null)} className="flex-1 rounded-none text-xs bg-neutral-900 hover:bg-neutral-800 text-white h-10 font-bold">Fechar</Button>
+                    <Button variant="outline" onClick={handlePrintSheet} className="flex-1 rounded-none text-xs gap-2 border-neutral-200 text-neutral-900 h-10 font-bold hover:bg-primary hover:text-primary-foreground hover:border-primary"><Printer className="h-4 w-4" /> Imprimir / PDF</Button>
+                    <Button onClick={() => setActiveSimulation(null)} className="cta-gradient border-0 flex-1 rounded-none text-xs text-white h-10 font-bold">Fechar</Button>
                   </div>
                 </div>
               );
@@ -874,12 +875,12 @@ function SimulationsPage() {
               <span className="text-xs font-medium text-neutral-500 mb-1 block">Período</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="flex items-center gap-2 truncate">
-                      <Filter className="h-4 w-4 shrink-0 text-neutral-500" />
+                      <Filter className="h-4 w-4 shrink-0 text-brand-accent" />
                       Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-500" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-brand-accent" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
@@ -904,11 +905,11 @@ function SimulationsPage() {
               <span className="text-xs font-medium text-neutral-500 mb-1 block">Parceiro</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">
                       {selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-500" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-brand-accent" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
@@ -943,11 +944,11 @@ function SimulationsPage() {
               <span className="text-xs font-medium text-neutral-500 mb-1 block">Produto</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">
                       {selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-500" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-brand-accent" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
@@ -982,11 +983,11 @@ function SimulationsPage() {
               <span className="text-xs font-medium text-neutral-500 mb-1 block">Situação</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">
                       {selectedStatus.length === 0 ? "Todas" : `${selectedStatus.length} selecionada(s)`}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-500" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-brand-accent" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
@@ -1017,7 +1018,7 @@ function SimulationsPage() {
               </Popover>
             </div>
 
-            <Button onClick={() => setMobileFilterOpen(false)} className="w-full h-11 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-bold mt-2 shadow-xs cursor-pointer">
+            <Button onClick={() => setMobileFilterOpen(false)} className="cta-gradient border-0 w-full h-11 rounded-none text-white font-bold mt-2 cursor-pointer">
               Aplicar Filtros
             </Button>
           </div>

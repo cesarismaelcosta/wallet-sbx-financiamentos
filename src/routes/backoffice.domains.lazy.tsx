@@ -142,17 +142,14 @@ function DominiosPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Domínios permitidos</h1>
+          <h1 className="page-header-title">Domínios permitidos</h1>
           <p className="text-sm text-neutral-600">Gerencie quais domínios de e-mail podem acessar o backoffice.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100 shadow-xs text-xs" onClick={load} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
-          </Button>
           {isAdmin && (
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white shadow-xs text-xs">
+                <Button variant="outline" size="sm" className="rounded-none border-neutral-200 text-neutral-900 shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                   <Plus className="mr-2 h-4 w-4" /> Adicionar domínio
                 </Button>
               </DialogTrigger>
@@ -170,13 +167,16 @@ function DominiosPage() {
                   />
                 </div>
                 <DialogFooter>
-                  <Button className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-medium text-xs" onClick={handleAdd}>
+                  <Button className="cta-gradient border-0 rounded-none text-white font-medium text-xs" onClick={handleAdd}>
                     Confirmar
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           )}
+          <Button size="sm" className="cta-gradient border-0 rounded-none text-white text-xs" onClick={load} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
+          </Button>
         </div>
       </div>
 

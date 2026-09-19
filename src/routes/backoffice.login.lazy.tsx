@@ -145,11 +145,11 @@ function BackofficeLogin() {
               variant="outline"
               onClick={handleGoogle}
               disabled={submitting || authLoading || authorizationLoading}
-              className="h-12 w-full gap-3 rounded-none border-neutral-200 font-bold text-neutral-900 hover:bg-neutral-50 hover:text-neutral-900 shadow-xs"
+              className="h-12 w-full gap-3 rounded-none border-neutral-200 font-bold text-neutral-900 shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
             >
               {submitting || authorizationLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
+                  <Loader2 className="h-4 w-4 animate-spin text-brand-accent" />
                   <span className="text-neutral-500">
                     {authorizationLoading ? "Validando permissões..." : "Estabelecendo handshake…"}
                   </span>

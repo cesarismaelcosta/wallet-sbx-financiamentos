@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -264,7 +265,7 @@ function BenefitsBuilder({ benefits = [], onChange }: { benefits: any[]; onChang
                     const IconComponent = ICON_MAP[iconKey];
                     return (
                       <SelectItem key={iconKey} value={iconKey} className="rounded-none cursor-pointer">
-                        <div className="flex items-center gap-2">{IconComponent && <IconComponent className="w-3.5 h-3.5 text-neutral-900" />}<span>{iconKey}</span></div>
+                        <div className="flex items-center gap-2">{IconComponent && <GradientIcon icon={IconComponent} size={14} />}<span>{iconKey}</span></div>
                       </SelectItem>
                     );
                   })}
@@ -282,7 +283,7 @@ function BenefitsBuilder({ benefits = [], onChange }: { benefits: any[]; onChang
           </div>
         </div>
       ))}
-      <Button type="button" onClick={() => onChange([...benefits, { icon: "Check", title: "", description: "" }])} variant="outline" size="sm" className="h-8 text-[10px] font-medium w-full border-dashed rounded-none border-neutral-300 text-neutral-900 hover:bg-neutral-100">
+      <Button type="button" onClick={() => onChange([...benefits, { icon: "Check", title: "", description: "" }])} variant="outline" size="sm" className="h-8 text-[10px] font-medium w-full border-dashed rounded-none border-neutral-300 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary">
         <Plus size={12} className="mr-1" /> Adicionar Benefício
       </Button>
     </div>
@@ -451,8 +452,8 @@ function OrchestratorConfigEditor({
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onClose} disabled={isSaving} className="rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100 shadow-xs text-xs">Cancelar</Button>
-          <Button size="sm" onClick={handleSaveClick} disabled={isSaving} className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-medium shadow-xs text-xs">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={isSaving} className="rounded-none border-neutral-200 text-neutral-900 shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
+          <Button size="sm" onClick={handleSaveClick} disabled={isSaving} className="cta-gradient border-0 rounded-none text-white font-medium text-xs">
             {isSaving ? <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} Salvar Rota
           </Button>
         </div>
@@ -629,7 +630,7 @@ function OrchestratorConfigEditor({
                 <div className="flex flex-col space-y-2">
                   <div className="flex justify-between items-center bg-neutral-50 p-2.5 rounded-none border border-neutral-200">
                     <h3 className="font-medium text-neutral-900 uppercase text-xs">Consentimentos (LGPD)</h3>
-                    <Button onClick={() => { const current = parsedPreview.consent_configs || []; const updated = [...current, { id: `consent_${Date.now()}`, template_text: "", is_required: true, position: current.length + 1, links: [] }]; setParsedPreview({ ...parsedPreview, consent_configs: updated }); setJsonEditors({ ...jsonEditors, consent_configs: JSON.stringify(updated, null, 2) }); }} size="sm" className="bg-neutral-900 hover:bg-neutral-800 text-white text-[11px] h-7 rounded-none font-medium"><Plus size={12} className="mr-1" /> Add Termo</Button>
+                    <Button onClick={() => { const current = parsedPreview.consent_configs || []; const updated = [...current, { id: `consent_${Date.now()}`, template_text: "", is_required: true, position: current.length + 1, links: [] }]; setParsedPreview({ ...parsedPreview, consent_configs: updated }); setJsonEditors({ ...jsonEditors, consent_configs: JSON.stringify(updated, null, 2) }); }} size="sm" className="cta-gradient border-0 text-white text-[11px] h-7 rounded-none font-medium"><Plus size={12} className="mr-1" /> Add Termo</Button>
                   </div>
                   <div className="space-y-3">
                     {!parsedPreview.consent_configs || parsedPreview.consent_configs.length === 0 ? (
@@ -645,7 +646,7 @@ function OrchestratorConfigEditor({
                 <div className="flex flex-col space-y-2 border-t border-neutral-200 pt-5">
                   <div className="flex justify-between items-center bg-neutral-50 p-2.5 rounded-none border border-neutral-200">
                     <h3 className="font-medium text-neutral-900 uppercase text-xs">Dúvidas Frequentes (FAQs)</h3>
-                    <Button onClick={() => { const current = parsedPreview.page_faqs || []; const updated = [...current, { question: "", answer: "", position: current.length + 1, bullets: [] }]; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} size="sm" className="bg-neutral-900 hover:bg-neutral-800 text-white text-[11px] h-7 rounded-none font-medium"><Plus size={12} className="mr-1" /> Add FAQ</Button>
+                    <Button onClick={() => { const current = parsedPreview.page_faqs || []; const updated = [...current, { question: "", answer: "", position: current.length + 1, bullets: [] }]; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} size="sm" className="cta-gradient border-0 text-white text-[11px] h-7 rounded-none font-medium"><Plus size={12} className="mr-1" /> Add FAQ</Button>
                   </div>
                   <div className="space-y-3">
                     {!parsedPreview.page_faqs || parsedPreview.page_faqs.length === 0 ? (
@@ -844,15 +845,15 @@ function OrchestratorConfigsBackofficePage() {
       <div id="main-app-content" className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Consulta de Rotas</h1>
+            <h1 className="page-header-title">Consulta de Rotas</h1>
             <p className="text-sm text-neutral-600">Gerenciamento e inspeção ordenada das configurações de rotas.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={load} className="rounded-none border-neutral-200 bg-white text-neutral-900 hover:bg-neutral-100 shadow-xs text-xs" disabled={loading}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
-            </Button>
-            <Button size="sm" onClick={() => { setEditingConfig(null); setIsEditorOpen(true); }} className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-medium shadow-xs text-xs hidden sm:flex">
+            <Button variant="outline" size="sm" onClick={() => { setEditingConfig(null); setIsEditorOpen(true); }} className="rounded-none border-neutral-200 bg-white text-neutral-900 shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary hidden sm:flex">
               <Plus className="mr-2 h-4 w-4" /> Nova Rota
+            </Button>
+            <Button size="sm" onClick={load} className="cta-gradient border-0 rounded-none text-white font-medium text-xs" disabled={loading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
             </Button>
           </div>
         </div>
@@ -866,7 +867,7 @@ function OrchestratorConfigsBackofficePage() {
             <div className="flex items-center gap-2 lg:ml-auto">
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 rounded-none gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-neutral-50 transition-colors shadow-xs text-xs">
+                  <Button variant="outline" size="sm" className="h-10 rounded-none gap-2 bg-white text-neutral-900 border-neutral-200 transition-colors shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <Filter className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
                     <span className="truncate">Status: {statusFilter === "active" ? "Ativas" : statusFilter === "inactive" ? "Inativas" : "Todas"}</span>
                     <ChevronDown className="h-3 w-3 shrink-0 text-neutral-400" />
@@ -900,7 +901,7 @@ function OrchestratorConfigsBackofficePage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={5} className="p-10 text-center text-neutral-500"><div className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin text-neutral-900" /> Carregando informações...</div></td></tr>
+                  <tr><td colSpan={5} className="p-10 text-center text-neutral-500"><div className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin text-brand-accent" /> Carregando informações...</div></td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={5} className="p-10 text-center text-neutral-500 font-medium">Nenhuma rota encontrada.</td></tr>
                 ) : (
@@ -1000,10 +1001,10 @@ function OrchestratorConfigsBackofficePage() {
 
               <div className="p-3 sm:p-4 border-t border-neutral-200 bg-white flex flex-col gap-2 shrink-0 shadow-lg w-full">
                 <div className="flex items-center gap-2 w-full">
-                  <Button variant="outline" size="sm" onClick={() => handleDuplicateRoute(activeConfig)} className="hidden sm:flex flex-1 rounded-none text-xs gap-1.5 border-neutral-200 text-neutral-900 hover:bg-neutral-100 h-9 font-medium px-2"><Copy className="h-3.5 w-3.5 shrink-0 text-neutral-400" /> Duplicar</Button>
-                  <Button variant="outline" size="sm" onClick={handlePrintSheet} className="flex-1 rounded-none text-xs gap-1.5 border-neutral-200 text-neutral-900 hover:bg-neutral-100 h-9 font-medium px-2"><Printer className="h-3.5 w-3.5 shrink-0 text-neutral-400" /> Imprimir</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleDuplicateRoute(activeConfig)} className="hidden sm:flex flex-1 rounded-none text-xs gap-1.5 border-neutral-200 text-neutral-900 h-9 font-medium px-2 hover:bg-primary hover:text-primary-foreground hover:border-primary"><Copy className="h-3.5 w-3.5 shrink-0 text-neutral-400" /> Duplicar</Button>
+                  <Button variant="outline" size="sm" onClick={handlePrintSheet} className="flex-1 rounded-none text-xs gap-1.5 border-neutral-200 text-neutral-900 h-9 font-medium px-2 hover:bg-primary hover:text-primary-foreground hover:border-primary"><Printer className="h-3.5 w-3.5 shrink-0 text-neutral-400" /> Imprimir</Button>
                 </div>
-                <Button size="sm" onClick={() => setIsRouteDrawerOpen(false)} className="w-full rounded-none text-xs bg-neutral-900 hover:bg-neutral-800 text-white h-9 font-medium">Fechar</Button>
+                <Button size="sm" onClick={() => setIsRouteDrawerOpen(false)} className="cta-gradient border-0 w-full rounded-none text-xs text-white h-9 font-medium">Fechar</Button>
               </div>
             </div>
           </div>

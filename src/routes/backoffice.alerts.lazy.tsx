@@ -221,7 +221,7 @@ function AlertsPage() {
       
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Alertas do Sistema</h1>
+          <h1 className="page-header-title">Alertas do Sistema</h1>
           <p className="text-sm text-neutral-600">Gerencie quem recebe notificações de erros e infraestrutura.</p>
         </div>
 
@@ -229,7 +229,7 @@ function AlertsPage() {
           {isAdmin && (
             <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white shadow-xs text-xs">
+                <Button variant="outline" size="sm" className="rounded-none border-neutral-200 text-neutral-900 shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                   <Plus className="mr-2 h-4 w-4" /> Cadastrar E-mail
                 </Button>
               </DialogTrigger>
@@ -263,10 +263,10 @@ function AlertsPage() {
                 </div>
 
                 <DialogFooter>
-                  <Button variant="outline" className="rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100 text-xs" onClick={() => setRegisterOpen(false)}>
+                  <Button variant="outline" className="rounded-none border-neutral-200 text-neutral-900 text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary" onClick={() => setRegisterOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button onClick={handleRegister} disabled={isSaving} className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-medium text-xs">
+                  <Button onClick={handleRegister} disabled={isSaving} className="cta-gradient border-0 rounded-none text-white font-medium text-xs">
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                     Cadastrar
                   </Button>
@@ -275,7 +275,7 @@ function AlertsPage() {
             </Dialog>
           )}
 
-          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100 shadow-xs text-xs">
+          <Button size="sm" onClick={load} disabled={loading} className="cta-gradient border-0 rounded-none text-white text-xs">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
           </Button>
         </div>

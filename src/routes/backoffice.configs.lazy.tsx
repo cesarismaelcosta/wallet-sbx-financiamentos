@@ -19,7 +19,7 @@ function ConfiguracoesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Configurações</h1>
+        <h1 className="page-header-title">Configurações</h1>
         <p className="text-sm text-neutral-600">
           Ajuste preferências da sua operação de crédito.
         </p>
@@ -70,7 +70,7 @@ function ConfiguracoesPage() {
               </div>
               <h3 className="mt-4 text-base font-bold text-neutral-900">{s.title}</h3>
               <p className="mt-1 text-sm text-neutral-600 flex-1">{s.desc}</p>
-              <Button size="sm" variant="outline" className="mt-4 rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100 font-bold shadow-xs w-full sm:w-auto self-start">
+              <Button size="sm" variant="outline" className="mt-4 rounded-none border-neutral-200 text-neutral-900 font-bold shadow-xs w-full sm:w-auto self-start hover:bg-primary hover:text-primary-foreground hover:border-primary">
                 Configurar
               </Button>
             </div>

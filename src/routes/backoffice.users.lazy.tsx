@@ -59,6 +59,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -373,7 +374,7 @@ function UsuariosPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-10 w-full rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs"
+                    className="h-10 w-full rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
                   >
                     <span className="flex items-center gap-2 truncate">
                       <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -434,7 +435,7 @@ function UsuariosPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-10 w-full rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs"
+                    className="h-10 w-full rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
                   >
                     <span className="flex items-center gap-2 truncate">
                       <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -496,8 +497,8 @@ function UsuariosPage() {
       </div>
 
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
-        <Button variant="outline" onClick={() => setregisterOpen(false)} className="w-full sm:w-auto h-10 rounded-none border-neutral-200 hover:bg-neutral-100 text-neutral-900 text-xs">Cancelar</Button>
-        <Button onClick={handleRegister} disabled={isSaving} className="w-full sm:w-auto bg-neutral-900 hover:bg-neutral-800 text-white h-10 rounded-none shadow-xs font-medium text-xs">
+        <Button variant="outline" onClick={() => setregisterOpen(false)} className="w-full sm:w-auto h-10 rounded-none border-neutral-200 text-neutral-900 text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
+        <Button onClick={handleRegister} disabled={isSaving} className="cta-gradient border-0 w-full sm:w-auto text-white h-10 rounded-none font-medium text-xs">
           {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
           Cadastrar
         </Button>
@@ -516,7 +517,7 @@ function UsuariosPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 w-full rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs"
+                className="h-10 w-full rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
               >
                 <span className="flex items-center gap-2 truncate">
                   <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -577,7 +578,7 @@ function UsuariosPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 w-full rounded-none gap-2 bg-white hover:bg-neutral-50 border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs"
+                className="h-10 w-full rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
               >
                 <span className="flex items-center gap-2 truncate">
                   <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -632,8 +633,8 @@ function UsuariosPage() {
       </div>
 
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-4">
-        <Button variant="outline" onClick={() => setEditOpen(false)} className="w-full sm:w-auto h-10 rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100 text-xs">Cancelar</Button>
-        <Button onClick={handleUpdatePermissions} disabled={isUpdating} className="w-full sm:w-auto bg-neutral-900 hover:bg-neutral-800 text-white font-medium h-10 rounded-none shadow-xs text-xs">
+        <Button variant="outline" onClick={() => setEditOpen(false)} className="w-full sm:w-auto h-10 rounded-none border-neutral-200 text-neutral-900 text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
+        <Button onClick={handleUpdatePermissions} disabled={isUpdating} className="cta-gradient border-0 w-full sm:w-auto text-white font-medium h-10 rounded-none text-xs">
           {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Salvar Permissões
         </Button>
@@ -645,17 +646,17 @@ function UsuariosPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Usuários do backoffice</h1>
+          <h1 className="page-header-title">Usuários do backoffice</h1>
         </div>
 
         <div className="flex items-center gap-2">
           {isAdmin && (
-            <Button size="sm" onClick={() => setregisterOpen(true)} className="rounded-none bg-neutral-900 hover:bg-neutral-800 text-white shadow-xs text-xs">
+            <Button variant="outline" size="sm" onClick={() => setregisterOpen(true)} className="rounded-none border-neutral-200 text-neutral-900 shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
               <Plus className="mr-2 h-4 w-4" /> Cadastrar Usuário
             </Button>
           )}
 
-          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="rounded-none border-neutral-200 text-neutral-900 hover:bg-neutral-100 shadow-xs text-xs">
+          <Button size="sm" onClick={load} disabled={loading} className="cta-gradient border-0 rounded-none text-white text-xs">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
           </Button>
         </div>
@@ -754,7 +755,7 @@ function UsuariosPage() {
                         <div className="flex items-center justify-end gap-1">
                           {u.role === "viewer" && (
                             <Button variant="ghost" size="sm" onClick={() => openEditPermissions(u)} className="rounded-none hover:bg-neutral-100 text-neutral-900 font-medium text-xs h-8">
-                              <Settings2 className="mr-1 h-3 w-3 text-neutral-500" /> Permissões
+                              <GradientIcon icon={Settings2} size={12} className="mr-1" /> Permissões
                             </Button>
                           )}
                           <Button variant="ghost" size="sm" onClick={() => toggleActive(u)} disabled={isMe} className="rounded-none hover:bg-neutral-100 text-neutral-900 font-medium text-xs h-8">

@@ -26,11 +26,16 @@ import { useIsMobile } from "@/hooks/use-mobile";
 // ============================================================================
 // [CONSTANTES E HELPERS]
 // ============================================================================
-// Paleta neutra para análise vertical (do mais escuro ao mais claro)
-const neutralColors = ["#171717", "#404040", "#737373", "#a3a3a3", "#d4d4d4", "#e5e5e5"];
+// Tinta escura (evolução diária) + rampa azul do design system (--chart-1/2/3)
+// para os rankings — validada como escala ordinal (monotônica, contraste >=2:1
+// no tom mais claro contra o card branco, tons distinguíveis entre si). Ver
+// skill de dataviz. Ciclo de 3 tons; rankings com mais de 3 itens repetem o
+// tom mais claro (identidade real já vem do rótulo direto em cada barra).
+const darkInk = "#404040"; // cinza neutro (mais suave que --foreground puro)
+const chartBlues = ["#2245a5", "#2a72df", "#64a4e8"]; // hsl(var(--chart-1/2/3))
 
 const defaultChartConfig = {
-  count: { label: "Quantidade", color: "#171717" }, // neutral-900
+  count: { label: "Quantidade", color: darkInk },
 } satisfies ChartConfig;
 
 // ============================================================================
@@ -77,7 +82,7 @@ export default function TrafficCharts({
                 <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#737373" }} interval="preserveStartEnd" />
                 <YAxis hide />
                 <ChartTooltip cursor={{ fill: "#f5f5f5", opacity: 0.8 }} content={<ChartTooltipContent className="rounded-none shadow-md border-neutral-200" />} />
-                <Bar dataKey="count" fill="#171717" radius={[0, 0, 0, 0]}>
+                <Bar dataKey="count" fill={darkInk} radius={[0, 0, 0, 0]}>
                   <LabelList dataKey="count" position="top" offset={6} className="fill-neutral-900" fontSize={11} fontWeight={700} formatter={(v: any) => (v > 0 ? v : "")} />
                 </Bar>
               </BarChart>
@@ -132,7 +137,7 @@ export default function TrafficCharts({
                   <ChartTooltip cursor={{ fill: "#f5f5f5", opacity: 0.8 }} content={<ChartTooltipContent className="rounded-none shadow-md border-neutral-200" />} />
                   <Bar dataKey="count" radius={[0, 0, 0, 0]} maxBarSize={28}>
                     {chart.data.map((_: unknown, i: number) => (
-                      <Cell key={i} fill={neutralColors[(i + chart.colorOffset) % neutralColors.length]} />
+                      <Cell key={i} fill={chartBlues[(i + chart.colorOffset) % chartBlues.length]} />
                     ))}
                     <LabelList dataKey="count" position="right" fill="#171717" fontSize={11} fontWeight={700} />
                   </Bar>
