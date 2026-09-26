@@ -92,8 +92,8 @@ function SeguroAutoConsultPage() {
         </main>
       </section>
 
-      {/* 5. [SUPORTE]: Seção estática de educação do consumidor envolta em .dark */}
-      <div className="dark w-full" id="como-funciona">
+      {/* 5. [SUPORTE]: Seção estática de educação do consumidor — HowItWorks agora responde ao tema global (claro/escuro) via seu próprio mapeamento invertido; wrapper .dark local removido */}
+      <div className="w-full" id="como-funciona">
         <HowItWorks />
       </div>
     </>

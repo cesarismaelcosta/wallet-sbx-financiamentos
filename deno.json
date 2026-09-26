@@ -3,7 +3,7 @@
     "deploy": "supabase functions deploy"
   },
   "imports": {
-    "postgres": "https://deno.land/x/postgresjs/mod.js",
+    "postgres": "https://deno.land/x/postgresjs@v3.4.8/mod.js",
     "../_shared/": "./supabase/functions/_shared/"
   },
   "compilerOptions": {

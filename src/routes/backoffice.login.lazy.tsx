@@ -13,7 +13,7 @@
  *    os elementos (Card principal, Botões, Alertas de Erro) adotam `rounded-none`.
  * 2. Neutral Purity: Extinção de variáveis temáticas como `bg-card` ou `primary`. 
  *    Uso explícito da paleta `neutral-900` para focos, `neutral-500` para 
- *    textos secundários e `bg-white` para o contêiner estrutural principal.
+ *    textos secundários e `bg-card` para o contêiner estrutural principal.
  * 3. Scope Inheritance: Mantém a herança de contexto do `BackofficeGuard`.
  * =========================================================================
  */
@@ -103,22 +103,22 @@ function BackofficeLogin() {
   // [OUTPUT]: RENDERIZAÇÃO ESTÉTICA (UI)
   // =========================================================================
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-100 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-accent px-4">
       <div className="w-full max-w-md">
-        <div className="rounded-none border border-neutral-200 bg-white p-8 shadow-md">
+        <div className="rounded-none border border-border bg-card p-8 shadow-md">
           <div className="mb-6 flex justify-center">
-            <WalletLogo size="lg" withTagline centered asLink />
+            <WalletLogo size="lg" withTagline centered asLink followTheme />
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-neutral-900">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-foreground">
             <ShieldCheck className="h-3.5 w-3.5" /> Backoffice
           </div>
           <h1 className="mt-3 page-header-title">
             Acesso restrito
           </h1>
-          <p className="mt-2 text-sm text-neutral-600 leading-relaxed">
+          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
             Entre com sua conta corporativa{" "}
-            <span className="font-bold text-neutral-900">@superbid.net</span>{" "}
+            <span className="font-bold text-foreground">@superbid.net</span>{" "}
             para acessar o painel de operações.
           </p>
 
@@ -145,12 +145,12 @@ function BackofficeLogin() {
               variant="outline"
               onClick={handleGoogle}
               disabled={submitting || authLoading || authorizationLoading}
-              className="h-12 w-full gap-3 rounded-none border-neutral-200 font-bold text-neutral-900 shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
+              className="h-12 w-full gap-3 rounded-none border-border font-bold text-foreground shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
             >
               {submitting || authorizationLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin text-brand-accent" />
-                  <span className="text-neutral-500">
+                  <span className="text-muted-foreground">
                     {authorizationLoading ? "Validando permissões..." : "Estabelecendo handshake…"}
                   </span>
                 </>
@@ -177,7 +177,7 @@ function BackofficeLogin() {
               }}
               variant="ghost"
               size="sm"
-              className="mt-3 w-full rounded-none text-xs text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100"
+              className="mt-3 w-full rounded-none text-xs text-muted-foreground hover:text-foreground hover:bg-accent"
             >
               Forçar saída desta conta
             </Button>

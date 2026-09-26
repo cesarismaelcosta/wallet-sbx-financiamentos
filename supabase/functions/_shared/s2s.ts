@@ -77,7 +77,10 @@ export async function signSigninParameters(data: SigninParameters): Promise<stri
  */
 export async function verifySigninParameters(token: string): Promise<SigninParameters> {
   try {
-    const { payload } = await jwtVerify(token, S2S_SECRET);
+    // 🛡️ [SBXW-08 FIX - extensão]: mesma correção aplicada em jwt.ts, estendida
+    // aqui por consistência: este módulo assina/verifica com a MESMA secret
+    // (JWT_SECRET, via S2S_SECRET) e não tinha allowlist de algoritmo.
+    const { payload } = await jwtVerify(token, S2S_SECRET, { algorithms: ["HS256"] });
     return payload.data as SigninParameters;
   } catch (error) {
     debugLog("🚨 [S2S Crypto] Parâmetros de signin expirados ou adulterados na fronteira.");
@@ -152,7 +155,9 @@ export async function signS2SEntity(entityData: S2SEntity | Record<string, unkno
  */
 export async function verifyS2SEntity(token: string): Promise<S2SEntity> {
   try {
-    const { payload } = await jwtVerify(token, S2S_SECRET);
+    // 🛡️ [SBXW-08 FIX - extensão]: allowlist explícita de algoritmo (ver
+    // verifySigninParameters acima e jwt.ts).
+    const { payload } = await jwtVerify(token, S2S_SECRET, { algorithms: ["HS256"] });
     // 🛡️ Assinatura válida não basta: o shape do perfil também é validado.
     return assertS2SEntity(payload.data);
 

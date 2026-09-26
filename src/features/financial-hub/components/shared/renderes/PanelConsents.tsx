@@ -34,26 +34,26 @@ export function PanelConsents({ configs }: { configs: any[] }) {
   if (!Array.isArray(configs) || configs.length === 0) return null;
 
   return (
-    <div className="rounded-none border border-neutral-200 bg-white p-4 space-y-4 break-inside-avoid shadow-sm">
-      <h4 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5 border-b border-neutral-100 pb-2">
+    <div className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 space-y-4 break-inside-avoid shadow-sm">
+      <h4 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 border-b border-neutral-100 dark:border-neutral-800 pb-2">
         <CheckSquare className="h-3.5 w-3.5" /> Regras de Aceite (Tela)
       </h4>
-      <div className="bg-white rounded-none border border-neutral-200 shadow-xs divide-y divide-neutral-100">
+      <div className="bg-white dark:bg-neutral-900 rounded-none border border-neutral-200 dark:border-neutral-800 shadow-xs divide-y divide-neutral-100 dark:divide-neutral-800">
         {configs.map((config: any, index: number) => {
           // Garante que links internos também sejam arrays iteráveis
           const links = safeArray(config.links);
           
           return (
-            <div key={index} className="p-4 space-y-3 break-inside-avoid hover:bg-neutral-50 transition-colors">
+            <div key={index} className="p-4 space-y-3 break-inside-avoid hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-neutral-900 uppercase tracking-wide">
+                <span className="text-[11px] font-bold text-neutral-900 dark:text-neutral-100 uppercase tracking-wide">
                   {config.id || "Termo N/A"}
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-none border border-neutral-200">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded-none border border-neutral-200 dark:border-neutral-800">
                   {config.is_required || config.required ? "Obrigatório" : "Opcional"}
                 </span>
               </div>
-              <div className="text-[11px] text-neutral-600 leading-relaxed bg-white p-3 rounded-none border border-neutral-200">
+              <div className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed bg-white dark:bg-neutral-900 p-3 rounded-none border border-neutral-200 dark:border-neutral-800">
                 {config.template_text ? (
                   config.template_text.split(/(\{.*?\})/g).map((part: string, i: number) => {
                     if (part.startsWith("{") && part.endsWith("}")) {
@@ -64,7 +64,7 @@ export function PanelConsents({ configs }: { configs: any[] }) {
                       
                       if (!linkConfig) {
                         return (
-                          <span key={i} className="underline font-bold inline mx-0.5 text-neutral-900">
+                          <span key={i} className="underline font-bold inline mx-0.5 text-neutral-900 dark:text-neutral-100">
                             {cleanText}
                           </span>
                         );
@@ -72,7 +72,7 @@ export function PanelConsents({ configs }: { configs: any[] }) {
 
                       if (linkConfig.type === "web" || linkConfig.url) {
                         return (
-                          <a key={i} href={linkConfig.url} target="_blank" rel="noopener noreferrer" className="underline font-bold inline mx-0.5 text-neutral-900 hover:text-neutral-600 transition-colors">
+                          <a key={i} href={linkConfig.url} target="_blank" rel="noopener noreferrer" className="underline font-bold inline mx-0.5 text-neutral-900 dark:text-neutral-100 hover:text-neutral-600 dark:hover:text-neutral-400 transition-colors">
                             {cleanText}
                           </a>
                         );
@@ -82,11 +82,11 @@ export function PanelConsents({ configs }: { configs: any[] }) {
                         return (
                           <Popover key={i}>
                             <PopoverTrigger asChild>
-                              <span className="underline font-bold cursor-pointer border-b border-dashed inline mx-0.5 text-neutral-900 border-neutral-900 hover:text-neutral-600">
+                              <span className="underline font-bold cursor-pointer border-b border-dashed inline mx-0.5 text-neutral-900 dark:text-neutral-100 border-neutral-900 dark:border-neutral-100 hover:text-neutral-600 dark:hover:text-neutral-400">
                                 {cleanText}
                               </span>
                             </PopoverTrigger>
-                            <PopoverContent side="bottom" align="start" className="max-w-xs p-3 bg-white text-neutral-700 text-[11px] rounded-none border border-neutral-200 shadow-xl leading-relaxed z-[100]">
+                            <PopoverContent side="bottom" align="start" className="max-w-xs p-3 bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 text-[11px] rounded-none border border-neutral-200 dark:border-neutral-800 shadow-xl leading-relaxed z-[100]">
                               <p>{linkConfig.tooltip_text}</p>
                             </PopoverContent>
                           </Popover>

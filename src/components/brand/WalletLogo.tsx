@@ -7,14 +7,31 @@
  * =========================================================================
  * @description Renderiza o logo da marca "Wallet sbX" com suporte a tamanhos 
  * variáveis, tagline opcional responsiva e comportamento de navegação (Link).
- * 
+ *
+ * [NEUTRAL PURITY / IMUNIDADE AO TEMA]: Por padrão (`followTheme=false`) o
+ * logo NÃO acompanha o dark mode -- sempre renderiza a versão clara e a
+ * tagline em `neutral-500` fixo. Isso porque este componente é usado em
+ * rotas de cliente (accounts.signin, PanelHeader/navegação do financial-hub,
+ * sbxpay.index, sandbox) que não podem herdar o dark mode ativado via
+ * localStorage["sbx-theme"] pelo ThemeToggle do backoffice. O único consumidor
+ * que deve de fato trocar de tema é o próprio backoffice (`backoffice.lazy.tsx`
+ * e `backoffice.login.lazy.tsx`), que passa `followTheme` explicitamente.
+ *
+ * [MODO NOTURNO ESCOPADO POR PÁGINA]: `forceDark` é um segundo mecanismo,
+ * independente de `followTheme`/`resolvedTheme`. Ele existe para rotas como
+ * `sbxpay.offer` que têm seu próprio toggle noturno local (não ligado ao
+ * ThemeProvider/localStorage["sbx-theme"] global) -- o `PanelHeader` repassa
+ * seu `nightMode` recebido via prop para cá como `forceDark`.
+ *
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
  */
 
 import { Link } from "@tanstack/react-router";
 import logoSrc from "@/assets/wallet-sbx-logo.png";
+import logoSrcDark from "@/assets/wallet-sbx-logo-dark.png";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 
 type WalletLogoProps = {
   /** Largura base do logo. O eixo vertical auto-escala. */
@@ -29,6 +46,19 @@ type WalletLogoProps = {
   className?: string;
   /** Classes CSS adicionais para customização pontual da tagline. */
   taglineClassName?: string;
+  /**
+   * Quando `true`, o logo (imagem + cor da tagline) acompanha o dark mode
+   * resolvido pelo ThemeProvider. Default `false`: o logo fica imune ao tema
+   * (sempre versão clara), pois a maioria dos consumidores é rota de cliente.
+   * Só o backoffice deve passar `true`.
+   */
+  followTheme?: boolean;
+  /**
+   * Força a versão escura do logo independentemente do ThemeProvider global
+   * -- usado por rotas com dark mode escopado só à página (ex.: sbxpay.offer),
+   * cujo estado não passa por `resolvedTheme`. Default `false`.
+   */
+  forceDark?: boolean;
 };
 
 const SIZE_MAP: Record<NonNullable<WalletLogoProps["size"]>, string> = {
@@ -52,7 +82,11 @@ export function WalletLogo({
   centered = false,
   className,
   taglineClassName,
+  followTheme = false,
+  forceDark = false,
 }: WalletLogoProps) {
+  const { resolvedTheme } = useTheme();
+  const isDarkActive = forceDark || (followTheme && resolvedTheme === "dark");
   const content = (
     <span
       className={cn(
@@ -62,7 +96,7 @@ export function WalletLogo({
       )}
     >
       <img
-        src={logoSrc}
+        src={isDarkActive ? logoSrcDark : logoSrc}
         alt="Wallet sbX"
         className={cn(SIZE_MAP[size], "w-auto select-none block")}
         draggable={false}
@@ -70,7 +104,8 @@ export function WalletLogo({
       {withTagline && (
         <span
           className={cn(
-            "font-mono font-medium uppercase text-neutral-500 whitespace-nowrap leading-none select-none",
+            "font-mono font-medium uppercase whitespace-nowrap leading-none select-none",
+            followTheme || forceDark ? "text-muted-foreground" : "text-neutral-500",
             TAGLINE_SIZE[size],
             taglineClassName,
           )}

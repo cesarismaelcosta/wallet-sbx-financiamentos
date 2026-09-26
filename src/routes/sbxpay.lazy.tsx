@@ -31,6 +31,7 @@ import { createLazyFileRoute, Outlet, useNavigate } from "@tanstack/react-router
 // ✨ NOTA: Importamos apenas o Hook. O Componente Provider agora mora no __root.tsx
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHeader";
+import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 import { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import { getDefaultSbxEnvironment, USE_COOKIE, getTokenForPayload } from "@/services/session";
@@ -64,6 +65,8 @@ export const UserDataContext = createContext<{
  * 🎨 [PLACEHOLDER ESTRUTURAL]
  */
 function HomeSkeleton() {
+  const { theme, setTheme } = useTheme();
+  const nightMode = theme === "dark";
   const skeletonSections = [
     { isHero: true, isReverse: false },
     { isHero: false, isReverse: false },
@@ -73,7 +76,7 @@ function HomeSkeleton() {
 
   return (
     <div className="bg-white min-h-screen antialiased font-sans overflow-x-hidden relative flex flex-col">
-      <PanelHeader showNav={true} showAuth={true} links={[]} />
+      <PanelHeader showNav={true} showAuth={true} links={[]} nightMode={nightMode} onToggleNightMode={() => setTheme(nightMode ? "light" : "dark")} />
 
       <div className="flex-1">
         {skeletonSections.map((section, index) => (

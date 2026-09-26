@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* Alinha o variant `dark:` do Tailwind v4 à classe `.dark` que o
+ * ThemeProvider aplica em <html> (equivalente ao `darkMode: ["class"]`
+ * do Tailwind v3 usado no design system de referência). Sem isso, todo
+ * `dark:` no projeto (ThemeToggle, accordion, alert, dropdown-menu,
+ * select) só reage à preferência do sistema operacional, nunca ao
+ * toggle manual -- mesmo com o restante do tema (via `.dark { ... }`
+ * de CSS custom properties, que não depende dessa configuração)
+ * trocando de cor normalmente. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));

@@ -1428,7 +1428,7 @@ function SandboxPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleInspectOffer();
                       }}
-                      className="rounded-none font-mono text-xs border-neutral-300"
+                      className="rounded-none font-mono text-xs border-neutral-300 placeholder:text-neutral-400 focus-visible:ring-neutral-900"
                     />
                     <Button
                       onClick={handleInspectOffer}
@@ -1442,7 +1442,7 @@ function SandboxPage() {
                       onClick={() => handleOpenConsultarOferta(customOfferId)}
                       variant="outline"
                       size="sm"
-                      className="rounded-none text-neutral-700 border-neutral-300 hover:bg-neutral-100"
+                      className="rounded-none bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100 focus-visible:ring-neutral-900"
                     >
                       <Info className="h-3.5 w-3.5 mr-1" /> Detalhes
                     </Button>
@@ -2222,7 +2222,7 @@ function SandboxPage() {
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 flex items-center justify-center"
+                        className="rounded-none bg-white text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 focus-visible:ring-neutral-900 flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Fetch (JSON)
@@ -2253,7 +2253,7 @@ function SandboxPage() {
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 flex items-center justify-center"
+                        className="rounded-none bg-white text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 focus-visible:ring-neutral-900 flex items-center justify-center"
                       >
                         {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
                       </Button>
@@ -2285,7 +2285,7 @@ function SandboxPage() {
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 flex items-center justify-center"
+                        className="rounded-none bg-white text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 focus-visible:ring-neutral-900 flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Fetch (JSON)
@@ -2316,7 +2316,7 @@ function SandboxPage() {
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 flex items-center justify-center"
+                        className="rounded-none bg-white text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 focus-visible:ring-neutral-900 flex items-center justify-center"
                       >
                         {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
                       </Button>

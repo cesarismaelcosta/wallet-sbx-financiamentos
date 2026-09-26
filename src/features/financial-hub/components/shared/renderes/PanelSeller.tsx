@@ -24,16 +24,16 @@ export function PanelSeller({ offer, managerDetails }: { offer: any, managerDeta
   const managerId = offer?.manager_id || managerDetails?.manager_id;
 
   return (
-    <div className="rounded-none border border-neutral-200 bg-white p-4 space-y-3 break-inside-avoid shadow-xs">
-      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5 border-b border-neutral-100 pb-2">
-        <Briefcase size={14} className="text-neutral-900" /> Organizador & Vendedor
+    <div className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 space-y-3 break-inside-avoid shadow-xs">
+      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 border-b border-neutral-100 dark:border-neutral-800 pb-2">
+        <Briefcase size={14} className="text-neutral-900 dark:text-neutral-100" /> Organizador & Vendedor
       </h4>
       <div className="grid grid-cols-2 gap-3 text-xs">
         
         {offer.manager_name && (
           <div className="flex flex-col">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Organizador:</span>
-            <span className="text-neutral-900 font-medium mt-0.5">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Organizador:</span>
+            <span className="text-neutral-900 dark:text-neutral-100 font-medium mt-0.5">
               {offer.manager_name} 
               {managerId ? ` (${managerId})` : ""}
             </span>
@@ -42,15 +42,15 @@ export function PanelSeller({ offer, managerDetails }: { offer: any, managerDeta
         
         {offer.seller_id && (
           <div className="flex flex-col items-end text-right">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Seller ID:</span>
-            <span className="text-neutral-900 font-medium font-mono mt-0.5">{offer.seller_id}</span>
+            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Seller ID:</span>
+            <span className="text-neutral-900 dark:text-neutral-100 font-medium font-mono mt-0.5">{offer.seller_id}</span>
           </div>
         )}
         
         {offer.legal_name && (
-          <div className="col-span-2 flex flex-col pt-2 border-t border-neutral-100 mt-1">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Razão Social (Vendedor):</span>
-            <span className="text-neutral-900 font-medium mt-0.5">
+          <div className="col-span-2 flex flex-col pt-2 border-t border-neutral-100 dark:border-neutral-800 mt-1">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Razão Social (Vendedor):</span>
+            <span className="text-neutral-900 dark:text-neutral-100 font-medium mt-0.5">
               {offer.legal_name} {offer.trade_name ? `(${offer.trade_name})` : ""}
             </span>
           </div>

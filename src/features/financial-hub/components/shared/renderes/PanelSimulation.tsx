@@ -36,17 +36,17 @@ export function PanelSimulation({
   }
 
   return (
-    <div className="rounded-none border border-neutral-200 bg-white p-4 space-y-3 break-inside-avoid shadow-xs">
+    <div className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 space-y-3 break-inside-avoid shadow-xs">
       
       {/* CABEÇALHO DO PAINEL */}
-      <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
-        <h4 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5">
-          <Building2 size={14} className="text-neutral-900" /> Condições da Simulação
+      <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-800 pb-2">
+        <h4 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+          <Building2 size={14} className="text-neutral-900 dark:text-neutral-100" /> Condições da Simulação
         </h4>
         
         {/* Logo do banco apenas na visão de oferta única, se houver. Exceção Zero-Radius: rounded-[6px] */}
         {!hasMultiple && bank?.logo_url && (
-          <div className="flex h-9 w-9 items-center justify-center rounded-[6px] bg-neutral-50 overflow-hidden border border-neutral-200 shrink-0">
+          <div className="flex h-9 w-9 items-center justify-center rounded-[6px] bg-neutral-50 dark:bg-neutral-800 overflow-hidden border border-neutral-200 dark:border-neutral-800 shrink-0">
             <img src={bank.logo_url} className="h-full w-full object-cover rounded-[6px]" alt={bank?.name || "Banco"} />
           </div>
         )}
@@ -60,23 +60,23 @@ export function PanelSimulation({
             const cet = item.cet_rate ? Number(item.cet_rate).toFixed(2) : null;
 
             return (
-              <div key={idx} className="bg-white border border-neutral-200 rounded-none p-3 space-y-2 hover:bg-neutral-50 transition-colors shadow-xs">
+              <div key={idx} className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-3 space-y-2 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors shadow-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-neutral-900">
+                  <span className="text-xs font-medium text-neutral-900 dark:text-neutral-100">
                     {item.description || `Opção ${idx + 1}`}
                   </span>
                   {cet && (
-                    <span className="text-[10px] font-medium bg-neutral-100 text-neutral-900 px-2 py-0.5 rounded-none border border-neutral-200">
+                    <span className="text-[10px] font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 px-2 py-0.5 rounded-none border border-neutral-200 dark:border-neutral-800">
                       {cet}% a.m.
                     </span>
                   )}
                 </div>
                 <div className="flex items-baseline justify-between pt-0.5">
                   <div>
-                    <div className="text-sm font-semibold text-neutral-900">
-                      {item.installments}x <span className="text-neutral-900">{BRL(item.installment_value)}</span>
+                    <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                      {item.installments}x <span className="text-neutral-900 dark:text-neutral-100">{BRL(item.installment_value)}</span>
                     </div>
-                    <div className="text-[11px] text-neutral-400 mt-0.5">
+                    <div className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
                       Total: {BRL(itemTotal)}
                     </div>
                   </div>
@@ -88,22 +88,22 @@ export function PanelSimulation({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           <div className="flex flex-col">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Instituição Financeira:</span> 
-            <span className="text-neutral-900 font-medium mt-0.5">{bank?.name || "—"}</span>
+            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Instituição Financeira:</span> 
+            <span className="text-neutral-900 dark:text-neutral-100 font-medium mt-0.5">{bank?.name || "—"}</span>
           </div>
           
           <div className="flex flex-col">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Valor Financiado:</span> 
-            <span className="text-neutral-900 font-semibold text-sm mt-0.5">{BRL(simulation?.financed_amount)}</span>
+            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Valor Financiado:</span> 
+            <span className="text-neutral-900 dark:text-neutral-100 font-semibold text-sm mt-0.5">{BRL(simulation?.financed_amount)}</span>
           </div>
           
           <div className="flex flex-col">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Parcelas e Taxa:</span> 
-            <span className="text-neutral-900 font-semibold text-sm mt-0.5">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Parcelas e Taxa:</span> 
+            <span className="text-neutral-900 dark:text-neutral-100 font-semibold text-sm mt-0.5">
               {hasInstallments ? `${simulation.installments}x ${BRL(simulation.installment_value)}` : "—"}
             </span>
             {simulation?.cet_rate && (
-              <span className="text-[11px] text-neutral-400 mt-0.5">
+              <span className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
                 Taxa: {Number(simulation.cet_rate).toFixed(2)}% a.m.
               </span>
             )}
@@ -113,9 +113,9 @@ export function PanelSimulation({
 
       {/* RETORNO DO PARCEIRO */}
       {simulation?.result_partner_types?.description && (
-        <div className="pt-2 border-t border-neutral-100 text-xs space-y-1">
-          <span className="text-neutral-400 block font-medium uppercase tracking-wider text-[10px]">Retorno do Parceiro / Motivo:</span>
-          <p className="text-neutral-700 font-normal leading-relaxed bg-neutral-50 p-2.5 rounded-none border border-neutral-200">
+        <div className="pt-2 border-t border-neutral-100 dark:border-neutral-800 text-xs space-y-1">
+          <span className="text-neutral-400 dark:text-neutral-500 block font-medium uppercase tracking-wider text-[10px]">Retorno do Parceiro / Motivo:</span>
+          <p className="text-neutral-700 dark:text-neutral-300 font-normal leading-relaxed bg-neutral-50 dark:bg-neutral-800 p-2.5 rounded-none border border-neutral-200 dark:border-neutral-800">
             {simulation.result_partner_types.description}
           </p>
         </div>

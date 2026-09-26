@@ -19,9 +19,12 @@ import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { ButtonWhatsApp } from "@/features/financial-hub/components/layout/ButtonWhatsApp";
+import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 
 export function Step5Confirm() {
   const { state, update, goTo } = useWizard<any>();
+  const { theme } = useTheme();
+  const nightMode = theme === "dark";
 
   // Estados locais de UI
   const [status, setStatus] = useState<"loading" | "success" | "denied" | "error">("loading");
@@ -66,8 +69,8 @@ export function Step5Confirm() {
       {/* 1. ESTADO DE CARREGAMENTO */}
       {status === "loading" && (
         <div className="flex flex-col items-center gap-3 py-12">
-          <Loader2 className="h-10 w-10 animate-spin text-neutral-900" strokeWidth={1.5} />
-          <h2 className="text-lg font-bold text-neutral-900 tracking-tight">Analisando proposta...</h2>
+          <Loader2 className="h-10 w-10 animate-spin text-neutral-900 dark:text-neutral-100" strokeWidth={1.5} />
+          <h2 className="text-lg font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">Analisando proposta...</h2>
         </div>
       )}
 
@@ -79,24 +82,24 @@ export function Step5Confirm() {
             <>
               <div className="w-36 h-36 flex items-center justify-center mb-2">
                 <img
-                  src="/assets/home/carhomeequity.webp"
+                  src={nightMode ? "/assets/home/carhomeequity-dark.webp" : "/assets/home/carhomeequity.webp"}
                   alt="Proposta enviada"
-                  className="mix-blend-multiply w-full h-auto object-contain relative"
+                  className={`w-full h-auto object-contain relative ${nightMode ? "" : "mix-blend-multiply"}`}
                 />
               </div>
 
               <div className="space-y-2 max-w-sm mx-auto">
-                <h2 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">Proposta enviada!</h2>
-                <p className="text-sm text-neutral-600 leading-relaxed">
+                <h2 className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">Proposta enviada!</h2>
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                   Recebemos sua proposta. Entraremos em contato pelo e-mail{" "}
-                  <strong className="text-neutral-900">{state.data?.eligibility?.email}</strong>.
+                  <strong className="text-neutral-900 dark:text-neutral-100">{state.data?.eligibility?.email}</strong>.
                 </p>
               </div>
 
               {/* Protocolo com Zero-Radius */}
               {state.data?.proposalId && (
-                <div className="rounded-none border border-neutral-200 bg-surface-alt px-4 py-2.5 text-sm text-neutral-700 shadow-xs">
-                  Protocolo: <strong className="text-neutral-900">{state.data.proposalId}</strong>
+                <div className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-4 py-2.5 text-sm text-neutral-700 dark:text-neutral-300 shadow-xs">
+                  Protocolo: <strong className="text-neutral-900 dark:text-neutral-100">{state.data.proposalId}</strong>
                 </div>
               )}
             </>
@@ -107,15 +110,15 @@ export function Step5Confirm() {
             <>
               <div className="w-36 h-36 flex items-center justify-center mb-2">
                 <img
-                  src="/assets/home/financiamentocreditonegada.webp"
+                  src={nightMode ? "/assets/home/financiamentocreditonegada-dark.webp" : "/assets/home/financiamentocreditonegada.webp"}
                   alt="Proposta não aprovada"
-                  className="mix-blend-multiply w-full h-auto object-contain relative"
+                  className={`w-full h-auto object-contain relative ${nightMode ? "" : "mix-blend-multiply"}`}
                 />
               </div>
 
               <div className="space-y-2 max-w-xs mx-auto">
-                <h3 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">Proposta não aprovada</h3>
-                <p className="text-sm text-neutral-600 leading-relaxed">
+                <h3 className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">Proposta não aprovada</h3>
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                   Infelizmente, não foi possível prosseguir neste momento com os dados informados.
                 </p>
               </div>
@@ -129,13 +132,13 @@ export function Step5Confirm() {
                 <img
                   src="/assets/home/financiamentoveiculosnegada.png"
                   alt="Erro na comunicação"
-                  className="mix-blend-multiply w-full h-auto object-contain relative"
+                  className={`w-full h-auto object-contain relative ${nightMode ? "" : "mix-blend-multiply"}`}
                 />
               </div>
 
               <div className="space-y-2 max-w-xs mx-auto">
-                <h3 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight">Ops, algo deu errado</h3>
-                <p className="text-sm text-neutral-600 leading-relaxed">
+                <h3 className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">Ops, algo deu errado</h3>
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                   Houve um problema na comunicação. Por favor, tente novamente.
                 </p>
               </div>
@@ -143,12 +146,12 @@ export function Step5Confirm() {
           )}
 
           {/* Botões: Layout Horizontal Padronizado com Zero-Radius e Neutral Purity */}
-          <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 pt-6 w-full border-t border-neutral-200">
+          <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 pt-6 w-full border-t border-neutral-200 dark:border-neutral-800">
             {/* Botão Voltar / Recomeçar */}
             <Button
               variant="ghost"
               onClick={handleRestart}
-              className="w-full sm:w-auto rounded-none text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900 font-medium transition-colors"
+              className="w-full sm:w-auto rounded-none text-[#2246A7] hover:bg-[#E7F2FD] dark:hover:bg-neutral-800 hover:text-[#2246A7] font-medium transition-colors"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               {status === "success" ? "Voltar ao início" : "Tentar novamente"}
@@ -161,6 +164,7 @@ export function Step5Confirm() {
                 variant="button"
                 config={state.data?.integration_details}
                 data={state.data}
+                className="border-[#2246A7] text-[#2246A7] hover:bg-[#2246A7] hover:text-white"
               />
             </div>
           </div>

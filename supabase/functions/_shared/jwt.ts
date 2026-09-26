@@ -121,7 +121,9 @@ export async function generateSessionToken(
  */
 export async function verifySessionToken(token: string): Promise<SessionValidationResult> {
   try {
-    const { payload } = await jwtVerify(token, getJwtSecret());
+    // 🛡️ [SBXW-08 FIX]: algoritmo aceito fixado explicitamente, em vez de
+    // depender apenas do comportamento padrão da lib pra uma chave simétrica.
+    const { payload } = await jwtVerify(token, getJwtSecret(), { algorithms: ["HS256"] });
 
     // [PLANO 1b]: Compatibilidade: tokens legados não têm `typ` e continuam aceitos como sessão.
     // Rejeita bloqueando sumariamente se um token de transporte for usado como sessão.
@@ -130,6 +132,21 @@ export async function verifySessionToken(token: string): Promise<SessionValidati
         valid: false,
         errorCode: "JWT_MALFORMED_TOKEN",
         errorMessage: "Token de transporte não pode ser usado como sessão.",
+      };
+    }
+
+    // 🛡️ [SBXW-28 FIX]: a checagem de `typ` acima só rejeita quando o campo
+    // EXISTE e é diferente de "session" — por compatibilidade com tokens
+    // legados sem `typ`. Isso deixava passar o token de handoff assinado em
+    // `s2s.ts` (`signSigninParameters`), que usa a mesma secret (`JWT_SECRET`)
+    // mas nunca seta `typ` nem `userId` (seu payload é `{ data: {...} }`).
+    // Sem este check, esse token seguia como sessão "válida" com userId vazio.
+    const rawUserId = typeof payload.userId === "string" ? payload.userId.trim() : "";
+    if (!rawUserId) {
+      return {
+        valid: false,
+        errorCode: "JWT_MALFORMED_TOKEN",
+        errorMessage: "Token sem identificador de usuário não pode ser usado como sessão.",
       };
     }
 
@@ -152,7 +169,7 @@ export async function verifySessionToken(token: string): Promise<SessionValidati
         session_token: token,
         issue_at: payload.iat ? new Date(Number(payload.iat) * 1000).toISOString() : new Date().toISOString(),
         expires_in: 7200,
-        userId: String(payload.userId || ""),
+        userId: rawUserId,
         userName: String(payload.userName || ""),
         login: String(payload.login || ""),
       },
@@ -272,7 +289,8 @@ export async function verifyExchangeToken(
 ): Promise<ExchangeValidationResult> {
   let payload: any;
   try {
-    const verified = await jwtVerify(token, getJwtSecret());
+    // 🛡️ [SBXW-08 FIX]: algoritmo aceito fixado explicitamente.
+    const verified = await jwtVerify(token, getJwtSecret(), { algorithms: ["HS256"] });
     payload = verified.payload;
   } catch (err: any) {
     const errMessage = (err.message || "").toLowerCase();

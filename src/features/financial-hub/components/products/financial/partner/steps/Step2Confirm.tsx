@@ -53,30 +53,30 @@ export function Step2Confirm() {
   return (
     // Max-w-lg e mx-auto centralizam e dão respiro lateral em telas grandes
     <div className="w-full max-w-lg mx-auto space-y-10">
-      <div className="bg-white space-y-4">
+      <div className="bg-white dark:bg-neutral-950 space-y-4">
         
         {isApproved ? (
           <>
             {/* Header: Ícone oculto no mobile (hidden sm:flex), linhas mais juntas (space-y-0.5) e maior respiro (mb-6) */}
             <div className="flex items-start gap-4 mb-6">
-              <div className="bg-neutral-100 p-2.5 rounded-none border border-neutral-200 shrink-0 hidden sm:flex">
-                <ThumbsUp className="h-6 w-6 text-neutral-900" />
+              <div className="bg-neutral-100 dark:bg-neutral-800 p-2.5 rounded-none border border-neutral-200 dark:border-neutral-800 shrink-0 hidden sm:flex">
+                <ThumbsUp className="h-6 w-6 text-neutral-900 dark:text-neutral-100" />
               </div>
               
               <div className="space-y-0.5 flex-1 w-0 min-w-0">
                 {/* Clamp de 14px com peso black e truncate, igual ao Step 1 */}
-                <h3 className="text-[clamp(14px,3.5vw,20px)] sm:text-2xl font-black text-neutral-900 uppercase tracking-tight leading-snug truncate w-full block">
+                <h3 className="text-[clamp(14px,3.5vw,20px)] sm:text-2xl font-black text-neutral-900 dark:text-neutral-100 uppercase tracking-tight leading-snug truncate w-full block">
                   Oferta encontrada
                 </h3>
                 
                 {/* Cores convertidas de slate para neutral */}
-                <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 truncate pt-0.5 w-full block">
+                <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 dark:text-neutral-400 truncate pt-0.5 w-full block">
                   {offerDescText}
                 </p>
 
                 <div className="flex items-center pt-0.5">
-                  <p className="text-sm text-neutral-600 truncate">
-                    Lote {loteSubIndex} • <strong className="text-neutral-900 font-bold mr-2">{BRL(valorOferta)}</strong>
+                  <p className="text-sm text-neutral-600 dark:text-neutral-400 truncate">
+                    Lote {loteSubIndex} • <strong className="text-neutral-900 dark:text-neutral-100 font-bold mr-2">{BRL(valorOferta)}</strong>
                   </p>
 
                   {offer && (
@@ -84,7 +84,7 @@ export function Step2Confirm() {
                       href={getSuperbidUrl(offer)} 
                       target="_blank" 
                       rel="noopener noreferrer" 
-                      className="text-neutral-400 hover:text-neutral-700 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
+                      className="text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
                       title="Ver oferta original na Superbid"
                     >
                       <ExternalLink size={18} strokeWidth={1.5} />
@@ -95,10 +95,10 @@ export function Step2Confirm() {
             </div>
 
             {/* Box da Oferta: Padrão Zero-Radius e Neutral */}
-            <div className="bg-surface-alt border border-neutral-200 rounded-none p-6 sm:p-8 space-y-3 overflow-hidden">
+            <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-6 sm:p-8 space-y-3 overflow-hidden">
               
               {/* Texto inline (sem flexbox) e com condicional exata validada para 'sem entrada' */}
-              <p className="text-neutral-600 text-[11px] sm:text-sm font-medium mb-1 leading-tight w-full">
+              <p className="text-neutral-600 dark:text-neutral-400 text-[11px] sm:text-sm font-medium mb-1 leading-tight w-full">
                 {valorEntradaAPI > 0 ? (
                   <>
                     ent. <span className="text-[0.85em]">R$</span> {BRL(valorEntradaAPI).replace("R$", "").trim()} +{" "}
@@ -114,7 +114,7 @@ export function Step2Confirm() {
                 
                 {/* Multiplicador: Fim do var(--brand-primary), agora é neutral-500 */}
                 <span 
-                  className="font-medium text-neutral-500 shrink-0 mr-1.5 sm:mr-2" 
+                  className="font-medium text-neutral-500 dark:text-neutral-400 shrink-0 mr-1.5 sm:mr-2" 
                   style={{ fontSize: "clamp(1.2rem, 5.5vw, 1.5rem)" }}
                 >
                   {mainConsult?.installments}x
@@ -122,7 +122,7 @@ export function Step2Confirm() {
                 
                 {/* Símbolo R$ no mesmo nível */}
                 <span 
-                  className="font-bold text-brand-accent tracking-tight shrink-0 mr-1"
+                  className="font-bold text-[#2246A7] tracking-tight shrink-0 mr-1"
                   style={{ fontSize: "clamp(1.2rem, 5.25vw, 1.68rem)" }}
                 >
                   R$
@@ -130,7 +130,7 @@ export function Step2Confirm() {
 
                 {/* Valor Principal (Diretamente no mesmo nível) */}
                 <span 
-                  className="font-bold text-brand-accent tracking-tight shrink-0"
+                  className="font-bold text-[#2246A7] tracking-tight shrink-0"
                   style={{ fontSize: "clamp(1.6rem, 7vw, 2.25rem)" }}
                 >
                   {BRL(mainConsult?.installment_value || 0).replace("R$", "").trim()}
@@ -138,7 +138,7 @@ export function Step2Confirm() {
 
                 {/* Sufixo (/mês) */}
                 <span 
-                  className="text-neutral-400 font-medium shrink-0 ml-1.5 sm:ml-2"
+                  className="text-neutral-400 dark:text-neutral-500 font-medium shrink-0 ml-1.5 sm:ml-2"
                   style={{ fontSize: "clamp(0.7rem, 3vw, 0.875rem)" }}
                 >
                   /mês*
@@ -146,13 +146,13 @@ export function Step2Confirm() {
               </div>
 
               {/* Escala neutral na taxa de juros */}
-              <div className="text-xs text-neutral-500 mt-3 pt-3 border-t border-neutral-200">
-                Taxa de juros de <span className="font-bold text-neutral-900">{Number(mainConsult?.cet_rate || 0).toFixed(2)}%</span> a.m.
+              <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-800">
+                Taxa de juros de <span className="font-bold text-neutral-900 dark:text-neutral-100">{Number(mainConsult?.cet_rate || 0).toFixed(2)}%</span> a.m.
               </div>
             </div>
 
             {/* Disclaimer */}
-            <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+            <p className="text-[11px] text-neutral-400 dark:text-neutral-500 font-medium leading-relaxed">
               *As condições apresentadas não são garantia de aprovação. Fale com nossos especialistas para seguirmos com a análise da sua linha de crédito.
             </p>
 
@@ -163,7 +163,7 @@ export function Step2Confirm() {
               <Button 
                 variant="ghost" 
                 onClick={back}
-                className="w-full sm:w-auto text-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/10 hover:text-[var(--brand-primary)] transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+                className="w-full sm:w-auto text-[#2246A7] hover:bg-[#E7F2FD] dark:hover:bg-neutral-800 hover:text-[#2246A7] transition-all focus-visible:ring-2 focus-visible:ring-[#2246A7] focus-visible:ring-offset-2"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> 
                 Voltar
@@ -175,6 +175,7 @@ export function Step2Confirm() {
                     variant="button"
                     config={state.data?.integration_details} 
                     data={state.data} 
+                    className="border-[#2246A7] text-[#2246A7] hover:bg-[#2246A7] hover:text-white"
                 />
               </div>
 
@@ -184,19 +185,19 @@ export function Step2Confirm() {
           /* Estado de Recusa - Padronizado e Minimalista */
           <div className="text-center py-12 space-y-6 flex flex-col items-center">
 
-            <div className="bg-neutral-100 p-4 rounded-none w-fit border border-neutral-200">
-              <ShieldCheck className="h-8 w-8 text-neutral-900" />
+            <div className="bg-neutral-100 dark:bg-neutral-800 p-4 rounded-none w-fit border border-neutral-200 dark:border-neutral-800">
+              <ShieldCheck className="h-8 w-8 text-neutral-900 dark:text-neutral-100" />
             </div>
 
             <div className="space-y-2 max-w-xs mx-auto">
-              <h3 className="text-xl font-bold text-slate-900 tracking-tight">Nenhuma oferta disponível</h3>
-              <p className="text-sm text-slate-500 leading-relaxed">
+              <h3 className="text-xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">Nenhuma oferta disponível</h3>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                 No momento não encontramos condições para os dados informados.
               </p>
             </div>
 
-            <div className="bg-slate-50 px-4 py-2 rounded-lg border border-slate-100">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            <div className="bg-neutral-50 dark:bg-neutral-900 px-4 py-2 rounded-none border border-neutral-200 dark:border-neutral-800">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
                 Sugestão: Tente aumentar a entrada.
               </p>
             </div>
@@ -205,7 +206,7 @@ export function Step2Confirm() {
             <Button 
               variant="ghost" 
               onClick={back}
-              className="text-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/10 hover:text-[var(--brand-primary)] transition-all focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+              className="text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100 transition-all focus-visible:ring-2 focus-visible:ring-neutral-900 dark:focus-visible:ring-neutral-100 focus-visible:ring-offset-2"
             >
               <ArrowLeft className="mr-2 h-4 w-4" /> Simular novamente
             </Button>

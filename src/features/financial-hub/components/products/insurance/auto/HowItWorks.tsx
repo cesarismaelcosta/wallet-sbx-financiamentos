@@ -6,8 +6,8 @@
  * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-RADIUS, CLEAN ICONS & WHITE HIGHLIGHTS
  * =========================================================================
  * 1. {Zero-Radius Strict Governance}: Eliminação total de arredondamentos (`rounded-none`).
- * 2. {Solid Black Region}: Fundo preto institucional explícito (`bg-[#1D1D1B]`) com 
- *    cartões e container interno em `bg-neutral-900` e bordas em `border-white/20`.
+ * 2. {Solid Black Region}: Fundo preto institucional explícito (`bg-[#1D1D1B] dark:bg-neutral-50`) com 
+ *    cartões e container interno em `bg-neutral-900 dark:bg-neutral-100` e bordas em `border-white/20 dark:border-neutral-900/20`.
  * 3. {SBX Typography}: Títulos e Abas monoespaçados, uppercase e espaçados (tracking), 
  *    com ícones/bullets mutados (neutral-400) e descrições em branco puro para leitura fluida.
  */
@@ -60,14 +60,14 @@ export function HowItWorks() {
   const activeData = TABS_CONFIG.find(t => t.id === activeTab)!;
 
   return (
-    <section id="como-funciona" className="scroll-mt-24 py-16 lg:py-16 bg-[#1D1D1B] text-white font-sans border-b border-white/20 rounded-none">
+    <section id="como-funciona" className="scroll-mt-24 py-16 lg:py-16 bg-[#1D1D1B] dark:bg-neutral-50 text-white dark:text-neutral-900 font-sans border-b border-white/20 dark:border-neutral-900/20 rounded-none">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         
         <div className="text-center mb-12">
-          <h2 className="text-2xl sm:text-3xl font-semibold text-white mb-4 tracking-tight">
+          <h2 className="text-2xl sm:text-3xl font-semibold text-white dark:text-neutral-900 mb-4 tracking-tight">
             Como comparar cotações de seguro
           </h2>
-          <p className="text-white/80 max-w-2xl mx-auto text-sm sm:text-base leading-relaxed">
+          <p className="text-white/80 dark:text-neutral-900/80 max-w-2xl mx-auto text-sm sm:text-base leading-relaxed">
             Entenda como personalizar o seu seguro e comparar as diversas opções disponíveis.
           </p>
         </div>
@@ -83,11 +83,11 @@ export function HowItWorks() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-6 py-3 rounded-none font-mono text-xs uppercase tracking-[0.1em] transition-all border ${
                   isActive 
-                    ? 'bg-white text-neutral-900 border-white shadow-xs' 
-                    : 'bg-neutral-900 text-neutral-400 border-white/20 hover:border-white/40 hover:text-white'
+                    ? 'bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white border-white dark:border-neutral-900 shadow-xs' 
+                    : 'bg-neutral-900 dark:bg-neutral-100 text-neutral-400 border-white/20 dark:border-neutral-900/20 hover:border-white/40 dark:hover:border-neutral-900/40 hover:text-white dark:hover:text-neutral-900'
                 }`}
               >
-                <Icon size={16} strokeWidth={1.5} className={isActive ? 'text-neutral-900' : 'text-neutral-400'} /> 
+                <Icon size={16} strokeWidth={1.5} className={isActive ? 'text-neutral-900 dark:text-white' : 'text-neutral-400'} /> 
                 {tab.label}
               </button>
             );
@@ -95,24 +95,24 @@ export function HowItWorks() {
         </div>
 
         {/* Conteúdo Dinâmico */}
-        <div className="bg-neutral-900 p-6 md:p-10 rounded-none border border-white/20 min-h-[420px]">
+        <div className="bg-neutral-900 dark:bg-neutral-100 p-6 md:p-10 rounded-none border border-white/20 dark:border-neutral-900/20 min-h-[420px]">
           {/* Texto descritivo da aba */}
-          <p className="text-white font-medium mb-8 text-center max-w-3xl mx-auto text-sm sm:text-base leading-relaxed">
+          <p className="text-white dark:text-neutral-900 font-medium mb-8 text-center max-w-3xl mx-auto text-sm sm:text-base leading-relaxed">
             {activeData.desc}
           </p>
           
           <div className={`grid ${activeData.grid} gap-6`}>
             {activeData.items.map((item) => (
-              <div key={item.title} className="bg-[#1D1D1B] p-6 sm:p-8 rounded-none border border-white/20 flex flex-col shadow-xs transition-all hover:bg-[#1D1D1B]/80">
+              <div key={item.title} className="bg-[#1D1D1B] dark:bg-neutral-50 p-6 sm:p-8 rounded-none border border-white/20 dark:border-neutral-900/20 flex flex-col shadow-xs transition-all hover:bg-[#1D1D1B]/80 dark:hover:bg-neutral-50/80">
                 
                 {/* Título SBX: Mono, Uppercase, Tracking largo, Branco puro */}
-                <h4 className="font-mono text-sm uppercase tracking-[0.18em] text-white mb-5">
+                <h4 className="font-mono text-sm uppercase tracking-[0.18em] text-white dark:text-neutral-900 mb-5">
                   {item.title}
                 </h4>
                 
                 <ul className="space-y-3">
                   {item.points.map((p, idx) => (
-                    <li key={idx} className="flex items-start gap-3 text-sm text-white leading-relaxed">
+                    <li key={idx} className="flex items-start gap-3 text-sm text-white dark:text-neutral-900 leading-relaxed">
                       {/* Check icon atua como o "ícone mutado" (neutral-400) do nosso padrão */}
                       <Check className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" strokeWidth={2} />
                       <span>{p}</span>

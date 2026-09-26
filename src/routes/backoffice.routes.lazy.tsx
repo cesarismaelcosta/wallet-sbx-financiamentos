@@ -107,23 +107,23 @@ function PaymentFactorsBuilder({ factors = {}, onChange }: { factors: Record<str
   const addEntry = () => setEntries([...entries, { term: "", factor: "" }]);
 
   return (
-    <div className="space-y-2 pt-2 border-t border-neutral-200">
+    <div className="space-y-2 pt-2 border-t border-border">
       <div className="flex justify-between items-center">
-        <label className="text-[10px] font-medium text-neutral-400 uppercase">Fatores de Pagamento por Prazo</label>
-        <button type="button" onClick={addEntry} className="text-[10px] font-medium text-neutral-900 hover:underline flex items-center">
+        <label className="text-[10px] font-medium text-muted-foreground uppercase">Fatores de Pagamento por Prazo</label>
+        <button type="button" onClick={addEntry} className="text-[10px] font-medium text-foreground hover:underline flex items-center">
           <Plus size={12} className="mr-0.5" /> Adicionar Fator
         </button>
       </div>
 
       {entries.length === 0 ? (
-        <p className="text-[10px] text-neutral-400 italic">Nenhum fator customizado configurado.</p>
+        <p className="text-[10px] text-muted-foreground italic">Nenhum fator customizado configurado.</p>
       ) : (
-        <div className="space-y-2 bg-neutral-50 p-2.5 rounded-none border border-neutral-200">
+        <div className="space-y-2 bg-muted p-2.5 rounded-none border border-border">
           {entries.map((entry, idx) => (
             <div key={idx} className="flex items-center gap-2">
-              <div className="w-1/3"><Input placeholder="Prazo" value={entry.term} onChange={(e) => updateEntry(idx, "term", e.target.value)} className="h-8 text-xs font-mono bg-white rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
-              <div className="flex-1"><Input type="number" step="0.00000001" placeholder="Fator" value={entry.factor} onChange={(e) => updateEntry(idx, "factor", e.target.value)} className="h-8 text-xs font-mono bg-white rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
-              <button type="button" onClick={() => removeEntry(idx)} className="text-neutral-400 hover:text-destructive transition-colors p-1" title="Remover"><X size={14} /></button>
+              <div className="w-1/3"><Input placeholder="Prazo" value={entry.term} onChange={(e) => updateEntry(idx, "term", e.target.value)} className="h-8 text-xs font-mono bg-card rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
+              <div className="flex-1"><Input type="number" step="0.00000001" placeholder="Fator" value={entry.factor} onChange={(e) => updateEntry(idx, "factor", e.target.value)} className="h-8 text-xs font-mono bg-card rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
+              <button type="button" onClick={() => removeEntry(idx)} className="text-muted-foreground hover:text-destructive transition-colors p-1" title="Remover"><X size={14} /></button>
             </div>
           ))}
         </div>
@@ -163,42 +163,42 @@ function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: any; onU
   };
 
   return (
-    <div className="bg-white border border-neutral-200 rounded-none p-4 shadow-sm relative group">
-      <button onClick={onRemove} className="absolute top-3 right-3 text-neutral-300 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" title="Remover Termo"><X size={16} /></button>
+    <div className="bg-card border border-border rounded-none p-4 shadow-sm relative group">
+      <button onClick={onRemove} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" title="Remover Termo"><X size={16} /></button>
       <div className="grid gap-4">
         <div className="flex gap-4 items-end">
           <div className="flex-1 space-y-1.5">
-            <label className="text-[10px] font-medium text-neutral-400 uppercase">ID do Termo</label>
-            <Input value={consent.id} onChange={(e) => onUpdate({ ...consent, id: e.target.value })} className="h-8 text-xs font-mono bg-neutral-50 rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" />
+            <label className="text-[10px] font-medium text-muted-foreground uppercase">ID do Termo</label>
+            <Input value={consent.id} onChange={(e) => onUpdate({ ...consent, id: e.target.value })} className="h-8 text-xs font-mono bg-muted rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" />
           </div>
           <div className="flex items-center gap-2 mb-1.5">
             <Switch checked={consent.is_required} onCheckedChange={(v) => onUpdate({ ...consent, is_required: v })} />
-            <span className="text-[10px] font-medium text-neutral-400 uppercase">Obrigatório?</span>
+            <span className="text-[10px] font-medium text-muted-foreground uppercase">Obrigatório?</span>
           </div>
         </div>
 
         <div className="space-y-1.5">
           <div className="flex justify-between items-center">
-            <label className="text-[10px] font-medium text-neutral-400 uppercase">Texto do Termo</label>
-            <button onClick={handleInsertTag} className="text-[10px] font-medium text-white bg-neutral-900 px-2 py-1 rounded-none hover:bg-neutral-800 flex items-center shadow-xs" type="button">🔗 Criar Link</button>
+            <label className="text-[10px] font-medium text-muted-foreground uppercase">Texto do Termo</label>
+            <button onClick={handleInsertTag} className="text-[10px] font-medium text-background bg-foreground px-2 py-1 rounded-none hover:bg-foreground/90 flex items-center shadow-xs" type="button">🔗 Criar Link</button>
           </div>
-          <textarea ref={textareaRef} value={consent.template_text || ""} onChange={(e) => handleTextChange(e.target.value)} className="w-full h-16 border border-neutral-200 rounded-none p-2 text-xs outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 resize-none" placeholder="Ex: Concordo com a Política." />
+          <textarea ref={textareaRef} value={consent.template_text || ""} onChange={(e) => handleTextChange(e.target.value)} className="w-full h-16 border border-border rounded-none p-2 text-xs outline-none focus:border-foreground focus:ring-1 focus:ring-foreground resize-none" placeholder="Ex: Concordo com a Política." />
         </div>
 
         {consent.links && consent.links.length > 0 && (
-          <div className="bg-neutral-50 rounded-none p-3 border border-neutral-200 space-y-2 mt-1">
-            <h5 className="text-[10px] font-medium text-neutral-400 uppercase mb-2">Configuração dos Links</h5>
+          <div className="bg-muted rounded-none p-3 border border-border space-y-2 mt-1">
+            <h5 className="text-[10px] font-medium text-muted-foreground uppercase mb-2">Configuração dos Links</h5>
             {consent.links.map((link: any, idx: number) => (
-              <div key={idx} className="flex flex-col gap-2.5 bg-white p-3 rounded-none border border-neutral-200 shadow-sm">
+              <div key={idx} className="flex flex-col gap-2.5 bg-card p-3 rounded-none border border-border shadow-sm">
                 <div className="flex items-start justify-between gap-3 w-full">
                   <div className="flex-1">
-                    <span className="text-[9px] font-medium text-neutral-400 block uppercase mb-0.5">Texto Destacado</span>
-                    <span className="text-xs font-medium text-neutral-900 leading-snug block">{link.text}</span>
+                    <span className="text-[9px] font-medium text-muted-foreground block uppercase mb-0.5">Texto Destacado</span>
+                    <span className="text-xs font-medium text-foreground leading-snug block">{link.text}</span>
                   </div>
                   <div className="w-[120px]">
                     <Select value={link.type} onValueChange={(v) => updateLinkConfig(idx, { type: v })}>
-                      <SelectTrigger className="h-8 text-[11px] bg-neutral-50 rounded-none border-neutral-200"><SelectValue /></SelectTrigger>
-                      <SelectContent className="rounded-none border-neutral-200">
+                      <SelectTrigger className="h-8 text-[11px] bg-muted rounded-none border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent className="rounded-none border-border">
                         <SelectItem value="web" className="rounded-none cursor-pointer">Link Web</SelectItem>
                         <SelectItem value="tooltip" className="rounded-none cursor-pointer">Tooltip</SelectItem>
                       </SelectContent>
@@ -207,9 +207,9 @@ function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: any; onU
                 </div>
                 <div className="w-full">
                   {link.type === "web" ? (
-                    <Input type="url" placeholder="https://..." value={link.url || ""} onChange={(e) => updateLinkConfig(idx, { url: e.target.value })} className="h-8 text-xs w-full bg-neutral-50 rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" />
+                    <Input type="url" placeholder="https://..." value={link.url || ""} onChange={(e) => updateLinkConfig(idx, { url: e.target.value })} className="h-8 text-xs w-full bg-muted rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" />
                   ) : (
-                    <textarea placeholder="Balão de ajuda..." value={link.tooltip_text || ""} onChange={(e) => updateLinkConfig(idx, { tooltip_text: e.target.value })} className="w-full min-h-[70px] border border-neutral-200 rounded-none p-2.5 text-xs outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 resize-y bg-neutral-50" />
+                    <textarea placeholder="Balão de ajuda..." value={link.tooltip_text || ""} onChange={(e) => updateLinkConfig(idx, { tooltip_text: e.target.value })} className="w-full min-h-[70px] border border-border rounded-none p-2.5 text-xs outline-none focus:border-foreground focus:ring-1 focus:ring-foreground resize-y bg-muted" />
                   )}
                 </div>
               </div>
@@ -224,23 +224,23 @@ function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: any; onU
 function TextPartsBuilder({ label, parts = [], onChange }: { label: string; parts: any[]; onChange: (p: any[]) => void; }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-[10px] font-medium text-neutral-400 uppercase">{label}</label>
-      <div className="space-y-2 bg-neutral-50 p-2.5 border border-neutral-200 rounded-none">
+      <label className="text-[10px] font-medium text-muted-foreground uppercase">{label}</label>
+      <div className="space-y-2 bg-muted p-2.5 border border-border rounded-none">
         {parts.map((part, idx) => (
           <div key={idx} className="flex gap-2 items-center">
-            <Input value={part.text} onChange={(e) => { const n = [...parts]; n[idx].text = e.target.value; onChange(n); }} className="h-8 text-xs flex-1 bg-white rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" placeholder="Digite..." />
+            <Input value={part.text} onChange={(e) => { const n = [...parts]; n[idx].text = e.target.value; onChange(n); }} className="h-8 text-xs flex-1 bg-card rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" placeholder="Digite..." />
             <Select value={part.type || "normal"} onValueChange={(v) => { const n = [...parts]; n[idx].type = v; onChange(n); }}>
-              <SelectTrigger className="h-8 w-28 text-[11px] bg-white rounded-none border-neutral-200"><SelectValue /></SelectTrigger>
-              <SelectContent className="rounded-none border-neutral-200">
+              <SelectTrigger className="h-8 w-28 text-[11px] bg-card rounded-none border-border"><SelectValue /></SelectTrigger>
+              <SelectContent className="rounded-none border-border">
                 <SelectItem value="normal" className="rounded-none cursor-pointer">Normal</SelectItem>
                 <SelectItem value="bold" className="rounded-none cursor-pointer">Negrito</SelectItem>
                 <SelectItem value="highlight" className="rounded-none cursor-pointer">Destaque Cor</SelectItem>
               </SelectContent>
             </Select>
-            <button onClick={() => onChange(parts.filter((_, i) => i !== idx))} className="text-neutral-400 hover:text-destructive"><X size={14} /></button>
+            <button onClick={() => onChange(parts.filter((_, i) => i !== idx))} className="text-muted-foreground hover:text-destructive"><X size={14} /></button>
           </div>
         ))}
-        <Button type="button" onClick={() => onChange([...parts, { text: "", type: "normal" }])} variant="ghost" size="sm" className="h-8 text-[10px] font-medium text-neutral-900 w-full mt-1 border border-dashed border-neutral-300 hover:bg-neutral-100 rounded-none">
+        <Button type="button" onClick={() => onChange([...parts, { text: "", type: "normal" }])} variant="ghost" size="sm" className="h-8 text-[10px] font-medium text-foreground w-full mt-1 border border-dashed border-border hover:bg-accent rounded-none">
           <Plus size={12} className="mr-1" /> Adicionar Pedaço de Texto
         </Button>
       </div>
@@ -253,14 +253,14 @@ function BenefitsBuilder({ benefits = [], onChange }: { benefits: any[]; onChang
   return (
     <div className="space-y-3">
       {benefits.map((ben, idx) => (
-        <div key={idx} className="bg-neutral-50 p-3 rounded-none border border-neutral-200 relative group space-y-3">
-          <button onClick={() => onChange(benefits.filter((_, i) => i !== idx))} className="absolute top-2 right-2 text-neutral-300 hover:text-destructive opacity-0 group-hover:opacity-100"><X size={14} /></button>
+        <div key={idx} className="bg-muted p-3 rounded-none border border-border relative group space-y-3">
+          <button onClick={() => onChange(benefits.filter((_, i) => i !== idx))} className="absolute top-2 right-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"><X size={14} /></button>
           <div className="flex gap-3">
             <div className="w-1/3 space-y-1">
-              <label className="text-[9px] font-medium text-neutral-400 uppercase">Ícone</label>
+              <label className="text-[9px] font-medium text-muted-foreground uppercase">Ícone</label>
               <Select value={ben.icon} onValueChange={(v) => { const n = [...benefits]; n[idx].icon = v; onChange(n); }}>
-                <SelectTrigger className="h-8 text-[11px] bg-white rounded-none border-neutral-200"><SelectValue placeholder="Escolha..." /></SelectTrigger>
-                <SelectContent className="max-h-60 rounded-none border-neutral-200">
+                <SelectTrigger className="h-8 text-[11px] bg-card rounded-none border-border"><SelectValue placeholder="Escolha..." /></SelectTrigger>
+                <SelectContent className="max-h-60 rounded-none border-border">
                   {iconOptions.map((iconKey) => {
                     const IconComponent = ICON_MAP[iconKey];
                     return (
@@ -273,17 +273,17 @@ function BenefitsBuilder({ benefits = [], onChange }: { benefits: any[]; onChang
               </Select>
             </div>
             <div className="w-2/3 space-y-1">
-              <label className="text-[9px] font-medium text-neutral-400 uppercase">Título</label>
-              <Input value={ben.title} onChange={(e) => { const n = [...benefits]; n[idx].title = e.target.value; onChange(n); }} className="h-8 text-xs bg-white rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" placeholder="Ex: Até 48 meses" />
+              <label className="text-[9px] font-medium text-muted-foreground uppercase">Título</label>
+              <Input value={ben.title} onChange={(e) => { const n = [...benefits]; n[idx].title = e.target.value; onChange(n); }} className="h-8 text-xs bg-card rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" placeholder="Ex: Até 48 meses" />
             </div>
           </div>
           <div className="space-y-1">
-            <label className="text-[9px] font-medium text-neutral-400 uppercase">Descrição</label>
-            <Input value={ben.description} onChange={(e) => { const n = [...benefits]; n[idx].description = e.target.value; onChange(n); }} className="h-8 text-xs bg-white rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" placeholder="Ex: Escolha a parcela" />
+            <label className="text-[9px] font-medium text-muted-foreground uppercase">Descrição</label>
+            <Input value={ben.description} onChange={(e) => { const n = [...benefits]; n[idx].description = e.target.value; onChange(n); }} className="h-8 text-xs bg-card rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" placeholder="Ex: Escolha a parcela" />
           </div>
         </div>
       ))}
-      <Button type="button" onClick={() => onChange([...benefits, { icon: "Check", title: "", description: "" }])} variant="outline" size="sm" className="h-8 text-[10px] font-medium w-full border-dashed rounded-none border-neutral-300 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary">
+      <Button type="button" onClick={() => onChange([...benefits, { icon: "Check", title: "", description: "" }])} variant="outline" size="sm" className="h-8 text-[10px] font-medium w-full border-dashed rounded-none border-border text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary">
         <Plus size={12} className="mr-1" /> Adicionar Benefício
       </Button>
     </div>
@@ -317,21 +317,21 @@ function FooterBuilder({ footer = {}, onChange }: { footer: any; onChange: (f: a
   return (
     <div className="space-y-3">
       <div className="flex justify-between items-center">
-        <label className="text-[10px] font-medium text-neutral-400 uppercase">Texto do Rodapé</label>
-        <button onClick={handleInsertTag} className="text-[10px] font-medium text-white bg-neutral-900 px-2 py-1 rounded-none hover:bg-neutral-800 flex items-center shadow-xs" type="button">🔗 Criar Link</button>
+        <label className="text-[10px] font-medium text-muted-foreground uppercase">Texto do Rodapé</label>
+        <button onClick={handleInsertTag} className="text-[10px] font-medium text-background bg-foreground px-2 py-1 rounded-none hover:bg-foreground/90 flex items-center shadow-xs" type="button">🔗 Criar Link</button>
       </div>
-      <textarea ref={textareaRef} value={footer.template_text || ""} onChange={(e) => handleTextChange(e.target.value)} className="w-full h-24 border border-neutral-200 rounded-none p-2.5 text-xs outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 resize-y bg-white" placeholder="© 2026 Wallet sbX." />
+      <textarea ref={textareaRef} value={footer.template_text || ""} onChange={(e) => handleTextChange(e.target.value)} className="w-full h-24 border border-border rounded-none p-2.5 text-xs outline-none focus:border-foreground focus:ring-1 focus:ring-foreground resize-y bg-card" placeholder="© 2026 Wallet sbX." />
       {footer.links && footer.links.length > 0 && (
-        <div className="bg-neutral-50 rounded-none p-3 border border-neutral-200 space-y-2 mt-2">
-          <h5 className="text-[10px] font-medium text-neutral-400 uppercase mb-2">URLs Mapeadas</h5>
+        <div className="bg-muted rounded-none p-3 border border-border space-y-2 mt-2">
+          <h5 className="text-[10px] font-medium text-muted-foreground uppercase mb-2">URLs Mapeadas</h5>
           {footer.links.map((link: any, idx: number) => (
-            <div key={idx} className="flex flex-col gap-2.5 bg-white p-3 rounded-none border border-neutral-200 shadow-sm">
+            <div key={idx} className="flex flex-col gap-2.5 bg-card p-3 rounded-none border border-border shadow-sm">
               <div className="w-full">
-                <span className="text-[9px] font-medium text-neutral-400 block uppercase mb-0.5">Texto Destacado</span>
-                <span className="text-xs font-medium text-neutral-900 leading-snug block">{link.text}</span>
+                <span className="text-[9px] font-medium text-muted-foreground block uppercase mb-0.5">Texto Destacado</span>
+                <span className="text-xs font-medium text-foreground leading-snug block">{link.text}</span>
               </div>
               <div className="w-full">
-                <Input type="url" placeholder="https://..." value={link.url || ""} onChange={(e) => { const newLinks = [...(footer.links || [])]; newLinks[idx].url = e.target.value; onChange({ ...footer, links: newLinks }); }} className="h-8 text-xs w-full bg-neutral-50 rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" />
+                <Input type="url" placeholder="https://..." value={link.url || ""} onChange={(e) => { const newLinks = [...(footer.links || [])]; newLinks[idx].url = e.target.value; onChange({ ...footer, links: newLinks }); }} className="h-8 text-xs w-full bg-muted rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" />
               </div>
             </div>
           ))}
@@ -444,15 +444,15 @@ function OrchestratorConfigEditor({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-neutral-100 flex flex-col animate-in fade-in duration-200">
-      <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-neutral-200 shadow-sm shrink-0">
+    <div className="fixed inset-0 z-50 bg-accent flex flex-col animate-in fade-in duration-200">
+      <header className="flex items-center justify-between px-6 py-4 bg-card border-b border-border shadow-sm shrink-0">
         <div>
-          <h2 className="text-base font-semibold text-neutral-900 flex items-center gap-2">
-            {initialData?.id ? <><Edit size={16} className="text-neutral-700" /> Editando Rota #{initialData.id}</> : <><Plus size={16} className="text-neutral-700" /> Nova Rota</>}
+          <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+            {initialData?.id ? <><Edit size={16} className="text-foreground" /> Editando Rota #{initialData.id}</> : <><Plus size={16} className="text-foreground" /> Nova Rota</>}
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onClose} disabled={isSaving} className="rounded-none border-neutral-200 text-neutral-900 shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={isSaving} className="rounded-none border-border text-foreground shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
           <Button size="sm" onClick={handleSaveClick} disabled={isSaving} className="cta-gradient border-0 rounded-none text-white font-medium text-xs">
             {isSaving ? <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />} Salvar Rota
           </Button>
@@ -460,23 +460,23 @@ function OrchestratorConfigEditor({
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="w-[60%] flex flex-col bg-white border-r border-neutral-200 overflow-hidden shadow-sm z-10">
+        <div className="w-[60%] flex flex-col bg-card border-r border-border overflow-hidden shadow-sm z-10">
           <Tabs defaultValue="general" className="flex-1 flex flex-col h-full">
-            <TabsList className="w-full justify-start rounded-none border-b border-neutral-200 bg-transparent p-0 h-11 shrink-0">
-              <TabsTrigger value="general" className="data-[state=active]:border-b-2 data-[state=active]:border-neutral-900 rounded-none h-full px-5 text-neutral-500 data-[state=active]:text-neutral-900 font-medium text-xs"><Settings2 className="w-3.5 h-3.5 mr-1.5" /> Geral</TabsTrigger>
-              <TabsTrigger value="rules" className="data-[state=active]:border-b-2 data-[state=active]:border-neutral-900 rounded-none h-full px-5 text-neutral-500 data-[state=active]:text-neutral-900 font-medium text-xs"><Code2 className="w-3.5 h-3.5 mr-1.5" /> Regras & Integração</TabsTrigger>
-              <TabsTrigger value="visual" className="data-[state=active]:border-b-2 data-[state=active]:border-neutral-900 rounded-none h-full px-5 text-neutral-500 data-[state=active]:text-neutral-900 font-medium text-xs"><LayoutTemplate className="w-3.5 h-3.5 mr-1.5" /> Oferta & Rodapé</TabsTrigger>
-              <TabsTrigger value="legal" className="data-[state=active]:border-b-2 data-[state=active]:border-neutral-900 rounded-none h-full px-5 text-neutral-500 data-[state=active]:text-neutral-900 font-medium text-xs"><FileText className="w-3.5 h-3.5 mr-1.5" /> LGPD & FAQs</TabsTrigger>
+            <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent p-0 h-11 shrink-0">
+              <TabsTrigger value="general" className="data-[state=active]:border-b-2 data-[state=active]:border-foreground rounded-none h-full px-5 text-muted-foreground data-[state=active]:text-foreground font-medium text-xs"><Settings2 className="w-3.5 h-3.5 mr-1.5" /> Geral</TabsTrigger>
+              <TabsTrigger value="rules" className="data-[state=active]:border-b-2 data-[state=active]:border-foreground rounded-none h-full px-5 text-muted-foreground data-[state=active]:text-foreground font-medium text-xs"><Code2 className="w-3.5 h-3.5 mr-1.5" /> Regras & Integração</TabsTrigger>
+              <TabsTrigger value="visual" className="data-[state=active]:border-b-2 data-[state=active]:border-foreground rounded-none h-full px-5 text-muted-foreground data-[state=active]:text-foreground font-medium text-xs"><LayoutTemplate className="w-3.5 h-3.5 mr-1.5" /> Oferta & Rodapé</TabsTrigger>
+              <TabsTrigger value="legal" className="data-[state=active]:border-b-2 data-[state=active]:border-foreground rounded-none h-full px-5 text-muted-foreground data-[state=active]:text-foreground font-medium text-xs"><FileText className="w-3.5 h-3.5 mr-1.5" /> LGPD & FAQs</TabsTrigger>
             </TabsList>
 
             <div className="flex-1 overflow-y-auto p-6">
               <TabsContent value="general" className="space-y-5 mt-0">
                 <div className="grid grid-cols-2 gap-5">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-medium text-neutral-400 uppercase">Tipo</label>
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Tipo</label>
                     <Select value={formData.config_type} onValueChange={(v) => setFormData({ ...formData, config_type: v })}>
-                      <SelectTrigger className="h-10 rounded-none border-neutral-200 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent className="rounded-none border-neutral-200 text-xs">
+                      <SelectTrigger className="h-10 rounded-none border-border text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent className="rounded-none border-border text-xs">
                         <SelectItem value="EVENT" className="rounded-none cursor-pointer">Evento (EVENT)</SelectItem>
                         <SelectItem value="SELLER" className="rounded-none cursor-pointer">Seller (SELLER)</SelectItem>
                         <SelectItem value="PRODUCT" className="rounded-none cursor-pointer">Produto (PRODUCT)</SelectItem>
@@ -486,37 +486,37 @@ function OrchestratorConfigEditor({
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-medium text-neutral-400 uppercase">Lookup ID <span className="text-destructive">*</span></label>
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Lookup ID <span className="text-destructive">*</span></label>
                     {formData.config_type === "PRODUCT" ? (
                       <Select value={String(formData.lookup_id || "")} onValueChange={(v) => setFormData({ ...formData, lookup_id: v })}>
-                        <SelectTrigger className="h-10 rounded-none border-neutral-200 text-xs"><SelectValue placeholder="Selecione o produto..." /></SelectTrigger>
-                        <SelectContent className="max-h-60 rounded-none border-neutral-200 text-xs">
-                          {productsList.map((p) => <SelectItem key={p.id} value={String(p.id)} className="rounded-none cursor-pointer">{p.name} <span className="text-neutral-400 font-mono text-[10px]">(ID: {p.id})</span></SelectItem>)}
+                        <SelectTrigger className="h-10 rounded-none border-border text-xs"><SelectValue placeholder="Selecione o produto..." /></SelectTrigger>
+                        <SelectContent className="max-h-60 rounded-none border-border text-xs">
+                          {productsList.map((p) => <SelectItem key={p.id} value={String(p.id)} className="rounded-none cursor-pointer">{p.name} <span className="text-muted-foreground font-mono text-[10px]">(ID: {p.id})</span></SelectItem>)}
                         </SelectContent>
                       </Select>
                     ) : formData.config_type === "CATEGORY" ? (
                       <Select value={String(formData.lookup_id || "")} onValueChange={(v) => setFormData({ ...formData, lookup_id: v })}>
-                        <SelectTrigger className="h-10 rounded-none border-neutral-200 text-xs"><SelectValue placeholder="Selecione a categoria..." /></SelectTrigger>
-                        <SelectContent className="max-h-60 rounded-none border-neutral-200 text-xs">
-                          {categoriesList.map((c) => <SelectItem key={c.id} value={String(c.id)} className="rounded-none cursor-pointer">{c.name} <span className="text-neutral-400 font-mono text-[10px]">(ID: {c.id})</span></SelectItem>)}
+                        <SelectTrigger className="h-10 rounded-none border-border text-xs"><SelectValue placeholder="Selecione a categoria..." /></SelectTrigger>
+                        <SelectContent className="max-h-60 rounded-none border-border text-xs">
+                          {categoriesList.map((c) => <SelectItem key={c.id} value={String(c.id)} className="rounded-none cursor-pointer">{c.name} <span className="text-muted-foreground font-mono text-[10px]">(ID: {c.id})</span></SelectItem>)}
                         </SelectContent>
                       </Select>
                     ) : formData.config_type === "SELLER" ? (
                       <Select value={String(formData.lookup_id || "")} onValueChange={(v) => setFormData({ ...formData, lookup_id: v })}>
-                        <SelectTrigger className="h-10 rounded-none border-neutral-200 text-xs"><SelectValue placeholder="Selecione o parceiro..." /></SelectTrigger>
-                        <SelectContent className="max-h-60 rounded-none border-neutral-200 text-xs">
-                          {partnersList.map((pt) => <SelectItem key={pt.id} value={String(pt.id)} className="rounded-none cursor-pointer">{pt.name} <span className="text-neutral-400 font-mono text-[10px]">(ID: {pt.id})</span></SelectItem>)}
+                        <SelectTrigger className="h-10 rounded-none border-border text-xs"><SelectValue placeholder="Selecione o parceiro..." /></SelectTrigger>
+                        <SelectContent className="max-h-60 rounded-none border-border text-xs">
+                          {partnersList.map((pt) => <SelectItem key={pt.id} value={String(pt.id)} className="rounded-none cursor-pointer">{pt.name} <span className="text-muted-foreground font-mono text-[10px]">(ID: {pt.id})</span></SelectItem>)}
                         </SelectContent>
                       </Select>
                     ) : (
-                      <Input value={formData.lookup_id} onChange={(e) => setFormData({ ...formData, lookup_id: e.target.value })} className="h-10 rounded-none font-mono text-xs border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" placeholder="Ex: ID ou código..." />
+                      <Input value={formData.lookup_id} onChange={(e) => setFormData({ ...formData, lookup_id: e.target.value })} className="h-10 rounded-none font-mono text-xs border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" placeholder="Ex: ID ou código..." />
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-medium text-neutral-400 uppercase">Público</label>
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Público</label>
                     <Select value={formData.entity_type} onValueChange={(v) => setFormData({ ...formData, entity_type: v })}>
-                      <SelectTrigger className="h-10 rounded-none border-neutral-200 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent className="rounded-none border-neutral-200 text-xs">
+                      <SelectTrigger className="h-10 rounded-none border-border text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent className="rounded-none border-border text-xs">
                         <SelectItem value="PF" className="rounded-none cursor-pointer">Pessoa Física</SelectItem>
                         <SelectItem value="PJ" className="rounded-none cursor-pointer">Pessoa Jurídica</SelectItem>
                         <SelectItem value="PF+PJ" className="rounded-none cursor-pointer">Ambos (PF+PJ)</SelectItem>
@@ -524,10 +524,10 @@ function OrchestratorConfigEditor({
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-medium text-neutral-400 uppercase">Integração</label>
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Integração</label>
                     <Select value={formData.integration_method} onValueChange={(v) => setFormData({ ...formData, integration_method: v })}>
-                      <SelectTrigger className="h-10 rounded-none border-neutral-200 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent className="rounded-none border-neutral-200 text-xs">
+                      <SelectTrigger className="h-10 rounded-none border-border text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent className="rounded-none border-border text-xs">
                         <SelectItem value="API" className="rounded-none cursor-pointer">API</SelectItem>
                         <SelectItem value="EMAIL" className="rounded-none cursor-pointer">E-mail</SelectItem>
                         <SelectItem value="FILE" className="rounded-none cursor-pointer">Arquivo</SelectItem>
@@ -536,25 +536,25 @@ function OrchestratorConfigEditor({
                     </Select>
                   </div>
                   <div className="space-y-1.5 col-span-2">
-                    <label className="text-[10px] font-medium text-neutral-400 uppercase">URL de Destino</label>
-                    <Input value={formData.page_url} onChange={(e) => setFormData({ ...formData, page_url: e.target.value })} className="h-10 rounded-none font-mono text-xs border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" />
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">URL de Destino</label>
+                    <Input value={formData.page_url} onChange={(e) => setFormData({ ...formData, page_url: e.target.value })} className="h-10 rounded-none font-mono text-xs border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" />
                   </div>
                   <div className="space-y-1.5 col-span-2">
-                    <label className="text-[10px] font-medium text-neutral-400 uppercase flex items-center gap-1.5">Vincular Parceiro <span className="text-destructive">*</span></label>
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase flex items-center gap-1.5">Vincular Parceiro <span className="text-destructive">*</span></label>
                     <Select value={String(formData.partner_id || "")} onValueChange={(v) => setFormData({ ...formData, partner_id: v })}>
-                      <SelectTrigger className="h-10 rounded-none border-neutral-200 text-xs"><SelectValue placeholder="Selecione um parceiro..." /></SelectTrigger>
-                      <SelectContent className="max-h-60 rounded-none border-neutral-200 text-xs">
+                      <SelectTrigger className="h-10 rounded-none border-border text-xs"><SelectValue placeholder="Selecione um parceiro..." /></SelectTrigger>
+                      <SelectContent className="max-h-60 rounded-none border-border text-xs">
                         {partnersList.map((p) => <SelectItem key={p.id} value={String(p.id)} className="rounded-none cursor-pointer">{p.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="col-span-2 grid grid-cols-2 gap-4 pt-2">
-                    <div className="p-3.5 bg-neutral-50 border border-neutral-200 rounded-none flex items-center justify-between">
-                      <div><h4 className="font-medium text-xs text-neutral-900">Status Ativo</h4></div>
+                    <div className="p-3.5 bg-muted border border-border rounded-none flex items-center justify-between">
+                      <div><h4 className="font-medium text-xs text-foreground">Status Ativo</h4></div>
                       <Switch checked={formData.is_active} onCheckedChange={(v) => setFormData({ ...formData, is_active: v })} />
                     </div>
-                    <div className="p-3.5 bg-neutral-50 border border-neutral-200 rounded-none flex items-center justify-between">
-                      <div><h4 className="font-medium text-xs text-neutral-900">É Integrada?</h4></div>
+                    <div className="p-3.5 bg-muted border border-border rounded-none flex items-center justify-between">
+                      <div><h4 className="font-medium text-xs text-foreground">É Integrada?</h4></div>
                       <Switch checked={formData.is_integrated} onCheckedChange={(v) => setFormData({ ...formData, is_integrated: v })} />
                     </div>
                   </div>
@@ -570,28 +570,28 @@ function OrchestratorConfigEditor({
 
                   return (
                     <div className="space-y-5">
-                      <div className="bg-white p-4 rounded-none border border-neutral-200 shadow-sm space-y-3">
-                        <h4 className="text-[10px] font-medium uppercase text-neutral-400 border-b border-neutral-100 pb-2">1. Credenciais & Canais</h4>
+                      <div className="bg-card p-4 rounded-none border border-border shadow-sm space-y-3">
+                        <h4 className="text-[10px] font-medium uppercase text-muted-foreground border-b border-border pb-2">1. Credenciais & Canais</h4>
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase">CNPJ da Loja</label><Input value={integration.cnpjLoja || ""} onChange={(e) => updateIntegration({ ...integration, cnpjLoja: e.target.value })} className="h-8 text-xs font-mono rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
-                          <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase">URL do WhatsApp</label><Input value={integration.urlWhatsApp || ""} onChange={(e) => updateIntegration({ ...integration, urlWhatsApp: e.target.value })} className="h-8 text-xs font-mono rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
+                          <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">CNPJ da Loja</label><Input value={integration.cnpjLoja || ""} onChange={(e) => updateIntegration({ ...integration, cnpjLoja: e.target.value })} className="h-8 text-xs font-mono rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
+                          <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">URL do WhatsApp</label><Input value={integration.urlWhatsApp || ""} onChange={(e) => updateIntegration({ ...integration, urlWhatsApp: e.target.value })} className="h-8 text-xs font-mono rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
                         </div>
                         {formData.integration_method === "EMAIL" && (
-                          <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase flex items-center gap-1.5">E-mail de Destino <span className="text-destructive">*</span></label><Input type="email" value={integration.email || ""} onChange={(e) => updateIntegration({ ...integration, email: e.target.value })} className="h-8 text-xs font-mono border-neutral-200 bg-neutral-50 rounded-none focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
+                          <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase flex items-center gap-1.5">E-mail de Destino <span className="text-destructive">*</span></label><Input type="email" value={integration.email || ""} onChange={(e) => updateIntegration({ ...integration, email: e.target.value })} className="h-8 text-xs font-mono border-border bg-muted rounded-none focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
                         )}
                       </div>
-                      <div className="bg-white p-4 rounded-none border border-neutral-200 shadow-sm space-y-3">
-                        <h4 className="text-[10px] font-medium uppercase text-neutral-400 border-b border-neutral-100 pb-2">2. Regras de Parcelamento</h4>
-                        <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase">Opções de Parcelas</label><Input value={Array.isArray(rules.installment_options) ? rules.installment_options.join(", ") : ""} onChange={(e) => { const parsedArray = e.target.value.split(",").map((n) => Number(n.trim())).filter((n) => !isNaN(n) && n > 0); updateRules({ ...rules, installment_options: parsedArray }); }} className="h-8 text-xs font-mono rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
+                      <div className="bg-card p-4 rounded-none border border-border shadow-sm space-y-3">
+                        <h4 className="text-[10px] font-medium uppercase text-muted-foreground border-b border-border pb-2">2. Regras de Parcelamento</h4>
+                        <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">Opções de Parcelas</label><Input value={Array.isArray(rules.installment_options) ? rules.installment_options.join(", ") : ""} onChange={(e) => { const parsedArray = e.target.value.split(",").map((n) => Number(n.trim())).filter((n) => !isNaN(n) && n > 0); updateRules({ ...rules, installment_options: parsedArray }); }} className="h-8 text-xs font-mono rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
                         <PaymentFactorsBuilder factors={rules.payment_factors || {}} onChange={(newFactors) => updateRules({ ...rules, payment_factors: newFactors })} />
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase">Parcela Padrão</label><Input type="number" value={rules.default_installments ?? ""} onChange={(e) => updateRules({ ...rules, default_installments: Number(e.target.value) })} className="h-8 text-xs rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
-                          <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase">Máx Financiado</label><Input type="number" value={rules.max_financed_amount ?? ""} onChange={(e) => updateRules({ ...rules, max_financed_amount: e.target.value ? Number(e.target.value) : undefined })} className="h-8 text-xs rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
+                          <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">Parcela Padrão</label><Input type="number" value={rules.default_installments ?? ""} onChange={(e) => updateRules({ ...rules, default_installments: Number(e.target.value) })} className="h-8 text-xs rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
+                          <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">Máx Financiado</label><Input type="number" value={rules.max_financed_amount ?? ""} onChange={(e) => updateRules({ ...rules, max_financed_amount: e.target.value ? Number(e.target.value) : undefined })} className="h-8 text-xs rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
                         </div>
                         <div className="grid grid-cols-3 gap-2 pt-1">
-                          <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase">Min Entrada (%)</label><Input type="number" value={rules.min_down_payment_percentage ?? 0} onChange={(e) => updateRules({ ...rules, min_down_payment_percentage: Number(e.target.value) })} className="h-8 text-xs rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
-                          <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase">Max Entrada (%)</label><Input type="number" value={rules.max_down_payment_percentage ?? 80} onChange={(e) => updateRules({ ...rules, max_down_payment_percentage: Number(e.target.value) })} className="h-8 text-xs rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
-                          <div className="space-y-1"><label className="text-[10px] font-medium text-neutral-400 uppercase">Cap Máximo (%)</label><Input type="number" value={rules.max_offer_cap_percent ?? 50} onChange={(e) => updateRules({ ...rules, max_offer_cap_percent: Number(e.target.value) })} className="h-8 text-xs rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" /></div>
+                          <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">Min Entrada (%)</label><Input type="number" value={rules.min_down_payment_percentage ?? 0} onChange={(e) => updateRules({ ...rules, min_down_payment_percentage: Number(e.target.value) })} className="h-8 text-xs rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
+                          <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">Max Entrada (%)</label><Input type="number" value={rules.max_down_payment_percentage ?? 80} onChange={(e) => updateRules({ ...rules, max_down_payment_percentage: Number(e.target.value) })} className="h-8 text-xs rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
+                          <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">Cap Máximo (%)</label><Input type="number" value={rules.max_offer_cap_percent ?? 50} onChange={(e) => updateRules({ ...rules, max_offer_cap_percent: Number(e.target.value) })} className="h-8 text-xs rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
                         </div>
                       </div>
                     </div>
@@ -608,17 +608,17 @@ function OrchestratorConfigEditor({
 
                   return (
                     <div className="space-y-5">
-                      <div className="bg-white p-4 rounded-none border border-neutral-200 shadow-sm space-y-3">
-                        <h4 className="text-[10px] font-medium uppercase text-neutral-400 border-b border-neutral-100 pb-2">1. Oferta Principal</h4>
+                      <div className="bg-card p-4 rounded-none border border-border shadow-sm space-y-3">
+                        <h4 className="text-[10px] font-medium uppercase text-muted-foreground border-b border-border pb-2">1. Oferta Principal</h4>
                         <TextPartsBuilder label="Título (Headline)" parts={offer.headline?.parts || []} onChange={(newParts) => updateConfig({ ...config, offer_panel: { ...offer, headline: { parts: newParts } } })} />
                         <TextPartsBuilder label="Subtítulo (Description)" parts={offer.description?.parts || []} onChange={(newParts) => updateConfig({ ...config, offer_panel: { ...offer, description: { parts: newParts } } })} />
                       </div>
-                      <div className="bg-white p-4 rounded-none border border-neutral-200 shadow-sm space-y-3">
-                        <h4 className="text-[10px] font-medium uppercase text-neutral-400 border-b border-neutral-100 pb-2">2. Benefícios</h4>
+                      <div className="bg-card p-4 rounded-none border border-border shadow-sm space-y-3">
+                        <h4 className="text-[10px] font-medium uppercase text-muted-foreground border-b border-border pb-2">2. Benefícios</h4>
                         <BenefitsBuilder benefits={offer.benefits || []} onChange={(newBenefits) => updateConfig({ ...config, offer_panel: { ...offer, benefits: newBenefits } })} />
                       </div>
-                      <div className="bg-white p-4 rounded-none border border-neutral-200 shadow-sm space-y-3">
-                        <h4 className="text-[10px] font-medium uppercase text-neutral-400 border-b border-neutral-100 pb-2">3. Rodapé e Legal (Footer)</h4>
+                      <div className="bg-card p-4 rounded-none border border-border shadow-sm space-y-3">
+                        <h4 className="text-[10px] font-medium uppercase text-muted-foreground border-b border-border pb-2">3. Rodapé e Legal (Footer)</h4>
                         <FooterBuilder footer={footer} onChange={(newFooter) => updateConfig({ ...config, footer: newFooter })} />
                       </div>
                     </div>
@@ -628,13 +628,13 @@ function OrchestratorConfigEditor({
 
               <TabsContent value="legal" className="space-y-6 mt-0 pb-8 flex flex-col">
                 <div className="flex flex-col space-y-2">
-                  <div className="flex justify-between items-center bg-neutral-50 p-2.5 rounded-none border border-neutral-200">
-                    <h3 className="font-medium text-neutral-900 uppercase text-xs">Consentimentos (LGPD)</h3>
+                  <div className="flex justify-between items-center bg-muted p-2.5 rounded-none border border-border">
+                    <h3 className="font-medium text-foreground uppercase text-xs">Consentimentos (LGPD)</h3>
                     <Button onClick={() => { const current = parsedPreview.consent_configs || []; const updated = [...current, { id: `consent_${Date.now()}`, template_text: "", is_required: true, position: current.length + 1, links: [] }]; setParsedPreview({ ...parsedPreview, consent_configs: updated }); setJsonEditors({ ...jsonEditors, consent_configs: JSON.stringify(updated, null, 2) }); }} size="sm" className="cta-gradient border-0 text-white text-[11px] h-7 rounded-none font-medium"><Plus size={12} className="mr-1" /> Add Termo</Button>
                   </div>
                   <div className="space-y-3">
                     {!parsedPreview.consent_configs || parsedPreview.consent_configs.length === 0 ? (
-                      <div className="text-center p-5 border border-dashed border-neutral-200 rounded-none text-neutral-400 text-xs bg-neutral-50/50">Nenhum termo configurado.</div>
+                      <div className="text-center p-5 border border-dashed border-border rounded-none text-muted-foreground text-xs bg-muted/50">Nenhum termo configurado.</div>
                     ) : (
                       parsedPreview.consent_configs.map((consent: any, index: number) => (
                         <ConsentItemBuilder key={index} consent={consent} onUpdate={(updatedConsent) => { const updatedList = [...parsedPreview.consent_configs]; updatedList[index] = updatedConsent; setParsedPreview({ ...parsedPreview, consent_configs: updatedList }); setJsonEditors({ ...jsonEditors, consent_configs: JSON.stringify(updatedList, null, 2) }); }} onRemove={() => { const updatedList = parsedPreview.consent_configs.filter((_: any, i: number) => i !== index); setParsedPreview({ ...parsedPreview, consent_configs: updatedList }); setJsonEditors({ ...jsonEditors, consent_configs: JSON.stringify(updatedList, null, 2) }); }} />
@@ -643,21 +643,21 @@ function OrchestratorConfigEditor({
                   </div>
                 </div>
 
-                <div className="flex flex-col space-y-2 border-t border-neutral-200 pt-5">
-                  <div className="flex justify-between items-center bg-neutral-50 p-2.5 rounded-none border border-neutral-200">
-                    <h3 className="font-medium text-neutral-900 uppercase text-xs">Dúvidas Frequentes (FAQs)</h3>
+                <div className="flex flex-col space-y-2 border-t border-border pt-5">
+                  <div className="flex justify-between items-center bg-muted p-2.5 rounded-none border border-border">
+                    <h3 className="font-medium text-foreground uppercase text-xs">Dúvidas Frequentes (FAQs)</h3>
                     <Button onClick={() => { const current = parsedPreview.page_faqs || []; const updated = [...current, { question: "", answer: "", position: current.length + 1, bullets: [] }]; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} size="sm" className="cta-gradient border-0 text-white text-[11px] h-7 rounded-none font-medium"><Plus size={12} className="mr-1" /> Add FAQ</Button>
                   </div>
                   <div className="space-y-3">
                     {!parsedPreview.page_faqs || parsedPreview.page_faqs.length === 0 ? (
-                      <div className="text-center p-5 border border-dashed border-neutral-200 rounded-none text-neutral-400 text-xs bg-neutral-50/50">Nenhuma FAQ configurada.</div>
+                      <div className="text-center p-5 border border-dashed border-border rounded-none text-muted-foreground text-xs bg-muted/50">Nenhuma FAQ configurada.</div>
                     ) : (
                       parsedPreview.page_faqs.map((faq: any, index: number) => (
-                        <div key={index} className="bg-white border border-neutral-200 rounded-none p-3.5 shadow-sm relative group">
-                          <button onClick={() => { const updated = parsedPreview.page_faqs.filter((_: any, i: number) => i !== index); setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="absolute top-3 right-3 text-neutral-300 hover:text-destructive opacity-0 group-hover:opacity-100"><X size={14} /></button>
+                        <div key={index} className="bg-card border border-border rounded-none p-3.5 shadow-sm relative group">
+                          <button onClick={() => { const updated = parsedPreview.page_faqs.filter((_: any, i: number) => i !== index); setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"><X size={14} /></button>
                           <div className="grid gap-3 pr-5">
-                            <Input value={faq.question} onChange={(e) => { const updated = [...parsedPreview.page_faqs]; updated[index].question = e.target.value; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="h-8 text-xs font-medium rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900" placeholder="Pergunta..." />
-                            <textarea value={faq.answer} onChange={(e) => { const updated = [...parsedPreview.page_faqs]; updated[index].answer = e.target.value; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="w-full h-14 border border-neutral-200 rounded-none p-2 text-xs outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 resize-none bg-neutral-50" placeholder="Resposta..." />
+                            <Input value={faq.question} onChange={(e) => { const updated = [...parsedPreview.page_faqs]; updated[index].question = e.target.value; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="h-8 text-xs font-medium rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" placeholder="Pergunta..." />
+                            <textarea value={faq.answer} onChange={(e) => { const updated = [...parsedPreview.page_faqs]; updated[index].answer = e.target.value; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="w-full h-14 border border-border rounded-none p-2 text-xs outline-none focus:border-foreground focus:ring-1 focus:ring-foreground resize-none bg-muted" placeholder="Resposta..." />
                           </div>
                         </div>
                       ))
@@ -669,26 +669,26 @@ function OrchestratorConfigEditor({
           </Tabs>
         </div>
 
-        <div className="w-[40%] bg-neutral-50 overflow-y-auto relative flex flex-col">
-          <div className="sticky top-0 px-6 pt-5 pb-3 z-20 bg-neutral-50 border-b border-neutral-200 shadow-xs shrink-0 flex items-center justify-between">
-            <h3 className="font-semibold text-xs uppercase text-neutral-900 flex items-center gap-2"><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-neutral-900 opacity-75"></span><span className="relative inline-flex rounded-none h-2 w-2 bg-neutral-900"></span></span> Live Preview</h3>
+        <div className="w-[40%] bg-muted overflow-y-auto relative flex flex-col">
+          <div className="sticky top-0 px-6 pt-5 pb-3 z-20 bg-muted border-b border-border shadow-xs shrink-0 flex items-center justify-between">
+            <h3 className="font-semibold text-xs uppercase text-foreground flex items-center gap-2"><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-foreground opacity-75"></span><span className="relative inline-flex rounded-none h-2 w-2 bg-foreground"></span></span> Live Preview</h3>
           </div>
           
           <div className="p-6 space-y-6 pb-20 max-w-xl mx-auto w-full">
             {parsedPreview.page_configs && Object.keys(parsedPreview.page_configs).length > 0 ? (
-              <div className="bg-white p-5 rounded-none shadow-sm border border-neutral-200">
+              <div className="bg-card p-5 rounded-none shadow-sm border border-border">
                 <PanelProduct config={parsedPreview.page_configs} />
               </div>
-            ) : (<div className="text-center p-5 border border-dashed border-neutral-200 rounded-none text-neutral-400 text-xs">Page Configs vazio.</div>)}
+            ) : (<div className="text-center p-5 border border-dashed border-border rounded-none text-muted-foreground text-xs">Page Configs vazio.</div>)}
             
             {parsedPreview.consent_configs && parsedPreview.consent_configs.length > 0 && (
-              <div className="bg-white p-4 rounded-none shadow-sm border border-neutral-200">
+              <div className="bg-card p-4 rounded-none shadow-sm border border-border">
                 <PanelConsents configs={parsedPreview.consent_configs} />
               </div>
             )}
             
             {parsedPreview.page_faqs && parsedPreview.page_faqs.length > 0 && (
-              <div className="bg-white p-4 rounded-none shadow-sm border border-neutral-200">
+              <div className="bg-card p-4 rounded-none shadow-sm border border-border">
                 <PanelFAQ faqs={parsedPreview.page_faqs} isPrint={false} />
               </div>
             )}
@@ -846,10 +846,10 @@ function OrchestratorConfigsBackofficePage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="page-header-title">Consulta de Rotas</h1>
-            <p className="text-sm text-neutral-600">Gerenciamento e inspeção ordenada das configurações de rotas.</p>
+            <p className="text-sm text-muted-foreground">Gerenciamento e inspeção ordenada das configurações de rotas.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setEditingConfig(null); setIsEditorOpen(true); }} className="rounded-none border-neutral-200 bg-white text-neutral-900 shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary hidden sm:flex">
+            <Button variant="outline" size="sm" onClick={() => { setEditingConfig(null); setIsEditorOpen(true); }} className="rounded-none border-border bg-card text-foreground shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary hidden sm:flex">
               <Plus className="mr-2 h-4 w-4" /> Nova Rota
             </Button>
             <Button size="sm" onClick={load} className="cta-gradient border-0 rounded-none text-white font-medium text-xs" disabled={loading}>
@@ -858,28 +858,28 @@ function OrchestratorConfigsBackofficePage() {
           </div>
         </div>
 
-        <div className="rounded-none border border-neutral-200 bg-white overflow-hidden shadow-xs">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-4 border-b border-neutral-200 p-4 bg-neutral-50/50">
+        <div className="rounded-none border border-border bg-card overflow-hidden shadow-xs">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4 border-b border-border p-4 bg-muted/50">
             <div className="relative w-full lg:flex-1 lg:max-w-md">
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por ID, URL, Produto..." className="h-11 w-full rounded-none bg-white border-neutral-200 pl-5 pr-12 text-[13px] text-neutral-900 placeholder:text-neutral-500 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900 shadow-none" />
-              <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-neutral-400" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por ID, URL, Produto..." className="h-11 w-full rounded-none bg-card border-border pl-5 pr-12 text-[13px] text-foreground placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground shadow-none" />
+              <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-muted-foreground" />
             </div>
             <div className="flex items-center gap-2 lg:ml-auto">
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 rounded-none gap-2 bg-white text-neutral-900 border-neutral-200 transition-colors shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
-                    <Filter className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+                  <Button variant="outline" size="sm" className="h-10 rounded-none gap-2 bg-card text-foreground border-border transition-colors shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                    <Filter className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span className="truncate">Status: {statusFilter === "active" ? "Ativas" : statusFilter === "inactive" ? "Inativas" : "Todas"}</span>
-                    <ChevronDown className="h-3 w-3 shrink-0 text-neutral-400" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0 w-48 bg-white border-neutral-200 rounded-none shadow-xs z-50" align="start">
+                <PopoverContent className="p-0 w-48 bg-card border-border rounded-none shadow-xs z-50" align="start">
                   <Command className="bg-transparent">
                     <CommandList className="text-xs">
                       <CommandGroup>
-                        <CommandItem onSelect={() => setStatusFilter("active")} className="cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 aria-selected:bg-neutral-100">Apenas Ativas</CommandItem>
-                        <CommandItem onSelect={() => setStatusFilter("inactive")} className="cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 aria-selected:bg-neutral-100">Apenas Inativas</CommandItem>
-                        <CommandItem onSelect={() => setStatusFilter("all")} className="cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 aria-selected:bg-neutral-100">Todas</CommandItem>
+                        <CommandItem onSelect={() => setStatusFilter("active")} className="cursor-pointer rounded-none text-foreground hover:bg-accent aria-selected:bg-accent">Apenas Ativas</CommandItem>
+                        <CommandItem onSelect={() => setStatusFilter("inactive")} className="cursor-pointer rounded-none text-foreground hover:bg-accent aria-selected:bg-accent">Apenas Inativas</CommandItem>
+                        <CommandItem onSelect={() => setStatusFilter("all")} className="cursor-pointer rounded-none text-foreground hover:bg-accent aria-selected:bg-accent">Todas</CommandItem>
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -891,7 +891,7 @@ function OrchestratorConfigsBackofficePage() {
           <div className="w-full overflow-x-auto">
             <table className="w-full text-xs table-fixed">
               <thead>
-                <tr className="border-b border-neutral-200 bg-neutral-100 text-left text-[10px] font-semibold uppercase tracking-wider text-neutral-600">
+                <tr className="border-b border-border bg-accent text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <th className="px-3 py-2.5 w-[70px]">ID</th>
                   <th className="px-3 py-2.5 w-[240px]">Regra</th>
                   <th className="px-3 py-2.5 w-[140px]">Parceiro</th>
@@ -901,35 +901,35 @@ function OrchestratorConfigsBackofficePage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={5} className="p-10 text-center text-neutral-500"><div className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin text-brand-accent" /> Carregando informações...</div></td></tr>
+                  <tr><td colSpan={5} className="p-10 text-center text-muted-foreground"><div className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin text-brand-accent" /> Carregando informações...</div></td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={5} className="p-10 text-center text-neutral-500 font-medium">Nenhuma rota encontrada.</td></tr>
+                  <tr><td colSpan={5} className="p-10 text-center text-muted-foreground font-medium">Nenhuma rota encontrada.</td></tr>
                 ) : (
                   filtered.map((r) => {
                     const prodName = getProductOrCategoryName(r);
                     const partner = getPartnerInfo(r);
                     return (
-                      <tr key={r.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors group cursor-pointer" onClick={() => { setActiveConfig(r); setIsRouteDrawerOpen(true); }}>
-                        <td className="px-3 py-2.5 font-mono text-xs font-medium text-neutral-900">{r.id || "—"}</td>
+                      <tr key={r.id} className="border-b border-border hover:bg-muted transition-colors group cursor-pointer" onClick={() => { setActiveConfig(r); setIsRouteDrawerOpen(true); }}>
+                        <td className="px-3 py-2.5 font-mono text-xs font-medium text-foreground">{r.id || "—"}</td>
                         <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-1.5"><span className="inline-flex items-center rounded-none border border-neutral-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-neutral-100 text-neutral-700">{r.config_type || "—"}</span><span className="text-[10px] font-medium text-neutral-400">({r.entity_type || "N/A"})</span></div>
-                          <div className="text-xs font-medium text-neutral-900 mt-1 truncate" title={prodName}>{prodName}</div>
+                          <div className="flex items-center gap-1.5"><span className="inline-flex items-center rounded-none border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-accent text-foreground">{r.config_type || "—"}</span><span className="text-[10px] font-medium text-muted-foreground">({r.entity_type || "N/A"})</span></div>
+                          <div className="text-xs font-medium text-foreground mt-1 truncate" title={prodName}>{prodName}</div>
                         </td>
                         <td className="px-3 py-2.5">
                           <div className="flex items-center gap-1.5 truncate">
                             {/* LOGO DO PARCEIRO = rounded-[6px] - EXCEÇÃO DA REGRA GERAL */}
-                            <div className="flex h-9 w-9 items-center justify-center bg-transparent shrink-0 rounded-[6px] overflow-hidden border border-neutral-200" title={partner?.name}>
-                              {partner?.logo_url ? <img src={partner.logo_url} className="h-full w-full object-cover rounded-[6px]" alt={partner.name} /> : <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase text-neutral-900 bg-neutral-100 rounded-[6px]">{partner?.name ? partner.name.slice(0, 3) : "—"}</span>}
+                            <div className="flex h-9 w-9 items-center justify-center bg-transparent shrink-0 rounded-[6px] overflow-hidden border border-border" title={partner?.name}>
+                              {partner?.logo_url ? <img src={partner.logo_url} className="h-full w-full object-cover rounded-[6px]" alt={partner.name} /> : <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase text-foreground bg-accent rounded-[6px]">{partner?.name ? partner.name.slice(0, 3) : "—"}</span>}
                             </div>
-                            <span className="text-xs font-medium text-neutral-900 truncate" title={partner?.name}>{partner?.name || "N/A"}</span>
+                            <span className="text-xs font-medium text-foreground truncate" title={partner?.name}>{partner?.name || "N/A"}</span>
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 font-mono text-[11px] text-neutral-400 truncate" title={r.page_url}>{r.page_url || "—"}</td>
+                        <td className="px-3 py-2.5 font-mono text-[11px] text-muted-foreground truncate" title={r.page_url}>{r.page_url || "—"}</td>
                         <td className="px-3 py-2.5 text-right hidden sm:table-cell">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setActiveConfig(r); setIsRouteDrawerOpen(true); }} className="rounded-none text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 px-2 h-8 text-[11px] font-medium"><Search className="w-3 h-3 mr-1 text-neutral-400" /> Insp.</Button>
-                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDuplicateRoute(r); }} className="rounded-none text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100 px-2 h-8 text-[11px] font-medium"><Copy className="w-3 h-3 mr-1 text-neutral-400" /> Duplicar</Button>
-                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setEditingConfig(r); setIsEditorOpen(true); }} className="rounded-none text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100 px-2 h-8 text-[11px] font-medium"><Edit className="w-3 h-3 mr-1 text-neutral-400" /> Edit</Button>
+                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setActiveConfig(r); setIsRouteDrawerOpen(true); }} className="rounded-none text-muted-foreground hover:text-foreground hover:bg-accent px-2 h-8 text-[11px] font-medium"><Search className="w-3 h-3 mr-1 text-muted-foreground" /> Insp.</Button>
+                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDuplicateRoute(r); }} className="rounded-none text-foreground hover:text-foreground hover:bg-accent px-2 h-8 text-[11px] font-medium"><Copy className="w-3 h-3 mr-1 text-muted-foreground" /> Duplicar</Button>
+                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setEditingConfig(r); setIsEditorOpen(true); }} className="rounded-none text-foreground hover:text-foreground hover:bg-accent px-2 h-8 text-[11px] font-medium"><Edit className="w-3 h-3 mr-1 text-muted-foreground" /> Edit</Button>
                           </div>
                         </td>
                       </tr>
@@ -943,50 +943,50 @@ function OrchestratorConfigsBackofficePage() {
 
         {isRouteDrawerOpen && activeConfig && (
           <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-all">
-            <div className="w-full sm:max-w-xl bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
-              <div className="flex items-center justify-between p-4 border-b border-neutral-200 bg-white shrink-0">
+            <div className="w-full sm:max-w-xl bg-card h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
+              <div className="flex items-center justify-between p-4 border-b border-border bg-card shrink-0">
                 <div className="flex items-center gap-2 truncate pr-2">
-                  <span className="w-2.5 h-2.5 rounded-none bg-neutral-900 shrink-0" />
-                  <h3 className="text-xs sm:text-sm font-semibold uppercase text-neutral-900 truncate">Consulta de Rota: ID #{activeConfig.id} - {getProductOrCategoryName(activeConfig)}</h3>
+                  <span className="w-2.5 h-2.5 rounded-none bg-foreground shrink-0" />
+                  <h3 className="text-xs sm:text-sm font-semibold uppercase text-foreground truncate">Consulta de Rota: ID #{activeConfig.id} - {getProductOrCategoryName(activeConfig)}</h3>
                 </div>
-                <button onClick={() => setIsRouteDrawerOpen(false)} className="p-1 rounded-none text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 cursor-pointer shrink-0"><X size={18} /></button>
+                <button onClick={() => setIsRouteDrawerOpen(false)} className="p-1 rounded-none text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer shrink-0"><X size={18} /></button>
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
                 <div className="space-y-5">
-                  <div className="bg-neutral-50 p-3.5 rounded-none border border-neutral-200 text-[10px] sm:text-xs space-y-1 font-mono text-neutral-800">
-                    <p><span className="text-neutral-400 font-normal">ID Config:</span> {activeConfig.id} <span className="text-neutral-300">|</span> <span className="text-neutral-400 font-normal">Lookup ID:</span> {activeConfig.lookup_id}</p>
-                    <p><span className="text-neutral-400 font-normal">Tipo:</span> {activeConfig.config_type} ({activeConfig.entity_type})</p>
-                    <p><span className="text-neutral-400 font-normal">Método:</span> {activeConfig.integration_method || "—"}</p>
-                    <p className="break-words pt-1 border-t border-neutral-200 mt-1.5"><span className="text-neutral-400 font-normal">URL:</span> {activeConfig.page_url}</p>
+                  <div className="bg-muted p-3.5 rounded-none border border-border text-[10px] sm:text-xs space-y-1 font-mono text-foreground">
+                    <p><span className="text-muted-foreground font-normal">ID Config:</span> {activeConfig.id} <span className="text-muted-foreground">|</span> <span className="text-muted-foreground font-normal">Lookup ID:</span> {activeConfig.lookup_id}</p>
+                    <p><span className="text-muted-foreground font-normal">Tipo:</span> {activeConfig.config_type} ({activeConfig.entity_type})</p>
+                    <p><span className="text-muted-foreground font-normal">Método:</span> {activeConfig.integration_method || "—"}</p>
+                    <p className="break-words pt-1 border-t border-border mt-1.5"><span className="text-muted-foreground font-normal">URL:</span> {activeConfig.page_url}</p>
                   </div>
 
                   {activeConfig.page_configs?.offer_panel && (
-                    <div className="bg-white p-4 rounded-none border border-neutral-200 shadow-sm break-inside-avoid space-y-3">
-                      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5 border-b border-neutral-100 pb-2"><Layers size={14} className="text-neutral-700" /> Offer Panel</h4>
+                    <div className="bg-card p-4 rounded-none border border-border shadow-sm break-inside-avoid space-y-3">
+                      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-foreground flex items-center gap-1.5 border-b border-border pb-2"><Layers size={14} className="text-foreground" /> Offer Panel</h4>
                       <PanelProduct config={activeConfig.page_configs} />
                     </div>
                   )}
 
                   <div className="flex flex-col gap-3">
                     {activeConfig.integration_details && Object.keys(activeConfig.integration_details).length > 0 && (
-                      <div className="bg-neutral-50 p-3.5 rounded-none border border-neutral-200 text-xs overflow-hidden"><h4 className="font-medium text-neutral-900 mb-2 uppercase text-[10px] tracking-wide flex items-center gap-1.5"><Code2 size={12} className="text-neutral-500" /> Integration Details</h4><pre className="font-mono text-[9px] text-neutral-600 whitespace-pre-wrap break-all overflow-x-auto bg-white p-2.5 rounded-none border border-neutral-200">{JSON.stringify(activeConfig.integration_details, null, 2)}</pre></div>
+                      <div className="bg-muted p-3.5 rounded-none border border-border text-xs overflow-hidden"><h4 className="font-medium text-foreground mb-2 uppercase text-[10px] tracking-wide flex items-center gap-1.5"><Code2 size={12} className="text-muted-foreground" /> Integration Details</h4><pre className="font-mono text-[9px] text-muted-foreground whitespace-pre-wrap break-all overflow-x-auto bg-card p-2.5 rounded-none border border-border">{JSON.stringify(activeConfig.integration_details, null, 2)}</pre></div>
                     )}
                     {activeConfig.rules && Object.keys(activeConfig.rules).length > 0 && (
-                      <div className="bg-neutral-50 p-3.5 rounded-none border border-neutral-200 text-xs overflow-hidden"><h4 className="font-medium text-neutral-900 mb-2 uppercase text-[10px] tracking-wide flex items-center gap-1.5"><SlidersHorizontal size={12} className="text-neutral-500" /> Rules</h4><pre className="font-mono text-[9px] text-neutral-600 whitespace-pre-wrap break-all overflow-x-auto bg-white p-2.5 rounded-none border border-neutral-200">{JSON.stringify(activeConfig.rules, null, 2)}</pre></div>
+                      <div className="bg-muted p-3.5 rounded-none border border-border text-xs overflow-hidden"><h4 className="font-medium text-foreground mb-2 uppercase text-[10px] tracking-wide flex items-center gap-1.5"><SlidersHorizontal size={12} className="text-muted-foreground" /> Rules</h4><pre className="font-mono text-[9px] text-muted-foreground whitespace-pre-wrap break-all overflow-x-auto bg-card p-2.5 rounded-none border border-border">{JSON.stringify(activeConfig.rules, null, 2)}</pre></div>
                     )}
                   </div>
 
                   {activeConfig.consent_configs && activeConfig.consent_configs.length > 0 && (
-                    <div className="bg-white p-4 rounded-none border border-neutral-200 shadow-sm break-inside-avoid space-y-3">
-                      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5 border-b border-neutral-100 pb-2"><FileText size={14} className="text-neutral-700" /> Consentimentos</h4>
+                    <div className="bg-card p-4 rounded-none border border-border shadow-sm break-inside-avoid space-y-3">
+                      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-foreground flex items-center gap-1.5 border-b border-border pb-2"><FileText size={14} className="text-foreground" /> Consentimentos</h4>
                       <PanelConsents configs={activeConfig.consent_configs} />
                     </div>
                   )}
 
                   {activeConfig.page_faqs && activeConfig.page_faqs.length > 0 && (
-                    <div className="bg-white p-4 rounded-none border border-neutral-200 shadow-sm break-inside-avoid space-y-3">
-                      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5 border-b border-neutral-100 pb-2"><HelpCircle size={14} className="text-neutral-700" /> FAQs</h4>
+                    <div className="bg-card p-4 rounded-none border border-border shadow-sm break-inside-avoid space-y-3">
+                      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-foreground flex items-center gap-1.5 border-b border-border pb-2"><HelpCircle size={14} className="text-foreground" /> FAQs</h4>
                       <PanelFAQ faqs={activeConfig.page_faqs} isPrint={false} />
                     </div>
                   )}
@@ -999,10 +999,10 @@ function OrchestratorConfigsBackofficePage() {
                 </div>
               </div>
 
-              <div className="p-3 sm:p-4 border-t border-neutral-200 bg-white flex flex-col gap-2 shrink-0 shadow-lg w-full">
+              <div className="p-3 sm:p-4 border-t border-border bg-card flex flex-col gap-2 shrink-0 shadow-lg w-full">
                 <div className="flex items-center gap-2 w-full">
-                  <Button variant="outline" size="sm" onClick={() => handleDuplicateRoute(activeConfig)} className="hidden sm:flex flex-1 rounded-none text-xs gap-1.5 border-neutral-200 text-neutral-900 h-9 font-medium px-2 hover:bg-primary hover:text-primary-foreground hover:border-primary"><Copy className="h-3.5 w-3.5 shrink-0 text-neutral-400" /> Duplicar</Button>
-                  <Button variant="outline" size="sm" onClick={handlePrintSheet} className="flex-1 rounded-none text-xs gap-1.5 border-neutral-200 text-neutral-900 h-9 font-medium px-2 hover:bg-primary hover:text-primary-foreground hover:border-primary"><Printer className="h-3.5 w-3.5 shrink-0 text-neutral-400" /> Imprimir</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleDuplicateRoute(activeConfig)} className="hidden sm:flex flex-1 rounded-none text-xs gap-1.5 border-border text-foreground h-9 font-medium px-2 hover:bg-primary hover:text-primary-foreground hover:border-primary"><Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> Duplicar</Button>
+                  <Button variant="outline" size="sm" onClick={handlePrintSheet} className="flex-1 rounded-none text-xs gap-1.5 border-border text-foreground h-9 font-medium px-2 hover:bg-primary hover:text-primary-foreground hover:border-primary"><Printer className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> Imprimir</Button>
                 </div>
                 <Button size="sm" onClick={() => setIsRouteDrawerOpen(false)} className="cta-gradient border-0 w-full rounded-none text-xs text-white h-9 font-medium">Fechar</Button>
               </div>

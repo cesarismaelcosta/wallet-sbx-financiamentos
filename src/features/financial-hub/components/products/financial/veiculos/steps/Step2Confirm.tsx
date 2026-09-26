@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { ButtonWhatsApp } from "@/features/financial-hub/components/layout/ButtonWhatsApp";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
+import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 
 // =========================================================================
 // 🤖 [UTILITY ARCHITECTURE]: Slugificação Segura para Ofertas sbX
@@ -46,6 +47,8 @@ export function Step2Confirm() {
   // =========================================================================
   // 🤖 [LOCAL STATE ARCHITECTURE]: Consumo de Estado do Wizard
   // =========================================================================
+  const { theme } = useTheme();
+  const nightMode = theme === "dark";
   const { state, back } = useWizard<any>();
   const result = state.data.simulationResult;
   const isApproved = result?.status_id === 1;
@@ -83,7 +86,7 @@ export function Step2Confirm() {
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-10 animate-in fade-in duration-500">
-      <div className="bg-white space-y-6">
+      <div className="bg-white dark:bg-neutral-950 space-y-6">
         
         {isApproved ? (
           <>
@@ -93,9 +96,9 @@ export function Step2Confirm() {
             <div className="flex items-start gap-4">
               
               {/* Box com a Ilustração Fixa - Simetria 1:1 com o Step 1 */}
-              <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
+              <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20 dark:bg-black">
                 <img
-                  src="/assets/home/financiamentoveiculossimulacao.webp"
+                  src={nightMode ? "/assets/home/financiamentoveiculossimulacao-dark.webp" : "/assets/home/financiamentoveiculossimulacao.webp"}
                   alt="Veículos"
                   className="w-full h-full object-contain relative"
                 />
@@ -103,19 +106,19 @@ export function Step2Confirm() {
               
               <div className="space-y-0.5 flex-1 w-0 min-w-0">
                 {/* Fonte cai para 14px no mobile, peso black, linha única forçada */}
-                <h3 className="text-[clamp(14px,3.5vw,20px)] sm:text-2xl font-black text-neutral-900 uppercase tracking-tight leading-snug truncate w-full block">
+                <h3 className="text-[clamp(14px,3.5vw,20px)] sm:text-2xl font-black text-neutral-900 dark:text-neutral-100 uppercase tracking-tight leading-snug truncate w-full block">
                   {isPJ ? "Referência de preço encontrada" : "Oferta encontrada"}
                 </h3>
                 
                 {/* Descrição do item */}
-                <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 truncate pt-0.5 w-full block">
+                <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 dark:text-neutral-400 truncate pt-0.5 w-full block">
                   {offerDescText}
                 </p>
 
                 {/* Lote e valor com destaque + Link Externo Padronizado */}
                 <div className="flex items-center pt-0.5">
-                  <p className="text-sm text-neutral-600 truncate">
-                    Lote {loteSubIndex} • <strong className="text-neutral-900 font-bold mr-2">{BRL(valorOferta)}</strong>
+                  <p className="text-sm text-neutral-600 dark:text-neutral-400 truncate">
+                    Lote {loteSubIndex} • <strong className="text-neutral-900 dark:text-neutral-100 font-bold mr-2">{BRL(valorOferta)}</strong>
                   </p>
 
                   {offer && (
@@ -123,7 +126,7 @@ export function Step2Confirm() {
                       href={getSuperbidUrl(offer)} 
                       target="_blank" 
                       rel="noopener noreferrer" 
-                      className="text-neutral-400 hover:text-neutral-700 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
+                      className="text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
                       title="Ver oferta original na Superbid"
                     >
                       <ExternalLink size={18} strokeWidth={1.5} />
@@ -134,10 +137,10 @@ export function Step2Confirm() {
             </div>
 
             {/* =========================================================================
-             * 🤖 [RESULT DISPLAY ARCHITECTURE]: Box da Oferta em bg-surface-alt
+             * 🤖 [RESULT DISPLAY ARCHITECTURE]: Box da Oferta em bg-neutral-50
              * ========================================================================= */}
-            <div className="bg-surface-alt border border-neutral-200 rounded-none p-6 sm:p-8 space-y-3 overflow-hidden">
-              <p className="text-neutral-600 text-[11px] sm:text-sm font-medium mb-1 leading-tight w-full">
+            <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-6 sm:p-8 space-y-3 overflow-hidden">
+              <p className="text-neutral-600 dark:text-neutral-400 text-[11px] sm:text-sm font-medium mb-1 leading-tight w-full">
                 {valorEntradaAPI > 0 ? (
                   <>
                     ent. <span className="text-[0.85em]">R$</span> {BRL(valorEntradaAPI).replace("R$", "").trim()} +{" "}
@@ -153,7 +156,7 @@ export function Step2Confirm() {
                 
                 {/* Multiplicador padronizado */}
                 <span 
-                  className="font-medium text-neutral-500 shrink-0" 
+                  className="font-medium text-neutral-500 dark:text-neutral-400 shrink-0" 
                   style={{ fontSize: "clamp(1.2rem, 5.5vw, 1.5rem)" }}
                 >
                   {mainConsult?.installments}x
@@ -161,7 +164,7 @@ export function Step2Confirm() {
                 
                 {/* Valor Principal */}
                 <span 
-                  className="font-bold text-brand-accent tracking-tight shrink-0 flex items-baseline gap-0.5"
+                  className="font-bold text-[#2246A7] tracking-tight shrink-0 flex items-baseline gap-0.5"
                   style={{ fontSize: "clamp(1.6rem, 7vw, 2.25rem)" }}
                 >
                   <span className="text-[0.75em] font-bold">R$</span>
@@ -170,20 +173,20 @@ export function Step2Confirm() {
 
                 {/* Sufixo (/mês) */}
                 <span 
-                  className="text-neutral-400 font-medium shrink-0"
+                  className="text-neutral-400 dark:text-neutral-500 font-medium shrink-0"
                   style={{ fontSize: "clamp(0.7rem, 3vw, 0.875rem)" }}
                 >
                   /mês*
                 </span>
               </div>
 
-              <div className="text-xs text-neutral-500 mt-3 pt-3 border-t border-neutral-200">
-                Taxa de juros de <span className="font-bold text-neutral-900">{Number(mainConsult?.cet_rate || 0).toFixed(2)}%</span> a.m.
+              <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-800">
+                Taxa de juros de <span className="font-bold text-neutral-900 dark:text-neutral-100">{Number(mainConsult?.cet_rate || 0).toFixed(2)}%</span> a.m.
               </div>
             </div>
 
             {/* Disclaimer */}
-            <p className="text-[11px] text-neutral-400 font-medium leading-relaxed">
+            <p className="text-[11px] text-neutral-400 dark:text-neutral-500 font-medium leading-relaxed">
               {isPJ
                 ? "*O valor de parcela é baseado em taxas de referência para financiamentos com nosso parceiro e não representa garantia de aprovação. Fale com nossos especialistas para seguirmos com a análise de crédito e buscarmos as melhores condições para você financiar essa oferta."
                 : "*As condições apresentadas não são garantia de aprovação. Fale com nossos especialistas para seguirmos com a análise da sua linha de crédito."}
@@ -196,7 +199,7 @@ export function Step2Confirm() {
               <Button 
                 variant="ghost" 
                 onClick={back}
-                className="w-full sm:w-auto text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900 transition-all rounded-none font-medium"
+                className="w-full sm:w-auto text-[#2246A7] hover:bg-[#E7F2FD] dark:hover:bg-neutral-800 hover:text-[#2246A7] transition-all rounded-none font-medium"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> 
                 Voltar
@@ -207,6 +210,7 @@ export function Step2Confirm() {
                   variant="button"
                   config={state.data?.integration_details} 
                   data={state.data} 
+                  className="border-[#2246A7] text-[#2246A7] hover:bg-[#2246A7] hover:text-white"
                 />
               </div>
             </div>
@@ -217,23 +221,23 @@ export function Step2Confirm() {
            * ========================================================================= */
           <div className="text-center py-8 space-y-6 flex flex-col items-center">
             
-            <div className="w-36 h-36 flex items-center justify-center">
+            <div className="w-36 h-36 flex items-center justify-center dark:bg-black">
               <img
-                src="/assets/home/financiamentocreditonegada.webp"
+                src={nightMode ? "/assets/home/financiamentocreditonegada-dark.webp" : "/assets/home/financiamentocreditonegada.webp"}
                 alt="Nenhuma oferta disponível"
                 className="w-full h-full object-contain relative"
               />
             </div>
 
             <div className="space-y-2 max-w-xs mx-auto">
-              <h3 className="text-xl font-bold text-neutral-900 tracking-tight">Nenhuma oferta disponível</h3>
-              <p className="text-sm text-neutral-600 leading-relaxed">
+              <h3 className="text-xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">Nenhuma oferta disponível</h3>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                 No momento não encontramos condições para os dados informados.
               </p>
             </div>
 
-            <div className="bg-surface-alt px-4 py-2 border border-neutral-200 rounded-none">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+            <div className="bg-neutral-50 dark:bg-neutral-900 px-4 py-2 border border-neutral-200 dark:border-neutral-800 rounded-none">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
                 Sugestão: Tente aumentar a entrada.
               </p>
             </div>
@@ -241,7 +245,7 @@ export function Step2Confirm() {
             <Button 
               variant="ghost" 
               onClick={back}
-              className="text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900 transition-all rounded-none font-medium"
+              className="text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100 transition-all rounded-none font-medium"
             >
               <ArrowLeft className="mr-2 h-4 w-4" /> Simular novamente
             </Button>

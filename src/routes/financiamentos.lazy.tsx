@@ -35,6 +35,7 @@ import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoff
 
 // Importando os componentes visuais para replicar o Layout Pixel-Perfect
 import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHeader";
+import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 import { PanelProductOfferSkeleton } from "@/features/financial-hub/components/layout/PanelProductOfferSkeleton";
 import { PanelStepSkeleton } from "@/features/financial-hub/components/layout/PanelStepSkeleton";
 import { PanelFAQSkeleton } from "@/features/financial-hub/components/layout/PanelFAQSkeleton";
@@ -54,9 +55,11 @@ export const Route = createLazyFileRoute('/financiamentos')({
 // Esta marcação usa os mesmos sub-componentes do FinancialHubLayout.
 // O usuário NÃO sente a transição de montagem, pois os pixels são idênticos.
 function RouteSkeleton() {
+  const { theme, setTheme } = useTheme();
+  const nightMode = theme === "dark";
   return (
     <div className="min-h-screen bg-white text-foreground flex flex-col transition-colors duration-300 relative rounded-none">
-      <PanelHeader showNav={true} showAuth={true} links={[]} />
+      <PanelHeader showNav={true} showAuth={true} links={[]} nightMode={nightMode} onToggleNightMode={() => setTheme(nightMode ? "light" : "dark")} />
       
       <main className="flex-1 w-full flex flex-col pt-16">
         <div className="max-w-7xl mx-auto px-6 py-12 w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">

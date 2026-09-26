@@ -33,6 +33,7 @@ import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
+import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 
 // =========================================================================
 // 🤖 [UTILITY ARCHITECTURE]: Slugificação Segura para Ofertas sbX
@@ -52,6 +53,8 @@ export function Step1Simulation() {
   // =========================================================================
   // 🤖 [LOCAL STATE ARCHITECTURE]: Gerenciamento de Inputs e Ciclo de Vida
   // =========================================================================
+  const { theme } = useTheme();
+  const nightMode = theme === "dark";
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [entradaFocused, setEntradaFocused] = useState(false); // controla o badge do slider de Entrada enquanto o input está em foco
@@ -194,7 +197,7 @@ export function Step1Simulation() {
   if (!state?.data || Object.keys(state.data).length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <span className="text-neutral-400">Carregando...</span>
+        <span className="text-neutral-400 dark:text-neutral-500">Carregando...</span>
       </div>
     );
   }
@@ -209,15 +212,15 @@ export function Step1Simulation() {
 
   return (
     <div className="w-full space-y-8 animate-in fade-in duration-500">
-      <div className="bg-white space-y-6">
+      <div className="bg-white dark:bg-neutral-950 space-y-6">
         
         {/* =========================================================================
          * 🤖 [PROGRESSIVE DISCLOSURE ARCHITECTURE]: Header Síncrono da Oferta
          * ========================================================================= */}
         <div className="flex items-start gap-4">
-          <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
+          <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20 dark:bg-black">
             <img
-              src="/assets/home/financiamentoveiculossimulacao.webp"
+              src={nightMode ? "/assets/home/financiamentoveiculossimulacao-dark.webp" : "/assets/home/financiamentoveiculossimulacao.webp"}
               alt="Veículos"
               className="w-full h-full object-contain relative"
             />
@@ -225,17 +228,17 @@ export function Step1Simulation() {
 
           <div className="space-y-0.5 flex-1 w-0 min-w-0">
             {/* Fonte cai para 14px no mobile, peso black, linha única forçada */}
-            <h3 className="text-[clamp(14px,3.5vw,20px)] sm:text-2xl font-black text-neutral-900 uppercase tracking-tight leading-snug truncate w-full block">
+            <h3 className="text-[clamp(14px,3.5vw,20px)] sm:text-2xl font-black text-neutral-900 dark:text-neutral-100 uppercase tracking-tight leading-snug truncate w-full block">
               Simule seu financiamento
             </h3>
 
-            <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 truncate pt-0.5 w-full block">
+            <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 dark:text-neutral-400 truncate pt-0.5 w-full block">
               {offerDescText}
             </p>
 
             <div className="flex items-center pt-0.5">
-              <p className="text-sm text-neutral-600 truncate">
-                Lote {loteSubIndex} • <strong className="text-neutral-900 font-bold mr-2">{BRL(localValorVeiculo)}</strong>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 truncate">
+                Lote {loteSubIndex} • <strong className="text-neutral-900 dark:text-neutral-100 font-bold mr-2">{BRL(localValorVeiculo)}</strong>
               </p>
               
               {offer && (
@@ -243,7 +246,7 @@ export function Step1Simulation() {
                   href={getSuperbidUrl(offer)} 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="text-neutral-400 hover:text-neutral-700 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
+                  className="text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
                   title="Ver oferta original na Superbid"
                 >
                   <ExternalLink size={18} strokeWidth={1.5} />
@@ -256,12 +259,12 @@ export function Step1Simulation() {
         {/* =========================================================================
          * 🤖 [ZERO-TRUST INPUTS & SLIDER CONTROLS]: Container de Simulação
          * ========================================================================= */}
-        <div className="bg-surface-alt border border-neutral-200 rounded-none p-4 sm:p-7 space-y-4">
+        <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-4 sm:p-7 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4">
             
             {/* Valor do lance */}
             <div className="space-y-1">
-              <Label className="text-[11px] font-medium text-neutral-900 uppercase tracking-wider font-sans">
+              <Label className="text-[11px] font-medium text-neutral-900 dark:text-neutral-100 uppercase tracking-wider font-sans">
                 Valor do lance
               </Label>
               <Input
@@ -273,7 +276,7 @@ export function Step1Simulation() {
                   setLocalValorVeiculo(rawValue);
                   updateData({ valorVeiculo: rawValue });
                 }}
-                className={`h-10 rounded-none bg-white border-neutral-200 text-brand-accent font-semibold disabled:bg-neutral-100 disabled:text-neutral-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
+                className={`h-10 rounded-none bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-brand-accent font-semibold disabled:bg-neutral-100 dark:disabled:bg-neutral-900 disabled:text-neutral-500 dark:disabled:text-neutral-600 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
               />
               <div className="pt-1 px-1">
                 <SliderCustomizado
@@ -297,7 +300,7 @@ export function Step1Simulation() {
 
             {/* Entrada */}
             <div className="space-y-1">
-              <Label className="text-[11px] font-medium text-neutral-900 uppercase tracking-wider font-sans">Entrada</Label>
+              <Label className="text-[11px] font-medium text-neutral-900 dark:text-neutral-100 uppercase tracking-wider font-sans">Entrada</Label>
               <Input
                 disabled={loading}
                 value={BRL((localValorVeiculo * localPercentualEntrada) / 100)}
@@ -310,7 +313,7 @@ export function Step1Simulation() {
                 }}
                 onFocus={() => setEntradaFocused(true)}
                 onBlur={() => setEntradaFocused(false)}
-                className={`h-10 rounded-none bg-white border-neutral-200 text-brand-accent font-semibold disabled:bg-neutral-100 disabled:text-neutral-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
+                className={`h-10 rounded-none bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-brand-accent font-semibold disabled:bg-neutral-100 dark:disabled:bg-neutral-900 disabled:text-neutral-500 dark:disabled:text-neutral-600 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`}
               />
               <div className="pt-1 px-1">
                 <SliderCustomizado
@@ -335,7 +338,7 @@ export function Step1Simulation() {
 
           {/* Parcelas */}
           <div className="space-y-3">
-            <Label className="text-[11px] font-medium text-neutral-900 uppercase tracking-wider font-sans">Parcelas</Label>
+            <Label className="text-[11px] font-medium text-neutral-900 dark:text-neutral-100 uppercase tracking-wider font-sans">Parcelas</Label>
             <RadioGroup
               disabled={loading}
               value={localParcelas ? String(localParcelas) : ""}
@@ -354,11 +357,11 @@ export function Step1Simulation() {
                       htmlFor={`p-${p}`}
                       className={`flex items-center justify-center p-2 border rounded-none transition-all shadow-xs ${
                         isSelected
-                          ? "border-transparent fill-gradient"
-                          : "border-neutral-300 bg-surface-alt hover:bg-neutral-100"
+                          ? "border-[#2246A7] bg-white dark:bg-brand-accent-muted"
+                          : "border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700"
                       } ${loading ? "!cursor-wait opacity-50" : "cursor-pointer"}`}
                     >
-                      <span className={`font-bold text-xs ${isSelected ? "text-white" : "text-brand-accent/60"}`}>{p}x</span>
+                      <span className={`font-bold text-xs ${isSelected ? "text-brand-accent" : "text-brand-accent/60"}`}>{p}x</span>
                     </Label>
                   </div>
                 );
@@ -383,7 +386,7 @@ export function Step1Simulation() {
           type="button"
           onClick={handleSimular}
           disabled={!areConsentsValid || !localParcelas || loading}
-          className="w-full h-12 rounded-none text-white shadow-xs transition-all active:scale-[0.98] bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 disabled:!cursor-wait flex items-center justify-center gap-2 mt-1"
+          className="w-full h-12 rounded-none text-white shadow-xs transition-all active:scale-[0.98] cta-gradient disabled:opacity-50 disabled:!cursor-wait flex items-center justify-center gap-2 mt-1"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2 animate-pulse">

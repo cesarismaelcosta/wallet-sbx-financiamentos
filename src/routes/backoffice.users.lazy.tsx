@@ -106,9 +106,9 @@ type SelectOption = {
 };
 
 const ROLE_BADGE: Record<Role, string> = {
-  admin: "bg-neutral-200 text-neutral-900 font-medium",
-  manager: "bg-neutral-200 text-neutral-900 font-medium",
-  viewer: "bg-neutral-100 text-neutral-600 font-normal",
+  admin: "bg-accent text-foreground font-medium",
+  manager: "bg-accent text-foreground font-medium",
+  viewer: "bg-accent text-muted-foreground font-normal",
 };
 
 async function callManage(payload: Record<string, unknown>) {
@@ -313,33 +313,33 @@ function UsuariosPage() {
     <>
       <div className="space-y-4 py-4">
         <div className="space-y-2">
-          <Label className="text-neutral-700 text-xs">Nome</Label>
+          <Label className="text-foreground text-xs">Nome</Label>
           <Input
             value={registerData.name}
             onChange={(e) => setregisterData({ ...registerData, name: e.target.value })}
-            className="rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900 text-xs"
+            className="rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground text-xs"
           />
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label className="text-neutral-700 text-xs">E-mail (Prefixo)</Label>
+            <Label className="text-foreground text-xs">E-mail (Prefixo)</Label>
             <Input
               value={registerData.emailPrefix}
               onChange={(e) => setregisterData({ ...registerData, emailPrefix: e.target.value })}
-              className="rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900 text-xs"
+              className="rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground text-xs"
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-neutral-700 text-xs">Domínio</Label>
+            <Label className="text-foreground text-xs">Domínio</Label>
             <Select
               value={registerData.domain}
               onValueChange={(v) => setregisterData({ ...registerData, domain: v })}
             >
-              <SelectTrigger className="rounded-none border-neutral-200 focus:ring-1 focus:ring-neutral-900 text-xs">
+              <SelectTrigger className="rounded-none border-border focus:ring-1 focus:ring-foreground text-xs">
                 <SelectValue placeholder="Selecione..." />
               </SelectTrigger>
-              <SelectContent className="rounded-none border-neutral-200">
+              <SelectContent className="rounded-none border-border">
                 {domains.map((d) => (
                   <SelectItem key={d} value={d} className="rounded-none cursor-pointer text-xs">@{d}</SelectItem>
                 ))}
@@ -348,15 +348,15 @@ function UsuariosPage() {
           </div>
         </div>
         <div className="space-y-2">
-          <Label className="text-neutral-700 text-xs">Cargo</Label>
+          <Label className="text-foreground text-xs">Cargo</Label>
           <Select
             value={registerData.role}
             onValueChange={(v: Role) => setregisterData({ ...registerData, role: v })}
           >
-            <SelectTrigger className="rounded-none border-neutral-200 focus:ring-1 focus:ring-neutral-900 text-xs">
+            <SelectTrigger className="rounded-none border-border focus:ring-1 focus:ring-foreground text-xs">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="rounded-none border-neutral-200">
+            <SelectContent className="rounded-none border-border">
               <SelectItem value="admin" className="rounded-none cursor-pointer text-xs">Administrador</SelectItem>
               <SelectItem value="manager" className="rounded-none cursor-pointer text-xs">Gerente</SelectItem>
               <SelectItem value="viewer" className="rounded-none cursor-pointer text-xs">Visualizador</SelectItem>
@@ -368,13 +368,13 @@ function UsuariosPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
             {/* PARCEIROS */}
             <div className="space-y-2 flex flex-col">
-              <Label className="text-neutral-700 text-xs">Parceiros Permitidos</Label>
+              <Label className="text-foreground text-xs">Parceiros Permitidos</Label>
               <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-10 w-full rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
+                    className="h-10 w-full rounded-none gap-2 bg-card border-border transition-colors text-foreground justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
                   >
                     <span className="flex items-center gap-2 truncate">
                       <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -389,31 +389,31 @@ function UsuariosPage() {
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-none border-neutral-200 shadow-xs" align="start">
-                  <Command className="bg-white">
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-none border-border shadow-xs" align="start">
+                  <Command className="bg-card">
                     <CommandList 
                       className="max-h-56 overflow-y-auto overscroll-contain text-xs"
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
-                        <CommandItem onSelect={() => setregisterData({ ...registerData, partners: ["*"] })} className="cursor-pointer font-medium text-neutral-900 rounded-none hover:bg-neutral-100">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${registerData.partners.includes("*") ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => setregisterData({ ...registerData, partners: ["*"] })} className="cursor-pointer font-medium text-foreground rounded-none hover:bg-accent">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${registerData.partners.includes("*") ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                             {registerData.partners.includes("*") && "✓"}
                           </div>
                           Todos (Acesso Total)
                         </CommandItem>
-                        <CommandItem onSelect={() => setregisterData({ ...registerData, partners: [] })} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-neutral-100">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${registerData.partners.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => setregisterData({ ...registerData, partners: [] })} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-accent">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${registerData.partners.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
                             {registerData.partners.length === 0 && "✓"}
                           </div>
                           Nenhum (Bloqueado)
                         </CommandItem>
-                        <div className="h-px bg-neutral-200 my-1" />
+                        <div className="h-px bg-accent my-1" />
                         {partnersList.map((p) => {
                           const isSelected = registerData.partners.includes(String(p.id));
                           return (
-                            <CommandItem key={p.id} onSelect={() => togglePartner(String(p.id))} className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                            <CommandItem key={p.id} onSelect={() => togglePartner(String(p.id))} className={`cursor-pointer rounded-none text-foreground hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                                 {isSelected && "✓"}
                               </div>
                               {p.name}
@@ -429,13 +429,13 @@ function UsuariosPage() {
 
             {/* PRODUTOS */}
             <div className="space-y-2 flex flex-col">
-              <Label className="text-neutral-700 text-xs">Produtos Permitidos</Label>
+              <Label className="text-foreground text-xs">Produtos Permitidos</Label>
               <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-10 w-full rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
+                    className="h-10 w-full rounded-none gap-2 bg-card border-border transition-colors text-foreground justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
                   >
                     <span className="flex items-center gap-2 truncate">
                       <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -450,31 +450,31 @@ function UsuariosPage() {
                     <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-none border-neutral-200 shadow-xs" align="start">
-                  <Command className="bg-white">
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-none border-border shadow-xs" align="start">
+                  <Command className="bg-card">
                     <CommandList 
                       className="max-h-56 overflow-y-auto overscroll-contain text-xs"
                       onWheelCapture={(e) => e.stopPropagation()}
                     >
                       <CommandGroup>
-                        <CommandItem onSelect={() => setregisterData({ ...registerData, products: ["*"] })} className="cursor-pointer font-medium text-neutral-900 rounded-none hover:bg-neutral-100">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${registerData.products.includes("*") ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => setregisterData({ ...registerData, products: ["*"] })} className="cursor-pointer font-medium text-foreground rounded-none hover:bg-accent">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${registerData.products.includes("*") ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                             {registerData.products.includes("*") && "✓"}
                           </div>
                           Todos (Acesso Total)
                         </CommandItem>
-                        <CommandItem onSelect={() => setregisterData({ ...registerData, products: [] })} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-neutral-100">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${registerData.products.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => setregisterData({ ...registerData, products: [] })} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-accent">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${registerData.products.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
                             {registerData.products.length === 0 && "✓"}
                           </div>
                           Nenhum (Bloqueado)
                         </CommandItem>
-                        <div className="h-px bg-neutral-200 my-1" />
+                        <div className="h-px bg-accent my-1" />
                         {productsList.map((p) => {
                           const isSelected = registerData.products.includes(String(p.id));
                           return (
-                            <CommandItem key={p.id} onSelect={() => toggleProduct(String(p.id))} className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                            <CommandItem key={p.id} onSelect={() => toggleProduct(String(p.id))} className={`cursor-pointer rounded-none text-foreground hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                                 {isSelected && "✓"}
                               </div>
                               {p.name}
@@ -489,15 +489,15 @@ function UsuariosPage() {
             </div>
           </div>
         ) : (
-          <div className="flex items-start gap-2 rounded-none border border-neutral-300 bg-neutral-50 p-3 text-xs text-neutral-700 animate-in fade-in duration-300">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" />
-            <p>Usuários com perfil de <strong className="font-medium text-neutral-900">{registerData.role === "admin" ? "Administrador" : "Gerente"}</strong> possuem acesso irrestrito a todos os parceiros e produtos.</p>
+          <div className="flex items-start gap-2 rounded-none border border-border bg-muted p-3 text-xs text-foreground animate-in fade-in duration-300">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <p>Usuários com perfil de <strong className="font-medium text-foreground">{registerData.role === "admin" ? "Administrador" : "Gerente"}</strong> possuem acesso irrestrito a todos os parceiros e produtos.</p>
           </div>
         )}
       </div>
 
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
-        <Button variant="outline" onClick={() => setregisterOpen(false)} className="w-full sm:w-auto h-10 rounded-none border-neutral-200 text-neutral-900 text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
+        <Button variant="outline" onClick={() => setregisterOpen(false)} className="w-full sm:w-auto h-10 rounded-none border-border text-foreground text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
         <Button onClick={handleRegister} disabled={isSaving} className="cta-gradient border-0 w-full sm:w-auto text-white h-10 rounded-none font-medium text-xs">
           {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
           Cadastrar
@@ -511,13 +511,13 @@ function UsuariosPage() {
       <div className="space-y-4 py-4 text-xs">
         {/* EDIÇÃO PARCEIROS */}
         <div className="space-y-2 flex flex-col">
-          <Label className="text-neutral-700 text-xs">Parceiros Permitidos</Label>
+          <Label className="text-foreground text-xs">Parceiros Permitidos</Label>
           <Popover modal={true}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 w-full rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
+                className="h-10 w-full rounded-none gap-2 bg-card border-border transition-colors text-foreground justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
               >
                 <span className="flex items-center gap-2 truncate">
                   <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -532,31 +532,31 @@ function UsuariosPage() {
                 <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-none border-neutral-200 shadow-xs" align="start">
-              <Command className="bg-white">
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-none border-border shadow-xs" align="start">
+              <Command className="bg-card">
                 <CommandList 
                   className="max-h-56 overflow-y-auto overscroll-contain text-xs"
                   onWheelCapture={(e) => e.stopPropagation()}
                 >
                   <CommandGroup>
-                    <CommandItem onSelect={() => setEditPartners(["*"])} className="cursor-pointer font-medium text-neutral-900 rounded-none hover:bg-neutral-100">
-                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${editPartners.includes("*") ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                    <CommandItem onSelect={() => setEditPartners(["*"])} className="cursor-pointer font-medium text-foreground rounded-none hover:bg-accent">
+                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${editPartners.includes("*") ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                         {editPartners.includes("*") && "✓"}
                       </div>
                       Todos (Acesso Total)
                     </CommandItem>
-                    <CommandItem onSelect={() => setEditPartners([])} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-neutral-100">
-                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${editPartners.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
+                    <CommandItem onSelect={() => setEditPartners([])} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-accent">
+                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${editPartners.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
                         {editPartners.length === 0 && "✓"}
                       </div>
                       Nenhum (Bloqueado)
                     </CommandItem>
-                    <div className="h-px bg-neutral-200 my-1" />
+                    <div className="h-px bg-accent my-1" />
                     {partnersList.map((p) => {
                       const isSelected = editPartners.includes(String(p.id));
                       return (
-                        <CommandItem key={p.id} onSelect={() => toggleEditPartner(String(p.id))} className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                        <CommandItem key={p.id} onSelect={() => toggleEditPartner(String(p.id))} className={`cursor-pointer rounded-none text-foreground hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}>
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                             {isSelected && "✓"}
                           </div>
                           {p.name}
@@ -572,13 +572,13 @@ function UsuariosPage() {
 
         {/* EDIÇÃO PRODUTOS */}
         <div className="space-y-2 flex flex-col">
-          <Label className="text-neutral-700 text-xs">Produtos Permitidos</Label>
+          <Label className="text-foreground text-xs">Produtos Permitidos</Label>
           <Popover modal={true}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 w-full rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
+                className="h-10 w-full rounded-none gap-2 bg-card border-border transition-colors text-foreground justify-between font-normal shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"
               >
                 <span className="flex items-center gap-2 truncate">
                   <Filter className="h-3.5 w-3.5 opacity-50 shrink-0" />
@@ -593,31 +593,31 @@ function UsuariosPage() {
                 <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-none border-neutral-200 shadow-xs" align="start">
-              <Command className="bg-white">
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-none border-border shadow-xs" align="start">
+              <Command className="bg-card">
                 <CommandList 
                   className="max-h-56 overflow-y-auto overscroll-contain text-xs"
                   onWheelCapture={(e) => e.stopPropagation()}
                 >
                   <CommandGroup>
-                    <CommandItem onSelect={() => setEditProducts(["*"])} className="cursor-pointer font-medium text-neutral-900 rounded-none hover:bg-neutral-100">
-                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${editProducts.includes("*") ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                    <CommandItem onSelect={() => setEditProducts(["*"])} className="cursor-pointer font-medium text-foreground rounded-none hover:bg-accent">
+                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${editProducts.includes("*") ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                         {editProducts.includes("*") && "✓"}
                       </div>
                       Todos (Acesso Total)
                     </CommandItem>
-                    <CommandItem onSelect={() => setEditProducts([])} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-neutral-100">
-                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${editProducts.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
+                    <CommandItem onSelect={() => setEditProducts([])} className="cursor-pointer font-medium text-destructive rounded-none hover:bg-accent">
+                      <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${editProducts.length === 0 ? "bg-destructive text-white border-destructive" : "opacity-50"}`}>
                         {editProducts.length === 0 && "✓"}
                       </div>
                       Nenhum (Bloqueado)
                     </CommandItem>
-                    <div className="h-px bg-neutral-200 my-1" />
+                    <div className="h-px bg-accent my-1" />
                     {productsList.map((p) => {
                       const isSelected = editProducts.includes(String(p.id));
                       return (
-                        <CommandItem key={p.id} onSelect={() => toggleEditProduct(String(p.id))} className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                        <CommandItem key={p.id} onSelect={() => toggleEditProduct(String(p.id))} className={`cursor-pointer rounded-none text-foreground hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}>
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                             {isSelected && "✓"}
                           </div>
                           {p.name}
@@ -633,7 +633,7 @@ function UsuariosPage() {
       </div>
 
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-4">
-        <Button variant="outline" onClick={() => setEditOpen(false)} className="w-full sm:w-auto h-10 rounded-none border-neutral-200 text-neutral-900 text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
+        <Button variant="outline" onClick={() => setEditOpen(false)} className="w-full sm:w-auto h-10 rounded-none border-border text-foreground text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
         <Button onClick={handleUpdatePermissions} disabled={isUpdating} className="cta-gradient border-0 w-full sm:w-auto text-white font-medium h-10 rounded-none text-xs">
           {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Salvar Permissões
@@ -651,7 +651,7 @@ function UsuariosPage() {
 
         <div className="flex items-center gap-2">
           {isAdmin && (
-            <Button variant="outline" size="sm" onClick={() => setregisterOpen(true)} className="rounded-none border-neutral-200 text-neutral-900 shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
+            <Button variant="outline" size="sm" onClick={() => setregisterOpen(true)} className="rounded-none border-border text-foreground shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
               <Plus className="mr-2 h-4 w-4" /> Cadastrar Usuário
             </Button>
           )}
@@ -664,20 +664,20 @@ function UsuariosPage() {
 
       {isMobile ? (
         <Sheet open={registerOpen} onOpenChange={setregisterOpen}>
-          <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-white border-t border-neutral-200">
+          <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-card border-t border-border">
             <SheetHeader className="text-left mb-4">
-              <SheetTitle className="text-neutral-900 text-base">Cadastrar novo usuário</SheetTitle>
-              <SheetDescription className="text-neutral-500 text-xs">Preencha os dados abaixo para criar o acesso.</SheetDescription>
+              <SheetTitle className="text-foreground text-base">Cadastrar novo usuário</SheetTitle>
+              <SheetDescription className="text-muted-foreground text-xs">Preencha os dados abaixo para criar o acesso.</SheetDescription>
             </SheetHeader>
             {renderRegisterContent()}
           </SheetContent>
         </Sheet>
       ) : (
         <Dialog open={registerOpen} onOpenChange={setregisterOpen}>
-          <DialogContent className="max-w-xl rounded-none sm:rounded-none bg-white border-neutral-200">
+          <DialogContent className="max-w-xl rounded-none sm:rounded-none bg-card border-border">
             <DialogHeader>
-              <DialogTitle className="text-neutral-900 text-base">Cadastrar novo usuário</DialogTitle>
-              <DialogDescription className="text-neutral-500 text-xs">Preencha os dados abaixo para criar o acesso.</DialogDescription>
+              <DialogTitle className="text-foreground text-base">Cadastrar novo usuário</DialogTitle>
+              <DialogDescription className="text-muted-foreground text-xs">Preencha os dados abaixo para criar o acesso.</DialogDescription>
             </DialogHeader>
             {renderRegisterContent()}
           </DialogContent>
@@ -686,11 +686,11 @@ function UsuariosPage() {
 
       {isMobile ? (
         <Sheet open={editOpen} onOpenChange={setEditOpen}>
-          <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-white border-t border-neutral-200">
+          <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-card border-t border-border">
             <SheetHeader className="text-left mb-4">
-              <SheetTitle className="text-neutral-900 text-base">Editar Permissões</SheetTitle>
-              <SheetDescription className="text-neutral-500 text-xs">
-                Ajuste os acessos de parceiros e produtos para <strong className="font-medium text-neutral-700">{editingUser?.name}</strong>.
+              <SheetTitle className="text-foreground text-base">Editar Permissões</SheetTitle>
+              <SheetDescription className="text-muted-foreground text-xs">
+                Ajuste os acessos de parceiros e produtos para <strong className="font-medium text-foreground">{editingUser?.name}</strong>.
               </SheetDescription>
             </SheetHeader>
             {renderEditContent()}
@@ -698,11 +698,11 @@ function UsuariosPage() {
         </Sheet>
       ) : (
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent className="max-w-md rounded-none sm:rounded-none bg-white border-neutral-200">
+          <DialogContent className="max-w-md rounded-none sm:rounded-none bg-card border-border">
             <DialogHeader>
-              <DialogTitle className="text-neutral-900 text-base">Editar Permissões</DialogTitle>
-              <DialogDescription className="text-neutral-500 text-xs">
-                Ajuste os acessos de parceiros e produtos para <strong className="font-medium text-neutral-700">{editingUser?.name}</strong>.
+              <DialogTitle className="text-foreground text-base">Editar Permissões</DialogTitle>
+              <DialogDescription className="text-muted-foreground text-xs">
+                Ajuste os acessos de parceiros e produtos para <strong className="font-medium text-foreground">{editingUser?.name}</strong>.
               </DialogDescription>
             </DialogHeader>
             {renderEditContent()}
@@ -710,10 +710,10 @@ function UsuariosPage() {
         </Dialog>
       )}
 
-      <div className="overflow-hidden rounded-none border border-neutral-200 bg-white shadow-xs">
+      <div className="overflow-hidden rounded-none border border-border bg-card shadow-xs">
         <div className="overflow-x-auto w-full pb-2">
           <table className="w-full text-xs">
-            <thead className="border-b border-neutral-200 bg-neutral-100 text-left text-neutral-600 uppercase tracking-wider text-[10px]">
+            <thead className="border-b border-border bg-accent text-left text-muted-foreground uppercase tracking-wider text-[10px]">
               <tr>
                 <th className="px-3 py-2.5 font-semibold">Usuário</th>
                 <th className="px-3 py-2.5 font-semibold">Cargo</th>
@@ -725,17 +725,17 @@ function UsuariosPage() {
               {users.map((u) => {
                 const isMe = backofficeUser?.email?.toLowerCase() === u.email.toLowerCase();
                 return (
-                  <tr key={u.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
+                  <tr key={u.id} className="border-b border-border hover:bg-muted transition-colors">
                     <td className="px-3 py-2.5 whitespace-nowrap">
-                      <div className="font-medium text-neutral-900">{u.name}</div>
-                      <div className="text-[11px] text-neutral-400">{u.email}</div>
+                      <div className="font-medium text-foreground">{u.name}</div>
+                      <div className="text-[11px] text-muted-foreground">{u.email}</div>
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <Select value={u.role} onValueChange={(v: Role) => changeRole(u, v)} disabled={!isAdmin || isMe}>
                         <SelectTrigger className={`h-7 w-36 text-[10px] uppercase tracking-wider rounded-none border-none focus:ring-0 shadow-none ${ROLE_BADGE[u.role]}`}>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="rounded-none border-neutral-200 text-xs">
+                        <SelectContent className="rounded-none border-border text-xs">
                           <SelectItem value="admin" className="rounded-none cursor-pointer text-xs">Administrador</SelectItem>
                           <SelectItem value="manager" className="rounded-none cursor-pointer text-xs">Gerente</SelectItem>
                           <SelectItem value="viewer" className="rounded-none cursor-pointer text-xs">Visualizador</SelectItem>
@@ -754,11 +754,11 @@ function UsuariosPage() {
                       {isAdmin && (
                         <div className="flex items-center justify-end gap-1">
                           {u.role === "viewer" && (
-                            <Button variant="ghost" size="sm" onClick={() => openEditPermissions(u)} className="rounded-none hover:bg-neutral-100 text-neutral-900 font-medium text-xs h-8">
+                            <Button variant="ghost" size="sm" onClick={() => openEditPermissions(u)} className="rounded-none hover:bg-accent text-foreground font-medium text-xs h-8">
                               <GradientIcon icon={Settings2} size={12} className="mr-1" /> Permissões
                             </Button>
                           )}
-                          <Button variant="ghost" size="sm" onClick={() => toggleActive(u)} disabled={isMe} className="rounded-none hover:bg-neutral-100 text-neutral-900 font-medium text-xs h-8">
+                          <Button variant="ghost" size="sm" onClick={() => toggleActive(u)} disabled={isMe} className="rounded-none hover:bg-accent text-foreground font-medium text-xs h-8">
                             {u.is_active ? (
                               <><UserX className="mr-1 h-3 w-3 text-destructive" /> Desativar</>
                             ) : (

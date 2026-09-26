@@ -29,6 +29,7 @@ import { setFastPathState } from "@/features/financial-hub/core/services/fastPat
 import { CardWizardData } from "../card.types";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
+import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 
 // =========================================================================
 // 🤖 [UX ARCHITECTURE]: Hook de Distração Cognitiva para APIs de alta latência
@@ -77,6 +78,8 @@ export function Step1Simulation() {
   // =========================================================================
   // 🤖 [LOCAL STATE ARCHITECTURE]: Gerenciamento de Ciclo de Vida e Estados
   // =========================================================================
+  const { theme } = useTheme();
+  const nightMode = theme === "dark";
   const [loading, setLoading] = useState(false);
   const { state, update } = useWizard<CardWizardData>();
 
@@ -190,7 +193,7 @@ export function Step1Simulation() {
   if (!state || !state.data) {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <Loader2 className="h-10 w-10 animate-spin text-neutral-900" />
+        <Loader2 className="h-10 w-10 animate-spin text-neutral-900 dark:text-neutral-100" />
       </div>
     );
   }
@@ -201,30 +204,30 @@ export function Step1Simulation() {
 
   return (
     <div className="w-full space-y-8 animate-in fade-in duration-500">
-      <div className="bg-white space-y-6">
+      <div className="bg-white dark:bg-neutral-950 space-y-6">
         
         {/* =========================================================================
          * 🤖 [PROGRESSIVE DISCLOSURE ARCHITECTURE]: Header Síncrono e Contexto da Oferta
          * ========================================================================= */}
         <div className="flex items-start gap-4">
           {/* Imagem totalmente solta sem nenhum box */}
-          <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20">
-            <img src="/assets/home/cartao.webp" alt="Cartão" className="w-full h-full object-contain relative" />
+          <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20 dark:bg-black">
+            <img src={nightMode ? "/assets/home/cartao-dark.webp" : "/assets/home/cartao.webp"} alt="Cartão" className="w-full h-full object-contain relative" />
           </div>
 
           <div className="space-y-0.5 flex-1 w-0 min-w-0">
-            <h3 className="text-[clamp(16px,4vw,20px)] sm:text-xl font-bold text-neutral-900 uppercase tracking-tight leading-snug">
+            <h3 className="text-[clamp(16px,4vw,20px)] sm:text-xl font-bold text-neutral-900 dark:text-neutral-100 uppercase tracking-tight leading-snug">
               Simulação de parcelamento*
             </h3>
 
-            <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 truncate pt-0.5 w-full block">
+            <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 dark:text-neutral-400 truncate pt-0.5 w-full block">
               {offerDescText}
             </p>
 
             {/* LINHA DO LOTE E PREÇO COM LINK AO LADO */}
             <div className="flex items-center pt-0.5">
-              <p className="text-sm text-neutral-600 truncate">
-                Lote {loteSubIndex} • <strong className="text-neutral-900 font-bold mr-2">{BRL(offerValue || 0)}</strong>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 truncate">
+                Lote {loteSubIndex} • <strong className="text-neutral-900 dark:text-neutral-100 font-bold mr-2">{BRL(offerValue || 0)}</strong>
               </p>
 
               {offer && (
@@ -232,7 +235,7 @@ export function Step1Simulation() {
                   href={getSuperbidUrl(offer)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-neutral-400 hover:text-neutral-700 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
+                  className="text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
                   title="Ver oferta original na Superbid"
                 >
                   <ExternalLink size={18} strokeWidth={1.5} />
@@ -249,8 +252,8 @@ export function Step1Simulation() {
           {isLoadingUI ? (
             <div className="space-y-3 animate-in fade-in duration-300">
               {/* STATUS TRACKER (Minimalista) */}
-              <div className="flex items-center gap-2 px-1 text-neutral-500">
-                <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-neutral-900" />
+              <div className="flex items-center gap-2 px-1 text-neutral-500 dark:text-neutral-400">
+                <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-neutral-900 dark:text-neutral-100" />
                 <span className="text-xs font-normal tracking-wide transition-opacity duration-300 animate-in fade-in">
                   {loadingMessage}
                 </span>
@@ -261,19 +264,19 @@ export function Step1Simulation() {
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <div
                     key={`skeleton-${i}`}
-                    className="w-full flex flex-col items-start p-4 bg-surface-alt border border-neutral-200 rounded-none overflow-hidden shadow-xs animate-pulse space-y-3"
+                    className="w-full flex flex-col items-start p-4 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 rounded-none overflow-hidden shadow-xs animate-pulse space-y-3"
                   >
                     <div className="flex items-baseline gap-2 w-full">
-                      <div className="h-5 w-8 bg-neutral-200 rounded-none"></div>
-                      <div className="h-6 w-28 bg-neutral-200 rounded-none"></div>
+                      <div className="h-5 w-8 bg-neutral-200 dark:bg-neutral-700 rounded-none"></div>
+                      <div className="h-6 w-28 bg-neutral-200 dark:bg-neutral-700 rounded-none"></div>
                     </div>
-                    <div className="h-3 w-20 bg-neutral-100 rounded-none"></div>
+                    <div className="h-3 w-20 bg-neutral-100 dark:bg-neutral-800 rounded-none"></div>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            // [RESOLVED STATE]: Injeção dos dados reais com fundo bg-surface-alt e fonte serifada de destaque no multiplicador
+            // [RESOLVED STATE]: Injeção dos dados reais com fundo bg-neutral-50 dark:bg-neutral-800 e fonte serifada de destaque no multiplicador
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl animate-in slide-in-from-bottom-4 fade-in duration-500 ease-out">
               {(simulationResult?.consults || []).map((item: any, index: number) => {
                 const qtdParcelas = item.installments;
@@ -283,10 +286,10 @@ export function Step1Simulation() {
                 return (
                   <button
                     key={index}
-                    className="w-full flex flex-col items-start pl-6 pr-4 py-3.5 bg-surface-alt border border-neutral-300 rounded-none overflow-hidden hover:bg-neutral-100 hover:border-neutral-900 transition-all focus-visible:ring-0 focus-visible:outline-none focus:border-neutral-900 hover:-translate-y-0.5 shadow-xs"
+                    className="w-full flex flex-col items-start pl-6 pr-4 py-3.5 bg-neutral-50 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 rounded-none overflow-hidden hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:border-neutral-900 dark:hover:border-neutral-100 transition-all focus-visible:ring-0 focus-visible:outline-none focus:border-neutral-900 dark:focus:border-neutral-100 hover:-translate-y-0.5 shadow-xs"
                   >
                     <div className="flex items-baseline gap-1.5 w-full">
-                      <span className="text-[13px] md:text-sm font-medium text-neutral-500 shrink-0">
+                      <span className="text-[13px] md:text-sm font-medium text-neutral-500 dark:text-neutral-400 shrink-0">
                         {qtdParcelas}x
                       </span>
 
@@ -296,9 +299,9 @@ export function Step1Simulation() {
                     </div>
 
                     {/* Linha discreta alinhada com o multiplicador */}
-                    <div className="w-7 h-px bg-neutral-200 mt-2 mb-1.5" />
+                    <div className="w-7 h-px bg-neutral-200 dark:bg-neutral-700 mt-2 mb-1.5" />
 
-                    <span className="text-xs font-normal text-neutral-500">
+                    <span className="text-xs font-normal text-neutral-500 dark:text-neutral-400">
                       Total {BRL(totalOpcao)}
                     </span>
                   </button>
@@ -308,7 +311,7 @@ export function Step1Simulation() {
           )}
         </div>
 
-        <p className="text-[12px] text-neutral-400 font-medium leading-relaxed pb-4">
+        <p className="text-[12px] text-neutral-400 dark:text-neutral-500 font-medium leading-relaxed pb-4">
           * Considera o valor do lance no momento da simulação, sem adicionar eventuais comissões ou outras taxas que
           também podem ser parceladas.
         </p>

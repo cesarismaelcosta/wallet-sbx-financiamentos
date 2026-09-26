@@ -34,8 +34,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 // no tom mais claro contra o card branco, tons distinguíveis entre si). Ver
 // skill de dataviz. Ciclo de 3 tons; rankings com mais de 3 itens repetem o
 // tom mais claro (identidade real já vem do rótulo direto em cada barra).
-const darkInk = "#404040"; // cinza neutro (mais suave que --foreground puro)
-const chartBlues = ["#2245a5", "#2a72df", "#64a4e8"]; // hsl(var(--chart-1/2/3))
+const darkInk = "hsl(var(--foreground))"; // token do tema (adapta claro/escuro)
+const chartBlues = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))"]; // tokens do tema (adapta claro/escuro)
 
 const BRL = (n: number) => 
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -68,28 +68,28 @@ export default function SimulationCharts({
           GRÁFICO 1: EVOLUÇÃO DIÁRIA (Linha do Tempo)
       --------------------------------------------------------------------- */}
       <div className="grid grid-cols-1 gap-4">
-        <div className="rounded-none border border-neutral-200 bg-white p-5 shadow-sm">
+        <div className="rounded-none border border-border bg-card p-5 shadow-sm">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h3 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900">Evolução de Simulações Diárias</h3>
-              <p className="text-xs text-neutral-500 font-medium mt-1">{periodLabel}</p>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-card-foreground">Evolução de Simulações Diárias</h3>
+              <p className="text-xs text-muted-foreground font-medium mt-1">{periodLabel}</p>
             </div>
           </div>
           
           {loading || !simKpis ? (
-            <div className="h-[240px] flex items-center justify-center text-neutral-500 font-medium">
-              <Loader2 className="h-4 w-4 animate-spin mr-2 text-neutral-900" />
+            <div className="h-[240px] flex items-center justify-center text-muted-foreground font-medium">
+              <Loader2 className="h-4 w-4 animate-spin mr-2 text-foreground" />
               Carregando...
             </div>
           ) : (
             <ChartContainer config={defaultChartConfig} className="h-[240px] w-full min-w-0">
               <BarChart data={simDailyData} margin={{ top: 24, right: 0, left: -24, bottom: 0 }}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#e5e5e5" />
-                <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#737373" }} interval="preserveStartEnd" />
+                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} interval="preserveStartEnd" />
                 <YAxis hide />
-                <ChartTooltip cursor={{ fill: "#f5f5f5", opacity: 0.8 }} content={<ChartTooltipContent className="rounded-none shadow-md border-neutral-200" />} />
+                <ChartTooltip cursor={{ fill: "hsl(var(--muted))", opacity: 0.8 }} content={<ChartTooltipContent className="rounded-none shadow-md border-border" />} />
                 <Bar dataKey="count" fill={darkInk} radius={[0, 0, 0, 0]}>
-                  <LabelList dataKey="count" position="top" offset={6} className="fill-neutral-900" fontSize={11} fontWeight={700} formatter={(v: any) => (v > 0 ? v : "")} />
+                  <LabelList dataKey="count" position="top" offset={6} className="fill-foreground" fontSize={11} fontWeight={700} formatter={(v: any) => (v > 0 ? v : "")} />
                 </Bar>
               </BarChart>
             </ChartContainer>
@@ -106,19 +106,19 @@ export default function SimulationCharts({
           { title: "Por Produto", data: simKpis?.byProduct },
           { title: "Por Parceiro", data: simKpis?.byPartner },
         ].map((chart, idx) => (
-          <div key={chart.title} className="rounded-none border border-neutral-200 bg-white p-5 overflow-hidden shadow-sm">
+          <div key={chart.title} className="rounded-none border border-border bg-card p-5 overflow-hidden shadow-sm">
             <div className="mb-4">
-              <h3 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900">{chart.title}</h3>
-              <p className="text-xs text-neutral-500 font-medium mt-1">{periodLabel}</p>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-card-foreground">{chart.title}</h3>
+              <p className="text-xs text-muted-foreground font-medium mt-1">{periodLabel}</p>
             </div>
             
             {loading || !chart.data ? (
-              <div className="h-[240px] flex items-center justify-center text-neutral-500 font-medium">
-                <Loader2 className="h-4 w-4 animate-spin mr-2 text-neutral-900" />
+              <div className="h-[240px] flex items-center justify-center text-muted-foreground font-medium">
+                <Loader2 className="h-4 w-4 animate-spin mr-2 text-foreground" />
                 Carregando...
               </div>
             ) : chart.data.length === 0 ? (
-              <p className="text-sm text-neutral-500 font-medium text-center mt-10">Nenhum dado no período.</p>
+              <p className="text-sm text-muted-foreground font-medium text-center mt-10">Nenhum dado no período.</p>
             ) : (
               <ChartContainer config={defaultChartConfig} className="h-[240px] w-full">
                 {/* ✨ FIX RESPONSIVO: Margem direita dinâmica para evitar corte dos valores monetários */}
@@ -127,7 +127,7 @@ export default function SimulationCharts({
                   layout="vertical" 
                   margin={{ top: 0, right: isMobile ? 100 : 130, left: 0, bottom: 0 }}
                 >
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#e5e5e5" />
+                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis type="number" hide />
                   
                   {/* ✨ FIX RESPONSIVO: Largura do Eixo Y dinâmica para não espremer a barra */}
@@ -136,19 +136,19 @@ export default function SimulationCharts({
                     dataKey="name" 
                     tickLine={false} 
                     axisLine={false} 
-                    tick={{ fontSize: isMobile ? 10 : 11, fill: "#737373", fontWeight: 500 }} 
+                    tick={{ fontSize: isMobile ? 10 : 11, fill: "hsl(var(--muted-foreground))", fontWeight: 500 }} 
                     width={isMobile ? 80 : 120}
                   />
                   
                   <ChartTooltip
-                    cursor={{ fill: "#f5f5f5", opacity: 0.8 }}
+                    cursor={{ fill: "hsl(var(--muted))", opacity: 0.8 }}
                     content={
                       <ChartTooltipContent
-                        className="rounded-none shadow-md border-neutral-200"
+                        className="rounded-none shadow-md border-border"
                         formatter={(value, _name, item) => (
                           <div className="flex flex-col">
-                            <span className="font-bold text-neutral-900">{value} simulações</span>
-                            <span className="text-xs font-medium text-neutral-500">{BRL(item.payload.volume)}</span>
+                            <span className="font-bold text-popover-foreground">{value} simulações</span>
+                            <span className="text-xs font-medium text-muted-foreground">{BRL(item.payload.volume)}</span>
                           </div>
                         )}
                       />
@@ -171,10 +171,10 @@ export default function SimulationCharts({
                         
                         return (
                           <g>
-                            <text x={cx} y={cy - 6} fill="#171717" fontSize={11} fontWeight={700} dominantBaseline="middle">
+                            <text x={cx} y={cy - 6} fill="hsl(var(--foreground))" fontSize={11} fontWeight={700} dominantBaseline="middle">
                               {props.value}
                             </text>
-                            <text x={cx} y={cy + 8} fill="#737373" fontSize={10} fontWeight={500} dominantBaseline="middle">
+                            <text x={cx} y={cy + 8} fill="hsl(var(--muted-foreground))" fontSize={10} fontWeight={500} dominantBaseline="middle">
                               {BRL(item.volume)}
                             </text>
                           </g>

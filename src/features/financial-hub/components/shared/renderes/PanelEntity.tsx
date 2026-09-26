@@ -35,51 +35,51 @@ export function PanelEntity({ entity, entityDetails }: { entity: any, entityDeta
   const docValueOnly = docString.replace(/^(CPF|CNPJ|Doc):\s*/, '');
 
   return (
-    <div className="rounded-none border border-neutral-200 bg-white p-4 space-y-3 break-inside-avoid shadow-xs">
-      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5 border-b border-neutral-100 pb-2">
-        <User size={14} className="text-neutral-900" /> Dados do Lead ({isPJ ? "Pessoa Jurídica" : "Pessoa Física"})
+    <div className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 space-y-3 break-inside-avoid shadow-xs">
+      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 border-b border-neutral-100 dark:border-neutral-800 pb-2">
+        <User size={14} className="text-neutral-900 dark:text-neutral-100" /> Dados do Lead ({isPJ ? "Pessoa Jurídica" : "Pessoa Física"})
       </h4>
       
       <div className="grid grid-cols-2 gap-3 text-xs">
         <div className="flex flex-col">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
             {isPJ ? "CNPJ" : "CPF"}
           </span> 
-          <span className="font-mono text-neutral-900 font-medium mt-0.5">{docValueOnly || "—"}</span>
+          <span className="font-mono text-neutral-900 dark:text-neutral-100 font-medium mt-0.5">{docValueOnly || "—"}</span>
         </div>
         
         <div className="flex flex-col">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
             {isPJ ? "Data de Fundação" : "Data de Nascimento"}
           </span> 
-          <span className="text-neutral-900 font-medium mt-0.5">
+          <span className="text-neutral-900 dark:text-neutral-100 font-medium mt-0.5">
             {data.birth_date ? formatDate(data.birth_date).d : "—"}
           </span>
         </div>
         
         <div className="flex flex-col">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Telefone</span> 
-          <span className="text-neutral-900 font-medium mt-0.5">{data.phone || "—"}</span>
+          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Telefone</span> 
+          <span className="text-neutral-900 dark:text-neutral-100 font-medium mt-0.5">{data.phone || "—"}</span>
         </div>
         
         <div className="flex flex-col overflow-hidden">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">E-mail</span> 
-          <span className="text-neutral-900 font-medium mt-0.5 truncate" title={data.email}>
+          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">E-mail</span> 
+          <span className="text-neutral-900 dark:text-neutral-100 font-medium mt-0.5 truncate" title={data.email}>
             {data.email || "—"}
           </span>
         </div>
         
         {data.gender && (
           <div className="flex flex-col">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Gênero</span> 
-            <span className="text-neutral-900 font-medium mt-0.5">{data.gender}</span>
+            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Gênero</span> 
+            <span className="text-neutral-900 dark:text-neutral-100 font-medium mt-0.5">{data.gender}</span>
           </div>
         )}
         
         {fullAddress && (
-          <div className="col-span-2 flex flex-col pt-2 border-t border-neutral-100 mt-1">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Endereço</span> 
-            <span className="text-neutral-900 font-normal mt-0.5">{fullAddress}</span>
+          <div className="col-span-2 flex flex-col pt-2 border-t border-neutral-100 dark:border-neutral-800 mt-1">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Endereço</span> 
+            <span className="text-neutral-900 dark:text-neutral-100 font-normal mt-0.5">{fullAddress}</span>
           </div>
         )}
       </div>

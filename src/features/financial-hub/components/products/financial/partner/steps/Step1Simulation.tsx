@@ -208,7 +208,7 @@ export function Step1Simulation() {
   if (!state?.data || Object.keys(state.data).length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <span className="text-neutral-400">Carregando...</span>
+        <span className="text-neutral-400 dark:text-neutral-500">Carregando...</span>
       </div>
     );
   }
@@ -225,7 +225,7 @@ export function Step1Simulation() {
 
   return (
     <div className="w-full space-y-8 animate-in fade-in duration-500 max-w-xl mx-auto lg:mx-0">
-      <div className="bg-white space-y-6">
+      <div className="bg-white dark:bg-neutral-950 space-y-6">
         
         {/* =========================================================================
          * 🤖 [PROGRESSIVE DISCLOSURE ARCHITECTURE]: Header Síncrono da Oferta
@@ -233,23 +233,23 @@ export function Step1Simulation() {
         <div className="flex items-start gap-4">
           
           {/* Box Zero-Radius mantendo o ÍCONE ORIGINAL do Partner */}
-          <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20 bg-neutral-100 rounded-none border border-neutral-200">
-            <ThumbsUp className="h-8 w-8 text-neutral-900" />
+          <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20 bg-neutral-100 dark:bg-neutral-800 rounded-none border border-neutral-200 dark:border-neutral-800">
+            <ThumbsUp className="h-8 w-8 text-neutral-900 dark:text-neutral-100" />
           </div>
 
           <div className="space-y-0.5 flex-1 w-0 min-w-0">
             {/* CORREÇÃO APLICADA: clamp desce a 14px no mobile, font-black mantido, truncate e w-full block preservados para forçar linha única */}
-            <h3 className="text-[clamp(14px,3.5vw,20px)] sm:text-2xl font-black text-neutral-900 uppercase tracking-tight leading-snug truncate w-full block">
+            <h3 className="text-[clamp(14px,3.5vw,20px)] sm:text-2xl font-black text-neutral-900 dark:text-neutral-100 uppercase tracking-tight leading-snug truncate w-full block">
               Simule seu financiamento
             </h3>
 
-            <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 truncate pt-0.5 w-full block">
+            <p className="text-[clamp(10px,3vw,12px)] sm:text-xs text-neutral-600 dark:text-neutral-400 truncate pt-0.5 w-full block">
               {offerDescText}
             </p>
 
             <div className="flex items-center pt-0.5">
-              <p className="text-sm text-neutral-600 truncate">
-                Lote {loteSubIndex} • <strong className="text-neutral-900 font-bold mr-2">{BRL(localValorOferta)}</strong>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 truncate">
+                Lote {loteSubIndex} • <strong className="text-neutral-900 dark:text-neutral-100 font-bold mr-2">{BRL(localValorOferta)}</strong>
               </p>
 
               {offer && (
@@ -257,7 +257,7 @@ export function Step1Simulation() {
                   href={getSuperbidUrl(offer)} 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="text-neutral-400 hover:text-neutral-700 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
+                  className="text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors flex items-center outline-none focus:outline-none focus:ring-0 ml-1"
                   title="Ver oferta original na Superbid"
                 >
                   <ExternalLink size={18} strokeWidth={1.5} />
@@ -270,12 +270,12 @@ export function Step1Simulation() {
         {/* =========================================================================
          * 🤖 [ZERO-TRUST INPUTS & SLIDER CONTROLS]: Container de Simulação
          * ========================================================================= */}
-        <div className="bg-surface-alt border border-neutral-200 rounded-none p-4 sm:p-7 space-y-4">
+        <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-4 sm:p-7 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4">
 
             {/* Controle do Valor do Lance */}
             <div className="space-y-1">
-              <Label className="text-[11px] font-medium text-neutral-900 uppercase tracking-wider font-sans">Valor do lance</Label>
+              <Label className="text-[11px] font-medium text-neutral-900 dark:text-neutral-100 uppercase tracking-wider font-sans">Valor do lance</Label>
               <Input 
                 disabled={loading}
                 value={BRL(localValorOferta)} 
@@ -285,7 +285,7 @@ export function Step1Simulation() {
                   setlocalValorOferta(rawValue);
                   updateData({ valorOferta: rawValue });
                 }}
-                className={`h-10 rounded-none bg-white border-neutral-200 text-brand-accent font-semibold disabled:bg-neutral-100 disabled:text-neutral-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`} 
+                className={`h-10 rounded-none bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-brand-accent font-semibold disabled:bg-neutral-100 dark:disabled:bg-neutral-900 disabled:text-neutral-500 dark:disabled:text-neutral-600 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`} 
               />
               <div className="pt-1 px-1">
                 <SliderCustomizado 
@@ -309,7 +309,7 @@ export function Step1Simulation() {
 
             {/* Controle da Entrada */}
             <div className="space-y-1">
-              <Label className="text-[11px] font-medium text-neutral-900 uppercase tracking-wider font-sans">Entrada</Label>
+              <Label className="text-[11px] font-medium text-neutral-900 dark:text-neutral-100 uppercase tracking-wider font-sans">Entrada</Label>
               <Input 
                 disabled={loading}
                 value={BRL((localValorOferta * localPercentualEntrada) / 100)} 
@@ -322,7 +322,7 @@ export function Step1Simulation() {
                 }}
                 onFocus={() => setEntradaFocused(true)}
                 onBlur={() => setEntradaFocused(false)}
-                className={`h-10 rounded-none bg-white border-neutral-200 text-brand-accent font-semibold disabled:bg-neutral-100 disabled:text-neutral-500 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`} 
+                className={`h-10 rounded-none bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-brand-accent font-semibold disabled:bg-neutral-100 dark:disabled:bg-neutral-900 disabled:text-neutral-500 dark:disabled:text-neutral-600 disabled:!cursor-wait ${loading ? "!cursor-wait" : "cursor-text"}`} 
               />
               <div className="pt-1 px-1">
                 <SliderCustomizado 
@@ -347,7 +347,7 @@ export function Step1Simulation() {
 
           {/* Seleção de Parcelas */}
           <div className="space-y-3">
-            <Label className="text-[11px] font-medium text-neutral-900 uppercase tracking-wider font-sans">Parcelas</Label>
+            <Label className="text-[11px] font-medium text-neutral-900 dark:text-neutral-100 uppercase tracking-wider font-sans">Parcelas</Label>
             <RadioGroup
               disabled={loading}
               value={localParcelas ? String(localParcelas) : ""}
@@ -367,11 +367,11 @@ export function Step1Simulation() {
                       htmlFor={`p-${p}`} 
                       className={`flex items-center justify-center p-2 border rounded-none transition-all shadow-xs ${
                         isSelected
-                          ? "border-transparent fill-gradient"
-                          : "border-neutral-300 bg-surface-alt hover:bg-neutral-100"
+                          ? "border-[#2246A7] bg-white dark:bg-brand-accent-muted"
+                          : "border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700"
                       } ${loading ? "!cursor-wait opacity-50" : "cursor-pointer"}`}
                     >
-                      <span className={`font-bold text-xs ${isSelected ? "text-white" : "text-brand-accent/60"}`}>{p}x</span>
+                      <span className={`font-bold text-xs ${isSelected ? "text-brand-accent" : "text-brand-accent/60"}`}>{p}x</span>
                     </Label>
                   </div>
                 );
@@ -398,7 +398,7 @@ export function Step1Simulation() {
           type="button"
           onClick={handleSimular} 
           disabled={!areConsentsValid || !localParcelas || loading}
-          className="w-full h-12 rounded-none text-white shadow-xs transition-all active:scale-[0.98] bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 disabled:!cursor-wait flex items-center justify-center gap-2 mt-1"
+          className="w-full h-12 rounded-none text-white shadow-xs transition-all active:scale-[0.98] cta-gradient disabled:opacity-50 disabled:!cursor-wait flex items-center justify-center gap-2 mt-1"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2 animate-pulse">

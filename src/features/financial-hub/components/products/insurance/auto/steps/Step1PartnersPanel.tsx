@@ -23,8 +23,12 @@ import { DynamicConsents } from "@/features/financial-hub/components/layout/Dyna
 import { useMemo, useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 
 export function Step1PartnersPanel() {
+
+  const { theme } = useTheme();
+  const nightMode = theme === "dark";
 
   // =========================================================================
   // 🤖 [BFCACHE SHIELD]: Proteção contra congelamento do botão (Back/Forward)
@@ -105,9 +109,9 @@ export function Step1PartnersPanel() {
        * ========================================================================= */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="shrink-0 w-16 h-16 overflow-hidden flex items-center justify-center">
+          <div className="shrink-0 w-16 h-16 overflow-hidden flex items-center justify-center dark:bg-black">
             <img
-              src="/assets/home/seguros.webp"
+              src={nightMode ? "/assets/home/seguros-dark.webp" : "/assets/home/seguros.webp"}
               alt="Segurança"
               className="w-full h-full object-contain relative"
               onError={(e) => {
@@ -116,13 +120,13 @@ export function Step1PartnersPanel() {
             />
           </div>
           <div>
-            <h2 className="hidden sm:block text-xs font-bold uppercase tracking-widest text-neutral-400 leading-tight">
+            <h2 className="hidden sm:block text-xs font-bold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 leading-tight">
               Seguradoras
             </h2>
           </div>
         </div>
 
-        <div className="bg-brand-accent text-brand-accent-foreground px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
+        <div className="bg-[#2246A7] text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
           Cotação gratuita
         </div>
       </div>
@@ -134,12 +138,12 @@ export function Step1PartnersPanel() {
         {insurers.map((insurer) => (
           <div 
             key={insurer.name} 
-            className="h-16 w-full border border-neutral-200 rounded-none flex items-center justify-center bg-white p-3 hover:border-neutral-900 transition-all shadow-xs"
+            className="h-16 w-full border border-neutral-200 dark:border-neutral-800 rounded-none flex items-center justify-center bg-white dark:bg-black p-3 hover:border-neutral-900 dark:hover:border-neutral-100 transition-all shadow-xs"
           >
             <img 
               src={insurer.logo} 
               alt={`Logo ${insurer.name}`} 
-              className="max-h-[80%] max-w-[90%] object-contain grayscale hover:grayscale-0 transition-all duration-300" 
+              className={`max-h-[80%] max-w-[90%] object-contain transition-all duration-300 ${nightMode ? "grayscale invert" : "grayscale hover:grayscale-0"}`}
             />
           </div>
         ))}
@@ -162,7 +166,7 @@ export function Step1PartnersPanel() {
           type="button"
           disabled={loading || navLoading || !areConsentsValid}
           onClick={handleProceed}
-          className="w-full h-12 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-none transition-all shadow-xs disabled:opacity-50 disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none disabled:!cursor-wait flex items-center justify-center gap-2"
+          className="w-full h-12 cta-gradient text-white font-bold rounded-none transition-all shadow-xs disabled:opacity-50 disabled:!cursor-wait flex items-center justify-center gap-2"
         >
           {loading || navLoading ? (
             <span className="flex items-center justify-center gap-2 animate-pulse">

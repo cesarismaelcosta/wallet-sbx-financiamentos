@@ -38,6 +38,7 @@ import { ArrowLeft, ChevronDown, SlidersHorizontal, ArrowUpDown } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHeader";
+import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchOffersQuery } from "@/services/offer";
@@ -127,7 +128,7 @@ function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = 
   return (
     <div className="relative" ref={ref}>
       <div
-        className="flex items-center justify-between gap-2 px-3.5 py-2 border border-neutral-200 bg-white text-neutral-900 min-w-[160px] rounded-none shadow-xs cursor-pointer transition-colors hover:bg-neutral-50"
+        className="flex items-center justify-between gap-2 px-3.5 py-2 border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-w-[160px] rounded-none shadow-xs cursor-pointer transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center gap-2">
@@ -141,15 +142,15 @@ function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = 
         <div
           className={`absolute top-[calc(100%+4px)] ${
             align === "right" ? "right-0" : "left-0"
-          } min-w-full w-max bg-white border border-neutral-200 rounded-none shadow-md py-1 z-50 overflow-hidden`}
+          } min-w-full w-max bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-none shadow-md py-1 z-50 overflow-hidden`}
         >
           {options.map((opt: any) => (
             <div
               key={opt.value}
               className={`px-3.5 py-2 text-xs cursor-pointer transition-colors ${
                 value === opt.value
-                  ? "bg-neutral-100 text-neutral-900 font-semibold"
-                  : "text-neutral-700 hover:bg-neutral-50"
+                  ? "bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 font-semibold"
+                  : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
               }`}
               onClick={() => {
                 onChange(opt.value);
@@ -169,11 +170,17 @@ function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = 
 // [ESQUELETO ESTRUTURAL DA PRATELEIRA: NEUTRAL BYPASS]
 // =========================================================================
 function OfferSkeletonLoader() {
+  // Usa o MESMO tema global do resto do app (useTheme/ThemeProvider) --
+  // a offer não tem mais uma preferência própria, então nunca diverge da
+  // sbxpay.index ou de qualquer outra rota.
+  const { theme } = useTheme();
+  const nightMode = theme === "dark";
+
   return (
-    <div className="max-w-7xl mx-auto px-6 py-28 space-y-8 animate-pulse bg-white">
+    <div className="max-w-7xl mx-auto px-6 py-28 space-y-8 animate-pulse bg-white dark:bg-neutral-950 transition-colors">
       <div className="flex justify-between items-center">
-        <div className="h-8 w-48 bg-neutral-200/80 rounded-none" />
-        <div className="h-8 w-28 bg-neutral-100 rounded-none" />
+        <div className="h-8 w-48 bg-neutral-200/80 dark:bg-neutral-700/80 rounded-none" />
+        <div className="h-8 w-28 bg-neutral-100 dark:bg-neutral-800 rounded-none" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pt-6">
@@ -217,6 +224,12 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  // 🌙 Tema global compartilhado com o resto do app (useTheme/ThemeProvider) --
+  // a offer segue exatamente o mesmo tema da sbxpay.index e de qualquer outra
+  // rota; não existe mais uma preferência isolada que possa divergir.
+  const { theme, setTheme } = useTheme();
+  const nightMode = theme === "dark";
 
   const totalPages = Math.max(Math.ceil(totalElements / pageSize), 1);
 
@@ -451,7 +464,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   const formattedTotal = totalElements.toLocaleString("pt-BR");
 
   return (
-    <div className="min-h-screen bg-white text-neutral-900 pb-20 relative rounded-none">
+    <div className="min-h-screen bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100 pb-20 relative rounded-none transition-colors">
 
       {/* 1. HEADER */}
       <PanelHeader 
@@ -461,18 +474,20 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         userData={userProfile}
         onLogout={() => logout({ purgeEnv: true })}
         onNavigate={(path) => navigate({ to: path as any })}
+        nightMode={nightMode}
+        onToggleNightMode={() => setTheme(nightMode ? "light" : "dark")}
       />
 
       {/* 2. BARRA FLUTUANTE MOBILE FIXA */}
       <div
-        className="md:hidden fixed top-[60px] left-0 w-full h-[48px] bg-white border-b border-neutral-200 shadow-xs z-40 rounded-none"
+        className="md:hidden fixed top-[60px] left-0 w-full h-[48px] bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700 shadow-xs z-40 rounded-none transition-colors"
         ref={mobileMenuRef}
       >
-        <div className="flex items-center w-full h-full divide-x divide-neutral-200">
+        <div className="flex items-center w-full h-full divide-x divide-neutral-200 dark:divide-neutral-700">
           {/* 2A. Filtrar (Mobile) */}
           {isCartao && (
             <div
-              className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-neutral-900 transition-colors hover:bg-neutral-50"
+              className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-neutral-900 dark:text-neutral-100 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
               onClick={() => {
                 setFilterMenuOpen(!filterMenuOpen);
                 setSortMenuOpen(false);
@@ -485,27 +500,27 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
           {/* 2B. Ordenar (Mobile) */}
           <div
-            className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-neutral-900 transition-colors hover:bg-neutral-50"
+            className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-neutral-900 dark:text-neutral-100 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
             onClick={() => {
               setSortMenuOpen(!sortMenuOpen);
               setFilterMenuOpen(false);
             }}
           >
-            <ArrowUpDown size={15} className="text-neutral-500" />
+            <ArrowUpDown size={15} className="text-neutral-500 dark:text-neutral-400" />
             <span className="text-xs font-medium select-none">Ordenar</span>
           </div>
         </div>
 
         {/* Menus Dropdown (Mobile) */}
         {isCartao && filterMenuOpen && (
-          <div className="absolute top-[48px] left-0 w-full bg-white shadow-lg border-b border-neutral-200 max-h-[75vh] overflow-y-auto z-40 rounded-none">
+          <div className="absolute top-[48px] left-0 w-full bg-white dark:bg-neutral-900 shadow-lg border-b border-neutral-200 dark:border-neutral-700 max-h-[75vh] overflow-y-auto z-40 rounded-none">
             {FILTER_OPTIONS.map((opt, idx) => (
               <div
                 key={idx}
-                className={`px-5 py-3 text-xs border-b border-neutral-100 last:border-0 cursor-pointer ${
+                className={`px-5 py-3 text-xs border-b border-neutral-100 dark:border-neutral-800 last:border-0 cursor-pointer ${
                   selectedCategory === opt.value
-                    ? "text-neutral-900 bg-neutral-100 font-semibold"
-                    : "text-neutral-600 hover:bg-neutral-50"
+                    ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 font-semibold"
+                    : "text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
                 }`}
                 onClick={() => {
                   handleCategoryChange(opt.value);
@@ -519,14 +534,14 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         )}
 
         {sortMenuOpen && (
-          <div className="absolute top-[48px] left-0 w-full bg-white shadow-lg border-b border-neutral-200 max-h-[60vh] overflow-y-auto z-40 rounded-none">
+          <div className="absolute top-[48px] left-0 w-full bg-white dark:bg-neutral-900 shadow-lg border-b border-neutral-200 dark:border-neutral-700 max-h-[60vh] overflow-y-auto z-40 rounded-none">
             {SORT_OPTIONS.map((opt, idx) => (
               <div
                 key={idx}
-                className={`px-5 py-3.5 text-xs border-b border-neutral-100 last:border-0 cursor-pointer ${
+                className={`px-5 py-3.5 text-xs border-b border-neutral-100 dark:border-neutral-800 last:border-0 cursor-pointer ${
                   currentSort === opt.value
-                    ? "text-neutral-900 bg-neutral-100 font-semibold"
-                    : "text-neutral-600 hover:bg-neutral-50"
+                    ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 font-semibold"
+                    : "text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
                 }`}
                 onClick={() => {
                   handleSortChange(opt.value);
@@ -545,7 +560,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
         {/* DESKTOP BARRA DE FILTRO E ORDENAÇÃO */}
         <div className="hidden md:flex w-full items-center justify-between gap-4 pt-2 pb-6">
           <div className="flex items-center">
-            <p className="text-xs font-medium text-neutral-500 m-0 tabular-nums">{formattedTotal} anúncios</p>
+            <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 m-0 tabular-nums">{formattedTotal} anúncios</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -573,7 +588,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
         {/* MOBILE: QUANTIDADE DE ANÚNCIOS */}
         <div className="md:hidden mb-4">
-          <p className="text-xs font-medium text-neutral-500 m-0 tabular-nums">{formattedTotal} anúncios</p>
+          <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 m-0 tabular-nums">{formattedTotal} anúncios</p>
         </div>
 
         {/* ENGINE DE CARDS */}
@@ -584,8 +599,8 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
             ))}
           </div>
         ) : offersList.length === 0 ? (
-          <div className="bg-neutral-50 text-neutral-900 p-12 text-center border border-neutral-200 rounded-none shadow-xs my-12">
-            <p className="text-neutral-500 font-normal text-sm">
+          <div className="bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 p-12 text-center border border-neutral-200 dark:border-neutral-700 rounded-none shadow-xs my-12">
+            <p className="text-neutral-500 dark:text-neutral-400 font-normal text-sm">
               Nenhuma oferta encontrada para esta categoria no momento.
             </p>
           </div>
@@ -615,11 +630,11 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
                   size="sm"
                   disabled={pageNumber === 1 || loading}
                   onClick={() => setPageNumber((p) => Math.max(p - 1, 1))}
-                  className="group border-neutral-200 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary text-xs rounded-none"
+                  className="group bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-[#2246A7] hover:text-white hover:border-[#2246A7] disabled:opacity-100 disabled:bg-white dark:disabled:bg-neutral-900 disabled:text-neutral-300 dark:disabled:text-neutral-700 disabled:border-neutral-100 dark:disabled:border-neutral-800 text-xs rounded-none"
                 >
                   <span className="inline-block transition-transform duration-300 group-hover:-translate-x-1">←</span> Anterior
                 </Button>
-                <span className="text-xs text-neutral-500 px-2 font-normal tabular-nums">
+                <span className="text-xs text-neutral-500 dark:text-neutral-400 px-2 font-normal tabular-nums">
                   Página {pageNumber} de {totalPages}
                 </span>
                 <Button
@@ -627,7 +642,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
                   size="sm"
                   disabled={pageNumber >= totalPages || loading}
                   onClick={() => setPageNumber((p) => Math.min(p + 1, totalPages))}
-                  className="group border-neutral-200 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary text-xs rounded-none"
+                  className="group bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-[#2246A7] hover:text-white hover:border-[#2246A7] disabled:opacity-100 disabled:bg-white dark:disabled:bg-neutral-900 disabled:text-neutral-300 dark:disabled:text-neutral-700 disabled:border-neutral-100 dark:disabled:border-neutral-800 text-xs rounded-none"
                 >
                   Próxima <span className="inline-block transition-transform duration-300 group-hover:translate-x-1">→</span>
                 </Button>
@@ -636,10 +651,10 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
 
             <div className="md:hidden py-8 text-center">
               {loading && pageNumber > 1 && (
-                <span className="text-xs text-neutral-500">Carregando mais ofertas...</span>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">Carregando mais ofertas...</span>
               )}
               {!loading && pageNumber >= totalPages && (
-                <span className="text-xs text-neutral-400">Você viu todas as ofertas.</span>
+                <span className="text-xs text-neutral-400 dark:text-neutral-500">Você viu todas as ofertas.</span>
               )}
             </div>
           </>

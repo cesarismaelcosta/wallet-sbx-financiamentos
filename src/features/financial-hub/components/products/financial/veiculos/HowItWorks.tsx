@@ -6,8 +6,8 @@
  * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-RADIUS, CLEAN ICONS & WHITE HIGHLIGHTS
  * =========================================================================
  * 1. {Zero-Radius Strict Governance}: Eliminação total de arredondamentos (`rounded-3xl` virou `rounded-none`).
- * 2. {Solid Black Region}: Fundo preto institucional explícito (`bg-[#1D1D1B]`) com 
- *    cartões em `bg-neutral-900` e bordas refinadas.
+ * 2. {Solid Black Region}: Fundo preto institucional explícito (`bg-[#1D1D1B] dark:bg-neutral-50`) com 
+ *    cartões em `bg-neutral-900 dark:bg-neutral-100` e bordas refinadas.
  * 3. {SBX Typography}: Títulos monoespaçados, uppercase e espaçados (tracking), com 
  *    ícones mutados (neutral-400) e descrições em branco puro para leitura fluida.
  * 
@@ -37,11 +37,11 @@ export function HowItWorks() {
   ];
 
   return (
-    <section id="como-funciona" className="scroll-mt-24 bg-[#1D1D1B] text-white py-16 lg:py-16 relative overflow-hidden border-b border-white/20 rounded-none">
+    <section id="como-funciona" className="scroll-mt-24 bg-[#1D1D1B] dark:bg-neutral-50 text-white dark:text-neutral-900 py-16 lg:py-16 relative overflow-hidden border-b border-white/20 dark:border-neutral-900/20 rounded-none">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 relative z-10">
-        <h2 className="text-center text-2xl sm:text-3xl font-semibold mb-16 text-white tracking-tight leading-snug">
-          Em <span className="serif font-normal text-white">3 passos</span> você compra na{" "}
-          <span className="serif font-normal text-white">
+        <h2 className="text-center text-2xl sm:text-3xl font-semibold mb-16 text-white dark:text-neutral-900 tracking-tight leading-snug">
+          Em <span className="serif font-normal text-white dark:text-neutral-900">3 passos</span> você compra na{" "}
+          <span className="serif font-normal text-white dark:text-neutral-900">
             Superbid
           </span>{" "}
           com seu financiamento.
@@ -51,18 +51,18 @@ export function HowItWorks() {
           {steps.map((s, i) => (
             <div
               key={i}
-              className="bg-neutral-900 p-6 sm:p-8 transition-all hover:bg-neutral-800/80 border border-white/20 rounded-none flex flex-col shadow-xs"
+              className="bg-neutral-900 dark:bg-neutral-100 p-6 sm:p-8 transition-all hover:bg-neutral-800/80 dark:hover:bg-neutral-200/80 border border-white/20 dark:border-neutral-900/20 rounded-none flex flex-col shadow-xs"
             >
               {/* Ícones com cor mutada (neutral-400), Títulos brancos e em destaque */}
               <div className="flex items-center gap-3 mb-4">
                 {s.i}
-                <h3 className="font-mono text-sm uppercase tracking-[0.18em] text-white mt-0.5">
+                <h3 className="font-mono text-sm uppercase tracking-[0.18em] text-white dark:text-neutral-900 mt-0.5">
                   {s.t}
                 </h3>
               </div>
 
               {/* Descrição: Branco puro para destaque total da ação */}
-              <p className="text-sm leading-relaxed text-white">
+              <p className="text-sm leading-relaxed text-white dark:text-neutral-900">
                 {s.d}
               </p>
             </div>

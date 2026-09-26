@@ -49,9 +49,9 @@ export function WizardHeader({ currentStep, stepsInfo }: WizardHeaderProps) {
               <span
                 className={cn(
                   "flex h-6 w-6 shrink-0 items-center justify-center rounded-none border text-[11px] font-semibold transition-all duration-300",
-                  done && "border-neutral-900 bg-neutral-900 text-white",
-                  active && "border-neutral-900 bg-neutral-900 text-white font-bold",
-                  !done && !active && "border-neutral-200 bg-white text-neutral-400",
+                  done && "border-brand-accent bg-brand-accent text-brand-accent-foreground",
+                  active && "border-brand-accent bg-brand-accent text-brand-accent-foreground font-bold",
+                  !done && !active && "border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500",
                 )}
               >
                 {done ? <Check className="h-3 w-3" /> : idx}
@@ -59,7 +59,7 @@ export function WizardHeader({ currentStep, stepsInfo }: WizardHeaderProps) {
               <span
                 className={cn(
                   "hidden truncate text-xs sm:inline-block transition-colors duration-300",
-                  active ? "font-bold text-neutral-900" : "text-neutral-500 font-medium",
+                  active ? "font-bold text-brand-accent" : "text-neutral-500 dark:text-neutral-400 font-medium",
                 )}
               >
                 {l}
@@ -70,19 +70,19 @@ export function WizardHeader({ currentStep, stepsInfo }: WizardHeaderProps) {
       </ol>
 
       {/* Barra de progresso visual com Zero-Radius e Neutral Purity (Sem roxo) */}
-      <div className="mb-4 h-1 w-full overflow-hidden rounded-none bg-neutral-200 relative">
+      <div className="mb-4 h-1 w-full overflow-hidden rounded-none bg-neutral-200 dark:bg-neutral-800 relative">
         <div
-          className="h-full rounded-none bg-neutral-900 transition-all duration-500 absolute left-0 top-0"
+          className="h-full rounded-none bg-brand-accent transition-all duration-500 absolute left-0 top-0"
           style={{ width: `${pct}%` }}
         />
       </div>
 
       {/* Título e Descrição */}
       <div className="mb-4">
-        <h2 className="text-lg font-bold leading-tight text-neutral-900 tracking-tight">
+        <h2 className="text-lg font-bold leading-tight text-neutral-900 dark:text-neutral-100 tracking-tight">
           {content.title}
         </h2>
-        <p className="mt-1 text-[13px] leading-snug text-neutral-600">
+        <p className="mt-1 text-[13px] leading-snug text-neutral-600 dark:text-neutral-400">
           {content.description}
         </p>
       </div>

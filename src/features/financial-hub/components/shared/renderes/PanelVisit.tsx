@@ -41,55 +41,55 @@ export function PanelVisit({ visitData, updateData }: { visitData: any; updateDa
   const targetUrl = visit?.target_url;
 
   return (
-    <div className="rounded-none border border-neutral-200 bg-white p-4 space-y-3 break-inside-avoid shadow-xs">
-      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5 border-b border-neutral-100 pb-2">
-        <CalendarIcon size={14} className="text-neutral-900" /> Origem & Visita
+    <div className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 space-y-3 break-inside-avoid shadow-xs">
+      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 border-b border-neutral-100 dark:border-neutral-800 pb-2">
+        <CalendarIcon size={14} className="text-neutral-900 dark:text-neutral-100" /> Origem & Visita
       </h4>
       
       <div className="grid grid-cols-2 gap-3 text-xs">
         <div className="flex flex-col">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Data de Acesso</span>
-          <span className="text-neutral-900 font-medium mt-0.5">{created.d} às {created.h}</span>
+          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Data de Acesso</span>
+          <span className="text-neutral-900 dark:text-neutral-100 font-medium mt-0.5">{created.d} às {created.h}</span>
         </div>
         
         <div className="flex flex-col overflow-hidden">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">UTM Source / Campaign</span>
-          <span className="text-neutral-900 font-mono truncate mt-0.5" title={`${utmSource} / ${utmCampaign}`}>
+          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">UTM Source / Campaign</span>
+          <span className="text-neutral-900 dark:text-neutral-100 font-mono truncate mt-0.5" title={`${utmSource} / ${utmCampaign}`}>
             {utmSource} / {utmCampaign}
           </span>
         </div>
 
         {visitId && (
           <div className="flex flex-col overflow-hidden">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Visit ID</span>
-            <span className="font-mono text-neutral-900 mt-0.5 truncate" title={visitId}>{visitId}</span>
+            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Visit ID</span>
+            <span className="font-mono text-neutral-900 dark:text-neutral-100 mt-0.5 truncate" title={visitId}>{visitId}</span>
           </div>
         )}
         
         <div className="flex flex-col">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Localização</span>
-          <span className="text-neutral-900 mt-0.5">{country} / {state} / {city}</span>
+          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Localização</span>
+          <span className="text-neutral-900 dark:text-neutral-100 mt-0.5">{country} / {state} / {city}</span>
         </div>
         
-        <div className="col-span-2 flex flex-col pt-2 border-t border-neutral-100 mt-1">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">IP & Device</span>
-          <span className="text-neutral-900 mt-0.5">{ip} / {os} ({device})</span>
+        <div className="col-span-2 flex flex-col pt-2 border-t border-neutral-100 dark:border-neutral-800 mt-1">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">IP & Device</span>
+          <span className="text-neutral-900 dark:text-neutral-100 mt-0.5">{ip} / {os} ({device})</span>
         </div>
 
         {(originUrl || targetUrl) && (
           <>
             {originUrl && (
-              <div className="col-span-2 flex flex-col overflow-hidden pt-2 border-t border-neutral-100 mt-1">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Origem (URL)</span>
-                <span className="text-neutral-900 font-mono text-[11px] truncate mt-0.5" title={originUrl}>
+              <div className="col-span-2 flex flex-col overflow-hidden pt-2 border-t border-neutral-100 dark:border-neutral-800 mt-1">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Origem (URL)</span>
+                <span className="text-neutral-900 dark:text-neutral-100 font-mono text-[11px] truncate mt-0.5" title={originUrl}>
                   {originUrl}
                 </span>
               </div>
             )}
             {targetUrl && (
-              <div className="col-span-2 flex flex-col overflow-hidden pt-2 border-t border-neutral-100 mt-1">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Destino (URL)</span>
-                <span className="text-neutral-900 font-mono text-[11px] truncate mt-0.5" title={targetUrl}>
+              <div className="col-span-2 flex flex-col overflow-hidden pt-2 border-t border-neutral-100 dark:border-neutral-800 mt-1">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">Destino (URL)</span>
+                <span className="text-neutral-900 dark:text-neutral-100 font-mono text-[11px] truncate mt-0.5" title={targetUrl}>
                   {targetUrl}
                 </span>
               </div>

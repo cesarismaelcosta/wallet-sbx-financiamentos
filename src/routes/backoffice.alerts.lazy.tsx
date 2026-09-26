@@ -222,48 +222,48 @@ function AlertsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-header-title">Alertas do Sistema</h1>
-          <p className="text-sm text-neutral-600">Gerencie quem recebe notificações de erros e infraestrutura.</p>
+          <p className="text-sm text-muted-foreground">Gerencie quem recebe notificações de erros e infraestrutura.</p>
         </div>
 
         <div className="flex items-center gap-2">
           {isAdmin && (
             <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="rounded-none border-neutral-200 text-neutral-900 shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                <Button variant="outline" size="sm" className="rounded-none border-border text-foreground shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                   <Plus className="mr-2 h-4 w-4" /> Cadastrar E-mail
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:rounded-none bg-white border-neutral-200">
+              <DialogContent className="sm:rounded-none bg-card border-border">
                 <DialogHeader>
-                  <DialogTitle className="text-neutral-900 text-base">Novo Destinatário de Alerta</DialogTitle>
-                  <DialogDescription className="text-neutral-500 text-xs">Cadastre um membro da equipe técnica para receber logs de falhas.</DialogDescription>
+                  <DialogTitle className="text-foreground text-base">Novo Destinatário de Alerta</DialogTitle>
+                  <DialogDescription className="text-muted-foreground text-xs">Cadastre um membro da equipe técnica para receber logs de falhas.</DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4 py-4 text-xs">
                   <div className="space-y-2">
-                    <Label className="text-neutral-700 text-xs">Nome ou Setor (ex: Squad DevOps)</Label>
+                    <Label className="text-foreground text-xs">Nome ou Setor (ex: Squad DevOps)</Label>
                     <Input
                       value={registerData.name}
                       placeholder="Ex: João da Silva"
                       onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
-                      className="rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900 text-neutral-900 placeholder:text-neutral-400 text-xs"
+                      className="rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground text-foreground placeholder:text-muted-foreground text-xs"
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label className="text-neutral-700 text-xs">E-mail Completo</Label>
+                    <Label className="text-foreground text-xs">E-mail Completo</Label>
                     <Input
                       type="email"
                       placeholder="devops@suaempresa.com"
                       value={registerData.email}
                       onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
-                      className="rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900 text-neutral-900 placeholder:text-neutral-400 text-xs"
+                      className="rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground text-foreground placeholder:text-muted-foreground text-xs"
                     />
                   </div>
                 </div>
 
                 <DialogFooter>
-                  <Button variant="outline" className="rounded-none border-neutral-200 text-neutral-900 text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary" onClick={() => setRegisterOpen(false)}>
+                  <Button variant="outline" className="rounded-none border-border text-foreground text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary" onClick={() => setRegisterOpen(false)}>
                     Cancelar
                   </Button>
                   <Button onClick={handleRegister} disabled={isSaving} className="cta-gradient border-0 rounded-none text-white font-medium text-xs">
@@ -281,11 +281,11 @@ function AlertsPage() {
         </div>
       </div>
 
-      <div className="rounded-none border border-neutral-200 bg-white flex flex-col overflow-hidden shadow-xs">
+      <div className="rounded-none border border-border bg-card flex flex-col overflow-hidden shadow-xs">
         <div className="overflow-x-auto w-full pb-2">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-neutral-200 bg-neutral-100 text-left text-[10px] font-semibold uppercase tracking-wider text-neutral-600 whitespace-nowrap">
+              <tr className="border-b border-border bg-accent text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
                 <th className="px-4 py-2.5 w-[300px]">Destinatário</th>
                 <th className="px-4 py-2.5 w-[200px]">Categoria</th>
                 <th className="px-4 py-2.5 w-[150px]">Status</th>
@@ -295,7 +295,7 @@ function AlertsPage() {
             <tbody>
               {recipients.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-neutral-500 text-xs">
+                  <td colSpan={4} className="p-8 text-center text-muted-foreground text-xs">
                     Nenhum destinatário de alerta configurado.
                   </td>
                 </tr>
@@ -303,14 +303,14 @@ function AlertsPage() {
               
               {recipients.map((r) => {
                 return (
-                  <tr key={r.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
+                  <tr key={r.id} className="border-b border-border hover:bg-muted transition-colors">
                     <td className="px-4 py-2.5 whitespace-nowrap">
-                      <div className="font-medium text-neutral-900">{r.name}</div>
-                      <div className="text-[11px] text-neutral-400">{r.email}</div>
+                      <div className="font-medium text-foreground">{r.name}</div>
+                      <div className="text-[11px] text-muted-foreground">{r.email}</div>
                     </td>
                     
                     <td className="px-4 py-2.5 whitespace-nowrap">
-                      <span className="inline-flex items-center rounded-none bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-700 uppercase tracking-wider">
+                      <span className="inline-flex items-center rounded-none bg-accent px-2 py-0.5 text-[10px] font-medium text-foreground uppercase tracking-wider">
                         Todos os Erros
                       </span>
                     </td>
@@ -329,7 +329,7 @@ function AlertsPage() {
                     <td className="px-4 py-2.5 text-right whitespace-nowrap">
                       {isAdmin && (
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => toggleActive(r)} className="h-8 px-2 text-xs rounded-none hover:bg-neutral-100 text-neutral-900 font-medium">
+                          <Button variant="ghost" size="sm" onClick={() => toggleActive(r)} className="h-8 px-2 text-xs rounded-none hover:bg-accent text-foreground font-medium">
                             {r.is_active ? "Pausar" : "Ativar"}
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => handleDelete(r.id)} className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-none">

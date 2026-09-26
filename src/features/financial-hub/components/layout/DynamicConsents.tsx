@@ -72,7 +72,7 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
   return (
     <TooltipProvider delayDuration={200}>
       {/* Contêiner Estrutural Hairline: cantos retos e superfície neutra suave */}
-      <div className="flex flex-col border border-neutral-200 bg-neutral-50/60 p-2.5 space-y-1 rounded-none">
+      <div className="flex flex-col border border-neutral-200 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-900/60 p-2.5 space-y-1 rounded-none">
         {[...configs]
           .sort((a, b) => a.position - b.position)
           .map((opt) => {
@@ -87,7 +87,7 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                   checked={isChecked}
                   onCheckedChange={(checked) => onChange({ ...value, [opt.id]: !!checked })}
                   className={`h-4 w-4 shrink-0 rounded-none border transition-colors focus-visible:ring-1 focus-visible:ring-neutral-900 ${
-                    isChecked ? "border-transparent fill-gradient" : "border-neutral-300"
+                    isChecked ? "border-transparent fill-gradient" : "border-neutral-300 dark:border-neutral-600"
                   }`}
                 />
               </div>
@@ -95,7 +95,7 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
               {/* Rótulo e Parser Dinâmico de Termos */}
               <label 
                 htmlFor={`consent-${opt.id}`} 
-                className="text-xs text-neutral-600 leading-snug cursor-pointer select-none flex-1 mt-[2px]"
+                className="text-xs text-neutral-600 dark:text-neutral-400 leading-snug cursor-pointer select-none flex-1 mt-[2px]"
               >
                 {opt.template_text ? (
                   /* Parsing do template dinâmico para extração de tags {identificador} */
@@ -107,7 +107,7 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
 
                       if (!linkConfig) {
                         return (
-                          <span key={i} className="font-semibold text-neutral-900">
+                          <span key={i} className="font-semibold text-neutral-900 dark:text-neutral-100">
                             {cleanText}
                           </span>
                         );
@@ -151,9 +151,9 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                                 side="bottom"
                                 align="start"
                                 sideOffset={6}
-                                className="max-w-xs p-3 bg-white text-neutral-900 text-[11px] rounded-none border border-neutral-200 shadow-md leading-relaxed z-[100] animate-in fade-in-0 zoom-in-95"
+                                className="max-w-xs p-3 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 text-[11px] rounded-none border border-neutral-200 dark:border-neutral-700 shadow-md leading-relaxed z-[100] animate-in fade-in-0 zoom-in-95"
                               >
-                                <p className="font-normal text-neutral-600">
+                                <p className="font-normal text-neutral-600 dark:text-neutral-400">
                                   {linkConfig.tooltip_text}
                                 </p>
                               </TooltipContent>
@@ -174,7 +174,7 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                       href={(opt as any).url} 
                       target="_blank" 
                       rel="noopener noreferrer" 
-                      className="font-semibold text-neutral-900 underline underline-offset-2 mx-1 hover:text-neutral-700 transition-colors"
+                      className="font-semibold text-neutral-900 dark:text-neutral-100 underline underline-offset-2 mx-1 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {(opt as any).link_text}

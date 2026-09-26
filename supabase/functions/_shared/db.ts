@@ -45,8 +45,12 @@
  * -- mesmo valor novo — os dois lados precisam ficar sincronizados.
  */
 
-// @deno-types="https://deno.land/x/postgresjs/mod.js"
-import postgres from 'https://deno.land/x/postgresjs/mod.js';
+// 🛡️ [SBXW-31 FIX]: versão fixa (era sem versão — resolvia sempre para a
+// "latest" do módulo, com aviso `x-deno-warning: Implicitly using latest
+// version` no deploy; qualquer alteração a montante entrava em produção sem
+// revisão nem sinal, no módulo que abre conexão direta ao banco fora de RLS).
+// @deno-types="https://deno.land/x/postgresjs@v3.4.8/mod.js"
+import postgres from 'https://deno.land/x/postgresjs@v3.4.8/mod.js';
 
 // 🛡️ [FIX - 2026-09-17]: Voltamos pro Transaction Pooler (Supavisor) — mas
 // não como `postgres`. O incidente de 16/09 ("password authentication

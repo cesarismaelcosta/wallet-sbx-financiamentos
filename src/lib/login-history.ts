@@ -7,7 +7,7 @@ const STORAGE = typeof window !== "undefined" ? sessionStorage : null;
 const LAST_LOG_KEY = "sbx.login.last";
 
 
-export type LoginHistoryEvent = "login" | "refresh" | "logout" | "failed_attempt" | "blocked";
+export type LoginHistoryEvent = "login" | "refresh" | "logout" | "failed_attempt" | "blocked" | "page_view";
 
 // O e-mail é consumido apenas em memória (hash para o throttle) e não trafega no payload
 type LogLoginHistoryInput = {

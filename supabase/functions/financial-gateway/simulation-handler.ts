@@ -257,12 +257,14 @@ export async function processSimulation(
     case 3: 
       debugLog(`🏦 INICIO FLUXO CREDITAS - PRODUTO: ${payload.product_id} | FASE: ${step}`, payload.simulation_id);
 
-      if (payload.product_id === 7) { // CAR EQUITY (Auto Equity)
+      if (Number(payload.product_id) === 7) { // CAR EQUITY (Auto Equity)
         
         if (step === 'CHECK_ELIGIBILITY') {
           payload.simulation_id = payload.simulation_id || crypto.randomUUID();
           payload.action_description = 'SIMULATION_CHECK_ELIGIBILITY';
           
+          debugLog(`🏦 CHECK_ELIGIBILITY - PRODUTO: ${payload.product_id} | FASE: ${step}`, payload.simulation_id);
+
           try {
             gatewayResult = await processSimulationCreditasAutoEquity(payload, step);
           } catch (err: any) {

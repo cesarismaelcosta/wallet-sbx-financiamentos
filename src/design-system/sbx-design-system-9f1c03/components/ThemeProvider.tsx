@@ -28,11 +28,20 @@ export function ThemeProvider({
   storageKey = "sbx-theme",
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  );
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+      try {
+        return (localStorage.getItem(storageKey) as Theme) || defaultTheme;
+      } catch {
+        return defaultTheme;
+      }
+    }
+    return defaultTheme;
+  });
 
-  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">("dark");
+  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">(
+    defaultTheme === "light" ? "light" : "dark"
+  );
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -67,9 +76,15 @@ export function ThemeProvider({
 
   const value = {
     theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme);
-      setTheme(theme);
+    setTheme: (newTheme: Theme) => {
+      if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+        try {
+          localStorage.setItem(storageKey, newTheme);
+        } catch (e) {
+          console.error("Falha ao salvar tema no localStorage", e);
+        }
+      }
+      setTheme(newTheme);
     },
     resolvedTheme,
   };

@@ -24,8 +24,13 @@
  *    sendo vedada a sua persistência em `localStorage` ou `sessionStorage`.
  * 4. {Zero-Radius & Neutral Purity}: Enquadramento do card em proporções de 440px,
  *    arestas estritamente retas (`rounded-none`), paleta monocromática neutra
- *    (`neutral-900`, `border-neutral-200`, `bg-surface-alt`) e imagem de erro tratada
- *    em escala de cinza (`grayscale contrast-125`).
+ *    e imagem de erro tratada em escala de cinza (`grayscale contrast-125`).
+ *    Correção: `bg-surface-alt`, `bg-card` e `text-foreground` eram tokens
+ *    vivos do tema (mudam de valor em `.dark`) e não neutros fixos como o
+ *    comentário original sugeria -- a tela de login inteira herdava o dark
+ *    mode ativado via localStorage["sbx-theme"] pelo ThemeToggle do
+ *    backoffice. Substituídos por `bg-neutral-50`, `bg-white` e
+ *    `text-neutral-900`, imunizando a página ao tema, igual ao CardOfferV.
  *
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro (Architectural Mechanics)
@@ -37,6 +42,7 @@ import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-rou
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { autenticateWalletsbX } from "@/services/auth";
 import { WalletLogo } from "@/components/brand/WalletLogo";
+import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import {
   getDefaultSbxEnvironment,
@@ -113,6 +119,11 @@ export const Route = createLazyFileRoute("/accounts/signin")({
 export function CustomLogin() {
   const { setSession } = useFinancialAuth();
   const navigate = useNavigate();
+
+  // Tema global compartilhado com o resto do app (useTheme/ThemeProvider) --
+  // igual às demais rotas, sem imunidade/estado próprio.
+  const { theme } = useTheme();
+  const nightMode = theme === "dark";
 
   // 🔒 Captura segura de Search Params validados no contrato da rota
   const search = useSearch({ from: "/accounts/signin" }) as {
@@ -286,15 +297,15 @@ export function CustomLogin() {
   const loginLabelText = tipoPessoa === "F" ? "E-mail, login ou CPF" : "CNPJ ou login";
 
   return (
-    <div className="min-h-screen flex items-start sm:items-center justify-center pt-12 sm:pt-0 bg-surface-alt px-4 sm:px-6 font-sans antialiased text-foreground">
+    <div className="min-h-screen flex items-start sm:items-center justify-center pt-12 sm:pt-0 bg-neutral-50 dark:bg-neutral-950 px-4 sm:px-6 font-sans antialiased text-neutral-900 dark:text-neutral-100">
       {/* Contêiner do Card Flutuante Centralizado com Zero-Radius Strict Governance */}
-      <div className="w-full max-w-[440px] bg-card rounded-none shadow-xs border border-neutral-200 p-6 sm:p-10">
+      <div className="w-full max-w-[440px] bg-white dark:bg-neutral-900 rounded-none shadow-xs border border-neutral-200 dark:border-neutral-800 p-6 sm:p-10">
         
         {/* Cabeçalho da Marca: logo centralizado, badge de Stage fora do fluxo (absolute) */}
         <div className="relative flex justify-center items-start mb-6">
-          <WalletLogo size="md" withTagline centered />
+          <WalletLogo size="md" withTagline centered forceDark={nightMode} />
           <span
-            className={`absolute right-0 top-0 text-[10px] uppercase font-mono tracking-[0.18em] px-2.5 py-1 rounded-none bg-surface-alt text-neutral-600 border border-neutral-200 transition-opacity duration-150 ${
+            className={`absolute right-0 top-0 text-[10px] uppercase font-mono tracking-[0.18em] px-2.5 py-1 rounded-none bg-neutral-50 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700 transition-opacity duration-150 ${
               showStageBadge ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
             aria-hidden={!showStageBadge}
@@ -306,17 +317,17 @@ export function CustomLogin() {
         {/* Seletor Segmentado de Ambiente: Padrão Institucional Neutro & Zero-Radius */}
         {mounted && showEnvSelector && !securityRedirectUrl && (
           <div className="mb-6">
-            <p className="text-[10px] sm:text-[11px] uppercase font-mono text-neutral-500 mb-2 text-center tracking-[0.18em]">
+            <p className="text-[10px] sm:text-[11px] uppercase font-mono text-neutral-500 dark:text-neutral-400 mb-2 text-center tracking-[0.18em]">
               SELECIONE O AMBIENTE DE DESTINO:
             </p>
-            <div className="flex bg-surface-alt rounded-none p-1 border border-neutral-200">
+            <div className="flex bg-neutral-50 dark:bg-neutral-800 rounded-none p-1 border border-neutral-200 dark:border-neutral-700">
               <button
                 type="button"
                 onClick={() => handleEnvChange("staging")}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-none transition-all border ${
                   ambienteAtivo === "staging"
-                    ? "bg-white text-neutral-900 border-neutral-200 shadow-xs"
-                    : "text-neutral-500 border-transparent hover:text-neutral-900"
+                    ? "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 border-neutral-200 dark:border-neutral-700 shadow-xs"
+                    : "text-neutral-500 dark:text-neutral-400 border-transparent hover:text-neutral-900 dark:hover:text-neutral-100"
                 }`}
               >
                 STAGE
@@ -326,8 +337,8 @@ export function CustomLogin() {
                 onClick={() => handleEnvChange("production")}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-none transition-all border ${
                   ambienteAtivo === "production"
-                    ? "bg-white text-neutral-900 border-neutral-200 shadow-xs"
-                    : "text-neutral-500 border-transparent hover:text-neutral-900"
+                    ? "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 border-neutral-200 dark:border-neutral-700 shadow-xs"
+                    : "text-neutral-500 dark:text-neutral-400 border-transparent hover:text-neutral-900 dark:hover:text-neutral-100"
                 }`}
               >
                 PRODUÇÃO
@@ -339,7 +350,7 @@ export function CustomLogin() {
         <form onSubmit={handleRealLogin} className="flex flex-col gap-4 sm:gap-5" noValidate>
           {/* Alternador Segmentado por Abas: Pessoa Física vs Pessoa Jurídica */}
           {!securityRedirectUrl && (
-            <div className="flex w-full border-b border-neutral-200 mb-1">
+            <div className="flex w-full border-b border-neutral-200 dark:border-neutral-700 mb-1">
               <button
                 type="button"
                 disabled={isLoading}
@@ -351,8 +362,8 @@ export function CustomLogin() {
                 }}
                 className={`flex-1 font-mono text-[10px] sm:text-xs uppercase tracking-widest font-medium py-2.5 sm:py-3 transition-all border-b-2 outline-none ${
                   tipoPessoa === "F"
-                    ? "text-neutral-900 border-neutral-900"
-                    : "text-neutral-400 border-transparent hover:text-neutral-900"
+                    ? "text-neutral-900 dark:text-neutral-100 border-neutral-900 dark:border-neutral-100"
+                    : "text-neutral-400 dark:text-neutral-500 border-transparent hover:text-neutral-900 dark:hover:text-neutral-100"
                 } disabled:opacity-50 ${isLoading ? "cursor-wait" : "cursor-pointer"}`}
               >
                 Pessoa Física
@@ -368,8 +379,8 @@ export function CustomLogin() {
                 }}
                 className={`flex-1 font-mono text-[10px] sm:text-xs uppercase tracking-widest font-medium py-2.5 sm:py-3 transition-all border-b-2 outline-none ${
                   tipoPessoa === "J"
-                    ? "text-neutral-900 border-neutral-900"
-                    : "text-neutral-400 border-transparent hover:text-neutral-900"
+                    ? "text-neutral-900 dark:text-neutral-100 border-neutral-900 dark:border-neutral-100"
+                    : "text-neutral-400 dark:text-neutral-500 border-transparent hover:text-neutral-900 dark:hover:text-neutral-100"
                 } disabled:opacity-50 ${isLoading ? "cursor-wait" : "cursor-pointer"}`}
               >
                 Pessoa Jurídica
@@ -379,7 +390,7 @@ export function CustomLogin() {
 
           {/* Banner de Feedback de Erros Globais (Com Imagem Tratada em Escala de Cinza) */}
           {generalError && (
-            <div className="flex items-center gap-3 sm:gap-4 bg-surface-alt text-neutral-800 text-xs sm:text-[13px] leading-relaxed p-3.5 sm:p-4 rounded-none border border-neutral-200 shadow-xs font-medium animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 sm:gap-4 bg-neutral-50 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 text-xs sm:text-[13px] leading-relaxed p-3.5 sm:p-4 rounded-none border border-neutral-200 dark:border-neutral-700 shadow-xs font-medium animate-in fade-in zoom-in-95 duration-200">
               <img
                 src="/assets/error/error.webp"
                 alt="Aviso"
@@ -407,11 +418,11 @@ export function CustomLogin() {
                     }
                     if (loginError) setLoginError("");
                   }}
-                  className={`w-full h-11 sm:h-12 border rounded-none px-4 sm:px-5 text-xs sm:text-sm outline-none transition-all bg-card text-foreground placeholder:text-neutral-400 ${
+                  className={`w-full h-11 sm:h-12 border rounded-none px-4 sm:px-5 text-xs sm:text-sm outline-none transition-all bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 ${
                     loginError
-                      ? "border-neutral-900 focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900"
-                      : "border-neutral-200 focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900"
-                  } disabled:bg-surface-alt disabled:text-neutral-400 ${isLoading ? "cursor-wait" : "cursor-text"}`}
+                      ? "border-neutral-900 dark:border-neutral-100 focus:border-neutral-900 dark:focus:border-neutral-100 focus:ring-1 focus:ring-neutral-900 dark:focus:ring-neutral-100"
+                      : "border-neutral-200 dark:border-neutral-700 focus:border-neutral-900 dark:focus:border-neutral-100 focus:ring-1 focus:ring-neutral-900 dark:focus:ring-neutral-100"
+                  } disabled:bg-neutral-50 dark:disabled:bg-neutral-900 disabled:text-neutral-400 dark:disabled:text-neutral-600 ${isLoading ? "cursor-wait" : "cursor-text"}`}
                   placeholder={loginLabelText}
                 />
                 {loginError && <span className="text-destructive text-[11px] pl-4 font-medium mt-0.5">{loginError}</span>}
@@ -428,17 +439,17 @@ export function CustomLogin() {
                       setPassword(e.target.value);
                       if (passwordError) setPasswordError("");
                     }}
-                    className={`w-full h-11 sm:h-12 border rounded-none pl-4 sm:pl-5 pr-12 text-xs sm:text-sm outline-none transition-all bg-card text-foreground placeholder:text-neutral-400 ${
+                    className={`w-full h-11 sm:h-12 border rounded-none pl-4 sm:pl-5 pr-12 text-xs sm:text-sm outline-none transition-all bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 ${
                       passwordError
-                        ? "border-neutral-900 focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900"
-                        : "border-neutral-200 focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900"
-                    } disabled:bg-surface-alt disabled:text-neutral-400 ${isLoading ? "cursor-wait" : "cursor-text"}`}
+                        ? "border-neutral-900 dark:border-neutral-100 focus:border-neutral-900 dark:focus:border-neutral-100 focus:ring-1 focus:ring-neutral-900 dark:focus:ring-neutral-100"
+                        : "border-neutral-200 dark:border-neutral-700 focus:border-neutral-900 dark:focus:border-neutral-100 focus:ring-1 focus:ring-neutral-900 dark:focus:ring-neutral-100"
+                    } disabled:bg-neutral-50 dark:disabled:bg-neutral-900 disabled:text-neutral-400 dark:disabled:text-neutral-600 ${isLoading ? "cursor-wait" : "cursor-text"}`}
                     placeholder="Senha"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 sm:right-5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-900 outline-none flex items-center justify-center cursor-pointer"
+                    className="absolute right-4 sm:right-5 top-1/2 -translate-y-1/2 text-neutral-400 dark:text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 outline-none flex items-center justify-center cursor-pointer"
                     aria-label={showPassword ? "Ocultar senha" : "Exibir senha"}
                   >
                     {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
@@ -455,7 +466,7 @@ export function CustomLogin() {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full h-11 sm:h-12 bg-neutral-900 text-white font-semibold text-sm rounded-none transition-all duration-200 flex items-center justify-center gap-2 hover:bg-neutral-800 disabled:opacity-50 ${
+            className={`w-full h-11 sm:h-12 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 font-semibold text-sm rounded-none transition-all duration-200 flex items-center justify-center gap-2 hover:bg-neutral-800 dark:hover:bg-neutral-300 disabled:opacity-50 ${
               isLoading ? "cursor-wait" : "cursor-pointer"
             }`}
           >

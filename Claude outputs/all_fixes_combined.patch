@@ -1,0 +1,300 @@
+diff --git a/deno.json b/deno.json
+index 94a7960..ff22562 100644
+--- a/deno.json
++++ b/deno.json
+@@ -3,7 +3,7 @@
+     "deploy": "supabase functions deploy"
+   },
+   "imports": {
+-    "postgres": "https://deno.land/x/postgresjs/mod.js",
++    "postgres": "https://deno.land/x/postgresjs@v3.4.8/mod.js",
+     "../_shared/": "./supabase/functions/_shared/"
+   },
+   "compilerOptions": {
+diff --git a/src/routes/financialGatewayGate.tsx b/src/routes/financialGatewayGate.tsx
+index 2284564..8a462f8 100644
+--- a/src/routes/financialGatewayGate.tsx
++++ b/src/routes/financialGatewayGate.tsx
+@@ -33,12 +33,28 @@ interface SearchSchema {
+   entity_id?: string;
+ }
+ 
++// =========================================================================
++// [SEGURANÇA - SBXW-07 FIX]: Open Redirect Shield, mesmo critério já aplicado
++// em accounts.signin.tsx (SBXW-22) e no orchestrator (SBXW-12). Só aceita
++// caminho relativo simples (começa com "/", não com "//" protocol-relative),
++// recusando qualquer URL absoluta ou esquema estranho. Validado aqui no
++// contrato da rota (validateSearch), não só no componente, porque a rota é
++// acessível diretamente por URL.
++// =========================================================================
++function sanitizeReturnUri(uri: unknown): string | undefined {
++  if (typeof uri !== "string") return undefined;
++  if (uri.startsWith("/") && !uri.startsWith("//")) {
++    return uri;
++  }
++  return undefined;
++}
++
+ export const Route = createFileRoute("/financialGatewayGate")({
+   validateSearch: (search: Record<string, unknown>): SearchSchema => ({
+     status: search.status as string | undefined,
+     code: search.code as string | undefined,
+     message: search.message as string | undefined,
+-    return_uri: search.return_uri as string | undefined,
++    return_uri: sanitizeReturnUri(search.return_uri),
+     offer_id: search.offer_id as string | undefined,
+     product_id: search.product_id as string | undefined,
+     entity_id: search.entity_id as string | undefined,
+@@ -48,6 +64,7 @@ export const Route = createFileRoute("/financialGatewayGate")({
+     const { status, code, message, return_uri, offer_id, product_id, entity_id } = Route.useSearch();
+     const [countdown, setCountdown] = useState(5);
+ 
++    // return_uri já chega sanitizado (relativo ou undefined) via sanitizeReturnUri em validateSearch.
+     const targetReturnUrl = return_uri && return_uri !== "/" ? return_uri : "/";
+ 
+     // =====================================================================
+diff --git a/supabase/functions/_shared/auth.ts b/supabase/functions/_shared/auth.ts
+index a3653ad..4cad499 100644
+--- a/supabase/functions/_shared/auth.ts
++++ b/supabase/functions/_shared/auth.ts
+@@ -45,9 +45,17 @@ export async function validateRequest(req: Request): Promise<AuthContext> {
+ 
+   if (!jwtToken) {
+     const cookieHeader = req.headers.get("cookie") || "";
+-    const match = cookieHeader.match(/session_token=([^;]+)/);
+-    if (match && match[1]) {
+-      jwtToken = match[1];
++    // 🛡️ [SBXW-32 FIX]: Extração ancorada por nome exato do cookie. A regex
++    // anterior (/session_token=([^;]+)/) casava com QUALQUER cookie cujo nome
++    // terminasse em "session_token" (ex.: "evil_session_token=X"), permitindo
++    // fixação de sessão se esse cookie aparecesse antes do legítimo. Agora
++    // comparamos o nome exato após separar por ";".
++    const sessionCookie = cookieHeader
++      .split(";")
++      .map((pair) => pair.trim())
++      .find((pair) => pair.startsWith("session_token="));
++    if (sessionCookie) {
++      jwtToken = sessionCookie.slice("session_token=".length);
+     }
+   }
+ 
+diff --git a/supabase/functions/_shared/db.ts b/supabase/functions/_shared/db.ts
+index f4edbc6..ad81834 100644
+--- a/supabase/functions/_shared/db.ts
++++ b/supabase/functions/_shared/db.ts
+@@ -45,8 +45,12 @@
+  * -- mesmo valor novo — os dois lados precisam ficar sincronizados.
+  */
+ 
+-// @deno-types="https://deno.land/x/postgresjs/mod.js"
+-import postgres from 'https://deno.land/x/postgresjs/mod.js';
++// 🛡️ [SBXW-31 FIX]: versão fixa (era sem versão — resolvia sempre para a
++// "latest" do módulo, com aviso `x-deno-warning: Implicitly using latest
++// version` no deploy; qualquer alteração a montante entrava em produção sem
++// revisão nem sinal, no módulo que abre conexão direta ao banco fora de RLS).
++// @deno-types="https://deno.land/x/postgresjs@v3.4.8/mod.js"
++import postgres from 'https://deno.land/x/postgresjs@v3.4.8/mod.js';
+ 
+ // 🛡️ [FIX - 2026-09-17]: Voltamos pro Transaction Pooler (Supavisor) — mas
+ // não como `postgres`. O incidente de 16/09 ("password authentication
+diff --git a/supabase/functions/_shared/infrastructure.ts b/supabase/functions/_shared/infrastructure.ts
+index 65558bb..e8f0c83 100644
+--- a/supabase/functions/_shared/infrastructure.ts
++++ b/supabase/functions/_shared/infrastructure.ts
+@@ -62,11 +62,19 @@ export function captureInfrastructureSync(req: Request): OriginDetails & { geoPe
+ 
+   /**
+    * IP:
+-   * O x-client-ip DEVE vir em primeiro lugar porque enviamos no financial-gateway-gate
++   * 🛡️ [SBXW-17 FIX]: `cf-connecting-ip` vem primeiro porque é definido pela
++   * borda Cloudflare e não pode ser falsificado pelo cliente. A ordem antiga
++   * priorizava `x-client-ip` (header comum, sem autenticação alguma) — em uma
++   * requisição direta de um cliente externo, qualquer um podia forjar esse
++   * header. `x-client-ip` continua no fallback porque é assim que o próprio
++   * `financial-gateway-gate` propaga o IP real do cliente em chamadas
++   * internas server-to-server (onde `cf-connecting-ip` não está presente, já
++   * que não passam pela borda pública de novo) — aqui ele só é aceito depois
++   * dos headers de borda confiáveis terem sido checados e ausentes.
+    */
+-  const rawIp = req.headers.get("x-client-ip") ||
++  const rawIp = req.headers.get("cf-connecting-ip") ||
+                 req.headers.get("x-forwarded-for")?.split(",")[0] ||
+-                req.headers.get("cf-connecting-ip") ||
++                req.headers.get("x-client-ip") ||
+                 req.headers.get("x-real-ip") ||
+                 "0.0.0.0";
+ 
+diff --git a/supabase/functions/_shared/jwt.ts b/supabase/functions/_shared/jwt.ts
+index e2a684b..b41b305 100644
+--- a/supabase/functions/_shared/jwt.ts
++++ b/supabase/functions/_shared/jwt.ts
+@@ -121,7 +121,9 @@ export async function generateSessionToken(
+  */
+ export async function verifySessionToken(token: string): Promise<SessionValidationResult> {
+   try {
+-    const { payload } = await jwtVerify(token, getJwtSecret());
++    // 🛡️ [SBXW-08 FIX]: algoritmo aceito fixado explicitamente, em vez de
++    // depender apenas do comportamento padrão da lib pra uma chave simétrica.
++    const { payload } = await jwtVerify(token, getJwtSecret(), { algorithms: ["HS256"] });
+ 
+     // [PLANO 1b]: Compatibilidade: tokens legados não têm `typ` e continuam aceitos como sessão.
+     // Rejeita bloqueando sumariamente se um token de transporte for usado como sessão.
+@@ -133,6 +135,21 @@ export async function verifySessionToken(token: string): Promise<SessionValidati
+       };
+     }
+ 
++    // 🛡️ [SBXW-28 FIX]: a checagem de `typ` acima só rejeita quando o campo
++    // EXISTE e é diferente de "session" — por compatibilidade com tokens
++    // legados sem `typ`. Isso deixava passar o token de handoff assinado em
++    // `s2s.ts` (`signSigninParameters`), que usa a mesma secret (`JWT_SECRET`)
++    // mas nunca seta `typ` nem `userId` (seu payload é `{ data: {...} }`).
++    // Sem este check, esse token seguia como sessão "válida" com userId vazio.
++    const rawUserId = typeof payload.userId === "string" ? payload.userId.trim() : "";
++    if (!rawUserId) {
++      return {
++        valid: false,
++        errorCode: "JWT_MALFORMED_TOKEN",
++        errorMessage: "Token sem identificador de usuário não pode ser usado como sessão.",
++      };
++    }
++
+     // DEBUG: Vamos ver o que o JWT diz sobre a vida dele
+     // 🛡️ Dados passados via `data` (não interpolados na mensagem) para manter
+     // consistência com o mecanismo de mascaramento do logger.
+@@ -152,7 +169,7 @@ export async function verifySessionToken(token: string): Promise<SessionValidati
+         session_token: token,
+         issue_at: payload.iat ? new Date(Number(payload.iat) * 1000).toISOString() : new Date().toISOString(),
+         expires_in: 7200,
+-        userId: String(payload.userId || ""),
++        userId: rawUserId,
+         userName: String(payload.userName || ""),
+         login: String(payload.login || ""),
+       },
+@@ -272,7 +289,8 @@ export async function verifyExchangeToken(
+ ): Promise<ExchangeValidationResult> {
+   let payload: any;
+   try {
+-    const verified = await jwtVerify(token, getJwtSecret());
++    // 🛡️ [SBXW-08 FIX]: algoritmo aceito fixado explicitamente.
++    const verified = await jwtVerify(token, getJwtSecret(), { algorithms: ["HS256"] });
+     payload = verified.payload;
+   } catch (err: any) {
+     const errMessage = (err.message || "").toLowerCase();
+diff --git a/supabase/functions/_shared/logger.ts b/supabase/functions/_shared/logger.ts
+index d751b9a..094d6ac 100644
+--- a/supabase/functions/_shared/logger.ts
++++ b/supabase/functions/_shared/logger.ts
+@@ -126,7 +126,14 @@ const redact = (key: string, value: any): any => {
+  * @returns {any} Uma nova estrutura de dados sanitizada.
+  */
+ const deepRedact = (obj: any): any => {
+-  if (obj === null || typeof obj !== 'object') return obj;
++  if (obj === null || typeof obj !== 'object') {
++    // 🛡️ [SBXW-30 FIX]: uma string solta passava direto, sem checagem alguma
++    // (foi assim que um secret em texto claro, passado como segundo argumento
++    // de debugLog, chegou ao log). Números/booleanos/undefined seguem
++    // passando (baixo risco de serem segredo, evita mudança de comportamento
++    // desnecessária); só string é tratada como não confiável por padrão.
++    return typeof obj === 'string' ? '[REDACTED:scalar-string]' : obj;
++  }
+   
+   // Lida com Arrays iterando sobre cada elemento
+   if (Array.isArray(obj)) return obj.map(deepRedact);
+diff --git a/supabase/functions/_shared/s2s.ts b/supabase/functions/_shared/s2s.ts
+index c08db22..8fd6a3a 100644
+--- a/supabase/functions/_shared/s2s.ts
++++ b/supabase/functions/_shared/s2s.ts
+@@ -77,7 +77,10 @@ export async function signSigninParameters(data: SigninParameters): Promise<stri
+  */
+ export async function verifySigninParameters(token: string): Promise<SigninParameters> {
+   try {
+-    const { payload } = await jwtVerify(token, S2S_SECRET);
++    // 🛡️ [SBXW-08 FIX - extensão]: mesma correção aplicada em jwt.ts, estendida
++    // aqui por consistência: este módulo assina/verifica com a MESMA secret
++    // (JWT_SECRET, via S2S_SECRET) e não tinha allowlist de algoritmo.
++    const { payload } = await jwtVerify(token, S2S_SECRET, { algorithms: ["HS256"] });
+     return payload.data as SigninParameters;
+   } catch (error) {
+     debugLog("🚨 [S2S Crypto] Parâmetros de signin expirados ou adulterados na fronteira.");
+@@ -152,7 +155,9 @@ export async function signS2SEntity(entityData: S2SEntity | Record<string, unkno
+  */
+ export async function verifyS2SEntity(token: string): Promise<S2SEntity> {
+   try {
+-    const { payload } = await jwtVerify(token, S2S_SECRET);
++    // 🛡️ [SBXW-08 FIX - extensão]: allowlist explícita de algoritmo (ver
++    // verifySigninParameters acima e jwt.ts).
++    const { payload } = await jwtVerify(token, S2S_SECRET, { algorithms: ["HS256"] });
+     // 🛡️ Assinatura válida não basta: o shape do perfil também é validado.
+     return assertS2SEntity(payload.data);
+ 
+diff --git a/supabase/functions/_shared/server.ts b/supabase/functions/_shared/server.ts
+index a3510dd..9db65f8 100644
+--- a/supabase/functions/_shared/server.ts
++++ b/supabase/functions/_shared/server.ts
+@@ -169,6 +169,14 @@ export const withSecurity = (
+       "Access-Control-Allow-Methods": [...config.methods, "OPTIONS"].join(", "),
+       "Access-Control-Allow-Headers": allAllowedHeaders,
+       "Access-Control-Allow-Credentials": "true",
++      // 🛡️ [SBXW-18 FIX]: headers de hardening centralizados aqui porque todas
++      // as respostas das 14 functions espalham (`...corsHeaders`) este objeto —
++      // adicionar aqui cobre todas de uma vez, sem tocar em cada handler.
++      // CSP restritiva: nenhuma resposta de API deveria executar/carregar nada;
++      // 'none' em todas as diretivas relevantes.
++      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
++      "X-Frame-Options": "DENY",
++      "Referrer-Policy": "no-referrer",
+     };
+ 
+     // -----------------------------------------------------------------------
+@@ -284,12 +292,21 @@ export const withSecurity = (
+         headers: { ...corsHeaders, "Content-Type": "application/json", ...(std.headers || {}) },
+       });
+     } catch (err: any) {
+-      console.error(`[withSecurity FATAL ERROR em ${functionName}]:`, err);
++      // 🛡️ [SBXW-19 FIX]: Este catch só é alcançado por exceção NÃO
++      // controlada (bug real) — erro de negócio esperado já retorna via
++      // StandardResponse.error acima, sem passar por aqui. Antes, `err.message`
++      // (texto bruto da exceção do runtime) era devolvido direto ao cliente,
++      // vazando biblioteca/caminho/estrutura interna. Agora: mensagem genérica
++      // + ID de correlação para o cliente; detalhe completo só no log do
++      // servidor, correlacionável pelo mesmo ID.
++      const correlationId = crypto.randomUUID();
++      console.error(`[withSecurity FATAL ERROR em ${functionName}] (correlationId=${correlationId}):`, err);
+       return new Response(
+         JSON.stringify({
+           success: false,
+           code: "INTERNAL_SERVER_ERROR",
+-          message: err.message || "Erro crítico no wrapper.",
++          message: "Erro interno inesperado. Se precisar de suporte, informe o código de referência.",
++          correlationId,
+         }),
+         {
+           status: 500,
+diff --git a/supabase/functions/financial-gateway-gate/index.ts b/supabase/functions/financial-gateway-gate/index.ts
+index 101d048..63cbc5c 100644
+--- a/supabase/functions/financial-gateway-gate/index.ts
++++ b/supabase/functions/financial-gateway-gate/index.ts
+@@ -458,13 +458,18 @@ function respondWithError(
+     );
+   }
+ 
++  // 🛡️ [SBXW-29 FIX]: `FRONTEND_URL` (configuração de servidor) vem primeiro
++  // e nunca mais caímos para `Origin`/`Referer` do próprio requisitante — esse
++  // header não tem autenticação alguma e permitia a um atacante forjar a
++  // origem confiável usada para montar a URL de retorno, sobrevivendo até à
++  // correção do curinga de CORS (SBXW-15), porque essa resolução de origem
++  // não depende da allowlist de CORS. `safeReturnUri` continua como segunda
++  // opção porque já passou por `getSafeRedirectUrl` (allowlist), não é um
++  // header bruto do cliente.
+   let frontendOrigin =
++    Deno.env.get("FRONTEND_URL") ||
+     originFromUrl(safeReturnUri) ||
+-    originFromUrl(req.headers.get("origin") || req.headers.get("referer") || "");
+-
+-  if (!frontendOrigin) {
+-    frontendOrigin = Deno.env.get("FRONTEND_URL") || "";
+-  }
++    "";
+ 
+   if (!frontendOrigin) {
+     return new Response(

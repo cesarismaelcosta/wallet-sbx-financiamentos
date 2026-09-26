@@ -27,7 +27,7 @@ import { vehicleSchema, type VehicleData } from "../schemas";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider"; // Motor Genérico
 
 // Classe padronizada para unificar tamanho, fonte e zero-radius estrito
-const commonInputClass = "h-11 text-sm rounded-none border-neutral-200 bg-white transition-all duration-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900";
+const commonInputClass = "h-11 text-sm rounded-none border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 transition-all duration-200 focus-visible:ring-1 focus-visible:ring-[#2246A7] focus-visible:border-[#2246A7]";
 
 export function Step3Vehicle() {
   // Acedemos ao motor genérico
@@ -65,15 +65,15 @@ export function Step3Vehicle() {
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
-      <section className="rounded-none border border-neutral-200 bg-surface-alt p-5 sm:p-6 shadow-xs space-y-4">
-        <header className="flex items-center gap-2 text-sm font-bold text-neutral-900 uppercase tracking-wider">
-          <Car className="h-4 w-4 text-neutral-900" strokeWidth={1.5} /> Informações do veículo
+      <section className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-5 sm:p-6 shadow-xs space-y-4">
+        <header className="flex items-center gap-2 text-sm font-bold text-neutral-900 dark:text-neutral-100 uppercase tracking-wider">
+          <Car className="h-4 w-4 text-neutral-900 dark:text-neutral-100" strokeWidth={1.5} /> Informações do veículo
         </header>
 
         <div className="space-y-4">
           {/* Campo Placa */}
           <div className="space-y-1.5">
-            <Label htmlFor="licensePlate" className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Placa do veículo</Label>
+            <Label htmlFor="licensePlate" className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">Placa do veículo</Label>
             <Input 
               id="licensePlate"
               {...form.register("licensePlate")} 
@@ -89,7 +89,7 @@ export function Step3Vehicle() {
 
           {/* Campo Proprietário */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Quem é o proprietário do veículo?</Label>
+            <Label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">Quem é o proprietário do veículo?</Label>
             <Select 
               value={kinship ?? ""}
               onValueChange={(v) => form.setValue("ownerKinshipDegree", v as any, { shouldValidate: true })}
@@ -97,7 +97,7 @@ export function Step3Vehicle() {
               <SelectTrigger className={commonInputClass}>
                 <SelectValue placeholder="Selecione o proprietário" />
               </SelectTrigger>
-              <SelectContent className="rounded-none border-neutral-200">
+              <SelectContent className="rounded-none border-neutral-200 dark:border-neutral-800">
                 {[
                   { value: "SELF", label: "O próprio solicitante" },
                   { value: "SPOUSE", label: "Cônjuge" },
@@ -109,7 +109,7 @@ export function Step3Vehicle() {
                   <SelectItem 
                     key={item.value} 
                     value={item.value}
-                    className="rounded-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-900 cursor-pointer"
+                    className="rounded-none data-[highlighted]:bg-neutral-100 dark:data-[highlighted]:bg-neutral-800 data-[highlighted]:text-neutral-900 dark:data-[highlighted]:text-neutral-100 cursor-pointer"
                   >
                     {item.label}
                   </SelectItem>
@@ -129,7 +129,7 @@ export function Step3Vehicle() {
           type="button" 
           variant="ghost" 
           onClick={back}
-          className="w-full sm:w-auto rounded-none text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900 font-medium"
+          className="w-full sm:w-auto rounded-none text-[#2246A7] hover:bg-[#E7F2FD] dark:hover:bg-neutral-800 hover:text-[#2246A7] font-medium"
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> 
           Voltar
@@ -137,7 +137,7 @@ export function Step3Vehicle() {
         <Button 
           type="submit" 
           size="lg" 
-          className="h-12 w-full sm:w-auto flex-1 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-bold shadow-xs transition-all active:scale-[0.98]"
+          className="h-12 w-full sm:w-auto flex-1 rounded-none cta-gradient text-white font-bold shadow-xs transition-all active:scale-[0.98]"
         >
           Continuar
         </Button>

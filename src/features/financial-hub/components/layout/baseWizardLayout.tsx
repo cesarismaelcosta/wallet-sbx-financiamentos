@@ -76,7 +76,7 @@ export function BaseWizardLayout({ manifest, className }: BaseWizardLayoutProps)
     <div 
       id="simular" 
       className={cn(
-        "grid h-auto scroll-mt-20 pt-12 bg-white text-neutral-900 rounded-none", 
+        "grid h-auto scroll-mt-20 pt-12 bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 rounded-none", 
         "grid-cols-1",         // Padrão mobile: empilhamento
         desktopGrid,           // Desktop: proporção vinda do Manifesto (ex: lg:grid-cols-[1fr_1.2fr])
         className
@@ -85,14 +85,14 @@ export function BaseWizardLayout({ manifest, className }: BaseWizardLayoutProps)
       {/* Coluna lateral: Painel de ofertas (Pitch Comercial)
           'sticky' mantém o argumento de valor visível durante o preenchimento.
       */}
-      <aside className="sticky top-8 p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-neutral-200 bg-white min-h-[50vh] rounded-none">
+      <aside className="sticky top-8 p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 min-h-[50vh] rounded-none">
         <PanelProductOffer config={pageConfigs} />
       </aside>
 
       {/* Área principal: Motor de passos
           Recebe o manifesto blindado pelo 'isReady'.
       */}
-      <main className="p-8 lg:p-10 flex flex-col bg-white rounded-none">
+      <main className="p-8 lg:p-10 flex flex-col bg-white dark:bg-neutral-950 rounded-none">
         <div className="flex-1">
           <WizardEngine manifest={manifest} />
         </div>

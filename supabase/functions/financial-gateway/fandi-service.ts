@@ -89,6 +89,7 @@ export async function processSimulationFandi(
   const integrationDetails = payload?.integration_details || {};
   
   const FANDI_API_KEY = Deno.env.get("FANDI_API_KEY");
+  console.log("[Fandi Service] FANDI_API_KEY:", FANDI_API_KEY ? "✅ Encontrada" : "❌ Não encontrada");
   const CNPJ_LOJA = integrationDetails.cnpjLoja; 
   const MASTER_SECRET = Deno.env.get('WEBHOOK_MASTER_SECRET');
 
@@ -158,7 +159,7 @@ export async function processSimulationFandi(
       fipe: offer.vehicle_details?.fipe_code
     }
   };
-  
+
   let guidResult;
   try {
     const guidResponse = await fetch(GUID_URL, { 
@@ -382,7 +383,7 @@ export async function processSimulationFandi(
               ...(retSimulacao?.institucional?.vendedorId ? { vendedorId: Number(retSimulacao.institucional.vendedorId) } : {})
           }
       };
-      
+
       const incResponse = await fetch(`${urlFandi}/v2/checkout/inclusao`, {
           method: 'POST',
           headers: {

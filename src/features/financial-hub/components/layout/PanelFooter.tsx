@@ -12,8 +12,8 @@
  * 
  * [MECÂNICA ARQUITETURAL V3 - BLINDAGEM NEUTRA AUTOCONTIDA & SBX DESIGN SYSTEM]:
  * 1. {Bypass de Tokens Globais Contaminados}: Substitui `bg-background`, `border-border`
- *    e `text-muted-foreground` por classes neutras explícitas (`bg-white`, `border-neutral-200`,
- *    `text-neutral-500`), expurgando qualquer vazamento arroxeado do CSS raiz.
+ *    e `text-muted-foreground` por classes neutras explícitas (`bg-white dark:bg-neutral-900`, `border-neutral-200 dark:border-neutral-800`,
+ *    `text-neutral-500 dark:text-neutral-400`), expurgando qualquer vazamento arroxeado do CSS raiz.
  * 2. {Zero-Radius Strict Governance}: Elimina cantos curvos (`rounded-sm`), consolidando
  *    cantos retos institucionais (`rounded-none`) nos focos e links regulatórios.
  * 3. {Dynamic Token Interpolation}: Motor de parsing regex para conversão segura de marcações
@@ -70,7 +70,7 @@ export function PanelFooter({ config }: PanelFooterProps) {
             href={linkMatch.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="underline underline-offset-2 font-medium text-neutral-800 hover:text-neutral-950 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 rounded-none inline-block mx-0.5"
+            className="underline underline-offset-2 font-medium text-neutral-800 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-500 rounded-none inline-block mx-0.5"
           >
             {part}
           </a>
@@ -82,9 +82,9 @@ export function PanelFooter({ config }: PanelFooterProps) {
   };
 
   return (
-    <footer className="py-10 px-6 text-center text-xs bg-white text-neutral-500 border-t border-neutral-200">
+    <footer className="py-10 px-6 text-center text-xs bg-white dark:bg-neutral-900 text-neutral-500 dark:text-neutral-400 border-t border-neutral-200 dark:border-neutral-800">
       <div className="max-w-5xl mx-auto">
-        <p className="leading-relaxed text-[10px] sm:text-[11px] text-justify sm:text-center text-neutral-500">
+        <p className="leading-relaxed text-[10px] sm:text-[11px] text-justify sm:text-center text-neutral-500 dark:text-neutral-400">
           {renderText()}
         </p>
       </div>

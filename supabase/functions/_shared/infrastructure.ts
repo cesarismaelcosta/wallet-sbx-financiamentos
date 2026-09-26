@@ -62,11 +62,19 @@ export function captureInfrastructureSync(req: Request): OriginDetails & { geoPe
 
   /**
    * IP:
-   * O x-client-ip DEVE vir em primeiro lugar porque enviamos no financial-gateway-gate
+   * 🛡️ [SBXW-17 FIX]: `cf-connecting-ip` vem primeiro porque é definido pela
+   * borda Cloudflare e não pode ser falsificado pelo cliente. A ordem antiga
+   * priorizava `x-client-ip` (header comum, sem autenticação alguma) — em uma
+   * requisição direta de um cliente externo, qualquer um podia forjar esse
+   * header. `x-client-ip` continua no fallback porque é assim que o próprio
+   * `financial-gateway-gate` propaga o IP real do cliente em chamadas
+   * internas server-to-server (onde `cf-connecting-ip` não está presente, já
+   * que não passam pela borda pública de novo) — aqui ele só é aceito depois
+   * dos headers de borda confiáveis terem sido checados e ausentes.
    */
-  const rawIp = req.headers.get("x-client-ip") ||
+  const rawIp = req.headers.get("cf-connecting-ip") ||
                 req.headers.get("x-forwarded-for")?.split(",")[0] ||
-                req.headers.get("cf-connecting-ip") ||
+                req.headers.get("x-client-ip") ||
                 req.headers.get("x-real-ip") ||
                 "0.0.0.0";
 

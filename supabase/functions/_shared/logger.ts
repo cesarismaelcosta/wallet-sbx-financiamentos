@@ -126,7 +126,14 @@ const redact = (key: string, value: any): any => {
  * @returns {any} Uma nova estrutura de dados sanitizada.
  */
 const deepRedact = (obj: any): any => {
-  if (obj === null || typeof obj !== 'object') return obj;
+  if (obj === null || typeof obj !== 'object') {
+    // 🛡️ [SBXW-30 FIX]: uma string solta passava direto, sem checagem alguma
+    // (foi assim que um secret em texto claro, passado como segundo argumento
+    // de debugLog, chegou ao log). Números/booleanos/undefined seguem
+    // passando (baixo risco de serem segredo, evita mudança de comportamento
+    // desnecessária); só string é tratada como não confiável por padrão.
+    return typeof obj === 'string' ? '[REDACTED:scalar-string]' : obj;
+  }
   
   // Lida com Arrays iterando sobre cada elemento
   if (Array.isArray(obj)) return obj.map(deepRedact);

@@ -33,6 +33,7 @@
 import React from "react";
 import { MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { formatDocument, BRL } from "../shared/formatters";
 import { useNavigation, NAVIGATION_INTENTS } from "../../core/hooks/useNavigation";
 
@@ -48,6 +49,10 @@ interface ButtonWhatsAppProps {
   areConsentsValid?: boolean;
   onAction?: (url: string, consents: any) => void;
   disabled?: boolean;
+  // Permite ao chamador sobrepor a cor padrão (institucional neutra) sem
+  // duplicar o componente — mesclado com cn()/twMerge, então as classes
+  // conflitantes (border/text/hover) do chamador vencem as daqui.
+  className?: string;
 }
 
 // =========================================================================
@@ -62,6 +67,7 @@ export function ButtonWhatsApp({
   areConsentsValid,
   onAction,
   disabled,
+  className,
 }: ButtonWhatsAppProps) {
   const { handleRedirect } = useNavigation();
   const contact = config?.urlWhatsApp || config?.whatsapp_number;
@@ -124,12 +130,12 @@ export function ButtonWhatsApp({
         type="button"
         disabled={isDisabled}
         onClick={handleClick}
-        className="w-full flex items-center gap-3 p-3.5 bg-white hover:bg-neutral-100 border border-neutral-200 rounded-none transition-colors text-left cursor-pointer disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+        className="w-full flex items-center gap-3 p-3.5 bg-white dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 rounded-none transition-colors text-left cursor-pointer disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
       >
-        <MessageCircle className="w-5 h-5 text-neutral-900 shrink-0" strokeWidth={1.5} />
+        <MessageCircle className="w-5 h-5 text-neutral-900 dark:text-neutral-100 shrink-0" strokeWidth={1.5} />
         <div className="text-xs">
-          <p className="font-semibold text-neutral-900">Continuar pelo WhatsApp</p>
-          <p className="text-neutral-500 text-[11px]">Falar agora com um especialista</p>
+          <p className="font-semibold text-neutral-900 dark:text-neutral-100">Continuar pelo WhatsApp</p>
+          <p className="text-neutral-500 dark:text-neutral-400 text-[11px]">Falar agora com um especialista</p>
         </div>
       </button>
     );
@@ -144,7 +150,10 @@ export function ButtonWhatsApp({
       disabled={isDisabled}
       variant="outline"
       onClick={handleClick}
-      className="flex-1 h-12 border-2 border-neutral-900 text-neutral-900 hover:bg-neutral-900 hover:text-white rounded-none font-medium tracking-wide transition-colors duration-150 shadow-none disabled:pointer-events-none disabled:opacity-50"
+      className={cn(
+        "flex-1 h-12 border-2 border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-900 dark:hover:bg-neutral-100 hover:text-white dark:hover:text-neutral-900 rounded-none font-medium tracking-wide transition-colors duration-150 shadow-none disabled:pointer-events-none disabled:opacity-50",
+        className,
+      )}
     >
       <MessageCircle className="h-4 w-4 mr-2" />
       Continuar pelo WhatsApp

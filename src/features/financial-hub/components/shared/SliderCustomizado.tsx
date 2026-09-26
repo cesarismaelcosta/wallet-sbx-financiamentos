@@ -71,7 +71,7 @@ export const SliderCustomizado = ({
       >
         {showBadge && (
           <span
-            className={`pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full fill-gradient px-2 py-0.5 text-[10px] font-bold shadow-sm transition-opacity duration-150 ${
+            className={`pointer-events-none absolute bottom-full mb-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full fill-gradient px-2 py-0.5 text-[10px] font-bold shadow-sm transition-opacity duration-150 ${
               showBadgeNow ? "opacity-100" : "opacity-0"
             }`}
           >

@@ -458,13 +458,18 @@ function respondWithError(
     );
   }
 
+  // 🛡️ [SBXW-29 FIX]: `FRONTEND_URL` (configuração de servidor) vem primeiro
+  // e nunca mais caímos para `Origin`/`Referer` do próprio requisitante — esse
+  // header não tem autenticação alguma e permitia a um atacante forjar a
+  // origem confiável usada para montar a URL de retorno, sobrevivendo até à
+  // correção do curinga de CORS (SBXW-15), porque essa resolução de origem
+  // não depende da allowlist de CORS. `safeReturnUri` continua como segunda
+  // opção porque já passou por `getSafeRedirectUrl` (allowlist), não é um
+  // header bruto do cliente.
   let frontendOrigin =
+    Deno.env.get("FRONTEND_URL") ||
     originFromUrl(safeReturnUri) ||
-    originFromUrl(req.headers.get("origin") || req.headers.get("referer") || "");
-
-  if (!frontendOrigin) {
-    frontendOrigin = Deno.env.get("FRONTEND_URL") || "";
-  }
+    "";
 
   if (!frontendOrigin) {
     return new Response(

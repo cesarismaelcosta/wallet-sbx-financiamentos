@@ -37,12 +37,12 @@ export function PanelAcceptedConsents({ consents }: { consents: any | any[] }) {
   );
 
   return (
-    <div className="rounded-none border border-neutral-200 bg-white p-4 space-y-4 break-inside-avoid shadow-sm">
-      <h4 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5 border-b border-neutral-100 pb-2">
+    <div className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 space-y-4 break-inside-avoid shadow-sm">
+      <h4 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 border-b border-neutral-100 dark:border-neutral-800 pb-2">
         <FileText className="h-3.5 w-3.5" /> Auditoria de Aceite (LGPD)
       </h4>
 
-      <div className="bg-white rounded-none border border-neutral-200 shadow-xs divide-y divide-neutral-100 overflow-hidden">
+      <div className="bg-white dark:bg-neutral-900 rounded-none border border-neutral-200 dark:border-neutral-800 shadow-xs divide-y divide-neutral-100 dark:divide-neutral-800 overflow-hidden">
         {sortedConsents.map((consent: any, index: number) => {
           const acceptedAt = formatDate(consent.accepted_at);
           
@@ -64,22 +64,22 @@ export function PanelAcceptedConsents({ consents }: { consents: any | any[] }) {
           const device = consent.device_type || origin.device_type || "N/A";
 
           return (
-            <div key={consent.id || index} className="p-4 space-y-3 break-inside-avoid hover:bg-neutral-50 transition-colors">
+            <div key={consent.id || index} className="p-4 space-y-3 break-inside-avoid hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 pb-1">
                 <div className="flex items-center gap-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
-                  <span className="text-[11px] font-bold text-neutral-900 uppercase tracking-wide break-words">
+                  <span className="text-[11px] font-bold text-neutral-900 dark:text-neutral-100 uppercase tracking-wide break-words">
                     {consent.consent_id || "Termo de Aceite"}
                   </span>
                 </div>
-                <span className="text-[10px] text-neutral-500 font-bold pl-5 sm:pl-0">
+                <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-bold pl-5 sm:pl-0">
                   {acceptedAt.d} às {acceptedAt.h}
                 </span>
               </div>
 
-              <div className="text-[11px] text-neutral-600 leading-relaxed flex gap-2 items-start py-1 bg-white p-3 border border-neutral-200 rounded-none">
+              <div className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed flex gap-2 items-start py-1 bg-white dark:bg-neutral-900 p-3 border border-neutral-200 dark:border-neutral-800 rounded-none">
                 <div className="flex items-center mt-0.5">
-                  <div className="h-4 w-4 shrink-0 rounded-none border border-neutral-400 bg-neutral-100 flex items-center justify-center text-[10px] text-neutral-900 font-bold">✓</div>
+                  <div className="h-4 w-4 shrink-0 rounded-none border border-neutral-400 dark:border-neutral-600 bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-[10px] text-neutral-900 dark:text-neutral-100 font-bold">✓</div>
                 </div>
                 <div className="flex-1">
                   {templateText ? (
@@ -89,12 +89,12 @@ export function PanelAcceptedConsents({ consents }: { consents: any | any[] }) {
                         const linkConfig = links.find((l: any) => l.text === cleanText);
 
                         if (!linkConfig) {
-                          return <span key={i} className="underline font-bold inline mx-0.5 text-neutral-900">{cleanText}</span>;
+                          return <span key={i} className="underline font-bold inline mx-0.5 text-neutral-900 dark:text-neutral-100">{cleanText}</span>;
                         }
 
                         if (linkConfig.type === "web" || linkConfig.url) {
                           return (
-                            <a key={i} href={linkConfig.url} target="_blank" rel="noopener noreferrer" className="underline font-bold inline mx-0.5 text-neutral-900 hover:text-neutral-600 transition-colors">
+                            <a key={i} href={linkConfig.url} target="_blank" rel="noopener noreferrer" className="underline font-bold inline mx-0.5 text-neutral-900 dark:text-neutral-100 hover:text-neutral-600 dark:hover:text-neutral-400 transition-colors">
                               {cleanText}
                             </a>
                           );
@@ -104,11 +104,11 @@ export function PanelAcceptedConsents({ consents }: { consents: any | any[] }) {
                           return (
                             <Popover key={i}>
                               <PopoverTrigger asChild>
-                                <span className="underline font-bold cursor-pointer border-b border-dashed inline mx-0.5 text-neutral-900 border-neutral-900 hover:text-neutral-600">
+                                <span className="underline font-bold cursor-pointer border-b border-dashed inline mx-0.5 text-neutral-900 dark:text-neutral-100 border-neutral-900 dark:border-neutral-100 hover:text-neutral-600 dark:hover:text-neutral-400">
                                   {cleanText}
                                 </span>
                               </PopoverTrigger>
-                              <PopoverContent side="bottom" align="start" className="max-w-xs p-3 bg-white text-neutral-700 text-[11px] rounded-none border border-neutral-200 shadow-xl leading-relaxed z-[100]">
+                              <PopoverContent side="bottom" align="start" className="max-w-xs p-3 bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 text-[11px] rounded-none border border-neutral-200 dark:border-neutral-800 shadow-xl leading-relaxed z-[100]">
                                 <p>{linkConfig.tooltip_text}</p>
                               </PopoverContent>
                             </Popover>
@@ -121,15 +121,15 @@ export function PanelAcceptedConsents({ consents }: { consents: any | any[] }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3 border-t border-neutral-100 text-[10px] text-neutral-500 font-medium">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3 border-t border-neutral-100 dark:border-neutral-800 text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
                 <div className="flex items-center gap-1.5">
-                  <MapPin className="h-3 w-3 text-neutral-400 shrink-0" />
+                  <MapPin className="h-3 w-3 text-neutral-400 dark:text-neutral-500 shrink-0" />
                   <span className="truncate">
                     {city} / {state} / {country}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Smartphone className="h-3 w-3 text-neutral-400 shrink-0" />
+                  <Smartphone className="h-3 w-3 text-neutral-400 dark:text-neutral-500 shrink-0" />
                   <span className="truncate">
                     {ipAddress} - {os} ({device})
                   </span>

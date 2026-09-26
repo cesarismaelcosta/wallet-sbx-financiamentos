@@ -37,7 +37,7 @@ export function PanelFooter({ footer }: { footer: any }) {
             href={linkMatch.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="underline font-bold text-neutral-900 hover:text-neutral-600 transition-colors"
+            className="underline font-bold text-neutral-900 dark:text-neutral-100 hover:text-neutral-600 dark:hover:text-neutral-400 transition-colors"
           >
             {part}
           </a>
@@ -49,11 +49,11 @@ export function PanelFooter({ footer }: { footer: any }) {
 
   return (
     <div className="space-y-2 pt-2 break-inside-avoid">
-      <h4 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5">
+      <h4 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
         <FileText size={14} /> Rodapé Legal (Footer)
       </h4>
-      <footer className="py-3 px-3 text-center text-[10px] text-neutral-500 bg-neutral-50 border border-neutral-200 rounded-none">
-        <p className="leading-relaxed text-justify sm:text-center text-neutral-500">
+      <footer className="py-3 px-3 text-center text-[10px] text-neutral-500 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 rounded-none">
+        <p className="leading-relaxed text-justify sm:text-center text-neutral-500 dark:text-neutral-400">
           {renderText()}
         </p>
       </footer>

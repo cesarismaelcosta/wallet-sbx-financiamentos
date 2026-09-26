@@ -28,7 +28,7 @@
 
 import { Outlet, Link, createRootRoute, HeadContent, Scripts, useRouterState } from "@tanstack/react-router";
 import { FinancialAuthProvider } from "@/integrations/auth/FinancialAuthContext";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { ThemeProvider } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 import appCss from "../index.css?url";
 
 // =========================================================================

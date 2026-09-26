@@ -33,7 +33,7 @@ import React, { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
-import { LogOut, AppWindow, Settings, Home } from "lucide-react";
+import { LogOut, AppWindow, Settings, Home, Sun, Moon } from "lucide-react";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import type { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -76,6 +76,12 @@ interface PanelHeaderProps {
   onLogout?: () => void;
   onNavigate?: (path: string) => void;
   showEnvironmentLinks?: boolean;
+  /** Estado do modo noturno escopado à página (opt-in). Quando ausente,
+   * o header nunca muda de aparência -- comportamento padrão preservado
+   * para todas as rotas que não passam essa prop. */
+  nightMode?: boolean;
+  /** Callback do toggle noturno. Só renderiza o botão Sol/Lua quando fornecido. */
+  onToggleNightMode?: () => void;
 }
 
 // =========================================================================
@@ -89,7 +95,9 @@ export function PanelHeader({
   userData,
   onLogout, 
   onNavigate,
-  showEnvironmentLinks = true
+  showEnvironmentLinks = true,
+  nightMode = false,
+  onToggleNightMode,
 }: PanelHeaderProps) {
   
   const navigate = useNavigate();
@@ -197,7 +205,7 @@ export function PanelHeader({
       {/* =====================================================================
           HEADER FIXO INSTITUCIONAL (Altura Estática: 64px / h-16)
          ===================================================================== */}
-      <header className="fixed top-0 left-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-neutral-200 shadow-xs h-16 flex items-center">
+      <header className="fixed top-0 left-0 w-full z-50 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800 shadow-xs h-16 flex items-center transition-colors">
         <div className="max-w-7xl mx-auto w-full px-6 flex items-center justify-between">
           
           {/* Lado Esquerdo: Logo Oficial Superbid */}
@@ -211,10 +219,10 @@ export function PanelHeader({
               title="Voltar ao Início"
             >
               <div className="hidden sm:flex items-center [&_img]:h-6 [&_img]:w-auto">
-                <WalletLogo size="md" withTagline />
+                <WalletLogo size="md" withTagline forceDark={nightMode} />
               </div>
               <div className="flex sm:hidden items-center [&_img]:h-5 [&_img]:w-auto">
-                <WalletLogo size="sm" withTagline />
+                <WalletLogo size="sm" withTagline forceDark={nightMode} />
               </div>
             </button>
           </div>
@@ -228,11 +236,11 @@ export function PanelHeader({
                     key={link.href}
                     href={`#${link.href}`}
                     onClick={(e) => handleScroll(e, link.href)}
-                    className="text-[13px] font-medium text-neutral-600 hover:text-neutral-900 focus-visible:text-neutral-900 focus-visible:outline-none transition-colors relative group"
+                    className="text-[13px] font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 focus-visible:text-neutral-900 dark:focus-visible:text-neutral-100 focus-visible:outline-none transition-colors relative group"
                   >
                     {link.label}
                     {/* Linha animada que expande no Hover e no Focus (Tab) */}
-                    <span className="absolute -bottom-1 left-0 h-px w-0 bg-neutral-900 group-hover:w-full group-focus-visible:w-full transition-all duration-500 ease-out"></span>
+                    <span className="absolute -bottom-1 left-0 h-px w-0 bg-neutral-900 dark:bg-neutral-100 group-hover:w-full group-focus-visible:w-full transition-all duration-500 ease-out"></span>
                   </a>
                 ))}
               </nav>
@@ -242,7 +250,24 @@ export function PanelHeader({
               <div className="flex items-center space-x-3">
                 {sessionToken ? (
                   <div className="flex items-center gap-3">
-                    
+
+                    {/* =========================================================
+                        0. TOGGLE NOTURNO (opt-in -- só renderiza quando a rota
+                           fornece onToggleNightMode, ex.: sbxpay.offer). Fica
+                           ao lado do avatar, no mesmo padrão do app de referência.
+                       ========================================================= */}
+                    {onToggleNightMode && (
+                      <button
+                        type="button"
+                        onClick={onToggleNightMode}
+                        aria-label={nightMode ? "Desativar modo noturno" : "Ativar modo noturno"}
+                        title={nightMode ? "Desativar modo noturno" : "Ativar modo noturno"}
+                        className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                      >
+                        {nightMode ? <Moon size={17} /> : <Sun size={17} />}
+                      </button>
+                    )}
+
                     {/* =========================================================
                         1. DESKTOP: Popover com Avatar Circular
                        ========================================================= */}
@@ -250,24 +275,38 @@ export function PanelHeader({
                       <Popover>
                         <PopoverTrigger asChild>
                           <button 
-                            className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 border border-neutral-200 outline-none ring-0 hover:bg-neutral-200 transition-colors cursor-pointer"
+                            className="flex h-10 w-10 items-center justify-center rounded-full fill-gradient outline-none ring-0 hover:opacity-90 transition-opacity cursor-pointer"
                             title={identityString}
                           >
-                            <span className="text-[13px] font-medium tracking-tight text-neutral-800 font-mono">
+                            <span className="text-[13px] font-medium tracking-tight font-mono">
                               {getInitials(identityString)}
                             </span>
                           </button>
                         </PopoverTrigger>
                         
-                        <PopoverContent className="w-52 p-1.5 shadow-md border border-neutral-200 bg-white rounded-none" align="end" sideOffset={8}>
+                        <PopoverContent className="w-60 p-1.5 shadow-md border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 rounded-none" align="end" sideOffset={8}>
+                          <div className="flex items-center gap-2.5 px-3 py-2">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full fill-gradient font-semibold shrink-0 font-mono text-xs">
+                              {getInitials(identityString)}
+                            </div>
+                            <div className="overflow-hidden">
+                              <p className="text-xs font-semibold text-[#2246A7] truncate">{identityString}</p>
+                              {hubLogin && (
+                                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 font-normal truncate">{hubLogin}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-1 mx-1" />
+
                           <button
                             onClick={() => handleLogoClick()}
-                            className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors cursor-pointer"
+                            className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors cursor-pointer"
                           >
                             <GradientIcon icon={Home} size={16} /> Início
                           </button>
 
-                          <div className="h-px bg-neutral-200 my-1 mx-1" />
+                          <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-1 mx-1" />
 
                           {showEnvironmentLinks && (
                             <>
@@ -275,7 +314,7 @@ export function PanelHeader({
                                 href="/backoffice" 
                                 target="_blank" 
                                 rel="noopener noreferrer" 
-                                className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
+                                className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors"
                               >
                                 <GradientIcon icon={AppWindow} size={16} /> Backoffice
                               </a>
@@ -283,17 +322,17 @@ export function PanelHeader({
                                 href="/sandbox" 
                                 target="_blank" 
                                 rel="noopener noreferrer" 
-                                className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
+                                className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors"
                               >
                                 <GradientIcon icon={Settings} size={16} /> Sandbox
                               </a>
-                              <div className="h-px bg-neutral-200 my-1 mx-1" />
+                              <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-1 mx-1" />
                             </>
                           )}
 
                           <button 
                             onClick={onLogout} 
-                            className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors cursor-pointer"
+                            className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors cursor-pointer"
                           >
                             <GradientIcon icon={LogOut} size={16} /> Sair
                           </button>
@@ -308,27 +347,27 @@ export function PanelHeader({
                       <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                         <SheetTrigger asChild>
                           <button 
-                            className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 border border-neutral-200 outline-none transition-colors cursor-pointer"
+                            className="flex h-10 w-10 items-center justify-center rounded-full fill-gradient outline-none transition-opacity hover:opacity-90 cursor-pointer"
                             title={identityString}
                           >
-                            <span className="text-[13px] font-medium tracking-tight text-neutral-800 font-mono">
+                            <span className="text-[13px] font-medium tracking-tight font-mono">
                               {getInitials(identityString)}
                             </span>
                           </button>
                         </SheetTrigger>
 
-                        <SheetContent side="bottom" className="rounded-none p-6 bg-white border-t border-neutral-200 z-50">
-                          <SheetHeader className="text-left pb-4 border-b border-neutral-200">
+                        <SheetContent side="bottom" className="rounded-none p-6 bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800 z-50">
+                          <SheetHeader className="text-left pb-4 border-b border-neutral-200 dark:border-neutral-800">
                             <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-800 font-semibold border border-neutral-200 shrink-0 font-mono">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full fill-gradient font-semibold shrink-0 font-mono">
                                 {getInitials(identityString)}
                               </div>
                               <div className="overflow-hidden">
-                                <SheetTitle className="text-sm font-semibold text-neutral-900 truncate">
+                                <SheetTitle className="text-sm font-semibold text-[#2246A7] truncate">
                                   {identityString}
                                 </SheetTitle>
                                 {hubLogin && (
-                                  <p className="text-xs text-neutral-500 font-normal truncate">
+                                  <p className="text-xs text-neutral-500 dark:text-neutral-400 font-normal truncate">
                                     {hubLogin}
                                   </p>
                                 )}
@@ -347,7 +386,7 @@ export function PanelHeader({
                               <GradientIcon icon={Home} size={16} /> Início
                             </button>
                             
-                            <div className="h-px bg-neutral-200 my-1 mx-1" />
+                            <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-1 mx-1" />
 
                             {showEnvironmentLinks && (
                               <>
@@ -356,7 +395,7 @@ export function PanelHeader({
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   onClick={() => setIsMobileMenuOpen(false)}
-                                  className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
+                                  className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors"
                                 >
                                   <GradientIcon icon={AppWindow} size={16} /> Backoffice
                                 </a>
@@ -365,11 +404,11 @@ export function PanelHeader({
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   onClick={() => setIsMobileMenuOpen(false)}
-                                  className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors"
+                                  className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors"
                                 >
                                   <GradientIcon icon={Settings} size={16} /> Sandbox
                                 </a>
-                                <div className="h-px bg-neutral-200 my-1 mx-1" />
+                                <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-1 mx-1" />
                               </>
                             )}
                             
@@ -379,7 +418,7 @@ export function PanelHeader({
                                   setIsMobileMenuOpen(false);
                                   onLogout?.();
                                 }}
-                                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 bg-neutral-50 border border-neutral-200 hover:bg-neutral-100 transition-colors cursor-pointer"
+                                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 dark:text-neutral-200 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
                               >
                                 <GradientIcon icon={LogOut} size={16} /> 
                                 <span>Sair da Conta</span>

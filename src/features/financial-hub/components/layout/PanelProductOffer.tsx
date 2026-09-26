@@ -47,38 +47,38 @@ export function PanelProductOffer({ config }: PanelProductOfferProps) {
   const getHeadlineStyle = (type: string) => {
     switch (type) {
       case "highlight":
-        return "font-normal text-neutral-900 serif";
+        return "font-normal text-neutral-900 dark:text-neutral-100 serif";
       case "bold":
-        return "font-semibold text-neutral-900";
+        return "font-semibold text-neutral-900 dark:text-neutral-100";
       default:
-        return "text-neutral-900";
+        return "text-neutral-900 dark:text-neutral-100";
     }
   };
 
   const getDescriptionStyle = (type: string) => {
     switch (type) {
       case "highlight":
-        return "font-semibold text-neutral-900"; // Descrição usa peso forte neutro, sem forçar serifa desalinhada
+        return "font-semibold text-neutral-900 dark:text-neutral-100"; // Descrição usa peso forte neutro, sem forçar serifa desalinhada
       case "bold":
-        return "font-semibold text-neutral-900";
+        return "font-semibold text-neutral-900 dark:text-neutral-100";
       default:
-        return "text-neutral-600";
+        return "text-neutral-600 dark:text-neutral-400";
     }
   };
 
   return (
-    <div className="space-y-6 text-neutral-900 rounded-none">
+    <div className="space-y-6 text-neutral-900 dark:text-neutral-100 bg-white dark:bg-neutral-950 rounded-none">
       
       {/* 1. HEADLINE E DESCRIÇÃO */}
       <div className="space-y-4">
-        <h1 className="text-2xl sm:text-3xl font-semibold leading-tight tracking-tight text-neutral-900">
+        <h1 className="text-2xl sm:text-3xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100">
           {offer_panel.headline.parts.map((part: any, i: number) => (
             <span key={i} className={getHeadlineStyle(part.type)}>
               {part.text}
             </span>
           ))}
         </h1>
-        <p className="mt-3 text-sm md:text-base text-neutral-600 leading-relaxed">
+        <p className="mt-3 text-sm md:text-base text-neutral-600 dark:text-neutral-400 leading-relaxed">
           {offer_panel.description.parts.map((part: any, i: number) => (
             <span key={i} className={getDescriptionStyle(part.type)}>
               {part.text}
@@ -98,8 +98,8 @@ export function PanelProductOffer({ config }: PanelProductOfferProps) {
                   {Icon && <GradientIcon icon={Icon} size={20} />}
                 </span>
                 <div className="space-y-0.5">
-                  <p className="text-sm font-medium text-neutral-900">{b.title}</p>
-                  <p className="text-xs text-neutral-500 leading-normal">{b.description}</p>
+                  <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{b.title}</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-normal">{b.description}</p>
                 </div>
               </li>
             );
@@ -109,11 +109,11 @@ export function PanelProductOffer({ config }: PanelProductOfferProps) {
 
       {/* 3. SELO REGULATÓRIO DO PARCEIRO */}
       {offer_panel.partner?.name && (
-        <div className="mt-8 rounded-none border border-neutral-200 bg-neutral-50 p-3.5 sm:p-4 flex flex-col items-start gap-1 overflow-hidden w-full shadow-xs">
-          <span className="text-[11px] uppercase tracking-wider text-neutral-500 font-mono">
+        <div className="mt-8 rounded-none border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800 p-3.5 sm:p-4 flex flex-col items-start gap-1 overflow-hidden w-full shadow-xs">
+          <span className="text-[11px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 font-mono">
             {offer_panel.partner.label}
           </span>
-          <strong className="text-xs sm:text-sm font-medium text-neutral-900 truncate w-full block">
+          <strong className="text-xs sm:text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate w-full block">
             {offer_panel.partner.name}
           </strong>
         </div>

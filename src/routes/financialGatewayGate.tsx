@@ -33,12 +33,28 @@ interface SearchSchema {
   entity_id?: string;
 }
 
+// =========================================================================
+// [SEGURANÇA - SBXW-07 FIX]: Open Redirect Shield, mesmo critério já aplicado
+// em accounts.signin.tsx (SBXW-22) e no orchestrator (SBXW-12). Só aceita
+// caminho relativo simples (começa com "/", não com "//" protocol-relative),
+// recusando qualquer URL absoluta ou esquema estranho. Validado aqui no
+// contrato da rota (validateSearch), não só no componente, porque a rota é
+// acessível diretamente por URL.
+// =========================================================================
+function sanitizeReturnUri(uri: unknown): string | undefined {
+  if (typeof uri !== "string") return undefined;
+  if (uri.startsWith("/") && !uri.startsWith("//")) {
+    return uri;
+  }
+  return undefined;
+}
+
 export const Route = createFileRoute("/financialGatewayGate")({
   validateSearch: (search: Record<string, unknown>): SearchSchema => ({
     status: search.status as string | undefined,
     code: search.code as string | undefined,
     message: search.message as string | undefined,
-    return_uri: search.return_uri as string | undefined,
+    return_uri: sanitizeReturnUri(search.return_uri),
     offer_id: search.offer_id as string | undefined,
     product_id: search.product_id as string | undefined,
     entity_id: search.entity_id as string | undefined,
@@ -48,6 +64,7 @@ export const Route = createFileRoute("/financialGatewayGate")({
     const { status, code, message, return_uri, offer_id, product_id, entity_id } = Route.useSearch();
     const [countdown, setCountdown] = useState(5);
 
+    // return_uri já chega sanitizado (relativo ou undefined) via sanitizeReturnUri em validateSearch.
     const targetReturnUrl = return_uri && return_uri !== "/" ? return_uri : "/";
 
     // =====================================================================

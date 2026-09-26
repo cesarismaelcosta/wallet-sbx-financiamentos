@@ -32,42 +32,42 @@ export function PanelProduct({ config }: { config: any }) {
   const getHeadlineStyle = (type: string) => {
     switch (type) {
       case "highlight":
-        return "font-normal text-neutral-900 serif";
+        return "font-normal text-neutral-900 dark:text-neutral-100 serif";
       case "bold":
-        return "font-semibold text-neutral-900";
+        return "font-semibold text-neutral-900 dark:text-neutral-100";
       default:
-        return "text-neutral-900";
+        return "text-neutral-900 dark:text-neutral-100";
     }
   };
 
   const getDescriptionStyle = (type: string) => {
     switch (type) {
       case "highlight":
-        return "font-semibold text-neutral-900";
+        return "font-semibold text-neutral-900 dark:text-neutral-100";
       case "bold":
-        return "font-semibold text-neutral-900";
+        return "font-semibold text-neutral-900 dark:text-neutral-100";
       default:
-        return "text-neutral-600";
+        return "text-neutral-600 dark:text-neutral-400";
     }
   };
 
   return (
-    <div className="rounded-none border border-neutral-200 bg-white p-4 space-y-4 break-inside-avoid shadow-sm">
-      <h4 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 flex items-center gap-1.5 mb-3 border-b border-neutral-100 pb-2">
+    <div className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 space-y-4 break-inside-avoid shadow-sm">
+      <h4 className="text-[11px] font-bold uppercase tracking-wider text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5 mb-3 border-b border-neutral-100 dark:border-neutral-800 pb-2">
         <Layers size={14} /> Painel de Proposta (Offer Panel)
       </h4>
       
       <div className="space-y-4">
         {/* 1. HEADLINE E DESCRIÇÃO (ESCALA COMPACTA) */}
         <div className="space-y-1.5">
-          <h2 className="text-lg sm:text-xl font-semibold leading-tight tracking-tight text-neutral-900">
+          <h2 className="text-lg sm:text-xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100">
             {panel.headline.parts.map((part: any, i: number) => (
               <span key={i} className={getHeadlineStyle(part.type)}>
                 {part.text}
               </span>
             ))}
           </h2>
-          <p className="text-xs text-neutral-600 leading-relaxed">
+          <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
             {panel.description.parts.map((part: any, i: number) => (
               <span key={i} className={getDescriptionStyle(part.type)}>
                 {part.text}
@@ -87,8 +87,8 @@ export function PanelProduct({ config }: { config: any }) {
                     <GradientIcon icon={IconComponent} size={16} />
                   </span>
                   <div className="space-y-0.5">
-                    <p className="text-xs font-medium text-neutral-900 leading-tight">{b.title}</p>
-                    <p className="text-[10px] text-neutral-500 leading-tight">{b.description}</p>
+                    <p className="text-xs font-medium text-neutral-900 dark:text-neutral-100 leading-tight">{b.title}</p>
+                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400 leading-tight">{b.description}</p>
                   </div>
                 </li>
               );
@@ -98,11 +98,11 @@ export function PanelProduct({ config }: { config: any }) {
 
         {/* 3. SELO REGULATÓRIO DO PARCEIRO */}
         {panel.partner?.name && (
-          <div className="mt-4 rounded-none border border-neutral-200 bg-neutral-50 p-3 flex flex-col items-start gap-0.5 overflow-hidden w-full shadow-xs">
-            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-mono">
+          <div className="mt-4 rounded-none border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800 p-3 flex flex-col items-start gap-0.5 overflow-hidden w-full shadow-xs">
+            <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 font-mono">
               {panel.partner.label}
             </span>
-            <strong className="text-[11px] sm:text-xs font-medium text-neutral-900 truncate w-full block">
+            <strong className="text-[11px] sm:text-xs font-medium text-neutral-900 dark:text-neutral-100 truncate w-full block">
               {panel.partner.name}
             </strong>
           </div>

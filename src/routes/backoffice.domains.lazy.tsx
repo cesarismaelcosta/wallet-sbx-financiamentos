@@ -143,27 +143,27 @@ function DominiosPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-header-title">Domínios permitidos</h1>
-          <p className="text-sm text-neutral-600">Gerencie quais domínios de e-mail podem acessar o backoffice.</p>
+          <p className="text-sm text-muted-foreground">Gerencie quais domínios de e-mail podem acessar o backoffice.</p>
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="rounded-none border-neutral-200 text-neutral-900 shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                <Button variant="outline" size="sm" className="rounded-none border-border text-foreground shadow-xs text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                   <Plus className="mr-2 h-4 w-4" /> Adicionar domínio
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md rounded-none sm:rounded-none bg-white border-neutral-200 shadow-lg">
+              <DialogContent className="sm:max-w-md rounded-none sm:rounded-none bg-card border-border shadow-lg">
                 <DialogHeader>
-                  <DialogTitle className="text-neutral-900 text-base">Adicionar novo domínio</DialogTitle>
+                  <DialogTitle className="text-foreground text-base">Adicionar novo domínio</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-2 pt-2 text-xs">
-                  <Label className="text-neutral-700 text-xs">Domínio</Label>
+                  <Label className="text-foreground text-xs">Domínio</Label>
                   <Input 
                     placeholder="exemplo.com" 
                     value={newDomain} 
                     onChange={e => setNewDomain(e.target.value)} 
-                    className="rounded-none border-neutral-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900 text-neutral-900 placeholder:text-neutral-400 text-xs"
+                    className="rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground text-foreground placeholder:text-muted-foreground text-xs"
                   />
                 </div>
                 <DialogFooter>
@@ -180,10 +180,10 @@ function DominiosPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-none border border-neutral-200 bg-white shadow-xs">
+      <div className="overflow-hidden rounded-none border border-border bg-card shadow-xs">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-neutral-200 bg-neutral-100 text-left text-[10px] font-semibold uppercase tracking-wider text-neutral-600">
+            <tr className="border-b border-border bg-accent text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               <th className="px-3 py-2.5">Domínio</th>
               <th className="px-3 py-2.5">Status</th>
               <th className="px-3 py-2.5">Adicionado em</th>
@@ -192,23 +192,23 @@ function DominiosPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-neutral-900 h-5 w-5"/></td></tr>
+              <tr><td colSpan={4} className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-foreground h-5 w-5"/></td></tr>
             ) : domains.length === 0 ? (
-              <tr><td colSpan={4} className="p-10 text-center text-neutral-500 text-xs">Nenhum domínio encontrado.</td></tr>
+              <tr><td colSpan={4} className="p-10 text-center text-muted-foreground text-xs">Nenhum domínio encontrado.</td></tr>
             ) : (
               domains.map((d) => (
-                <tr key={d.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
-                  <td className="px-3 py-2.5 font-medium text-neutral-900">{d.domain}</td>
+                <tr key={d.id} className="border-b border-border hover:bg-muted transition-colors">
+                  <td className="px-3 py-2.5 font-medium text-foreground">{d.domain}</td>
                   <td className="px-3 py-2.5">
                     <span className={`inline-flex items-center gap-1.5 rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${d.is_active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
                       {d.is_active ? <UserCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
                       {d.is_active ? "Ativo" : "Inativo"}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-neutral-400">{new Date(d.created_at).toLocaleDateString("pt-BR")}</td>
+                  <td className="px-3 py-2.5 text-muted-foreground">{new Date(d.created_at).toLocaleDateString("pt-BR")}</td>
                   <td className="px-3 py-2.5 text-right">
                     {isAdmin && (
-                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2 rounded-none hover:bg-neutral-100 text-neutral-900 font-medium" onClick={() => toggleStatus(d)}>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2 rounded-none hover:bg-accent text-foreground font-medium" onClick={() => toggleStatus(d)}>
                         {d.is_active ? (
                           <>
                             <ToggleLeft className="mr-1 h-4 w-4 text-destructive" /> Inativar

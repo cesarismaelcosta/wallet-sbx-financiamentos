@@ -45,9 +45,17 @@ export async function validateRequest(req: Request): Promise<AuthContext> {
 
   if (!jwtToken) {
     const cookieHeader = req.headers.get("cookie") || "";
-    const match = cookieHeader.match(/session_token=([^;]+)/);
-    if (match && match[1]) {
-      jwtToken = match[1];
+    // 🛡️ [SBXW-32 FIX]: Extração ancorada por nome exato do cookie. A regex
+    // anterior (/session_token=([^;]+)/) casava com QUALQUER cookie cujo nome
+    // terminasse em "session_token" (ex.: "evil_session_token=X"), permitindo
+    // fixação de sessão se esse cookie aparecesse antes do legítimo. Agora
+    // comparamos o nome exato após separar por ";".
+    const sessionCookie = cookieHeader
+      .split(";")
+      .map((pair) => pair.trim())
+      .find((pair) => pair.startsWith("session_token="));
+    if (sessionCookie) {
+      jwtToken = sessionCookie.slice("session_token=".length);
     }
   }
 

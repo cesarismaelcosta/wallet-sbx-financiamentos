@@ -169,6 +169,14 @@ export const withSecurity = (
       "Access-Control-Allow-Methods": [...config.methods, "OPTIONS"].join(", "),
       "Access-Control-Allow-Headers": allAllowedHeaders,
       "Access-Control-Allow-Credentials": "true",
+      // 🛡️ [SBXW-18 FIX]: headers de hardening centralizados aqui porque todas
+      // as respostas das 14 functions espalham (`...corsHeaders`) este objeto —
+      // adicionar aqui cobre todas de uma vez, sem tocar em cada handler.
+      // CSP restritiva: nenhuma resposta de API deveria executar/carregar nada;
+      // 'none' em todas as diretivas relevantes.
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "no-referrer",
     };
 
     // -----------------------------------------------------------------------
@@ -284,12 +292,21 @@ export const withSecurity = (
         headers: { ...corsHeaders, "Content-Type": "application/json", ...(std.headers || {}) },
       });
     } catch (err: any) {
-      console.error(`[withSecurity FATAL ERROR em ${functionName}]:`, err);
+      // 🛡️ [SBXW-19 FIX]: Este catch só é alcançado por exceção NÃO
+      // controlada (bug real) — erro de negócio esperado já retorna via
+      // StandardResponse.error acima, sem passar por aqui. Antes, `err.message`
+      // (texto bruto da exceção do runtime) era devolvido direto ao cliente,
+      // vazando biblioteca/caminho/estrutura interna. Agora: mensagem genérica
+      // + ID de correlação para o cliente; detalhe completo só no log do
+      // servidor, correlacionável pelo mesmo ID.
+      const correlationId = crypto.randomUUID();
+      console.error(`[withSecurity FATAL ERROR em ${functionName}] (correlationId=${correlationId}):`, err);
       return new Response(
         JSON.stringify({
           success: false,
           code: "INTERNAL_SERVER_ERROR",
-          message: err.message || "Erro crítico no wrapper.",
+          message: "Erro interno inesperado. Se precisar de suporte, informe o código de referência.",
+          correlationId,
         }),
         {
           status: 500,

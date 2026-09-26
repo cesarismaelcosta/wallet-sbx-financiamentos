@@ -19,7 +19,7 @@ import { useRef, useState } from "react";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { SliderCustomizado } from "@/features/financial-hub/components/shared/SliderCustomizado";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider"; // Motor Genérico
@@ -27,7 +27,7 @@ import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 
-const commonInputClass = "h-11 text-sm rounded-none border-neutral-200 bg-white transition-all duration-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900";
+const commonInputClass = "h-11 text-sm rounded-none border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 transition-all duration-200 focus-visible:ring-1 focus-visible:ring-[#2246A7] focus-visible:border-[#2246A7]";
 
 export function Step4Simulation() {
   // =========================================================================
@@ -113,29 +113,20 @@ export function Step4Simulation() {
       {/* =========================================================================
        * 🤖 [SLIDER ARCHITECTURE]: Controle de Valor Desejado com Zero-Radius
        * ========================================================================= */}
-      <div className="rounded-none border border-neutral-200 p-5 sm:p-6 bg-surface-alt shadow-xs space-y-3">
-        <Label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Valor desejado</Label>
-        <div className="text-2xl sm:text-3xl font-bold text-neutral-900 tracking-tight">{BRL(amount)}</div>
+      <div className="rounded-none border border-neutral-200 dark:border-neutral-800 p-5 sm:p-6 bg-neutral-50 dark:bg-neutral-900 shadow-xs space-y-3">
+        <Label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">Valor desejado</Label>
+        <div className="text-2xl sm:text-3xl font-bold text-[#2246A7] tracking-tight">{BRL(amount)}</div>
 
-        <div className="pt-2">
-          {/* Estilo scoped para o Slider do Shadcn com cores neutras */}
-          <style>{`
-            .slider-fix [role="slider"]:focus-visible {
-              outline: none !important;
-              box-shadow: 0 0 0 2px #171717 !important;
-            }
-          `}</style>
-
-          <div className="slider-fix">
-            <Slider
-              value={[amount]}
-              disabled={loading}
-              min={5000}
-              max={100000}
-              step={1000}
-              onValueChange={([v]) => setAmount(v)}
-            />
-          </div>
+        <div className="pt-1 px-1">
+          <SliderCustomizado
+            value={amount}
+            onValueChange={(v: number) => setAmount(v)}
+            min={5000}
+            max={100000}
+            step={1000}
+            isCurrency={true}
+            disabled={loading}
+          />
         </div>
       </div>
 
@@ -143,12 +134,12 @@ export function Step4Simulation() {
        * 🤖 [SELECT ARCHITECTURE]: Seleção do Propósito do Empréstimo
        * ========================================================================= */}
       <div className="space-y-1.5">
-        <Label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Motivo do empréstimo</Label>
+        <Label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">Motivo do empréstimo</Label>
         <Select value={purpose} onValueChange={setPurpose} disabled={loading}>
           <SelectTrigger className={commonInputClass}>
             <SelectValue placeholder="Escolher..." />
           </SelectTrigger>
-          <SelectContent className="rounded-none border-neutral-200">
+          <SelectContent className="rounded-none border-neutral-200 dark:border-neutral-800">
             {[
               { value: "INVESTMENT_IN_OWN_BUSINESS", label: "Investimento em negócio próprio" },
               { value: "DEBTS_PAYMENT", label: "Pagamento de dívidas" },
@@ -160,7 +151,7 @@ export function Step4Simulation() {
               <SelectItem
                 key={item.value}
                 value={item.value}
-                className="rounded-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-900 cursor-pointer"
+                className="rounded-none data-[highlighted]:bg-neutral-100 dark:data-[highlighted]:bg-neutral-800 data-[highlighted]:text-neutral-900 dark:data-[highlighted]:text-neutral-100 cursor-pointer"
               >
                 {item.label}
               </SelectItem>
@@ -178,14 +169,14 @@ export function Step4Simulation() {
           variant="ghost"
           onClick={back}
           disabled={loading}
-          className="w-full sm:w-auto rounded-none text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900 font-medium"
+          className="w-full sm:w-auto rounded-none text-[#2246A7] hover:bg-[#E7F2FD] dark:hover:bg-neutral-800 hover:text-[#2246A7] font-medium"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Voltar
         </Button>
         <Button
           size="lg"
-          className="h-12 w-full sm:w-auto flex-1 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-bold shadow-xs transition-all active:scale-[0.98] disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none"
+          className="h-12 w-full sm:w-auto flex-1 rounded-none cta-gradient text-white font-bold shadow-xs transition-all active:scale-[0.98] disabled:opacity-50"
           disabled={!purpose || loading}
           onClick={handleSimular}
         >

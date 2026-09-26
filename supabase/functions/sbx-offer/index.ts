@@ -18,7 +18,7 @@
  *    realiza o proxy de forma anônima e limpa, eliminando a dependência de tokens opacos no banco.
  *
  * @author César Ismael Pereira da Costa
- * @version 4.2.0 (Headers de navegador anti-Cloudflare integrados)
+ * @version 4.1.0 (Sessão centralizada no wrapper — v2.0.0 do registry/server)
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -40,6 +40,11 @@ serve(
   withSecurity("sbx-offer", async (req: Request, ctx?: RequestContext) => {
     // =========================================================================
     // FASE 1: GATEKEEPER DE BORDA
+    // [v2.0.0]: sessão já validada centralmente pelo wrapper (registry.ts:
+    // authMode.type === 'session', enforcement: 'wrapper') — `ctx.auth` chega
+    // pronto aqui. SESSION_EXPIRED (com handoff token) e UNAUTHORIZED são
+    // tratados em `_shared/session-guard.ts`; o handler nem chega a rodar se
+    // a sessão for inválida.
     // =========================================================================
     const auth = ctx?.auth;
 
@@ -59,28 +64,18 @@ serve(
       const offerBaseUrl = OFFER_BASE_URLS[env] || OFFER_BASE_URLS.staging;
       const eventBaseUrl = EVENT_BASE_URLS[env] || EVENT_BASE_URLS.staging;
 
-      const upstreamUrl = `${offerBaseUrl}/offers/?portalId=%5B2,15%5D&locale=pt_BR&timeZoneId=America%2FSao_Paulo&searchType=opened&filter=id:%5B${offerId}%5D&pageNumber=1&pageSize=15&orderBy=price%3Adesc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
+      const upstreamUrl = `${offerBaseUrl}/offers/?portalId=[2,15]&locale=pt_BR&timeZoneId=America/Sao_Paulo&searchType=opened&filter=id:[${offerId}]&pageNumber=1&pageSize=15&orderBy=price:desc&requestOrigin=marketplace&preOrderBy=orderByFirstOpenedOffersAndSecondHasPhoto`;
 
       debugLog(`[sbx-offer] Buscando oferta ID: ${offerId} no ambiente seguro: ${env}`);
 
-      // Requisição blindada com fingerprint completo de navegador para contornar a Cloudflare
+      // Requisição limpa e pública para a Superbid (Sem necessidade de Bearer Token do usuário)
       const response = await fetch(upstreamUrl, {
         method: "GET",
         headers: {
-          "Accept": "application/json, text/plain, */*",
-          "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-          "Cache-Control": "no-cache",
-          "Pragma": "no-cache",
-          "User-Agent": req.headers.get("user-agent") ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-          "Origin": "https://www.superbid.net",
-          "Referer": "https://www.superbid.net/",
-          "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-          "Sec-Ch-Ua-Mobile": "?0",
-          "Sec-Ch-Ua-Platform": '"Windows"',
-          "Sec-Fetch-Dest": "empty",
-          "Sec-Fetch-Mode": "cors",
-          "Sec-Fetch-Site": "cross-site",
-          "X-Forwarded-For": req.headers.get("x-forwarded-for") || "0.0.0.0",
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Origin: "https://www.superbid.net",
+          Referer: "https://www.superbid.net/",
         },
       });
 

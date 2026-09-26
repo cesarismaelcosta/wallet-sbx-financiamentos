@@ -27,6 +27,11 @@
  * - TOMADA DE PREÇO (modalityId 5): Fundo azul gelo.
  * - LEILÃO TRADICIONAL (offerTypeId 1): Fundo laranja claro + Data Fim.
  *
+ * [NEUTRAL PURITY]: Paleta migrada de tokens semanticos vivos (bg-card/text-foreground/bg-primary/bg-muted/border-border) para tons
+ * neutros fixos do Tailwind. Motivo: este card e renderizado em rota de cliente (sbxpay.offer) e nao pode
+ * herdar o dark mode ativado via localStorage["sbx-theme"] pelo ThemeToggle do backoffice -- o card fica
+ * imune ao tema, igual ao restante dos componentes do financial-hub.
+ *
  * @author Cesar Ismael Pereira da Costa
  * @author Gemini Pro
  */
@@ -261,19 +266,19 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
   const showMetric = !isLeilao && !isTomadaDePreco && !!offerData.system_metric;
 
   return (
-    <div className="rounded-none border border-border bg-card overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group">
+    <div className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group">
       <div className="flex flex-col h-full">
         {/* ================================================================ */}
         {/* RENDERIZAÇÃO DA MÍDIA (CARROSSEL)                                */}
         {/* ================================================================ */}
         <div
-          className="relative h-44 w-full bg-muted overflow-hidden shrink-0 rounded-none touch-pan-y"
+          className="relative h-44 w-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden shrink-0 rounded-none touch-pan-y"
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
         >
           {hasError ? (
-            <div className="absolute inset-0 bg-muted flex items-center justify-center text-muted-foreground text-xs font-bold uppercase tracking-wider">
+            <div className="absolute inset-0 bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-xs font-bold uppercase tracking-wider">
               Foto Indisponível
             </div>
           ) : (
@@ -290,12 +295,12 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
             />
           )}
 
-          <span className="absolute bottom-2 left-2 bg-primary/80 backdrop-blur-sm text-primary-foreground font-mono text-[9px] font-light uppercase tracking-[0.18em] px-2 py-1 rounded-none z-10">
+          <span className="absolute bottom-2 left-2 bg-neutral-900/80 backdrop-blur-sm text-white font-mono text-[9px] font-light uppercase tracking-[0.18em] px-2 py-1 rounded-none z-10">
             Lote #{offerData.lot_number || offerData.offer_id}
           </span>
 
           {item.is_simulated && (
-            <span className="absolute bottom-2 right-2 bg-card text-foreground text-[10px] font-normal px-2.5 py-0.5 rounded-none z-10 shadow lowercase">
+            <span className="absolute bottom-2 right-2 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 text-[10px] font-normal px-2.5 py-0.5 rounded-none z-10 shadow lowercase">
               com simulação
             </span>
           )}
@@ -307,7 +312,7 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
                 type="button"
                 onClick={handlePrevPhoto}
                 aria-label="Foto anterior"
-                className="absolute left-2 top-1/2 -translate-y-1/2 bg-primary/40 hover:bg-primary/60 backdrop-blur-sm text-primary-foreground p-1.5 rounded-none transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
+                className="absolute left-2 top-1/2 -translate-y-1/2 bg-neutral-900/40 hover:bg-neutral-900/60 backdrop-blur-sm text-white p-1.5 rounded-none transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
               >
                 <ArrowLeft size={16} strokeWidth={1.5} />
               </button>
@@ -315,7 +320,7 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
                 type="button"
                 onClick={handleNextPhoto}
                 aria-label="Próxima foto"
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-primary/40 hover:bg-primary/60 backdrop-blur-sm text-primary-foreground p-1.5 rounded-none transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-neutral-900/40 hover:bg-neutral-900/60 backdrop-blur-sm text-white p-1.5 rounded-none transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer border-none z-20"
               >
                 <ArrowRight size={16} strokeWidth={1.5} />
               </button>
@@ -323,7 +328,7 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
           )}
         </div>
 
-        <div className="h-px w-full bg-border" />
+        <div className="h-px w-full bg-neutral-200 dark:bg-neutral-800" />
 
         {/* ================================================================ */}
         {/* METADADOS E INFORMAÇÕES DA OFERTA                                */}
@@ -338,21 +343,21 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Ver oferta no Superbid"
-                className="text-muted-foreground hover:text-foreground transition-colors p-1 ml-auto"
+                className="text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors p-1 ml-auto"
                 onClick={(e) => e.stopPropagation()}
               >
                 <ExternalLink size={18} strokeWidth={1.5} />
               </a>
             </div>
 
-            <h3 className="font-normal text-[13px] md:text-sm text-foreground leading-snug line-clamp-2 uppercase min-h-[2.5rem]">
+            <h3 className="font-normal text-[13px] md:text-sm text-neutral-900 dark:text-neutral-100 leading-snug line-clamp-2 uppercase min-h-[2.5rem]">
               {offerDesc}
             </h3>
 
             {/* AQUI: Vendedor primeiro (text-xs), Localização depois (text-[11px]) */}
             <div className="space-y-1 mt-2">
-              <div className="text-xs text-muted-foreground truncate uppercase">{sellerName ||" "}</div>
-              <div className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+              <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate uppercase">{sellerName ||" "}</div>
+              <div className="flex items-center gap-1 text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
                 <MapPin size={12} strokeWidth={1.5} className="shrink-0" />
                 <span className="truncate">{locationDisplay}</span>
               </div>
@@ -362,12 +367,12 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
           {/* ================================================================ */}
           {/* PAINEL DE PRECIFICAÇÃO                                           */}
           {/* ================================================================ */}
-          <div className="pt-3 border-t border-border mt-auto">
-            <div className="text-[10px] text-muted-foreground font-normal uppercase mb-1">{priceLabel}</div>
-            <div className="text-lg md:text-xl font-bold tracking-tight text-foreground">
+          <div className="pt-3 border-t border-neutral-200 dark:border-neutral-800 mt-auto">
+            <div className="text-[10px] text-neutral-500 dark:text-neutral-400 font-normal uppercase mb-1">{priceLabel}</div>
+            <div className="text-lg md:text-xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
               {priceFormatted}
               {showMetric && (
-                <span className="text-[11px] font-medium text-muted-foreground ml-1 uppercase">
+                <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 ml-1 uppercase">
                   /{offerData.system_metric}
                 </span>
               )}
@@ -384,7 +389,7 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
           onClick={() => onSimulate(item, idx)}
           disabled={loading || disabled}
           variant="outline"
-          className="group flex items-center justify-center gap-2 w-full rounded-none shadow-xs bg-card text-foreground border border-border hover:bg-primary hover:text-primary-foreground hover:border-primary font-medium text-[13px] h-11 cursor-pointer transition-all duration-300 ease-out"
+          className="group flex items-center justify-center gap-2 w-full rounded-none shadow-xs bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 dark:hover:bg-white dark:hover:text-neutral-900 dark:hover:border-white font-medium text-[13px] h-11 cursor-pointer transition-all duration-300 ease-out"
         >
           {loading ? (
             <>

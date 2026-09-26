@@ -176,13 +176,13 @@ export function Step1Eligibility() {
   if (errorMsg) {
     return (
       <div className="flex flex-col items-center justify-center text-center animate-in fade-in zoom-in duration-300">
-        <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-none bg-surface-alt border border-neutral-200 text-neutral-900">
+        <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-none bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-900 dark:text-neutral-100">
           <AlertCircle className="h-10 w-10" />
         </div>
-        <h2 className="text-2xl font-bold text-neutral-900 tracking-tight">Não encontramos oferta</h2>
-        <p className="mt-3 max-w-sm text-sm text-neutral-600 leading-relaxed">{errorMsg}</p>
+        <h2 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">Não encontramos oferta</h2>
+        <p className="mt-3 max-w-sm text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">{errorMsg}</p>
         <div className="mt-8">
-          <Button variant="ghost" onClick={() => setErrorMsg(null)} className="rounded-none text-neutral-900 hover:bg-neutral-100">
+          <Button variant="ghost" onClick={() => setErrorMsg(null)} className="rounded-none text-[#2246A7] hover:bg-[#E7F2FD] dark:hover:bg-neutral-800">
             <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
           </Button>
         </div>
@@ -196,31 +196,31 @@ export function Step1Eligibility() {
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6"> 
       {/* Exibição dos dados do cliente (Read-only) com Zero-Radius e Neutral Purity */}
-      <div className="flex flex-col gap-4 rounded-none border border-neutral-200 bg-surface-alt p-4 sm:p-6 shadow-xs">
+      <div className="flex flex-col gap-4 rounded-none border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-4 sm:p-6 shadow-xs">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">Nome completo</p>
-          <p className="text-sm font-semibold text-neutral-900 mt-0.5">{form.watch("fullName") || "Carregando..."}</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Nome completo</p>
+          <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mt-0.5">{form.watch("fullName") || "Carregando..."}</p>
         </div>
         
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">CPF</p>
-            <p className="text-sm font-semibold text-neutral-900 mt-0.5">{form.watch("cpf") || entity?.document}</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">CPF</p>
+            <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mt-0.5">{form.watch("cpf") || entity?.document}</p>
           </div>
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">Data de nascimento</p>
-            <p className="text-sm font-semibold text-neutral-900 mt-0.5">{form.watch("birthDate") || formatBirthDateBR(entity?.birth_date)}</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Data de nascimento</p>
+            <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mt-0.5">{form.watch("birthDate") || formatBirthDateBR(entity?.birth_date)}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">Celular</p>
-            <p className="text-sm font-semibold text-neutral-900 mt-0.5">{form.watch("phone") || entity?.phone}</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Celular</p>
+            <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mt-0.5">{form.watch("phone") || entity?.phone}</p>
           </div>
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">E-mail</p>
-            <p className="text-sm font-semibold text-neutral-900 mt-0.5">{form.watch("email") || entity?.email}</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">E-mail</p>
+            <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mt-0.5">{form.watch("email") || entity?.email}</p>
           </div>
         </div>
       </div>
@@ -242,7 +242,7 @@ export function Step1Eligibility() {
       <Button 
         type="submit" 
         size="lg" 
-        className="h-12 w-full rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-bold shadow-xs transition-all active:scale-[0.98] disabled:bg-neutral-100 disabled:text-neutral-400 disabled:shadow-none"
+        className="h-12 w-full rounded-none cta-gradient text-white font-bold shadow-xs transition-all active:scale-[0.98] disabled:opacity-50"
         disabled={loading || !areConsentsValid}
       >
         {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Consultando...</> : "Continuar"}

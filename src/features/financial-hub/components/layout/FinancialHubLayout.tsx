@@ -36,6 +36,7 @@ import { ArrowLeft } from "lucide-react";
 import { OrchestratorWrapper } from "@/features/financial-hub/components/shared/OrchestratorWrapper";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext"; 
 import { PanelHeader } from "./PanelHeader";
+import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 import { PanelFAQ } from "./PanelFAQ";
 import { PanelFooter } from "./PanelFooter";
 import { PanelProductOfferSkeleton } from "./PanelProductOfferSkeleton";
@@ -123,6 +124,8 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
   
   const navigate = useNavigate();
   const { sessionToken, logout, userProfile } = useFinancialAuth();
+  const { theme, setTheme } = useTheme();
+  const nightMode = theme === "dark";
 
   const [isOrchestratorHydrating, setIsOrchestratorHydrating] = useState(true);
   const [runtimeError, setRuntimeError] = useState<any>(null);
@@ -226,12 +229,14 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
                 userData={userProfile} 
                 onLogout={() => logout({ purgeEnv: true })}
                 onNavigate={(path) => navigate({ to: path as any })}
+                nightMode={nightMode}
+                onToggleNightMode={() => setTheme(nightMode ? "light" : "dark")}
               />
 
               {/* Skeletons Estruturais durante Hidratação */}
               {isOrchestratorHydrating && (
                 <>
-                  <main className="flex-1 w-full flex flex-col pt-16 bg-white">
+                  <main className="flex-1 w-full flex flex-col pt-16 bg-white dark:bg-neutral-950">
                     <div className="max-w-7xl mx-auto px-6 py-12 w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
                       <PanelProductOfferSkeleton />
                       <PanelStepSkeleton />
@@ -244,7 +249,7 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
 
               {/* Conteúdo Renderizado da Jornada */}
               <main
-                className={`flex-1 w-full flex flex-col transition-opacity duration-300 pt-16 bg-white ${
+                className={`flex-1 w-full flex flex-col transition-opacity duration-300 pt-16 bg-white dark:bg-neutral-950 ${
                   isOrchestratorHydrating ? "opacity-0 pointer-events-none h-0 overflow-hidden" : "opacity-100"
                 }`}
               >

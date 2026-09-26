@@ -34,7 +34,7 @@ import { personalIncomeSchema, type PersonalIncomeData } from "../schemas";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 
 // Classe padronizada para unificar tamanho, fonte e zero-radius estrito
-const commonInputClass = "h-11 text-sm rounded-none border-neutral-200 bg-white transition-all duration-200 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900";
+const commonInputClass = "h-11 text-sm rounded-none border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 transition-all duration-200 focus-visible:ring-1 focus-visible:ring-[#2246A7] focus-visible:border-[#2246A7]";
 
 // Labels para o mapeamento visual dos Selects
 const LABELS: Record<string, string> = {
@@ -82,15 +82,15 @@ export function Step2PersonalData() {
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
-      <section className="rounded-none border border-neutral-200 bg-surface-alt p-5 sm:p-6 shadow-xs space-y-4">
-        <header className="flex items-center gap-2 text-sm font-bold text-neutral-900 uppercase tracking-wider">
-          <Wallet className="h-4 w-4 text-neutral-900" strokeWidth={1.5} /> Sua renda
+      <section className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 p-5 sm:p-6 shadow-xs space-y-4">
+        <header className="flex items-center gap-2 text-sm font-bold text-neutral-900 dark:text-neutral-100 uppercase tracking-wider">
+          <Wallet className="h-4 w-4 text-neutral-900 dark:text-neutral-100" strokeWidth={1.5} /> Sua renda
         </header>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {/* Renda Mensal */}
           <div className="sm:col-span-2 space-y-1.5">
-            <Label htmlFor="income" className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Renda mensal</Label>
+            <Label htmlFor="income" className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">Renda mensal</Label>
             <Input
               id="income"
               placeholder="Sua renda total mensal sem descontos..."
@@ -108,7 +108,7 @@ export function Step2PersonalData() {
 
           {/* Vínculo profissional */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Vínculo profissional</Label>
+            <Label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">Vínculo profissional</Label>
             <Select
               value={form.watch("professionalStatus") ?? ""}
               onValueChange={(v) => form.setValue("professionalStatus", v as any, { shouldValidate: true })}
@@ -116,12 +116,12 @@ export function Step2PersonalData() {
               <SelectTrigger className={commonInputClass}>
                 <SelectValue placeholder="Escolher..." />
               </SelectTrigger>
-              <SelectContent className="rounded-none border-neutral-200">
+              <SelectContent className="rounded-none border-neutral-200 dark:border-neutral-800">
                 {personalIncomeSchema.shape.professionalStatus.options.map((opt) => (
                   <SelectItem 
                     key={opt} 
                     value={opt}
-                    className="rounded-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-900 cursor-pointer"
+                    className="rounded-none data-[highlighted]:bg-neutral-100 dark:data-[highlighted]:bg-neutral-800 data-[highlighted]:text-neutral-900 dark:data-[highlighted]:text-neutral-100 cursor-pointer"
                   >
                     {LABELS[opt] || opt}
                   </SelectItem>
@@ -132,7 +132,7 @@ export function Step2PersonalData() {
 
           {/* Tempo de vínculo */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider">Tempo de vínculo</Label>
+            <Label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">Tempo de vínculo</Label>
             <Select
               value={form.watch("timeOfEmployment") ?? ""}
               onValueChange={(v) => form.setValue("timeOfEmployment", v as any, { shouldValidate: true })}
@@ -140,12 +140,12 @@ export function Step2PersonalData() {
               <SelectTrigger className={commonInputClass}>
                 <SelectValue placeholder="Escolher..." />
               </SelectTrigger>
-              <SelectContent className="rounded-none border-neutral-200">
+              <SelectContent className="rounded-none border-neutral-200 dark:border-neutral-800">
                 {personalIncomeSchema.shape.timeOfEmployment.options.map((opt) => (
                   <SelectItem 
                     key={opt} 
                     value={opt}
-                    className="rounded-none data-[highlighted]:bg-neutral-100 data-[highlighted]:text-neutral-900 cursor-pointer"
+                    className="rounded-none data-[highlighted]:bg-neutral-100 dark:data-[highlighted]:bg-neutral-800 data-[highlighted]:text-neutral-900 dark:data-[highlighted]:text-neutral-100 cursor-pointer"
                   >
                     {LABELS[opt] || opt}
                   </SelectItem>
@@ -162,7 +162,7 @@ export function Step2PersonalData() {
           type="button" 
           variant="ghost" 
           onClick={back}
-          className="w-full sm:w-auto rounded-none text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900 font-medium"
+          className="w-full sm:w-auto rounded-none text-[#2246A7] hover:bg-[#E7F2FD] dark:hover:bg-neutral-800 hover:text-[#2246A7] font-medium"
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> 
           Voltar
@@ -170,7 +170,7 @@ export function Step2PersonalData() {
         <Button 
           type="submit" 
           size="lg" 
-          className="h-12 w-full sm:w-auto flex-1 rounded-none bg-neutral-900 hover:bg-neutral-800 text-white font-bold shadow-xs transition-all active:scale-[0.98]"
+          className="h-12 w-full sm:w-auto flex-1 rounded-none cta-gradient text-white font-bold shadow-xs transition-all active:scale-[0.98]"
         >
           Continuar
         </Button>

@@ -521,10 +521,10 @@ function SimulationsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-header-title">Monitor de Simulações</h1>
-          <p className="text-sm text-neutral-600">Acompanhe simulações, análises e aprovações em tempo real.</p>
+          <p className="text-sm text-muted-foreground">Acompanhe simulações, análises e aprovações em tempo real.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleExportExcel} className="rounded-none border-neutral-200 text-neutral-900 transition-colors shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"><Download className="mr-2 h-4 w-4" /> Exportar Excel</Button>
+          <Button variant="outline" onClick={handleExportExcel} className="rounded-none border-border text-foreground transition-colors shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"><Download className="mr-2 h-4 w-4" /> Exportar Excel</Button>
           <Button onClick={() => load(0)} disabled={loading} className="cta-gradient border-0 rounded-none text-white"><RefreshCw className={`mr-2 h-4 w-4 shrink-0 ${loading ? "animate-spin" : ""}`} /> Atualizar</Button>
         </div>
       </div>
@@ -541,11 +541,11 @@ function SimulationsPage() {
             key={t.label} 
             className={`rounded-none border p-4 flex flex-col justify-between shadow-xs ${
               t.special 
-                ? "bg-surface-alt border-neutral-300 text-neutral-900" 
-                : "border-neutral-200 bg-white text-neutral-900"
+                ? "bg-surface-alt border-border text-foreground" 
+                : "border-border bg-card text-foreground"
             }`}
           >
-            <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-500 whitespace-nowrap">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground whitespace-nowrap">
               {t.label}
             </div>
             <div className="mt-2 text-xl font-semibold tracking-tight whitespace-nowrap">
@@ -555,30 +555,30 @@ function SimulationsPage() {
         ))}
       </div>
 
-      <div className="rounded-none border border-neutral-200 bg-white flex flex-col shadow-xs">
-        <div className="flex flex-col gap-3 border-b border-neutral-200 p-4 bg-neutral-50/50">
+      <div className="rounded-none border border-border bg-card flex flex-col shadow-xs">
+        <div className="flex flex-col gap-3 border-b border-border p-4 bg-muted/50">
           <div className="lg:hidden">
-            <Button variant="outline" onClick={() => setMobileFilterOpen(true)} className="w-full h-11 rounded-none gap-2 justify-start bg-white border-neutral-200 text-neutral-900 shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"><GradientIcon icon={Filter} size={16} /> Filtros</Button>
+            <Button variant="outline" onClick={() => setMobileFilterOpen(true)} className="w-full h-11 rounded-none gap-2 justify-start bg-card border-border text-foreground shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary"><GradientIcon icon={Filter} size={16} /> Filtros</Button>
           </div>
           <div className="flex flex-col lg:flex-row lg:items-center gap-4">
             <div className="relative w-full lg:flex-1 lg:max-w-md">
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar nome ou CPF/CNPJ..." className="h-11 w-full rounded-none bg-white border border-neutral-200 pl-5 pr-12 text-[13px] text-neutral-900 placeholder:text-neutral-500 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:border-neutral-900 transition-all shadow-none" />
-              <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-neutral-400" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar nome ou CPF/CNPJ..." className="h-11 w-full rounded-none bg-card border border-border pl-5 pr-12 text-[13px] text-foreground placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground transition-all shadow-none" />
+              <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-muted-foreground" />
             </div>
 
             <div className="hidden lg:flex lg:items-center lg:gap-2 lg:ml-auto">
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-card border-border transition-colors text-foreground justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Parceiro: {selectedPartners.length === 0 ? "Todos" : `${selectedPartners.length} sel.`}</span></span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-56 p-0 rounded-none border-neutral-200 shadow-xs" align="start">
-                  <Command className="bg-white"><CommandList><CommandGroup>
-                    <CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer text-neutral-900 rounded-none hover:bg-neutral-100"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedPartners.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>
+                <PopoverContent className="w-56 p-0 rounded-none border-border shadow-xs" align="start">
+                  <Command className="bg-card"><CommandList><CommandGroup>
+                    <CommandItem onSelect={() => setSelectedPartners([])} className="cursor-pointer text-foreground rounded-none hover:bg-accent"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${selectedPartners.length === 0 ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>{selectedPartners.length === 0 && "✓"}</div>Todos Parceiros</CommandItem>
                     {partnersList.map((p) => {
                       const isSelected = selectedPartners.includes(String(p.id));
-                      return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter((id) => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>);
+                      return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter((id) => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className={`cursor-pointer rounded-none text-foreground hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>);
                     })}
                   </CommandGroup></CommandList></Command>
                 </PopoverContent>
@@ -586,16 +586,16 @@ function SimulationsPage() {
 
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-card border-border transition-colors text-foreground justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Produto: {selectedProducts.length === 0 ? "Todos" : `${selectedProducts.length} sel.`}</span></span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-56 p-0 rounded-none border-neutral-200 shadow-xs" align="start">
-                  <Command className="bg-white"><CommandList><CommandGroup>
-                    <CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer text-neutral-900 rounded-none hover:bg-neutral-100"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedProducts.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>{selectedProducts.length === 0 && "✓"}</div>Todos Produtos</CommandItem>
+                <PopoverContent className="w-56 p-0 rounded-none border-border shadow-xs" align="start">
+                  <Command className="bg-card"><CommandList><CommandGroup>
+                    <CommandItem onSelect={() => setSelectedProducts([])} className="cursor-pointer text-foreground rounded-none hover:bg-accent"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${selectedProducts.length === 0 ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>{selectedProducts.length === 0 && "✓"}</div>Todos Produtos</CommandItem>
                     {productsList.map((p) => {
                       const isSelected = selectedProducts.includes(String(p.id));
-                      return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter((id) => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>);
+                      return (<CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter((id) => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className={`cursor-pointer rounded-none text-foreground hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{p.name}</CommandItem>);
                     })}
                   </CommandGroup></CommandList></Command>
                 </PopoverContent>
@@ -603,16 +603,16 @@ function SimulationsPage() {
 
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white text-neutral-900 border-neutral-200 transition-colors justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-card text-foreground border-border transition-colors justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 shrink-0" /><span className="truncate">Situação: {selectedStatus.length === 0 ? "Todos" : selectedStatus.includes("Qualificadas") && selectedStatus.length === 1 ? "Qualificadas" : `${selectedStatus.length} sel.`}</span></span><ChevronDown className="h-3 w-3 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0 w-56 bg-white border-neutral-200 rounded-none shadow-xs z-50" align="start">
+                <PopoverContent className="p-0 w-56 bg-card border-border rounded-none shadow-xs z-50" align="start">
                   <Command className="bg-transparent"><CommandList><CommandGroup>
-                    <CommandItem onSelect={() => handleSelectStatus("Todas")} className="cursor-pointer text-neutral-900 rounded-none hover:bg-neutral-100"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedStatus.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>{selectedStatus.length === 0 && "✓"}</div>Todas</CommandItem>
+                    <CommandItem onSelect={() => handleSelectStatus("Todas")} className="cursor-pointer text-foreground rounded-none hover:bg-accent"><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${selectedStatus.length === 0 ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>{selectedStatus.length === 0 && "✓"}</div>Todas</CommandItem>
                     {statusOptions.filter((s) => s !== "Qualificadas").map((s) => {
                       const isSelected = selectedStatus.includes(s);
-                      return (<CommandItem key={s} onSelect={() => handleSelectStatus(s)} className={`cursor-pointer rounded-none text-neutral-900 hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>{isSelected && "✓"}</div>{s}</CommandItem>);
+                      return (<CommandItem key={s} onSelect={() => handleSelectStatus(s)} className={`cursor-pointer rounded-none text-foreground hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}><div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>{isSelected && "✓"}</div>{s}</CommandItem>);
                     })}
                   </CommandGroup></CommandList></Command>
                 </PopoverContent>
@@ -620,16 +620,16 @@ function SimulationsPage() {
 
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-white border-neutral-200 transition-colors text-neutral-900 justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                  <Button variant="outline" size="sm" className="h-10 w-[175px] rounded-none gap-2 bg-card border-border transition-colors text-foreground justify-between shadow-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="flex items-center gap-2 truncate"><Filter className="h-3.5 w-3.5 opacity-50 shrink-0" /><span className="truncate">Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}</span></span><ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0 w-auto rounded-none border-neutral-200 shadow-xs" align="start">
-                  <Command className="bg-white"><CommandList><CommandGroup>
-                    <CommandItem onSelect={() => setDateRange("30")} className="rounded-none text-neutral-900 cursor-pointer hover:bg-neutral-100">Últimos 30 dias</CommandItem>
-                    <CommandItem onSelect={() => setDateRange("90")} className="rounded-none text-neutral-900 cursor-pointer hover:bg-neutral-100">Últimos 90 dias</CommandItem>
-                    <CommandItem onSelect={() => setDateRange("all")} className="rounded-none text-neutral-900 cursor-pointer hover:bg-neutral-100">Todo o período</CommandItem>
-                  </CommandGroup><div className="p-2 border-t border-neutral-200"><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command>
+                <PopoverContent className="p-0 w-auto rounded-none border-border shadow-xs" align="start">
+                  <Command className="bg-card"><CommandList><CommandGroup>
+                    <CommandItem onSelect={() => setDateRange("30")} className="rounded-none text-foreground cursor-pointer hover:bg-accent">Últimos 30 dias</CommandItem>
+                    <CommandItem onSelect={() => setDateRange("90")} className="rounded-none text-foreground cursor-pointer hover:bg-accent">Últimos 90 dias</CommandItem>
+                    <CommandItem onSelect={() => setDateRange("all")} className="rounded-none text-foreground cursor-pointer hover:bg-accent">Todo o período</CommandItem>
+                  </CommandGroup><div className="p-2 border-t border-border"><Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} /></div></CommandList></Command>
                 </PopoverContent>
               </Popover>
             </div>
@@ -639,7 +639,7 @@ function SimulationsPage() {
         <div className="overflow-x-auto w-full pb-2">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-neutral-200 bg-neutral-100 text-left text-[10px] font-semibold uppercase tracking-wider text-neutral-600 whitespace-nowrap">
+              <tr className="border-b border-border bg-accent text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
                 <th className="px-3 py-2.5 w-[75px]">Data</th>
                 <th className="px-3 py-2.5 w-[140px]">Cliente</th>
                 <th className="px-3 py-2.5 w-[140px]">Estágio/Produto</th>
@@ -666,33 +666,33 @@ function SimulationsPage() {
                 const phone = r.phone?.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3") ?? "";
 
                 return (
-                  <tr key={r.id} onClick={() => handleSelectSimulation(r)} className="border-b border-neutral-100 hover:bg-neutral-50 cursor-pointer transition-colors">
-                  <td className="px-3 py-2.5 w-[75px]"><div className="font-medium text-neutral-900">{created.d}</div><div className="text-[11px] text-neutral-400">{created.h}</div></td>
-                  <td className="px-3 py-2.5 w-[140px]"><div className="font-medium text-neutral-900 truncate" title={r.name || ""}>{r.name || "—"}</div><div className="text-[11px] text-neutral-400">{doc}</div><div className="text-[11px] text-neutral-400">{phone || "—"}</div></td>
-                  <td className="px-3 py-2.5 w-[140px]"><div className="font-medium text-neutral-900">{stageName}</div><div className="text-[11px] text-neutral-400">{productName}</div><div className="text-[10px] text-neutral-400 mt-0.5 uppercase tracking-tight">{r.partners?.name || "—"}</div></td>
-                  <td className="px-3 py-2.5 max-w-[190px] sm:max-w-[220px]"><div className="font-medium text-neutral-900 truncate">{String(offer?.offer_description || "—")}</div><div className="text-[11px] text-neutral-400 truncate mt-0.5">{String(offer?.event_id || "—")} - {String(offer?.event_description || "—")}</div><div className="text-[10px] text-neutral-500 mt-0.5">{BRL(Number(offer?.offer_value || 0))} {endEvent ? `(Fim: ${endEvent})` : ""}</div></td>
-                  <td className="px-3 py-2.5 w-[130px] text-right"><div className="font-semibold text-neutral-900">{BRL(r.financed_amount)}</div><div className="text-[10px] text-neutral-400">{r.down_payment_percentage === 0 ? "Sem entrada" : r.down_payment_percentage != null ? `Entrada: ${r.down_payment_percentage.toFixed(0)}%` : "—"}</div><div className="text-[10px] text-neutral-500">{parcela}</div></td>
-                  <td className="px-3 py-2.5 w-[150px]"><div className="flex flex-col items-start gap-1"><span className={`inline-flex items-center rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusClass(statusName)}`}>{statusName}</span><span className="text-[10px] text-neutral-400">{updated.d} {updated.h}</span></div></td>
+                  <tr key={r.id} onClick={() => handleSelectSimulation(r)} className="border-b border-border hover:bg-muted cursor-pointer transition-colors">
+                  <td className="px-3 py-2.5 w-[75px]"><div className="font-medium text-foreground">{created.d}</div><div className="text-[11px] text-muted-foreground">{created.h}</div></td>
+                  <td className="px-3 py-2.5 w-[140px]"><div className="font-medium text-foreground truncate" title={r.name || ""}>{r.name || "—"}</div><div className="text-[11px] text-muted-foreground">{doc}</div><div className="text-[11px] text-muted-foreground">{phone || "—"}</div></td>
+                  <td className="px-3 py-2.5 w-[140px]"><div className="font-medium text-foreground">{stageName}</div><div className="text-[11px] text-muted-foreground">{productName}</div><div className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-tight">{r.partners?.name || "—"}</div></td>
+                  <td className="px-3 py-2.5 max-w-[190px] sm:max-w-[220px]"><div className="font-medium text-foreground truncate">{String(offer?.offer_description || "—")}</div><div className="text-[11px] text-muted-foreground truncate mt-0.5">{String(offer?.event_id || "—")} - {String(offer?.event_description || "—")}</div><div className="text-[10px] text-muted-foreground mt-0.5">{BRL(Number(offer?.offer_value || 0))} {endEvent ? `(Fim: ${endEvent})` : ""}</div></td>
+                  <td className="px-3 py-2.5 w-[130px] text-right"><div className="font-semibold text-foreground">{BRL(r.financed_amount)}</div><div className="text-[10px] text-muted-foreground">{r.down_payment_percentage === 0 ? "Sem entrada" : r.down_payment_percentage != null ? `Entrada: ${r.down_payment_percentage.toFixed(0)}%` : "—"}</div><div className="text-[10px] text-muted-foreground">{parcela}</div></td>
+                  <td className="px-3 py-2.5 w-[150px]"><div className="flex flex-col items-start gap-1"><span className={`inline-flex items-center rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusClass(statusName)}`}>{statusName}</span><span className="text-[10px] text-muted-foreground">{updated.d} {updated.h}</span></div></td>
                   <td className="px-3 py-2.5 w-[130px]">
                       <div className="flex items-center gap-1.5">
                         <div className="flex h-9 w-9 items-center justify-center bg-transparent shrink-0 rounded-[6px] overflow-hidden">
                           {r.partners?.logo_url ? (
                             <img src={r.partners.logo_url} className="h-full w-full object-cover" alt={r.partners.name} />
                           ) : (
-                            <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase text-neutral-900 bg-neutral-100">
+                            <span className="flex items-center justify-center h-full w-full text-[10px] font-bold uppercase text-foreground bg-accent">
                               {r.partners?.name?.slice(0, 3)}
                             </span>
                           )}
                         </div>
                         {bank && (
                           <>
-                            <span className="text-neutral-300 text-xs">/</span>
+                            <span className="text-muted-foreground text-xs">/</span>
                             <div className="flex h-9 w-9 items-center justify-center bg-transparent shrink-0 rounded-[6px] overflow-hidden">
                               {bank?.logo_url ? (
                                 <img src={bank.logo_url} className="h-full w-full object-cover" alt={bank?.name} />
                               ) : (
-                                <div className="flex h-full w-full items-center justify-center bg-neutral-50 border border-neutral-200">
-                                  <Camera className="h-4 w-4 text-neutral-400" />
+                                <div className="flex h-full w-full items-center justify-center bg-muted border border-border">
+                                  <Camera className="h-4 w-4 text-muted-foreground" />
                                 </div>
                               )}
                             </div>
@@ -707,18 +707,18 @@ function SimulationsPage() {
           </table>
         </div>
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-200 bg-neutral-50">
-            <div className="text-xs text-neutral-500 font-medium">{rows.length === 0 ? "Nenhum resultado" : `${page * PAGE_SIZE + 1} a ${page * PAGE_SIZE + rows.length}`}</div>
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted">
+            <div className="text-xs text-muted-foreground font-medium">{rows.length === 0 ? "Nenhum resultado" : `${page * PAGE_SIZE + 1} a ${page * PAGE_SIZE + rows.length}`}</div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => { const prev = Math.max(0, page - 1); setPage(prev); load(prev); }} disabled={page === 0 || loading} className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary"><ChevronLeft className="mr-1 h-3.5 w-3.5" />Anterior</Button>
-              <Button variant="outline" size="sm" onClick={() => { const next = Math.min(totalPages - 1, page + 1); setPage(next); load(next); }} disabled={page >= totalPages - 1 || loading} className="h-8 text-xs rounded-none border-neutral-200 text-neutral-900 hover:bg-primary hover:text-primary-foreground hover:border-primary">Próxima<ChevronRight className="ml-1 h-3.5 w-3.5" /></Button>
+              <Button variant="outline" size="sm" onClick={() => { const prev = Math.max(0, page - 1); setPage(prev); load(prev); }} disabled={page === 0 || loading} className="h-8 text-xs rounded-none border-border text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary"><ChevronLeft className="mr-1 h-3.5 w-3.5" />Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => { const next = Math.min(totalPages - 1, page + 1); setPage(next); load(next); }} disabled={page >= totalPages - 1 || loading} className="h-8 text-xs rounded-none border-border text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary">Próxima<ChevronRight className="ml-1 h-3.5 w-3.5" /></Button>
             </div>
           </div>
         )}
       </div>
 
       <Sheet open={!!activeSimulation} onOpenChange={(open) => !open && setActiveSimulation(null)}>
-        <SheetContent className="w-full sm:max-w-xl flex flex-col h-full p-0 overflow-hidden bg-white rounded-none">
+        <SheetContent className="w-full sm:max-w-xl flex flex-col h-full p-0 overflow-hidden bg-card rounded-none">
           {activeSimulation &&
             (() => {
           const sim = activeSimulation;
@@ -748,7 +748,7 @@ function SimulationsPage() {
 
               return (
                 <div className="flex flex-col h-full overflow-hidden">
-                  <div className="p-4 sm:p-6 pb-4 border-b border-neutral-200 bg-white shrink-0">
+                  <div className="p-4 sm:p-6 pb-4 border-b border-border bg-card shrink-0">
                     <SheetHeader className="space-y-3 text-left">
                       <div className="flex items-center justify-between gap-2 pr-8">
                         <div className="flex items-center gap-2 min-w-0">
@@ -757,26 +757,26 @@ function SimulationsPage() {
                             {sim.partners?.logo_url ? (
                               <img src={sim.partners.logo_url} className="h-full w-full object-cover" alt={sim.partners?.name} />
                             ) : (
-                              <span className="flex items-center justify-center h-full w-full text-[9px] font-bold uppercase text-neutral-900 bg-neutral-100">
+                              <span className="flex items-center justify-center h-full w-full text-[9px] font-bold uppercase text-foreground bg-accent">
                                 {sim.partners?.name?.slice(0, 3)}
                               </span>
                             )}
                           </div>
-                          <span className="text-xs font-bold text-slate-700 uppercase tracking-wide truncate">{sim.partners?.name || "Parceiro N/A"}</span>
+                          <span className="text-xs font-bold text-foreground uppercase tracking-wide truncate">{sim.partners?.name || "Parceiro N/A"}</span>
                         </div>
-                        {detailLoading && <div className="flex items-center gap-1.5 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-none"><Loader2 className="h-3 w-3 animate-spin text-brand-accent" /> Carregando detalhes...</div>}
+                        {detailLoading && <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-accent px-2.5 py-1 rounded-none"><Loader2 className="h-3 w-3 animate-spin text-brand-accent" /> Carregando detalhes...</div>}
                       </div>
 
                       <div className="space-y-1 pr-8 text-left w-full">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] font-bold text-neutral-900 uppercase tracking-wider">{sim.product_types?.name || "Financiamento"}</span>
+                          <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">{sim.product_types?.name || "Financiamento"}</span>
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={`inline-flex items-center rounded-none px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${statusClass(sim.status_types?.name)}`}>
                               {sim.status_types?.name || "Pendente"}
                             </span>
                           </div>
                         </div>
-                        <SheetTitle className="text-lg sm:text-xl font-bold text-neutral-950 break-words text-left w-full">{sim.name || "—"}</SheetTitle>
+                        <SheetTitle className="text-lg sm:text-xl font-bold text-foreground break-words text-left w-full">{sim.name || "—"}</SheetTitle>
                       </div>
                     </SheetHeader>
                   </div>
@@ -797,8 +797,8 @@ function SimulationsPage() {
                     {!!pageConfigs?.footer && <PanelFooter footer={pageConfigs.footer as any} />}
                   </div>
 
-                  <div className="p-4 bg-white border-t border-neutral-200 flex items-center justify-between gap-3 shrink-0 shadow-xs">
-                    <Button variant="outline" onClick={handlePrintSheet} className="flex-1 rounded-none text-xs gap-2 border-neutral-200 text-neutral-900 h-10 font-bold hover:bg-primary hover:text-primary-foreground hover:border-primary"><Printer className="h-4 w-4" /> Imprimir / PDF</Button>
+                  <div className="p-4 bg-card border-t border-border flex items-center justify-between gap-3 shrink-0 shadow-xs">
+                    <Button variant="outline" onClick={handlePrintSheet} className="flex-1 rounded-none text-xs gap-2 border-border text-foreground h-10 font-bold hover:bg-primary hover:text-primary-foreground hover:border-primary"><Printer className="h-4 w-4" /> Imprimir / PDF</Button>
                     <Button onClick={() => setActiveSimulation(null)} className="cta-gradient border-0 flex-1 rounded-none text-xs text-white h-10 font-bold">Fechar</Button>
                   </div>
                 </div>
@@ -864,18 +864,18 @@ function SimulationsPage() {
           GAVETA DE FILTROS MOBILE
           ========================================================= */}
       <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-        <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-white z-50 border-t border-neutral-200">
+        <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-card z-50 border-t border-border">
           <SheetHeader className="mb-4 text-left">
-            <SheetTitle className="text-lg font-bold text-neutral-900">Filtros</SheetTitle>
+            <SheetTitle className="text-lg font-bold text-foreground">Filtros</SheetTitle>
           </SheetHeader>
           
           <div className="flex flex-col gap-4 w-full">
             
             <div className="w-full">
-              <span className="text-xs font-medium text-neutral-500 mb-1 block">Período</span>
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">Período</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="flex items-center gap-2 truncate">
                       <Filter className="h-4 w-4 shrink-0 text-brand-accent" />
                       Período: {dateRange === "custom" ? "Personalizado" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "Tudo"}
@@ -883,16 +883,16 @@ function SimulationsPage() {
                     <ChevronDown className="h-3 w-3 shrink-0 text-brand-accent" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
-                  <Command className="bg-white">
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-auto p-0 bg-card border-border rounded-none z-50 shadow-xs" align="start">
+                  <Command className="bg-card">
                     <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
-                        <CommandItem onSelect={() => setDateRange("30")} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">Últimos 30 dias</CommandItem>
-                        <CommandItem onSelect={() => setDateRange("90")} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">Últimos 90 dias</CommandItem>
-                        <CommandItem onSelect={() => setDateRange("all")} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">Todo o período</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("30")} className="text-foreground cursor-pointer rounded-none hover:bg-accent">Últimos 30 dias</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("90")} className="text-foreground cursor-pointer rounded-none hover:bg-accent">Últimos 90 dias</CommandItem>
+                        <CommandItem onSelect={() => setDateRange("all")} className="text-foreground cursor-pointer rounded-none hover:bg-accent">Todo o período</CommandItem>
                       </CommandGroup>
-                      <div className="border-t border-neutral-200 p-3">
-                        <p className="text-xs text-neutral-500 mb-2 font-medium">Personalizado:</p>
+                      <div className="border-t border-border p-3">
+                        <p className="text-xs text-muted-foreground mb-2 font-medium">Personalizado:</p>
                         <Calendar mode="range" selected={customRange} onSelect={(range) => { setCustomRange(range); setDateRange("custom"); }} numberOfMonths={1} />
                       </div>
                     </CommandList>
@@ -902,22 +902,22 @@ function SimulationsPage() {
             </div>
 
             <div className="w-full">
-              <span className="text-xs font-medium text-neutral-500 mb-1 block">Parceiro</span>
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">Parceiro</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">
                       {selectedPartners.length === 0 ? "Todos Parceiros" : `${selectedPartners.length} parceiro(s) sel.`}
                     </span>
                     <ChevronDown className="h-3 w-3 shrink-0 text-brand-accent" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
-                  <Command className="bg-white">
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-card border-border rounded-none z-50 shadow-xs" align="start">
+                  <Command className="bg-card">
                     <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
-                        <CommandItem onSelect={() => setSelectedPartners([])} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedPartners.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => setSelectedPartners([])} className="text-foreground cursor-pointer rounded-none hover:bg-accent">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${selectedPartners.length === 0 ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                             {selectedPartners.length === 0 && "✓"}
                           </div>
                           Todos Parceiros
@@ -925,8 +925,8 @@ function SimulationsPage() {
                         {partnersList.map((p) => {
                           const isSelected = selectedPartners.includes(String(p.id));
                           return (
-                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter((id) => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className={`text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedPartners(selectedPartners.filter((id) => id !== String(p.id))); else setSelectedPartners([...selectedPartners, String(p.id)]); }} className={`text-foreground cursor-pointer rounded-none hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                                 {isSelected && "✓"}
                               </div>
                               {p.name}
@@ -941,22 +941,22 @@ function SimulationsPage() {
             </div>
 
             <div className="w-full">
-              <span className="text-xs font-medium text-neutral-500 mb-1 block">Produto</span>
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">Produto</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">
                       {selectedProducts.length === 0 ? "Todos Produtos" : `${selectedProducts.length} produto(s) sel.`}
                     </span>
                     <ChevronDown className="h-3 w-3 shrink-0 text-brand-accent" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
-                  <Command className="bg-white">
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-card border-border rounded-none z-50 shadow-xs" align="start">
+                  <Command className="bg-card">
                     <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
-                        <CommandItem onSelect={() => setSelectedProducts([])} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedProducts.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => setSelectedProducts([])} className="text-foreground cursor-pointer rounded-none hover:bg-accent">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${selectedProducts.length === 0 ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                             {selectedProducts.length === 0 && "✓"}
                           </div>
                           Todos Produtos
@@ -964,8 +964,8 @@ function SimulationsPage() {
                         {productsList.map((p) => {
                           const isSelected = selectedProducts.includes(String(p.id));
                           return (
-                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter((id) => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className={`text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                            <CommandItem key={p.id} onSelect={() => { if (isSelected) setSelectedProducts(selectedProducts.filter((id) => id !== String(p.id))); else setSelectedProducts([...selectedProducts, String(p.id)]); }} className={`text-foreground cursor-pointer rounded-none hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                                 {isSelected && "✓"}
                               </div>
                               {p.name}
@@ -980,22 +980,22 @@ function SimulationsPage() {
             </div>
 
             <div className="w-full">
-              <span className="text-xs font-medium text-neutral-500 mb-1 block">Situação</span>
+              <span className="text-xs font-medium text-muted-foreground mb-1 block">Situação</span>
               <Popover modal={isMobile}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-white text-neutral-900 border-neutral-200 hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                  <Button variant="outline" className="h-11 w-full rounded-none justify-between gap-2 bg-card text-foreground border-border hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <span className="truncate">
                       {selectedStatus.length === 0 ? "Todas" : `${selectedStatus.length} selecionada(s)`}
                     </span>
                     <ChevronDown className="h-3 w-3 shrink-0 text-brand-accent" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-white border-neutral-200 rounded-none z-50 shadow-xs" align="start">
+                <PopoverContent className="w-[calc(100vw-3rem)] sm:w-56 p-0 bg-card border-border rounded-none z-50 shadow-xs" align="start">
                   <Command className="bg-transparent">
                     <CommandList className="max-h-56 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }} onWheelCapture={(e) => e.stopPropagation()}>
                       <CommandGroup>
-                        <CommandItem onSelect={() => handleSelectStatus("Todas")} className="text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100">
-                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${selectedStatus.length === 0 ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                        <CommandItem onSelect={() => handleSelectStatus("Todas")} className="text-foreground cursor-pointer rounded-none hover:bg-accent">
+                          <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${selectedStatus.length === 0 ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                             {selectedStatus.length === 0 && "✓"}
                           </div>
                           Todas
@@ -1003,8 +1003,8 @@ function SimulationsPage() {
                         {statusOptions.filter((s) => s !== "Qualificadas").map((s) => {
                           const isSelected = selectedStatus.includes(s);
                           return (
-                            <CommandItem key={s} onSelect={() => handleSelectStatus(s)} className={`text-neutral-900 cursor-pointer rounded-none hover:bg-neutral-100 ${isSelected ? "bg-neutral-50 font-medium" : ""}`}>
-                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-neutral-400 ${isSelected ? "bg-neutral-900 text-white border-neutral-900" : "opacity-50"}`}>
+                            <CommandItem key={s} onSelect={() => handleSelectStatus(s)} className={`text-foreground cursor-pointer rounded-none hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}>
+                              <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                                 {isSelected && "✓"}
                               </div>
                               {s}
