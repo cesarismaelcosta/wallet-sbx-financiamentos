@@ -390,9 +390,9 @@ export function CustomLogin() {
 
           {/* Banner de Feedback de Erros Globais (Com Imagem Tratada em Escala de Cinza) */}
           {generalError && (
-            <div className="flex items-center gap-3 sm:gap-4 bg-neutral-50 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 text-xs sm:text-[13px] leading-relaxed p-3.5 sm:p-4 rounded-none border border-neutral-200 dark:border-neutral-700 shadow-xs font-medium animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 sm:gap-4 bg-white dark:bg-black text-neutral-800 dark:text-neutral-200 text-xs sm:text-[13px] leading-relaxed p-3.5 sm:p-4 rounded-none border border-neutral-200 dark:border-neutral-800 shadow-xs font-medium animate-in fade-in zoom-in-95 duration-200">
               <img
-                src="/assets/error/error.webp"
+                src={nightMode ? "/assets/error/error-dark.webp" : "/assets/error/error.webp"}
                 alt="Aviso"
                 className="w-9 h-9 sm:w-11 sm:h-11 relative saturate-[10%]"
               />
