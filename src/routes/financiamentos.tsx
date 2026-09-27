@@ -17,9 +17,9 @@ export const Route = createFileRoute("/financiamentos")({
   head: () => ({
     meta: [
       { title: "Financiamento de Veículos e Cartão | Wallet sbX" },
-      { name: "description", content: "Simule financiamento de veículos e cartão de crédito 100% online, sem compromisso. Condições exclusivas para clientes Superbid." },
-      { property: "og:title", content: "Financiamento de Veículos e Cartão | Wallet sbX" },
-      { property: "og:description", content: "Simule financiamento de veículos e cartão de crédito 100% online, sem compromisso. Condições exclusivas para clientes Superbid." },
+      { name: "description", content: "Simule financiamento de veículos e cartão de crédito 100% online, sem compromisso. Condições exclusivas para clientes Superbid com a sua Wallet sbX." },
+      { property: "og:title", content: "Financiamento de Veículos e Cartão | Superbid | Wallet sbX" },
+      { property: "og:description", content: "Simule financiamento de veículos e cartão de crédito 100% online, sem compromisso. Condições exclusivas para clientes Superbid com a sua Wallet sbX." },
     ],
     links: [
       { rel: "canonical", href: "https://wallet.sbx.com.br/financiamentos" },

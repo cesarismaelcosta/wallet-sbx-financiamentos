@@ -17,12 +17,17 @@ export const Route = createFileRoute("/emprestimos")({
   head: () => ({
     meta: [
       { title: "Empréstimo com Garantia de Veículo | Wallet sbX" },
-      { name: "description", content: "Empréstimo com garantia de veículo (auto equity), condições exclusivas e simulação 100% online na Wallet sbX." },
-      { property: "og:title", content: "Empréstimo com Garantia de Veículo | Wallet sbX" },
-      { property: "og:description", content: "Empréstimo com garantia de veículo (auto equity), condições exclusivas e simulação 100% online na Wallet sbX." },
+      {
+        name: "description",
+        content:
+          "Empréstimo com garantia de veículo (auto equity), condições exclusivas e simulação 100% online na Superbid com sua Wallet sbX.",
+      },      { property: "og:title", content: "Empréstimo com Garantia de Veículo | Superbid | Wallet sbX" },
+      {
+        property: "og:description",
+        content:
+          "Empréstimo com garantia de veículo (auto equity), condições exclusivas e simulação 100% online na Superbid com sua Wallet sbX.",
+      },
     ],
-    links: [
-      { rel: "canonical", href: "https://wallet.sbx.com.br/emprestimos" },
-    ],
+    links: [{ rel: "canonical", href: "https://wallet.sbx.com.br/emprestimos" }],
   }),
 });

@@ -17,12 +17,18 @@ export const Route = createFileRoute("/seguros")({
   head: () => ({
     meta: [
       { title: "Seguro Auto e Residencial | Wallet sbX" },
-      { name: "description", content: "Contrate seguro auto e residencial com as melhores condições, 100% online. Cotação rápida e sem compromisso na Wallet sbX." },
-      { property: "og:title", content: "Seguro Auto e Residencial | Wallet sbX" },
-      { property: "og:description", content: "Contrate seguro auto e residencial com as melhores condições, 100% online. Cotação rápida e sem compromisso na Wallet sbX." },
+      {
+        name: "description",
+        content:
+          "Contrate seguro auto e residencial com as melhores condições, 100% online. Cotação rápida e sem compromisso na Superbid com sua Wallet sbX.",
+      },
+      { property: "og:title", content: "Seguro Auto e Residencial | Superbid | Wallet sbX" },
+      {
+        property: "og:description",
+        content:
+          "Contrate seguro auto e residencial com as melhores condições, 100% online. Cotação rápida e sem compromisso na Superbid com sua Wallet sbX.",
+      },
     ],
-    links: [
-      { rel: "canonical", href: "https://wallet.sbx.com.br/seguros" },
-    ],
+    links: [{ rel: "canonical", href: "https://wallet.sbx.com.br/seguros" }],
   }),
 });

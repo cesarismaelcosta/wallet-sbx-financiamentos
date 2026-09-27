@@ -15,11 +15,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as EmprestimosRouteImport } from './routes/emprestimos'
 import { Route as FinancialGatewayGateRouteImport } from './routes/financialGatewayGate'
 import { Route as FinanciamentosRouteImport } from './routes/financiamentos'
+import { Route as ProdutosRouteImport } from './routes/produtos'
 import { Route as SegurosRouteImport } from './routes/seguros'
 import { Route as AccountsSigninRouteImport } from './routes/accounts.signin'
 
 const BackofficeLazyRouteImport = createFileRoute('/backoffice')()
-const ProdutosLazyRouteImport = createFileRoute('/produtos')()
 const SandboxLazyRouteImport = createFileRoute('/sandbox')()
 const BackofficeIndexLazyRouteImport = createFileRoute('/backoffice/')()
 const BackofficeAlertsLazyRouteImport = createFileRoute('/backoffice/alerts')()
@@ -86,7 +86,7 @@ const FinanciamentosRoute = FinanciamentosRouteImport.update({
 } as any).lazy(() =>
   import('./routes/financiamentos.lazy').then((d) => d.Route),
 )
-const ProdutosLazyRoute = ProdutosLazyRouteImport.update({
+const ProdutosRoute = ProdutosRouteImport.update({
   id: '/produtos',
   path: '/produtos',
   getParentRoute: () => rootRouteImport,
@@ -221,14 +221,14 @@ const FinanciamentosVeiculosLazyRoute =
 const ProdutosIndexLazyRoute = ProdutosIndexLazyRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => ProdutosLazyRoute,
+  getParentRoute: () => ProdutosRoute,
 } as any).lazy(() =>
   import('./routes/produtos.index.lazy').then((d) => d.Route),
 )
 const ProdutosOfferLazyRoute = ProdutosOfferLazyRouteImport.update({
   id: '/offer',
   path: '/offer',
-  getParentRoute: () => ProdutosLazyRoute,
+  getParentRoute: () => ProdutosRoute,
 } as any).lazy(() =>
   import('./routes/produtos.offer.lazy').then((d) => d.Route),
 )
@@ -248,9 +248,9 @@ export interface FileRoutesByFullPath {
   '/emprestimos': typeof EmprestimosRouteWithChildren
   '/financialGatewayGate': typeof FinancialGatewayGateRoute
   '/financiamentos': typeof FinanciamentosRouteWithChildren
+  '/produtos': typeof ProdutosRouteWithChildren
   '/seguros': typeof SegurosRouteWithChildren
   '/backoffice': typeof BackofficeLazyRouteWithChildren
-  '/produtos': typeof ProdutosLazyRouteWithChildren
   '/sandbox': typeof SandboxLazyRoute
   '/accounts/signin': typeof AccountsSigninRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
@@ -307,9 +307,9 @@ export interface FileRoutesById {
   '/emprestimos': typeof EmprestimosRouteWithChildren
   '/financialGatewayGate': typeof FinancialGatewayGateRoute
   '/financiamentos': typeof FinanciamentosRouteWithChildren
+  '/produtos': typeof ProdutosRouteWithChildren
   '/seguros': typeof SegurosRouteWithChildren
   '/backoffice': typeof BackofficeLazyRouteWithChildren
-  '/produtos': typeof ProdutosLazyRouteWithChildren
   '/sandbox': typeof SandboxLazyRoute
   '/accounts/signin': typeof AccountsSigninRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
@@ -339,9 +339,9 @@ export interface FileRouteTypes {
     | '/emprestimos'
     | '/financialGatewayGate'
     | '/financiamentos'
+    | '/produtos'
     | '/seguros'
     | '/backoffice'
-    | '/produtos'
     | '/sandbox'
     | '/accounts/signin'
     | '/backoffice/alerts'
@@ -397,9 +397,9 @@ export interface FileRouteTypes {
     | '/emprestimos'
     | '/financialGatewayGate'
     | '/financiamentos'
+    | '/produtos'
     | '/seguros'
     | '/backoffice'
-    | '/produtos'
     | '/sandbox'
     | '/accounts/signin'
     | '/backoffice/alerts'
@@ -428,9 +428,9 @@ export interface RootRouteChildren {
   EmprestimosRoute: typeof EmprestimosRouteWithChildren
   FinancialGatewayGateRoute: typeof FinancialGatewayGateRoute
   FinanciamentosRoute: typeof FinanciamentosRouteWithChildren
+  ProdutosRoute: typeof ProdutosRouteWithChildren
   SegurosRoute: typeof SegurosRouteWithChildren
   BackofficeLazyRoute: typeof BackofficeLazyRouteWithChildren
-  ProdutosLazyRoute: typeof ProdutosLazyRouteWithChildren
   SandboxLazyRoute: typeof SandboxLazyRoute
   AccountsSigninRoute: typeof AccountsSigninRoute
   SandboxHelpLazyRoute: typeof SandboxHelpLazyRoute
@@ -477,7 +477,7 @@ declare module '@tanstack/react-router' {
       id: '/produtos'
       path: '/produtos'
       fullPath: '/produtos'
-      preLoaderRoute: typeof ProdutosLazyRouteImport
+      preLoaderRoute: typeof ProdutosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sandbox': {
@@ -611,14 +611,14 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/produtos/'
       preLoaderRoute: typeof ProdutosIndexLazyRouteImport
-      parentRoute: typeof ProdutosLazyRoute
+      parentRoute: typeof ProdutosRoute
     }
     '/produtos/offer': {
       id: '/produtos/offer'
       path: '/offer'
       fullPath: '/produtos/offer'
       preLoaderRoute: typeof ProdutosOfferLazyRouteImport
-      parentRoute: typeof ProdutosLazyRoute
+      parentRoute: typeof ProdutosRoute
     }
     '/sandbox_/help': {
       id: '/sandbox_/help'
@@ -665,6 +665,20 @@ const FinanciamentosRouteWithChildren = FinanciamentosRoute._addFileChildren(
   FinanciamentosRouteChildren,
 )
 
+interface ProdutosRouteChildren {
+  ProdutosOfferLazyRoute: typeof ProdutosOfferLazyRoute
+  ProdutosIndexLazyRoute: typeof ProdutosIndexLazyRoute
+}
+
+const ProdutosRouteChildren: ProdutosRouteChildren = {
+  ProdutosOfferLazyRoute: ProdutosOfferLazyRoute,
+  ProdutosIndexLazyRoute: ProdutosIndexLazyRoute,
+}
+
+const ProdutosRouteWithChildren = ProdutosRoute._addFileChildren(
+  ProdutosRouteChildren,
+)
+
 interface SegurosRouteChildren {
   SegurosAutoLazyRoute: typeof SegurosAutoLazyRoute
 }
@@ -708,28 +722,14 @@ const BackofficeLazyRouteWithChildren = BackofficeLazyRoute._addFileChildren(
   BackofficeLazyRouteChildren,
 )
 
-interface ProdutosLazyRouteChildren {
-  ProdutosOfferLazyRoute: typeof ProdutosOfferLazyRoute
-  ProdutosIndexLazyRoute: typeof ProdutosIndexLazyRoute
-}
-
-const ProdutosLazyRouteChildren: ProdutosLazyRouteChildren = {
-  ProdutosOfferLazyRoute: ProdutosOfferLazyRoute,
-  ProdutosIndexLazyRoute: ProdutosIndexLazyRoute,
-}
-
-const ProdutosLazyRouteWithChildren = ProdutosLazyRoute._addFileChildren(
-  ProdutosLazyRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EmprestimosRoute: EmprestimosRouteWithChildren,
   FinancialGatewayGateRoute: FinancialGatewayGateRoute,
   FinanciamentosRoute: FinanciamentosRouteWithChildren,
+  ProdutosRoute: ProdutosRouteWithChildren,
   SegurosRoute: SegurosRouteWithChildren,
   BackofficeLazyRoute: BackofficeLazyRouteWithChildren,
-  ProdutosLazyRoute: ProdutosLazyRouteWithChildren,
   SandboxLazyRoute: SandboxLazyRoute,
   AccountsSigninRoute: AccountsSigninRoute,
   SandboxHelpLazyRoute: SandboxHelpLazyRoute,
