@@ -28,6 +28,26 @@
  * -- original em db.ts), então não é afetado por isso.
  * alter table public.edge_rate_limits enable row level security;
  *
+ * -- =============================================================================
+ * -- Log de bloqueios (auditoria) -- NÃO manda alerta, só registra pra não
+ * -- jogar fora. Só grava quando a requisição É bloqueada (v_count >
+ * -- p_max_requests) -- nunca 1 linha por requisição permitida. 1 linha por
+ * -- (bucket, janela realmente estourada), com contador de quantas vezes
+ * -- aquele balde bateu 429 naquela janela -- mesmo espírito de
+ * -- `edge_rate_limits`, não cresce com o volume de tráfego normal.
+ * -- =============================================================================
+ * create table if not exists public.edge_rate_limit_blocks (
+ *   bucket_key text not null,
+ *   window_start timestamptz not null,
+ *   blocked_count integer not null default 1,
+ *   max_requests integer not null,
+ *   window_seconds integer not null,
+ *   last_blocked_at timestamptz not null default now(),
+ *   primary key (bucket_key, window_start)
+ * );
+ *
+ * alter table public.edge_rate_limit_blocks enable row level security;
+ *
  * create or replace function public.check_rate_limit(
  *   p_bucket_key text,
  *   p_max_requests integer,
@@ -37,6 +57,7 @@
  * as $$
  * declare
  *   v_count integer;
+ *   v_window_start timestamptz;
  * begin
  *   insert into public.edge_rate_limits (bucket_key, window_start, request_count)
  *   values (p_bucket_key, now(), 1)
@@ -51,26 +72,49 @@
  *         then now()
  *       else public.edge_rate_limits.window_start
  *     end
- *   returning request_count into v_count;
+ *   returning request_count, window_start into v_count, v_window_start;
  *
- *   return v_count <= p_max_requests;
+ *   if v_count > p_max_requests then
+ *     -- Só chega aqui quando estoura -- é o "somente o que estourar jogamos
+ *     -- lá". Upsert: se o mesmo balde já bateu 429 nessa mesma janela,
+ *     -- só incrementa o contador em vez de criar linha nova.
+ *     insert into public.edge_rate_limit_blocks (
+ *       bucket_key, window_start, blocked_count, max_requests, window_seconds, last_blocked_at
+ *     )
+ *     values (p_bucket_key, v_window_start, 1, p_max_requests, p_window_seconds, now())
+ *     on conflict (bucket_key, window_start) do update set
+ *       blocked_count = public.edge_rate_limit_blocks.blocked_count + 1,
+ *       last_blocked_at = now();
+ *
+ *     return false;
+ *   end if;
+ *
+ *   return true;
  * end;
  * $$;
  *
  * -- Só o necessário para o db_edge_worker -- nunca ALL PRIVILEGES.
  * grant select, insert, update on public.edge_rate_limits to db_edge_worker;
+ * grant select, insert, update on public.edge_rate_limit_blocks to db_edge_worker;
  * grant execute on function public.check_rate_limit(text, integer, integer) to db_edge_worker;
  *
  * -- Limpeza automática: pg_cron já habilitado neste projeto (mesmo
  * -- mecanismo do job de geo do login_history, via a function log-access).
- * -- Roda 1x por dia, apaga linhas com mais de 1 dia (bem além dos 60s
- * -- reais de janela hoje -- só margem de segurança generosa).
+ * -- Roda 1x por dia, apaga linhas de `edge_rate_limits` com mais de 1 dia
+ * -- (bem além dos 60s reais de janela hoje -- só margem de segurança
+ * -- generosa) e linhas de `edge_rate_limit_blocks` com mais de 90 dias
+ * -- (essa é log de auditoria, não contador operacional -- retenção maior
+ * -- de propósito; ajuste o intervalo abaixo se quiser outro prazo).
  * -- cron.schedule com um jobname que já existe SUBSTITUI o job antigo
- * -- (seguro rodar de novo, ex: ao replicar em homologação).
+ * -- (seguro rodar de novo, ex: ao replicar em homologação) -- mesmo job,
+ * -- agora limpando as duas tabelas.
  * select cron.schedule(
  *   'edge_rate_limits_cleanup',
  *   '0 3 * * *', -- todo dia às 03:00 UTC
- *   $$ delete from public.edge_rate_limits where window_start < now() - interval '1 day'; $$
+ *   $$
+ *     delete from public.edge_rate_limits where window_start < now() - interval '1 day';
+ *     delete from public.edge_rate_limit_blocks where window_start < now() - interval '90 days';
+ *   $$
  * );
  *
  * Reaproveita o role `db_edge_worker` (ver `_shared/db.ts`), mas com uma
@@ -85,6 +129,13 @@
  * ao volume de tráfego. Limpeza das linhas antigas fica a cargo de um job
  * pg_cron diário (ver a migração SQL que criou `edge_rate_limits`), não
  * deste arquivo.
+ *
+ * O log de bloqueios (`edge_rate_limit_blocks`) roda inteiro dentro do
+ * `check_rate_limit` -- não existe nenhuma chamada nova de rede/DB no lado
+ * do Deno (`checkRateLimit` abaixo NÃO mudou) -- é a mesma consulta única de
+ * sempre, só que a function no Postgres agora também grava quando bloqueia.
+ * Fail-open cobre esse log também: se a function inteira falhar por
+ * qualquer motivo, o catch abaixo libera a requisição igual.
  *
  * [FAIL-OPEN]: se a checagem falhar por qualquer motivo (banco fora do ar,
  * timeout, DB_POOLER_URL ausente nesta function, etc.), a requisição é
