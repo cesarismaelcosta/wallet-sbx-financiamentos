@@ -160,6 +160,30 @@
  *   nunca enviam `Origin`. Por isso `notification-dispatcher` usa
  *   `origin: 'self'` como camada extra, mas depende de `requiresHmac` para a
  *   proteção real.
+ * - `rateLimit`: limite de requisições por IP dentro de uma janela (ex:
+ *   `{ maxRequests: 10, windowSeconds: 60 }`), verificado centralmente pelo
+ *   wrapper via Postgres (ver `_shared/rate-limit.ts`). Opcional — ausência
+ *   significa sem limite (comportamento anterior, inalterado). Fail-open:
+ *   se a checagem em si falhar (banco fora do ar, timeout), a requisição
+ *   passa — rate limiting não deve virar um novo jeito de derrubar o app.
+ *
+ *   O balde é por (função, IP) — isso funciona bem quando quem chama é o
+ *   navegador de um usuário final, já que cada pessoa tem seu próprio IP.
+ *   Mas em rotas chamadas M2M — por `pg_cron` (`log-access`,
+ *   `notification-dispatcher`), por outra Edge Function que não propaga IP
+ *   nenhum (`notification-gateway`, chamada só pelo `notification-
+ *   dispatcher`), ou por um parceiro externo cujo servidor concentra
+ *   callbacks de vários usuários diferentes (`financial-gateway-webhook`,
+ *   chamado pelo Fandi) — TODAS as chamadas legítimas, de pessoas
+ *   completamente diferentes, colam no MESMO balde (o IP do worker interno,
+ *   ou até `0.0.0.0` quando nenhum header de IP chega a ser propagado). Por
+ *   isso essas 4 funções têm limites bem mais altos que o padrão de 10/min
+ *   (`log-access`/`notification-dispatcher`/`notification-gateway`:
+ *   100/min; `financial-gateway-webhook`: 20/min) — não é frouxidão, é
+ *   reconhecer que ali o número não discrimina por identidade de usuário, e
+ *   serve só como rede de segurança contra bug/loop, não como controle de
+ *   abuso por pessoa. A segurança real dessas rotas continua sendo o
+ *   segredo (HMAC/service role), não o IP.
  *
  * @author Cesar Ismael Pereira da Costa
  * @author Gemini Pro
@@ -232,6 +256,16 @@ export type FunctionConfig = {
    * (`_shared/server.ts`) via Postgres (`_shared/rate-limit.ts`). Opcional --
    * uma rota sem esse campo não tem rate limiting (comportamento anterior,
    * inalterado). Fail-open: se a checagem em si falhar, a requisição passa.
+   *
+   * O balde é por (função, IP) -- para rotas chamadas M2M (pg_cron,
+   * function-to-function sem propagar IP, ou um parceiro externo cujo
+   * servidor concentra chamadas de vários usuários diferentes), várias
+   * operações legítimas de pessoas distintas colam no MESMO balde. Nesses
+   * casos (hoje: `log-access`, `notification-dispatcher`,
+   * `notification-gateway`, `financial-gateway-webhook`), use um limite bem
+   * mais alto que o padrão de 10/min -- ele vira rede de segurança contra
+   * bug/loop, não controle por usuário. Ver [OUTROS CAMPOS DO CONTRATO] no
+   * cabeçalho deste arquivo para o detalhamento completo.
    */
   rateLimit?: {
     maxRequests: number;
@@ -268,7 +302,7 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
     },
   },
   'financial-gateway-webhook': {
-    rateLimit: { maxRequests: 10, windowSeconds: 60 }, // 🛡️ [RATE LIMIT] 10 req/min por IP -- ver _shared/rate-limit.ts
+    rateLimit: { maxRequests: 20, windowSeconds: 60 }, // 🛡️ [RATE LIMIT] 20 req/min por IP -- ver _shared/rate-limit.ts
     methods: ['POST'],
     requiredHeaders: [],
     authMode: {
@@ -309,7 +343,7 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   // 2. SISTEMA DE NOTIFICAÇÕES
   // ==========================================
   'notification-dispatcher': {
-    rateLimit: { maxRequests: 10, windowSeconds: 60 }, // 🛡️ [RATE LIMIT] 10 req/min por IP -- ver _shared/rate-limit.ts
+    rateLimit: { maxRequests: 100, windowSeconds: 60 }, // 🛡️ [RATE LIMIT] 100 req/min por IP -- ver _shared/rate-limit.ts
     methods: ['POST', 'GET'],
     requiredHeaders: ['x-timestamp', 'x-signature'],
     origin: 'self',
@@ -322,7 +356,7 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
     },
   },
   'notification-gateway': {
-    rateLimit: { maxRequests: 10, windowSeconds: 60 }, // 🛡️ [RATE LIMIT] 10 req/min por IP -- ver _shared/rate-limit.ts
+    rateLimit: { maxRequests: 100, windowSeconds: 60 }, // 🛡️ [RATE LIMIT] 100 req/min por IP -- ver _shared/rate-limit.ts
     methods: ['POST'],
     requiredHeaders: ['x-gateway-secret'],
     // [v2.0.0 — MUDANÇA FUNCIONAL]: antes, o segredo era checado só na mão
@@ -447,7 +481,7 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
   // propósito (reaproveita o deploy já existente em vez de criar uma
   // function nova) — ver `log-access/index.ts` para o histórico completo.
   'log-access': {
-    rateLimit: { maxRequests: 10, windowSeconds: 60 }, // 🛡️ [RATE LIMIT] 10 req/min por IP -- ver _shared/rate-limit.ts
+    rateLimit: { maxRequests: 100, windowSeconds: 60 }, // 🛡️ [RATE LIMIT] 100 req/min por IP -- ver _shared/rate-limit.ts
     methods: ['POST', 'GET'],
     requiredHeaders: ['x-timestamp', 'x-signature'],
     origin: 'self',

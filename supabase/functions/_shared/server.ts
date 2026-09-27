@@ -23,6 +23,23 @@
  *    quanto o padrão unificado de objetos `{ status, data, headers }`.
  * 5. Fail-Safe Global: Captura exceções não tratadas na regra de negócio, garantindo
  *    resposta JSON padronizada sem vazamento de stack trace.
+ * 6. Rate Limiting (PASSO 4.5, abaixo): limite de requisições por (função, IP),
+ *    opcional e declarado por rota no `registry.ts`, verificado via Postgres
+ *    (`_shared/rate-limit.ts`). Fail-open -- se a checagem falhar, a
+ *    requisição passa. Rodar ANTES da blindagem de perímetro (PASSO 5) é
+ *    proposital: cobre até força-bruta contra rotas de autenticação (ex:
+ *    `sbx-auth`), não só tráfego já autenticado.
+ *
+ *    Cuidado ao ler os números: o balde é por (função, IP), o que só
+ *    discrimina por usuário quando quem chama é o navegador de uma pessoa
+ *    real. Em rotas M2M -- disparadas por `pg_cron`, por outra Edge Function
+ *    que não propaga IP, ou por um parceiro externo cujo servidor concentra
+ *    chamadas de vários usuários (`log-access`, `notification-dispatcher`,
+ *    `notification-gateway`, `financial-gateway-webhook`) -- todas as
+ *    chamadas legítimas colam no MESMO balde, então esses 4 têm limites bem
+ *    mais altos que o padrão de 10/min (rede de segurança contra bug/loop,
+ *    não controle por pessoa). Ver o JSDoc de `rateLimit` em `registry.ts`
+ *    para o detalhamento completo.
  *
  * ============================================================================
  * [v2.0.0 — SESSÃO CENTRALIZADA (`authMode.type === 'session', enforcement: 'wrapper'`)]
@@ -204,10 +221,25 @@ export const withSecurity = (
     // Roda ANTES da blindagem de perímetro (PASSO 5) de propósito: cobre até
     // tentativas de força-bruta contra rotas de autenticação (ex: sbx-auth),
     // não só tráfego já autenticado. Fail-open -- ver _shared/rate-limit.ts.
+    //
+    // O balde é por (função, IP) -- em rotas M2M (`log-access`,
+    // `notification-dispatcher`, `notification-gateway`,
+    // `financial-gateway-webhook`), chamadas legítimas de usuários
+    // diferentes colam no MESMO balde, por isso essas 4 têm limites bem
+    // mais altos que o padrão de 10/min (ver detalhamento no cabeçalho
+    // deste arquivo e no JSDoc de `rateLimit` em `registry.ts`).
     if (config.rateLimit) {
+      // [FIX]: `x-client-ip` foi adicionado ao fallback porque é assim que
+      // `financial-gateway-gate` e `sbx-auth` propagam o IP real do usuário
+      // em chamadas internas server-to-server pro `orchestrator` (onde
+      // `cf-connecting-ip`/`x-forwarded-for` não existem, pois a chamada não
+      // passa pela borda pública de novo) -- mesma ordem de precedência já
+      // usada em `infrastructure.ts` (captureInfrastructureSync).
       const clientIp =
         req.headers.get("cf-connecting-ip") ||
         req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        req.headers.get("x-client-ip") ||
+        req.headers.get("x-real-ip") ||
         "0.0.0.0";
 
       const allowed = await checkRateLimit(
