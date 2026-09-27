@@ -1,6 +1,6 @@
 /**
- * @fileoverview Rota: /financiamentos/auto-equity
- * @path src/routes/financiamentos/auto-equity.lazy.tsx
+ * @fileoverview Rota: /emprestimos/auto-equity
+ * @path src/routes/emprestimos/auto-equity.lazy.tsx
  * 
  * =========================================================================
  * 🤖 PADRÃO GEMINI PRO ARQUITETURA: STATELESS WIZARD & DATA INJECTION
@@ -45,7 +45,7 @@ import { AutoEquityManifest } from "@/features/financial-hub/components/products
 // Hook de Contexto (Motor de Dados)
 import { useProductConsult } from "@/features/financial-hub/core/contexts/FinancialHubContext";
 
-export const Route = createLazyFileRoute("/financiamentos/auto-equity")({
+export const Route = createLazyFileRoute("/emprestimos/auto-equity")({
   component: AutoEquityConsultPage,
 });
 

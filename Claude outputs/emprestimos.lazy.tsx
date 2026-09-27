@@ -1,6 +1,6 @@
 /**
- * @fileoverview Rota Pai: /seguros (Layout Mestre)
- * @path src/routes/seguros.lazy.tsx
+ * @fileoverview Rota Pai: /emprestimos (Layout Mestre)
+ * @path src/routes/emprestimos.lazy.tsx
  *
  * =========================================================================
  * A guarda de sessão (zero-trust, resgate de handoff #xt=) e o skeleton de
@@ -16,7 +16,7 @@
 import { createLazyFileRoute, Outlet } from '@tanstack/react-router';
 import { FinancialHubLayout } from "@/features/financial-hub/components/layout/FinancialHubLayout";
 
-export const Route = createLazyFileRoute('/seguros')({
+export const Route = createLazyFileRoute('/emprestimos')({
   component: () => (
     <FinancialHubLayout>
       <Outlet />
