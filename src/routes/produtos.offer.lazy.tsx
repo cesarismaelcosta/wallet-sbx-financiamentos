@@ -1,7 +1,7 @@
 /**
- * @fileoverview 🛍️ Componente: OfferDetailsSBXPAY (Vitrine Central de Ofertas / Prateleira Mid-Funnel)
+ * @fileoverview 🛍️ Componente: OfferDetailsProdutos (Vitrine Central de Ofertas / Prateleira Mid-Funnel)
  * @module routes
- * @path src/routes/sbxpay/offer.tsx
+ * @path src/routes/produtos/offer.tsx
  *
  * =========================================================================
  * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-TRUST, OLAP & NEUTRAL PURITY
@@ -100,10 +100,10 @@ const FLOW_MAP: Record<string, { product_id: number }> = {
 function OfferDetailsSBXPage() {
   const params = new URLSearchParams(window.location.search);
   const flow = params.get("flow") || "Carros";
-  return <OfferDetailsSBXPAY flowKey={flow} />;
+  return <OfferDetailsProdutos flowKey={flow} />;
 }
 
-export const Route = createLazyFileRoute("/sbxpay/offer")({
+export const Route = createLazyFileRoute("/produtos/offer")({
   component: OfferDetailsSBXPage,
   pendingComponent: OfferSkeletonLoader,
 });
@@ -172,9 +172,9 @@ function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = 
 function OfferSkeletonLoader() {
   // Usa o MESMO tema global do resto do app (useTheme/ThemeProvider) --
   // a offer não tem mais uma preferência própria, então nunca diverge da
-  // sbxpay.index ou de qualquer outra rota.
-  const { theme } = useTheme();
-  const nightMode = theme === "dark";
+  // produtos.index ou de qualquer outra rota.
+  const { theme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-28 space-y-8 animate-pulse bg-white dark:bg-neutral-950 transition-colors">
@@ -193,9 +193,9 @@ function OfferSkeletonLoader() {
 }
 
 // =========================================================================
-// [COMPONENTE PRINCIPAL]: OfferDetailsSBXPAY
+// [COMPONENTE PRINCIPAL]: OfferDetailsProdutos
 // =========================================================================
-export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
+export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
   const { userId, sessionToken, userProfile, logout } = useFinancialAuth();
   const navigate = useNavigate();
   const searchParams = Route.useSearch() as any;
@@ -226,10 +226,10 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   // 🌙 Tema global compartilhado com o resto do app (useTheme/ThemeProvider) --
-  // a offer segue exatamente o mesmo tema da sbxpay.index e de qualquer outra
+  // a offer segue exatamente o mesmo tema da produtos.index e de qualquer outra
   // rota; não existe mais uma preferência isolada que possa divergir.
-  const { theme, setTheme } = useTheme();
-  const nightMode = theme === "dark";
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
 
   const totalPages = Math.max(Math.ceil(totalElements / pageSize), 1);
 
@@ -254,7 +254,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
   // visita tiver IDs válidos, eles são anexados ao destino — a visita continua
   // viva mesmo quando o retorno (auto ou manual) acontece.
   const dynamicReturnUri = (() => {
-    const base = searchParams.redirect_uri || searchParams.return_uri || "/sbxpay";
+    const base = searchParams.redirect_uri || searchParams.return_uri || "/produtos";
     try {
       const url = new URL(base, window.location.origin);
       const { visitId, visitUpdateId } = visitCursorRef.current;
@@ -339,7 +339,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
       } catch (error: any) {
         if (error.name === "AbortError" || controller.signal.aborted) return;
         logSystemError({
-          context: "sbxpay/offer.tsx",
+          context: "produtos/offer.tsx",
           subject: `Erro na Busca de Ofertas (${flowKey})`,
           message: error?.message || "Erro desconhecido",
           payload: { user_id: userId || "UNAUTHENTICATED", flow_key: flowKey },
@@ -431,7 +431,7 @@ export function OfferDetailsSBXPAY({ flowKey }: { flowKey?: string }) {
     } catch (error: any) {
       if (error?.code === "SESSION_EXPIRED" || error?.status === 401 || error?.code === 401) {
         clearSession();
-        const currentPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/sbxpay";
+        const currentPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/produtos";
         const rawFallback = error?.fallback_url || `/accounts/signin?redirect_uri=${encodeURIComponent(currentPath)}`;
         const safeUrl = new URL(rawFallback, window.location.origin);
         window.location.href = safeUrl.pathname + safeUrl.search;

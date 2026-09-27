@@ -23,8 +23,8 @@ import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/Th
 
 export function Step5Confirm() {
   const { state, update, goTo } = useWizard<any>();
-  const { theme } = useTheme();
-  const nightMode = theme === "dark";
+  const { theme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
 
   // Estados locais de UI
   const [status, setStatus] = useState<"loading" | "success" | "denied" | "error">("loading");

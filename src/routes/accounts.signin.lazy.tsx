@@ -122,8 +122,8 @@ export function CustomLogin() {
 
   // Tema global compartilhado com o resto do app (useTheme/ThemeProvider) --
   // igual às demais rotas, sem imunidade/estado próprio.
-  const { theme } = useTheme();
-  const nightMode = theme === "dark";
+  const { theme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
 
   // 🔒 Captura segura de Search Params validados no contrato da rota
   const search = useSearch({ from: "/accounts/signin" }) as {
@@ -255,7 +255,7 @@ export function CustomLogin() {
         setIsLoading(false);
 
         // 🔒 O DESTINO FINAL É DITADO PELO BACKEND (Elimina vetor de Open Redirect)
-        const serverRedirectUrl = response.initial_visit?.final_redirect_url || "/sbxpay";
+        const serverRedirectUrl = response.initial_visit?.final_redirect_url || "/produtos";
 
         try {
           const isRelative = serverRedirectUrl.startsWith("/") && !serverRedirectUrl.startsWith("//");

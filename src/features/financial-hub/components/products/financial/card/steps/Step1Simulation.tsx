@@ -78,8 +78,8 @@ export function Step1Simulation() {
   // =========================================================================
   // 🤖 [LOCAL STATE ARCHITECTURE]: Gerenciamento de Ciclo de Vida e Estados
   // =========================================================================
-  const { theme } = useTheme();
-  const nightMode = theme === "dark";
+  const { theme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
   const [loading, setLoading] = useState(false);
   const { state, update } = useWizard<CardWizardData>();
 

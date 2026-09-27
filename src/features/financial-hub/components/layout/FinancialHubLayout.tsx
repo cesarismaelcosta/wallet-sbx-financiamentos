@@ -126,8 +126,8 @@ function ErrorCountdown({ fallbackUrl, message, title, onRetry }: ErrorCountdown
 // seguros.lazy, etc.).
 // =========================================================================
 function AuthGateSkeleton() {
-  const { theme, setTheme } = useTheme();
-  const nightMode = theme === "dark";
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
   return (
     <div className="min-h-screen bg-white text-foreground flex flex-col transition-colors duration-300 relative">
       <PanelHeader showNav={true} showAuth={true} links={[]} nightMode={nightMode} onToggleNightMode={() => setTheme(nightMode ? "light" : "dark")} />
@@ -155,8 +155,8 @@ function FinancialHubOrchestrator({ children }: FinancialHubLayoutProps) {
   
   const navigate = useNavigate();
   const { sessionToken, logout, userProfile } = useFinancialAuth();
-  const { theme, setTheme } = useTheme();
-  const nightMode = theme === "dark";
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
 
   const [isOrchestratorHydrating, setIsOrchestratorHydrating] = useState(true);
   const [runtimeError, setRuntimeError] = useState<any>(null);

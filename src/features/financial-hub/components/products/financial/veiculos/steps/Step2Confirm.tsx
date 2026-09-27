@@ -47,8 +47,8 @@ export function Step2Confirm() {
   // =========================================================================
   // 🤖 [LOCAL STATE ARCHITECTURE]: Consumo de Estado do Wizard
   // =========================================================================
-  const { theme } = useTheme();
-  const nightMode = theme === "dark";
+  const { theme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
   const { state, back } = useWizard<any>();
   const result = state.data.simulationResult;
   const isApproved = result?.status_id === 1;

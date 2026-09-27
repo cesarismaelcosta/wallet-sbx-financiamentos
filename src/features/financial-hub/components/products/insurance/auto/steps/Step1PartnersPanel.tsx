@@ -27,8 +27,8 @@ import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/Th
 
 export function Step1PartnersPanel() {
 
-  const { theme } = useTheme();
-  const nightMode = theme === "dark";
+  const { theme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
 
   // =========================================================================
   // 🤖 [BFCACHE SHIELD]: Proteção contra congelamento do botão (Back/Forward)

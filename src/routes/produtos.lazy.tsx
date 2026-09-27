@@ -1,7 +1,7 @@
 /**
- * @fileoverview 🛡️ Componente Mestre: sbXPAYLayOut (Gatekeeper de Acesso e Sessão)
+ * @fileoverview 🛡️ Componente Mestre: ProdutosLayOut (Gatekeeper de Acesso e Sessão)
  * @module features/financial-hub/core/layout
- * @path src/routes/sbxpay.lazy.tsx
+ * @path src/routes/produtos.lazy.tsx
  *
  * =========================================================================
  * 🤖 PADRÃO GEMINI PRO ARQUITETURA: ZERO-TRUST & SCOPE DELEGATION
@@ -44,8 +44,8 @@ import { useOrchestratorHistorySync } from "@/features/financial-hub/core/hooks/
 // ============================================================================
 // O Guardião redundante (SbXPAYGuard) foi removido.
 // A rota agora aponta direto para a função principal de Layout.
-export const Route = createLazyFileRoute("/sbxpay")({
-  component: SbXPAYLayOut,
+export const Route = createLazyFileRoute("/produtos")({
+  component: ProdutosLayOut,
 });
 
 /**
@@ -65,8 +65,8 @@ export const UserDataContext = createContext<{
  * 🎨 [PLACEHOLDER ESTRUTURAL]
  */
 function HomeSkeleton() {
-  const { theme, setTheme } = useTheme();
-  const nightMode = theme === "dark";
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
   const skeletonSections = [
     { isHero: true, isReverse: false },
     { isHero: false, isReverse: false },
@@ -157,7 +157,7 @@ function HomeSkeleton() {
 // ============================================================================
 // [LAYOUT PRINCIPAL E GATEKEEPER]
 // ============================================================================
-export function SbXPAYLayOut() {
+export function ProdutosLayOut() {
   // 🛡️ [HISTORY SYNC GATEKEEPER]
   // Protege a aterrissagem na vitrine contra o resgate de cursores obsoletos
   // decorrentes do botão "Back" do navegador. (Cross-Layout Compatibility)
@@ -253,7 +253,7 @@ export function SbXPAYLayOut() {
               ...(vId ? { visit_id: vId } : {}),
               interaction_context: {
                 origin_url: currentHref,
-                utm_source: "sbxpay_direct",
+                utm_source: "produtos_direct",
                 utm_medium: "organic",
                 utm_campaign: "hub_layout_visit_init",
               },
@@ -374,7 +374,7 @@ export function SbXPAYLayOut() {
   if (!USE_COOKIE && !sessionToken) return null;
 
   return (
-    <div className="sbxpay-shell min-h-screen bg-white">
+    <div className="produtos-shell min-h-screen bg-white">
       <UserDataContext.Provider value={{ userData, performLogout, isVerifying }}>
         <Outlet />
       </UserDataContext.Provider>

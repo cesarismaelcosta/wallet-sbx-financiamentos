@@ -954,11 +954,11 @@ function SandboxPage() {
     const searchPayload: Record<string, string> = {
       environment: ambienteAtivo,
       auth_token: tokenToUse,
-      target_url: "/sbxpay",
+      target_url: "/produtos",
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
       utm_medium: "referral",
-      utm_campaign: "flow_sbxpay_form",
+      utm_campaign: "flow_produtos_form",
     };
 
     Object.entries(searchPayload).forEach(([key, value]) => {
@@ -1019,11 +1019,11 @@ function SandboxPage() {
         },
         body: JSON.stringify({
           environment: ambienteAtivo,
-          target_url: "/sbxpay",
+          target_url: "/produtos",
           return_uri: window.location.origin + window.location.pathname,
           utm_source: "sandbox",
           utm_medium: "referral",
-          utm_campaign: "flow_sbxpay_ajax_debug",
+          utm_campaign: "flow_produtos_ajax_debug",
         }),
       });
 
@@ -1638,7 +1638,7 @@ function SandboxPage() {
                       </>
                     ) : (
                       <>
-                        <ExternalLink className="h-4 w-4" /> Ir para sbxpay (form)
+                        <ExternalLink className="h-4 w-4" /> Ir para produtos (form)
                       </>
                     )}
                   </Button>
@@ -1650,7 +1650,7 @@ function SandboxPage() {
                     className="w-full rounded-none gap-2 bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-100 font-medium text-xs shadow-sm"
                   >
                     <ExternalLink className="h-4 w-4" />{" "}
-                    {loadingAction === "sbxpay_ajax" ? "Processando..." : "Ir para sbxpay (fetch - debug)"}
+                    {loadingAction === "sbxpay_ajax" ? "Processando..." : "Ir para produtos (fetch - debug)"}
                   </Button>
                 </CardContent>
               </Card>
@@ -2366,7 +2366,7 @@ function SandboxPage() {
 
       {/* MOBILE NAVIGATION TAB BAR */}
       <div className="fixed bottom-0 left-0 w-full bg-white border-t border-neutral-200 z-50 flex justify-around items-center pt-2 pb-4 md:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <a href="/sbxpay" className="flex flex-col items-center justify-center text-neutral-900 min-w-[70px] gap-1">
+        <a href="/produtos" className="flex flex-col items-center justify-center text-neutral-900 min-w-[70px] gap-1">
           <Home className="w-6 h-6" strokeWidth={1.5} />
           <span className="text-[10px] font-bold">Início</span>
         </a>

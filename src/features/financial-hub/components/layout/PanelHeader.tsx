@@ -143,13 +143,13 @@ export function PanelHeader({
       const visitPayload = {
         action: "VISIT",
         action_description: "HEADER_LOGO_CLICK",
-        target_url: "/sbxpay",
+        target_url: "/produtos",
         origin_url: currentHref,
         ...(existingVisitId && { visit_id: existingVisitId }),
         ...(existingVisitUpdateId && { visit_update_id: existingVisitUpdateId }),        
         interaction_context: {
           origin_url: currentHref,
-          utm_source: "sbxpay_logo",
+          utm_source: "produtos_logo",
           utm_medium: "navigation",
           utm_campaign: "header_home_click",
         },
@@ -171,7 +171,7 @@ export function PanelHeader({
           search: Object.fromEntries(urlObj.searchParams.entries()) as any
         });
       } else {
-        navigate({ to: "/sbxpay" });
+        navigate({ to: "/produtos" });
       }
     } catch (error: any) {
       console.error("[PanelHeader] Erro na orquestração ao clicar na Logo:", error);
@@ -188,7 +188,7 @@ export function PanelHeader({
           search: Object.fromEntries(urlObj.searchParams.entries()) as any
         });
       } else {
-        navigate({ to: "/sbxpay" }); 
+        navigate({ to: "/produtos" }); 
       }
     } finally {
       setIsNavigating(false);

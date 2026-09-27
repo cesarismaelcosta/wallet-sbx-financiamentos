@@ -120,7 +120,7 @@ function RootComponent() {
             // ===================================================================
             // 🟢 TRILHA CLIENTES (Financial Auth Injection)
             // ===================================================================
-            // Protege rotas como /sbxpay, /financiamentos, /seguros e /accounts/signin.
+            // Protege rotas como /produtos, /financiamentos, /seguros, /emprestimos e /accounts/signin.
             // Envelopar aqui previne a destruição da sessão durante transições de URL.
             <FinancialAuthProvider>
               <Outlet />

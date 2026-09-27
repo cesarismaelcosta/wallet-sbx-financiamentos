@@ -1,6 +1,6 @@
 /**
- * @fileoverview 🏠 Componente: sbXPAYHome (Rota: /sbxpay/)
- * @path src/routes/sbxpay/index.tsx
+ * @fileoverview 🏠 Componente: ProdutosHome (Rota: /produtos/)
+ * @path src/routes/produtos/index.tsx
  * @description Ponto de entrada principal do ambiente de homologação e testes do Financial Hub.
  * Gerencia a listagem de jornadas de produtos, o roteamento inteligente e a pureza visual neutra (SBX DS).
  *
@@ -49,14 +49,14 @@ import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { USE_COOKIE } from "@/services/session";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
-import { UserDataContext } from "@/routes/sbxpay.lazy";
+import { UserDataContext } from "@/routes/produtos.lazy";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
 // ============================================================================
 // [REGISTRO DA ROTA TANSTACK ROUTER]
 // ============================================================================
-export const Route = createLazyFileRoute("/sbxpay/")({
-  component: sbXPAYHome,
+export const Route = createLazyFileRoute("/produtos/")({
+  component: ProdutosHome,
 });
 
 // ============================================================================
@@ -81,11 +81,11 @@ type DirectConfig = {
 type FlowConfig = ShowcaseConfig | DirectConfig;
 
 const flowsConfig: Record<string, FlowConfig> = {
-  cartao: { isDirect: false, route: "/sbxpay/offer", flowKey: "Cartão", disabled: false },
-  carros: { isDirect: false, route: "/sbxpay/offer", flowKey: "Carros", disabled: false },
-  caminhoes: { isDirect: false, route: "/sbxpay/offer", flowKey: "Caminhões", disabled: false },
-  imoveis: { isDirect: false, route: "/sbxpay/offer", flowKey: "Imóveis", disabled: true },
-  floorPlan: { isDirect: false, route: "/sbxpay/offer", flowKey: "Vendedor", disabled: true },
+  cartao: { isDirect: false, route: "/produtos/offer", flowKey: "Cartão", disabled: false },
+  carros: { isDirect: false, route: "/produtos/offer", flowKey: "Carros", disabled: false },
+  caminhoes: { isDirect: false, route: "/produtos/offer", flowKey: "Caminhões", disabled: false },
+  imoveis: { isDirect: false, route: "/produtos/offer", flowKey: "Imóveis", disabled: true },
+  floorPlan: { isDirect: false, route: "/produtos/offer", flowKey: "Vendedor", disabled: true },
   equityCarro: { isDirect: true, productId: "7", disabled: false },
   equityImovel: { isDirect: true, productId: "6", disabled: true },
   seguroResidencial: { isDirect: true, productId: "10", disabled: true },
@@ -105,9 +105,9 @@ const homeLinks: AppJourney[] = [
 ];
 
 // ============================================================================
-// 🏠 [COMPONENTE PRINCIPAL: SBX PAY HOME]
+// 🏠 [COMPONENTE PRINCIPAL: PRODUTOS HOME]
 // ============================================================================
-export function sbXPAYHome() {
+export function ProdutosHome() {
   const navigate = useNavigate();
   const { sessionToken, logout, userProfile } = useFinancialAuth(); // EXTRAÍDO O USERPROFILE DO JWT
   const { userData, isVerifying } = useContext(UserDataContext) || {}; // EXTRAÍDO O USERDATA DO CONTEXTO DE REDE
@@ -127,8 +127,8 @@ export function sbXPAYHome() {
   // 🌙 Modo noturno da home: agora usa o MESMO tema global do resto do site
   // (ThemeProvider / localStorage["sbx-theme"]) em vez de um estado isolado.
   // Clicar no sol/lua aqui muda a página inteira, não só as imagens.
-  const { theme, setTheme } = useTheme();
-  const nightMode = theme === "dark";
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
   const setNightMode = (updater: boolean | ((prev: boolean) => boolean)) => {
     const next = typeof updater === "function" ? updater(nightMode) : updater;
     setTheme(next ? "dark" : "light");
@@ -218,7 +218,7 @@ export function sbXPAYHome() {
           ...(existingVisitUpdateId && { visit_update_id: existingVisitUpdateId }),
           interaction_context: {
             origin_url: currentHref,
-            utm_source: "sbxpay_direct",
+            utm_source: "produtos_direct",
             utm_medium: "referral",
             utm_campaign: `flow_${configKey.toLowerCase()}`,
           },
@@ -250,7 +250,7 @@ export function sbXPAYHome() {
         ...(existingVisitUpdateId && { visit_update_id: existingVisitUpdateId }),
         interaction_context: {
           origin_url: currentHref,
-          utm_source: "sbxpay_direct",
+          utm_source: "produtos_direct",
           utm_medium: "referral",
           utm_campaign: `flow_${configKey.toLowerCase()}`,
         },

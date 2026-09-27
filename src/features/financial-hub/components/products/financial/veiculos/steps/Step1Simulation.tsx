@@ -53,8 +53,8 @@ export function Step1Simulation() {
   // =========================================================================
   // 🤖 [LOCAL STATE ARCHITECTURE]: Gerenciamento de Inputs e Ciclo de Vida
   // =========================================================================
-  const { theme } = useTheme();
-  const nightMode = theme === "dark";
+  const { theme, resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [entradaFocused, setEntradaFocused] = useState(false); // controla o badge do slider de Entrada enquanto o input está em foco
