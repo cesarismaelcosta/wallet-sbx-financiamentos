@@ -17,12 +17,18 @@ export const Route = createFileRoute("/produtos")({
   head: () => ({
     meta: [
       { title: "Cartão, Veículos, Imóveis e Empréstimos | Wallet sbX" },
-      { name: "description", content: "Simule cartão de crédito, empréstimo com garantia de carro ou imóvel e seguros. Financie carros e caminhões anunciados na Superbid, 100% online." },
-      { property: "og:title", content: "Cartão, Veículos, Imóveis e Empréstimos | Wallet sbX" },
-      { property: "og:description", content: "Simule cartão de crédito, empréstimo com garantia de carro ou imóvel e seguros. Financie carros e caminhões anunciados na Superbid, 100% online." },
+      {
+        name: "description",
+        content:
+          "Simule cartão de crédito, empréstimo com garantia de carro ou imóvel e seguros. Financie carros e caminhões anunciados na Superbid, 100% online, com sua Wallet sbX.",
+      },
+      { property: "og:title", content: "Cartão, Veículos, Imóveis e Empréstimos | Superbid | Wallet sbX" },
+      {
+        property: "og:description",
+        content:
+          "Simule cartão de crédito, empréstimo com garantia de carro ou imóvel e seguros. Financie carros e caminhões anunciados na Superbid, 100% online, com sua Wallet sbX.",
+      },
     ],
-    links: [
-      { rel: "canonical", href: "https://wallet.sbx.com.br/produtos" },
-    ],
+    links: [{ rel: "canonical", href: "https://wallet.sbx.com.br/produtos" }],
   }),
 });
