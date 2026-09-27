@@ -34,13 +34,14 @@
  * @author Gemini Pro (Architectural Mechanics)
  */
 
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   Loader2,
   Plus,
   UserPlus,
   ArrowRight,
+  TriangleAlert,
 } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
@@ -123,6 +124,32 @@ export function ProdutosHome() {
   const [loading, setLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  // Chave do botão com falha na última tentativa -- mesma UX de CardOfferV:
+  // barra de preenchimento passivo (5s) até o usuário tentar de novo ou o
+  // tempo esgotar (limpa sozinho).
+  const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [errorFillProgress, setErrorFillProgress] = useState(0);
+  const errorFillRaf2Ref = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!errorKey) {
+      setErrorFillProgress(0);
+      return;
+    }
+    setErrorFillProgress(0);
+    const raf1 = requestAnimationFrame(() => {
+      errorFillRaf2Ref.current = requestAnimationFrame(() => setErrorFillProgress(100));
+    });
+    const timer = setTimeout(() => {
+      setErrorKey(null);
+    }, 5000);
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (errorFillRaf2Ref.current !== null) cancelAnimationFrame(errorFillRaf2Ref.current);
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [errorKey]);
 
   // 🌙 Modo noturno da home: agora usa o MESMO tema global do resto do site
   // (ThemeProvider / localStorage["sbx-theme"]) em vez de um estado isolado.
@@ -192,6 +219,7 @@ export function ProdutosHome() {
   const handleProductClick = async (configKey: keyof typeof flowsConfig) => {
     setLoading(true);
     setActiveKey(configKey);
+    setErrorKey(null);
 
     const config = flowsConfig[configKey];
     if (!config) {
@@ -282,6 +310,7 @@ export function ProdutosHome() {
 
       setLoading(false);
       setActiveKey(null);
+      setErrorKey(configKey);
     } finally {
       if (!config.isDirect) setLoading(false);
     }
@@ -299,6 +328,35 @@ export function ProdutosHome() {
     const config = flowsConfig[configKey];
     const isLocked = loading || isVerifying;
     const isCurrentLoading = loading && activeKey === configKey;
+    const isCurrentError = errorKey === configKey;
+
+    if (isCurrentError) {
+      return (
+        <div className="relative w-full md:w-auto overflow-hidden rounded-none border border-neutral-200 dark:border-neutral-700 shadow-xs bg-white dark:bg-neutral-900">
+          {/* Preenchimento passivo: cresce 0->100% em 5s, depois volta ao estado normal sozinho */}
+          <div
+            className="absolute inset-y-0 left-0 bg-neutral-100 dark:bg-neutral-800"
+            style={{
+              width: `${errorFillProgress}%`,
+              transitionProperty: "width",
+              transitionDuration: "5000ms",
+              transitionTimingFunction: "linear",
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => handleProductClick(configKey)}
+            className={`relative z-10 ${baseButtonClasses} text-neutral-900 dark:text-neutral-100`}
+          >
+            <TriangleAlert className="w-4 h-4 shrink-0 text-neutral-500 dark:text-neutral-400" strokeWidth={1.25} />
+            <span className="font-jakarta tracking-tight text-center truncate">Não foi possível continuar.</span>
+            <span className="underline underline-offset-2 decoration-neutral-400 dark:decoration-neutral-500 shrink-0">
+              Tentar novamente
+            </span>
+          </button>
+        </div>
+      );
+    }
 
     if (config.disabled) {
       return (

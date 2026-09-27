@@ -33,6 +33,7 @@
 import React, { useState, useEffect } from "react";
 import { useSearch, useNavigate, useLocation } from "@tanstack/react-router"; 
 import { ArrowLeft } from "lucide-react";
+import { ROOT_ROUTE, SIGNIN_ROUTE } from "@/config/routes";
 import { OrchestratorWrapper } from "@/features/financial-hub/components/shared/OrchestratorWrapper";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext"; 
 import { USE_COOKIE, getTokenForPayload } from "@/services/session";
@@ -67,6 +68,12 @@ interface ErrorCountdownProps {
 
 function ErrorCountdown({ fallbackUrl, message, title, onRetry }: ErrorCountdownProps) {
   const [countdown, setCountdown] = useState(5);
+  // 🌙 [DARK MODE FIX]: antes essa tela era sempre bg-white/text-neutral-900 fixos,
+  // ficando "queimada" em dark mode. Segue o mesmo padrão do resto do app
+  // (DefaultErrorComponent, accounts.signin.lazy.tsx): fundo casando com a imagem
+  // (branco/error.webp vs preto/error-dark.webp) via useTheme().
+  const { resolvedTheme } = useTheme();
+  const nightMode = resolvedTheme === "dark";
 
   useEffect(() => {
     // DECISÃO AUTOMÁTICA: O que fazer quando o relógio zerar
@@ -88,16 +95,20 @@ function ErrorCountdown({ fallbackUrl, message, title, onRetry }: ErrorCountdown
   }, [countdown, fallbackUrl, onRetry]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-white font-sans p-6 text-center text-neutral-900">
-      <img src="/assets/error/error.webp" alt="Erro na simulação" className="w-32 h-32 object-contain mb-6 mix-blend-multiply saturate-[10%]" />
+    <div className="flex min-h-screen flex-col items-center justify-center bg-white dark:bg-black font-sans p-6 text-center text-neutral-900 dark:text-neutral-100">
+      <img
+        src={nightMode ? "/assets/error/error-dark.webp" : "/assets/error/error.webp"}
+        alt="Erro na simulação"
+        className="w-32 h-32 object-contain mb-6 saturate-[10%]"
+      />
       
-      <h2 className="text-xl font-semibold text-neutral-900 mb-2">{title || "Ops! Tivemos um problema"}</h2>
-      <p className="text-neutral-600 font-normal text-sm mb-2 max-w-md px-4">
+      <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{title || "Ops! Tivemos um problema"}</h2>
+      <p className="text-neutral-600 dark:text-neutral-400 font-normal text-sm mb-2 max-w-md px-4">
         {message || "Não foi possível carregar a simulação desta oferta."}
       </p>
       
       {/* MENSAGEM DINÂMICA: O texto muda para deixar claro para o usuário o que o sistema fará sozinho */}
-      <p className="text-neutral-400 font-normal text-xs mt-4 mb-6 tabular-nums">
+      <p className="text-neutral-400 dark:text-neutral-500 font-normal text-xs mt-4 mb-6 tabular-nums">
         {onRetry ? `Tentando novamente em ${countdown}s...` : `Retornando em ${countdown}s...`}
       </p>
 
@@ -107,7 +118,7 @@ function ErrorCountdown({ fallbackUrl, message, title, onRetry }: ErrorCountdown
           if (onRetry) onRetry();
           else if (fallbackUrl) window.location.href = fallbackUrl;
         }}
-        className="flex items-center justify-center gap-2 px-5 py-2 font-normal rounded-none transition-colors text-sm w-full md:w-auto border border-neutral-200 bg-white text-neutral-900 hover:bg-neutral-50 shadow-xs"
+        className="flex items-center justify-center gap-2 px-5 py-2 font-normal rounded-none transition-colors text-sm w-full md:w-auto border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-800 shadow-xs"
       >
         <ArrowLeft className="w-4 h-4" strokeWidth={1.25} />
         <span className="font-jakarta tracking-tight text-center">
@@ -218,7 +229,7 @@ function FinancialHubOrchestrator({ children }: FinancialHubLayoutProps) {
             <ErrorCountdown
               title={uiTitle}
               message={runtimeError.message}
-              fallbackUrl={runtimeError.fallback_url || "/"}
+              fallbackUrl={runtimeError.fallback_url || ROOT_ROUTE}
             />
           );
         }
@@ -234,7 +245,7 @@ function FinancialHubOrchestrator({ children }: FinancialHubLayoutProps) {
             <ErrorCountdown
               title={uiTitle}
               message={simData.message}
-              fallbackUrl={simData.fallback_url || "/"}
+              fallbackUrl={simData.fallback_url || ROOT_ROUTE}
             />
           );
         }
@@ -331,13 +342,13 @@ export function FinancialHubLayout({ children }: FinancialHubLayoutProps) {
   useEffect(() => {
     if (!isClientMounted || isLoading || isExchanging) return;
 
-    if (!USE_COOKIE && !sessionToken && location.pathname !== '/accounts/signin') {
+    if (!USE_COOKIE && !sessionToken && location.pathname !== SIGNIN_ROUTE) {
       const currentPath = typeof window !== "undefined"
         ? window.location.pathname + window.location.search
-        : "/";
+        : ROOT_ROUTE;
 
       navigate({
-        to: '/accounts/signin',
+        to: SIGNIN_ROUTE,
         search: {
           redirect_uri: currentPath,
           handoff_error: reason
