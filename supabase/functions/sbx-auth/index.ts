@@ -22,6 +22,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { generateSessionToken } from "../_shared/jwt.ts";
+import { HOME_ROUTE, SIGNIN_ROUTE } from "../_shared/app-routes.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
 import { BFFUserProfile } from "../_shared/types.ts";
@@ -93,16 +94,16 @@ serve(
       // =======================================================================
       let safeVisitId: string | null = null;
       let safeVisitUpdateId: string | null = null;
-      let safeTargetUrl = "/produtos"; 
-      let safeOriginUrl = "/accounts/signin";
+      let safeTargetUrl = HOME_ROUTE; 
+      let safeOriginUrl = SIGNIN_ROUTE;
 
       if (handoff_token) {
         try {
           const intent = await verifySigninParameters(handoff_token);
           safeVisitId = intent.visit_id || null;
           safeVisitUpdateId = intent.visit_update_id || null;
-          safeTargetUrl = intent.target_url || "/produtos";
-          safeOriginUrl = intent.origin_url || "/accounts/signin";
+          safeTargetUrl = intent.target_url || HOME_ROUTE;
+          safeOriginUrl = intent.origin_url || SIGNIN_ROUTE;
           debugLog(`[sbx-auth] Handoff Token validado. Restaurando jornada: ${safeVisitId}`);
         } catch (e) {
           debugLog(`[sbx-auth] Handoff Token invalido. Ancorando na Home.`);

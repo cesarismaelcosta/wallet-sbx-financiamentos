@@ -34,6 +34,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
+import { HOME_ROUTES } from "../_shared/app-routes.ts";
 import { sql } from "../_shared/db.ts";
 import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { validateOfferAccess } from "../_shared/gateKeeper.ts";
@@ -58,7 +59,6 @@ const ACTIONS = ["VISIT", "CONSULT", "REDIRECT", "SIMULATE", "CONTACT"] as const
 type Action = (typeof ACTIONS)[number];
 
 const NAVIGATION_ACTIONS: Action[] = ["VISIT", "CONTACT"];
-const HOME_ROUTES = ["/", "/produtos"];
 
 const normalizeRoute = (raw?: string | null) => {
   if (!raw) return "";
