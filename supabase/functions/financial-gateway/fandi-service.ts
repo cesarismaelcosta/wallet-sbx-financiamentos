@@ -111,7 +111,11 @@ export async function processSimulationFandi(
   const payloadToSign = `${payload.simulation_id}.${simulationUpdateId}.${timestamp}`;
   const signature = await generateSignature(payloadToSign, MASTER_SECRET);
 
-  const webhookBase = "https://ldzutiojmcawhwdhojlo.supabase.co/functions/v1/financial-gateway-webhook/fandi";
+  // [FIX]: antes cravava a URL de um projeto específico -- quebrava em
+  // qualquer outro ambiente (o Fandi recebia a URL errada de callback e
+  // confirmava a operação no projeto errado). Igual ao padrão já usado em
+  // `financial-gateway-gate`/`sbx-auth` ao chamar o `orchestrator`.
+  const webhookBase = `${Deno.env.get("SUPABASE_URL")}/functions/v1/financial-gateway-webhook/fandi`;
   const WEBHOOK_URL = `${webhookBase}/${simulationId}/${simulationUpdateId}/${timestamp}/${signature}`;
 
   const GUID_URL = 'https://core.fandi.com.br/v2/checkout/obter-guid';
