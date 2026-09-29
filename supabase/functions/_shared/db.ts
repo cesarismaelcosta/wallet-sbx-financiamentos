@@ -82,21 +82,17 @@ if (!dbUrl) {
 export const sql = postgres(dbUrl, {
   prepare: false,      // Obrigatório para o Transaction Pooler (Supavisor)
   ssl: 'require',      // Obrigatório para o pooler
-  // 🚧 [REVISITAR - 2026-09-17]: mantive `max: 5` (decisão de 2026-09-15,
-  // motivo abaixo) em vez do `max: 1` — são dois objetivos que competem:
-  //   - `max: 5` evita que os `Promise.all` de persist-data.ts
-  //     (insertSimulationData/updateSimulationData) serializem na mesma
-  //     conexão em vez de rodar em paralelo de verdade (motivo original do
-  //     aumento de 1 pra 5, em 2026-09-15).
-  //   - `max: 1` é o valor comumente recomendado pra Edge Function +
-  //     Transaction Pooler, porque cada instância de function que sobe
-  //     concorrentemente abre seu próprio pool — com `max: 5` e muitas
-  //     instâncias simultâneas, dá pra esgotar o limite de conexões do
-  //     Supavisor pro projeto mais rápido do que na Direct Connection.
-  // Não decidi isso sozinho — se aparecer erro de "too many connections"/
-  // "no available connections" no Supavisor depois do deploy, este é o
-  // primeiro lugar a revisar, reduzindo esse número.
-  max: 5,
+  // [2026-09-29]: reduzido de 5 para 2. O motivo original do 5 (deixar os
+  // `Promise.all` de persist-data.ts rodarem em paralelo) não se sustenta: esses
+  // Promise.all rodam dentro de `sql.begin(async (t) => ...)`, e uma transação
+  // usa UMA conexão só -- as queries com `t` já eram serializadas nela, com
+  // max 5 ou max 1. Enquanto isso, 5 conexões por instância x várias instâncias
+  // vivas ao mesmo tempo lotava a fila do Supavisor para o db_edge_worker (em
+  // dev, uma requisição ficou 77s esperando vaga antes do handler). 2 deixa uma
+  // conexão livre para consultas fora da transação sem multiplicar a pressão.
+  // Se aparecer "too many connections"/"no available connections" de novo,
+  // baixar para 1 é o próximo passo.
+  max: 2,
   idle_timeout: 10,    // 🚀 CRÍTICO: Fecha conexões ociosas rápido para não engasgar o banco
   connect_timeout: 10  // Derruba rápido se o banco não responder
 });
