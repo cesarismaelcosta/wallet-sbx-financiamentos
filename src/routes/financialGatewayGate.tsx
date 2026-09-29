@@ -22,7 +22,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import { logSystemError } from "@/services/systemNotification";
-import { buildSigninRedirect } from "@/config/routes";
 
 interface SearchSchema {
   status?: string;
@@ -42,12 +41,27 @@ interface SearchSchema {
 // contrato da rota (validateSearch), não só no componente, porque a rota é
 // acessível diretamente por URL.
 // =========================================================================
+const ALLOWED_RETURN_DOMAINS = [
+  "localhost", "127.0.0.1",
+  "lovable.app", "lovableproject.com", "lovable.dev",
+  "superbid.net",
+];
+
 function sanitizeReturnUri(uri: unknown): string | undefined {
-  if (typeof uri !== "string") return undefined;
-  if (uri.startsWith("/") && !uri.startsWith("//")) {
-    return uri;
+  if (typeof uri !== "string" || !uri) return undefined;
+  // caminho relativo interno
+  if (uri.startsWith("/") && !uri.startsWith("//")) return uri;
+  // URL completa: só se o domínio estiver na lista permitida (mesma do backend, _shared/security.ts)
+  try {
+    const { protocol, hostname } = new URL(uri);
+    if (protocol !== "https:" && protocol !== "http:") return undefined;
+    const ok = ALLOWED_RETURN_DOMAINS.some(
+      (d) => hostname === d || hostname.endsWith(`.${d}`),
+    );
+    return ok ? uri : undefined;
+  } catch {
+    return undefined;
   }
-  return undefined;
 }
 
 export const Route = createFileRoute("/financialGatewayGate")({
@@ -91,21 +105,12 @@ export const Route = createFileRoute("/financialGatewayGate")({
     }, [status, code, message, targetReturnUrl, offer_id, product_id, entity_id]);
 
     // =====================================================================
-    // [GUARDAS DE SEGURANÇA]: Interceptação de sessão expirada via useEffect
-    // =====================================================================
-    useEffect(() => {
-      if (code === "SESSION_EXPIRED") {
-        const loginTarget = buildSigninRedirect(targetReturnUrl);
-        window.location.replace(loginTarget);
-      }
-    }, [code, targetReturnUrl]);
-
-    // =====================================================================
     // [CONTROLE DE FLUXO]: Temporizador regressivo para redirecionamento automático
     // =====================================================================
+    // [SESSION_EXPIRED]: token da Superbid expirado segue o mesmo fluxo dos
+    // demais erros -- tela de erro + contagem + retorno para a página que
+    // chamou (return_uri). Quem renova o token é a Superbid, não o nosso login.
     useEffect(() => {
-      if (code === "SESSION_EXPIRED") return;
-
       if (countdown > 0) {
         const timer = setTimeout(() => setCountdown((prev) => prev - 1), 1000);
         return () => clearTimeout(timer);
@@ -114,16 +119,15 @@ export const Route = createFileRoute("/financialGatewayGate")({
       if (countdown === 0) {
         window.location.replace(targetReturnUrl);
       }
-    }, [countdown, targetReturnUrl, code]);
-
-    if (code === "SESSION_EXPIRED") {
-      return null;
-    }
+    }, [countdown, targetReturnUrl]);
 
     // =====================================================================
     // [TRATAMENTO DE MENSAGEM]: Higienização textual para exibição amigável
     // =====================================================================
-    const rawMessage = message || "Não foi possível carregar a simulação desta oferta.";
+    const rawMessage =
+      code === "SESSION_EXPIRED"
+        ? "Sua sessão na Superbid expirou. Faça login novamente para continuar."
+        : message || "Não foi possível carregar a simulação desta oferta.";
     const cleanMessage = rawMessage.includes(":")
       ? rawMessage.substring(rawMessage.indexOf(":") + 1).trim()
       : rawMessage;

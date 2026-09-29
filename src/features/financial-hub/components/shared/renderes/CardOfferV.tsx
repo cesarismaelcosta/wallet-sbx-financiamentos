@@ -28,15 +28,20 @@
  * - LEILÃO TRADICIONAL (offerTypeId 1): Fundo laranja claro + Data Fim.
  *
  * [NEUTRAL PURITY]: Paleta migrada de tokens semanticos vivos (bg-card/text-foreground/bg-primary/bg-muted/border-border) para tons
- * neutros fixos do Tailwind. Motivo: este card e renderizado em rota de cliente (sbxpay.offer) e nao pode
+ * neutros fixos do Tailwind. Motivo: este card e renderizado em rota de cliente (produtos.offer) e nao pode
  * herdar o dark mode ativado via localStorage["sbx-theme"] pelo ThemeToggle do backoffice -- o card fica
  * imune ao tema, igual ao restante dos componentes do financial-hub.
+ *
+ * [ERROR STATE v2.2.0]: Nova prop `hasError` (setada pelo pai apos falha na simulação)
+ * substitui o botão por uma barra que se preenche em 5s (progresso passivo de auto-retorno,
+ * sem cor de erro -- mesma convenção neutra do resto do app) com um link "Tentar novamente"
+ * que já dispara `onSimulate` de novo, cancelando o preenchimento.
  *
  * @author Cesar Ismael Pereira da Costa
  * @author Gemini Pro
  */
 
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import {
   MapPin,
   ArrowLeft,
@@ -48,6 +53,7 @@ import {
   Handshake,
   Plus,
   Loader2,
+  TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -60,6 +66,8 @@ interface CardOfferVProps {
   isCartao: boolean;
   loading: boolean;
   disabled?: boolean;
+  hasError?: boolean;
+  onErrorTimeout?: () => void;
   onSimulate: (item: any, idx: number) => void;
 }
 
@@ -125,38 +133,38 @@ function ModalityTag({ category, formattedDate }: { category: OfferCategory; for
   switch (category) {
     case "compre_ja_balcao":
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 dark:bg-rose-950/40 text-[#003B73] dark:text-rose-200">
-          <Handshake size={13} className="text-slate-700 dark:text-slate-300" strokeWidth={2.5} />
-          <Plus size={10} className="text-slate-700 dark:text-slate-300" strokeWidth={3} />
-          <Tag size={13} className="text-slate-700 dark:text-slate-300" strokeWidth={2.5} />
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
+          <Handshake size={13} className="text-slate-700" strokeWidth={2.5} />
+          <Plus size={10} className="text-slate-700" strokeWidth={3} />
+          <Tag size={13} className="text-slate-700" strokeWidth={2.5} />
           <span className="tracking-tight">Mercado Balcão ou Compre Já</span>
         </div>
       );
     case "compre_ja":
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 dark:bg-rose-950/40 text-[#003B73] dark:text-rose-200">
-          <Tag size={13} className="text-slate-700 dark:text-slate-300" strokeWidth={2.5} />
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
+          <Tag size={13} className="text-slate-700" strokeWidth={2.5} />
           <span className="tracking-tight">Compre já</span>
         </div>
       );
     case "mercado_balcao":
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 dark:bg-rose-950/40 text-[#003B73] dark:text-rose-200">
-          <Handshake size={13} className="text-slate-700 dark:text-slate-300" strokeWidth={2.5} />
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-rose-100 text-[#003B73]">
+          <Handshake size={13} className="text-slate-700" strokeWidth={2.5} />
           <span className="tracking-tight">Mercado Balcão</span>
         </div>
       );
     case "tomada_de_preco":
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-sky-100 dark:bg-sky-950/40 text-[#003B73] dark:text-sky-200">
-          <Mail size={13} className="text-slate-700 dark:text-slate-300" strokeWidth={2.5} />
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-sky-100 text-[#003B73]">
+          <Mail size={13} className="text-slate-700" strokeWidth={2.5} />
           <span className="tracking-tight">Tomada de preço</span>
         </div>
       );
     case "leilao_tradicional":
       return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-orange-100 dark:bg-orange-950/40 text-[#003B73] dark:text-orange-200">
-          <Gavel size={13} className="text-slate-700 dark:text-slate-300" strokeWidth={2.5} />
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-orange-100 text-[#003B73]">
+          <Gavel size={13} className="text-slate-700" strokeWidth={2.5} />
           <span className="tracking-tight">{formattedDate}</span>
         </div>
       );
@@ -168,7 +176,7 @@ function ModalityTag({ category, formattedDate }: { category: OfferCategory; for
 // =========================================================================
 // [COMPONENTE PRINCIPAL]: CardOfferV
 // =========================================================================
-function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulate }: CardOfferVProps) {
+function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError: hasSimulationError, onErrorTimeout, onSimulate }: CardOfferVProps) {
   const offerData = item.offer || {};
   const eventData = item.event || {};
   const sellerData = item.seller || {};
@@ -178,6 +186,35 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
   // -------------------------------------------------------------------------
   const [photoIndex, setPhotoIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
+
+  // -------------------------------------------------------------------------
+  // ESTADO LOCAL: PREENCHIMENTO PASSIVO DO ESTADO DE ERRO (auto-retorno em 5s)
+  // -------------------------------------------------------------------------
+  const [fillProgress, setFillProgress] = useState(0);
+
+  const fillRaf2Ref = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!hasSimulationError) {
+      setFillProgress(0);
+      return;
+    }
+    setFillProgress(0);
+    // Duplo rAF: garante que o browser pinte o estado em 0% ANTES de setar
+    // 100%, senão a transição CSS de width não anima (parte já "cheia").
+    const raf1 = requestAnimationFrame(() => {
+      fillRaf2Ref.current = requestAnimationFrame(() => setFillProgress(100));
+    });
+    const timer = setTimeout(() => {
+      onErrorTimeout?.();
+    }, 5000);
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (fillRaf2Ref.current !== null) cancelAnimationFrame(fillRaf2Ref.current);
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSimulationError]);
 
   // ✨ [SWIPE CONTROL]: Referências para rastreio touch (Zero Re-render)
   const touchStartX = useRef<number | null>(null);
@@ -385,30 +422,56 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, onSimulat
       {/* CALL TO ACTION (CTA)                                             */}
       {/* ================================================================ */}
       <div className="p-4 pt-0">
-        <Button
-          onClick={() => onSimulate(item, idx)}
-          disabled={loading || disabled}
-          variant="outline"
-          className="group flex items-center justify-center gap-2 w-full rounded-none shadow-xs bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 dark:hover:bg-white dark:hover:text-neutral-900 dark:hover:border-white font-medium text-[13px] h-11 cursor-pointer transition-all duration-300 ease-out"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Aguarde...</span>
-            </>
-          ) : (
-            <>
-              <span>
-                {item.is_simulated ? "Refazer Simulação" : isCartao ? "Simular parcelamento" : "Simular financiamento"}
+        {hasSimulationError ? (
+          <div className="relative w-full h-11 overflow-hidden rounded-none border border-neutral-200 dark:border-neutral-700 shadow-xs bg-white dark:bg-neutral-900">
+            {/* Preenchimento passivo: cresce 0->100% em 5s, depois retorna ao estado normal (onErrorTimeout) */}
+            <div
+              className="absolute inset-y-0 left-0 bg-neutral-100 dark:bg-neutral-800"
+              style={{
+                width: `${fillProgress}%`,
+                transitionProperty: "width",
+                transitionDuration: "5000ms",
+                transitionTimingFunction: "linear",
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => onSimulate(item, idx)}
+              className="relative z-10 flex items-center justify-center gap-2 w-full h-full px-3 text-[13px] font-medium text-neutral-900 dark:text-neutral-100 cursor-pointer"
+            >
+              <TriangleAlert size={15} strokeWidth={1.5} className="shrink-0 text-neutral-500 dark:text-neutral-400" />
+              <span className="truncate">Não foi possível simular agora.</span>
+              <span className="underline underline-offset-2 decoration-neutral-400 dark:decoration-neutral-500 shrink-0">
+                Tentar novamente
               </span>
-              <ArrowRight
-                size={15}
-                strokeWidth={1.5}
-                className="transition-transform duration-300 group-hover:translate-x-1"
-              />
-            </>
-          )}
-        </Button>
+            </button>
+          </div>
+        ) : (
+          <Button
+            onClick={() => onSimulate(item, idx)}
+            disabled={loading || disabled}
+            variant="outline"
+            className="group flex items-center justify-center gap-2 w-full rounded-none shadow-xs bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 dark:hover:bg-white dark:hover:text-neutral-900 dark:hover:border-white font-medium text-[13px] h-11 cursor-pointer transition-all duration-300 ease-out"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Aguarde...</span>
+              </>
+            ) : (
+              <>
+                <span>
+                  {item.is_simulated ? "Refazer Simulação" : isCartao ? "Simular parcelamento" : "Simular financiamento"}
+                </span>
+                <ArrowRight
+                  size={15}
+                  strokeWidth={1.5}
+                  className="transition-transform duration-300 group-hover:translate-x-1"
+                />
+              </>
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );

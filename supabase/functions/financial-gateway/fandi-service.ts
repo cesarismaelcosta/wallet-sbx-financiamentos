@@ -164,6 +164,42 @@ export async function processSimulationFandi(
     }
   };
 
+  // --------------------------------------------------------------------------
+  // 🚨 ALERTA DE CADASTRO (e-mail interno): recusas do Fandi causadas por dado
+  // cadastral (vendedor não cadastrado / modelo Fipe-Molicar inválido). O Fandi
+  // pode devolver essas mensagens tanto no GUID (Passo 1) quanto na simulação
+  // (Passo 4) -- por isso a checagem fica num lugar só e é chamada nos dois.
+  // ⚠️ [SERVERLESS STABILITY]: sempre com await -- sem isso a Edge Function
+  // morre no 'return' seguinte e o alerta é descartado.
+  // --------------------------------------------------------------------------
+  const alertarErroCadastroFandi = async (apiMessage: string, etapa: "GUID" | "SIMULACAO") => {
+    const msg = (apiMessage || "").toLowerCase();
+    const isVendedorErro = msg.includes("cpf do vendedor") && msg.includes("não existe");
+    const isModeloMolicarErro = msg.includes("molicar") || msg.includes("código do modelo");
+    if (!isVendedorErro && !isModeloMolicarErro) return;
+
+    const errorTitle = isVendedorErro ? "Vendedor não cadastrado na Fandi" : "Código do modelo Fipe ou Molicar inválido";
+    await sendSystemAlert(supabase, {
+      context: isVendedorErro ? "fandi-service: SELLER_NOT_FOUND" : "fandi-service: INVALID_FIPE_OR_MOLICAR",
+      subject: `Alerta Fandi: ${errorTitle} ⚠️`,
+      message: apiMessage,
+      visitId: payload.visit_id || null,
+      visitUpdateId: payload.visit_update_id || null,
+      simulationId: payload.simulation_id || null,
+      simulationUpdateId: payload.simulation_update_id || null,
+      rawPayload: {
+        erro: apiMessage,
+        etapa,
+        codigo_parceiro: codigoParceiro,
+        seller_id: sellerId,
+        offer_id: offer?.offer_id ?? null,
+        fipe_code: offer.vehicle_details?.fipe_code,
+        ano_fabricacao: offer.vehicle_details?.manufacture_year ?? null,
+        ano_modelo: offer.vehicle_details?.model_year ?? null,
+      },
+    });
+  };
+
   let guidResult;
   try {
     const guidResponse = await fetch(GUID_URL, { 
@@ -188,25 +224,7 @@ export async function processSimulationFandi(
     // ✨ [OBSERVABILIDADE]: captura o payload completo que enviamos e a resposta
     // completa que o Fandi devolveu, pra próxima falha vir com o motivo real.
     debugLog("[Fandi GUID] Rejeitado pelo Fandi (retorno falsy).", { bodyGuid, guidResult });
-    const isVendedorErro = apiMessage.includes("Problema ao consultar o CPF do Vendedor pela API: Usuário não existe.");
-    const isModeloMolicarErro = apiMessage.includes("Código do modelo (Fandi) ou Molicar inválido(s).");
-
-    if (isVendedorErro || isModeloMolicarErro) {
-      const errorTitle = isVendedorErro ? "Vendedor não cadastrado na Fandi" : "Código do modelo Fipe ou Molicar inválido";
-      
-      // ⚠️ [SERVERLESS STABILITY]: Await obrigatório.
-      // Se não aguardarmos, a Edge Function morre no 'return' seguinte, descartando o alerta.
-      await sendSystemAlert(supabase, {
-        context: isVendedorErro ? "fandi-service: SELLER_NOT_FOUND" : "fandi-service: INVALID_FIPE_OR_MOLICAR",
-        subject: `Alerta Fandi: ${errorTitle} ⚠️`,
-        message: apiMessage,
-        visit_id: payload.visit_id || null,
-        visit_update_id: payload.visit_update_id || null,
-        simulation_id: payload.simulation_id || null,
-        simulation_update_id: payload.simulation_update_id || null,
-        rawPayload: { erro: apiMessage, codigo_parceiro: codigoParceiro, seller_id: sellerId, fipe_code: offer.vehicle_details?.fipe_code }
-      });
-    }
+    await alertarErroCadastroFandi(apiMessage, "GUID");
     return buildErrorResponse(8, apiMessage, simulation, bodyGuid);
   }
 
@@ -320,6 +338,9 @@ export async function processSimulationFandi(
 
   // 🛡️ GUARD CLAUSE: Interrompe fluxo se o banco negou a simulação ou ocorreu falha grave.
   if (dadosSimulacao.status_id !== 1) {
+    if (simResult.message) {
+      await alertarErroCadastroFandi(simResult.message, "SIMULACAO");
+    }
     const consultaNegadaOuFalha: Consultation = {
       status_id: dadosSimulacao.status_id,
       is_selected: true,

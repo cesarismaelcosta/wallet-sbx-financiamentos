@@ -188,12 +188,12 @@ async function fetchWithTimeout(
   } catch (err: any) {
     if (err?.name === "AbortError") {
       throw buildGatewayError(
-        { code: "GATEWAY_TIMEOUT", message: `Tempo limite excedido (${timeoutMs / 1000}s). Tente novamente.` },
+        { code: "GATEWAY_TIMEOUT", message: `Tempo limite excedido (${timeoutMs / 1000}s). Tente novamente.`, fallback_url: currentPath },
         504,
         currentPath,
       );
     }
-    throw buildGatewayError({ code: "NETWORK_ERROR", message: "Falha de rede ao contatar o serviço." }, 0, currentPath);
+    throw buildGatewayError({ code: "NETWORK_ERROR", message: "Falha de rede ao contatar o serviço.", fallback_url: currentPath }, 0, currentPath);
   } finally {
     clearTimeout(timer);
   }
