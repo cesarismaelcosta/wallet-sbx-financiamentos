@@ -56,9 +56,9 @@ export function BaseWizardLayout({ manifest, className }: BaseWizardLayoutProps)
 
   if (!isReady) {
     return (
-      <div className="flex h-72 w-full flex-col items-center justify-center gap-3 bg-white text-neutral-500 animate-in fade-in duration-300 rounded-none">
-        <Loader2 className="w-5 h-5 animate-spin text-neutral-900" />
-        <span className="text-xs font-medium tracking-wide uppercase font-mono text-neutral-600">
+      <div className="flex h-72 w-full flex-col items-center justify-center gap-3 bg-white dark:bg-neutral-950 text-neutral-500 dark:text-neutral-400 animate-in fade-in duration-300 rounded-none">
+        <Loader2 className="w-5 h-5 animate-spin text-neutral-900 dark:text-neutral-100" />
+        <span className="text-xs font-medium tracking-wide uppercase font-mono text-neutral-600 dark:text-neutral-400">
           Carregando informações da simulação...
         </span>
       </div>

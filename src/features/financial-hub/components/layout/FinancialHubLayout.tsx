@@ -140,7 +140,7 @@ function AuthGateSkeleton() {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const nightMode = resolvedTheme === "dark";
   return (
-    <div className="min-h-screen bg-white text-foreground flex flex-col transition-colors duration-300 relative">
+    <div className="min-h-screen bg-white dark:bg-neutral-950 text-foreground flex flex-col transition-colors duration-300 relative">
       <PanelHeader showNav={true} showAuth={true} links={[]} nightMode={nightMode} onToggleNightMode={() => setTheme(nightMode ? "light" : "dark")} />
 
       <main className="flex-1 w-full flex flex-col pt-16">

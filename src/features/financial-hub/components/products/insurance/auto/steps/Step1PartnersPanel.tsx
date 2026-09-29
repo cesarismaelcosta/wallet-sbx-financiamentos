@@ -126,7 +126,7 @@ export function Step1PartnersPanel() {
           </div>
         </div>
 
-        <div className="bg-[#2246A7] text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
+        <div className="fill-gradient text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
           Cotação gratuita
         </div>
       </div>
@@ -166,7 +166,7 @@ export function Step1PartnersPanel() {
           type="button"
           disabled={loading || navLoading || !areConsentsValid}
           onClick={handleProceed}
-          className="w-full h-12 cta-gradient text-white font-bold rounded-none transition-all shadow-xs disabled:opacity-50 disabled:!cursor-wait flex items-center justify-center gap-2"
+          className="w-full h-12 cta-gradient text-white font-bold rounded-none transition-all shadow-xs disabled:opacity-50 disabled:cursor-wait! flex items-center justify-center gap-2"
         >
           {loading || navLoading ? (
             <span className="flex items-center justify-center gap-2 animate-pulse">

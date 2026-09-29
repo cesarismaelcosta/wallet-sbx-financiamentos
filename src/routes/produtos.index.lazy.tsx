@@ -439,7 +439,7 @@ export function ProdutosHome() {
                           para `isDesktop` é renderizada — uma única imagem por vez. Mesmo padrão
                           aplicado nas outras 6 seções de produto abaixo. */}
                       {!isDesktop && (
-                        <div className="w-24 flex-shrink-0 relative flex justify-start">
+                        <div className="w-24 shrink-0 relative flex justify-start">
                           <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
@@ -454,7 +454,7 @@ export function ProdutosHome() {
                       )}
 
                       <div className="space-y-2 flex-1 text-left">
-                        <div className="inline-flex items-center space-x-2 bg-[#2246A7] px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
+                        <div className="inline-flex items-center space-x-2 fill-gradient px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
                           <span>Conta sbXPAY</span>
                         </div>
                         <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100 leading-[1.15]">
@@ -470,7 +470,7 @@ export function ProdutosHome() {
 
                     <div className="border-t border-neutral-200 dark:border-neutral-800 pt-5 space-y-4 text-left max-w-xl mx-auto lg:mx-0">
                       <div className="flex items-start space-x-3">
-                        <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
+                        <div className="shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
                           <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#2246A7]" strokeWidth={2} />
                         </div>
                         <div>
@@ -485,7 +485,7 @@ export function ProdutosHome() {
                       </div>
 
                       <div className="flex items-start space-x-3">
-                        <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
+                        <div className="shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
                           <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#2246A7]" strokeWidth={2} />
                         </div>
                         <div>
@@ -576,7 +576,7 @@ export function ProdutosHome() {
                   <div className="w-full lg:w-6/12 space-y-5">
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
-                        <div className="w-24 flex-shrink-0 relative flex justify-start">
+                        <div className="w-24 shrink-0 relative flex justify-start">
                           <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
@@ -590,7 +590,7 @@ export function ProdutosHome() {
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-[#2246A7] px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
+                        <div className="inline-flex items-center space-x-2 fill-gradient px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
                           <span>Até R$ 120 mil</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight leading-snug">
@@ -674,7 +674,7 @@ export function ProdutosHome() {
                   <div className="w-full lg:w-6/12 space-y-5">
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
-                        <div className="w-24 flex-shrink-0 relative flex justify-start">
+                        <div className="w-24 shrink-0 relative flex justify-start">
                           <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
@@ -688,7 +688,7 @@ export function ProdutosHome() {
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-[#2246A7] px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
+                        <div className="inline-flex items-center space-x-2 fill-gradient px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
                           <span>EM ATÉ 60x</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight leading-snug">
@@ -774,7 +774,7 @@ export function ProdutosHome() {
                   <div className="w-full lg:w-6/12 space-y-5">
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
-                        <div className="w-24 flex-shrink-0 relative flex justify-start">
+                        <div className="w-24 shrink-0 relative flex justify-start">
                           <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
@@ -788,7 +788,7 @@ export function ProdutosHome() {
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-[#2246A7] px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
+                        <div className="inline-flex items-center space-x-2 fill-gradient px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
                           <span>EM ATÉ 240 MESES</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight leading-snug">
@@ -846,7 +846,7 @@ export function ProdutosHome() {
                   <div className="w-full lg:w-6/12 space-y-5">
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
-                        <div className="w-24 flex-shrink-0 relative flex justify-start">
+                        <div className="w-24 shrink-0 relative flex justify-start">
                           <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
@@ -860,7 +860,7 @@ export function ProdutosHome() {
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-[#2246A7] px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
+                        <div className="inline-flex items-center space-x-2 fill-gradient px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
                           <span>TAXAS DIFERENCIADAS</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight leading-snug">
@@ -920,7 +920,7 @@ export function ProdutosHome() {
                   <div className="w-full lg:w-6/12 space-y-5">
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
-                        <div className="w-24 flex-shrink-0 relative flex justify-start">
+                        <div className="w-24 shrink-0 relative flex justify-start">
                           <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
@@ -934,7 +934,7 @@ export function ProdutosHome() {
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-[#2246A7] px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
+                        <div className="inline-flex items-center space-x-2 fill-gradient px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
                           <span>Lojistas AutoArremate</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight leading-snug">
@@ -991,7 +991,7 @@ export function ProdutosHome() {
                   <div className="w-full lg:w-6/12 space-y-5">
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
-                        <div className="w-24 flex-shrink-0 relative flex justify-start">
+                        <div className="w-24 shrink-0 relative flex justify-start">
                           <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
@@ -1005,7 +1005,7 @@ export function ProdutosHome() {
                         </div>
                       )}
                       <div className="space-y-2 flex-1">
-                        <div className="inline-flex items-center space-x-2 bg-[#2246A7] px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
+                        <div className="inline-flex items-center space-x-2 fill-gradient px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
                           <span>9 SEGURADORAS</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight leading-snug">
@@ -1071,15 +1071,13 @@ export function ProdutosHome() {
       {/* Rodapé Institucional Preto Grupo (#1D1D1B) */}
       <footer className="w-full py-10 mt-auto bg-[#1D1D1B] border-t border-neutral-800 text-white rounded-none">
         <div className="container mx-auto px-6 flex flex-col items-center gap-4 text-center">
-          <div className="h-16 w-16 md:h-20 md:w-20 rounded-none bg-[#1D1D1B] overflow-hidden flex items-center justify-center">
-            <img
-              src="/assets/home/sbx-etrade-mark-dark-D2r_Tkea.png"
-              alt="SBX e-trade"
-              loading="lazy"
-              decoding="async"
-              className="h-full w-full object-contain"
-            />
-          </div>
+          <img
+            src="/assets/home/sbx-e-trade-white.png"
+            alt="SBX e-trade"
+            loading="lazy"
+            decoding="async"
+            className="h-16 w-16 md:h-20 md:w-20 object-contain"
+          />
           <div className="flex flex-col gap-1 max-w-xl text-[11px] font-mono text-neutral-400">
             <p className="font-medium text-white">&copy; 2026 sbXPAY. Todos os direitos reservados.</p>
             <p className="leading-relaxed">

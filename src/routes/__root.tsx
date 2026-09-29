@@ -97,6 +97,18 @@ function RootComponent() {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
+        {/* 🎨 [ANTI-FLASH DE TEMA]: aplica a classe `dark`/`light` no <html> ANTES
+            do primeiro paint. Sem isso, o HTML vindo do SSR chega sem classe de
+            tema e o ThemeProvider só a aplica num useEffect (depois da
+            hidratação) -- em toda carga completa de página (ex: vindo da
+            Superbid, ou redirect do orquestrador) a tela piscava clara, com os
+            skeletons em modo claro, mesmo com `sbx-theme = dark` salvo. Mesma
+            chave e mesmas regras do ThemeProvider (default: light). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('sbx-theme')||'light';if(t==='system'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var r=document.documentElement;r.classList.remove('light','dark');r.classList.add(t);r.style.colorScheme=t}catch(e){}})();`,
+          }}
+        />
         <HeadContent />
       </head>
       <body>
