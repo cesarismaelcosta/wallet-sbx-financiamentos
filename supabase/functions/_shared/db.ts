@@ -32,17 +32,72 @@
  * -- com sequence. Inofensivo nas tabelas que usam UUID em vez de serial.
  * GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO db_edge_worker;
  *
- * -- 3. Guarda a connection string como secret da function (nunca em .env
- * --    versionado). Note o usuário no formato `db_edge_worker.<project-ref>`
- * --    — o Supavisor exige esse sufixo pra rotear a conexão corretamente,
- * --    já que o pooler é compartilhado entre vários projetos da mesma
- * --    região (aqui: us-west-1).
- * supabase secrets set DB_POOLER_URL="postgresql://db_edge_worker.ldzutiojmcawhwdhojlo:<senha-gerada-aleatoriamente>@aws-0-us-west-1.pooler.supabase.com:6543/postgres" --project-ref ldzutiojmcawhwdhojlo
+ * -- USAGE no schema public -- OBRIGATÓRIO. Sem ele o Postgres não enxerga as
+ * -- tabelas pelo nome e responde `relation "visits" does not exist` (e não
+ * -- "permission denied"), mesmo com os GRANTs de tabela acima. Foi o que
+ * -- aconteceu em homologação em 29/09/2026. Só dá visibilidade do schema --
+ * -- não libera nenhuma tabela além das listadas no GRANT acima.
+ * GRANT USAGE ON SCHEMA public TO db_edge_worker;
  *
- * -- Se um dia precisar rotacionar a senha deste role (ex: exposição
- * -- acidental), troque com `ALTER ROLE db_edge_worker WITH PASSWORD
- * -- '<nova-senha>';` e atualize o secret da function (passo 3) com o
- * -- mesmo valor novo — os dois lados precisam ficar sincronizados.
+ * -- 3. Guarda a connection string como secret das functions (DB_POOLER_URL).
+ * --    Formato (SEMPRE Transaction pooler, porta 6543, usuário com sufixo do
+ * --    projeto -- o Supavisor é compartilhado entre projetos da mesma região e
+ * --    usa esse sufixo pra rotear a conexão):
+ * --
+ * --      postgresql://db_edge_worker.<project-ref>:<senha>@<host-do-pooler>:6543/postgres
+ * --
+ * --    EXEMPLO (projeto de DEV -- ref ldzutiojmcawhwdhojlo, região us-west-1):
+ * --
+ * --      postgresql://db_edge_worker.ldzutiojmcawhwdhojlo:<senha>@aws-0-us-west-1.pooler.supabase.com:6543/postgres
+ * --
+ * --    ⚠️ O host e o ref do exemplo SÓ valem para dev. Cada ambiente (dev,
+ * --    homologação, produção) é um projeto diferente, com ref próprio e,
+ * --    possivelmente, outra região -- logo, outro host. Copiar o exemplo de
+ * --    dev para outro ambiente é o mesmo erro que já aconteceu com a URL dos
+ * --    crons (homologação chamando o projeto de dev). Sempre pegue host e ref
+ * --    no painel do PRÓPRIO projeto (passo 3.1).
+ * --
+ * -- 3.1 Pelo painel web (sem CLI), no projeto do ambiente que está configurando:
+ * --    a) Botão Connect (topo) -> "Connect to your project" -> Direct
+ * --       ("Connection string") -> Connection Method: Transaction pooler.
+ * --    b) Copie a connection string. Ela vem com o usuário
+ * --       `postgres.<project-ref>` -- TROQUE por `db_edge_worker.<project-ref>`.
+ * --       Host e porta 6543 ficam como vieram.
+ * --    c) NÃO clique em "Reset database password" nesse painel: ele troca a
+ * --       senha do `postgres` (usada por outras integrações), não a do
+ * --       db_edge_worker. Para (re)definir a senha do db_edge_worker, no SQL
+ * --       Editor do mesmo projeto:
+ * --
+ * --         select encode(gen_random_bytes(24), 'hex') as nova_senha;
+ * --         alter role db_edge_worker with password '<nova_senha>';
+ * --
+ * --       A partir do ALTER ROLE as functions desse projeto não conectam até
+ * --       o secret ser atualizado (passo d) -- faça os dois em sequência.
+ * --    d) Edge Functions -> Manage secrets -> DB_POOLER_URL (editar, ou Add new
+ * --       secret se não existir) -> cole a string do passo b com a senha.
+ * --       Vale na próxima execução das functions, sem redeploy.
+ * --
+ * -- 3.2 Pelo CLI (equivalente ao 3.1, com --project-ref do ambiente certo):
+ * --
+ * --      supabase secrets set DB_POOLER_URL="postgresql://db_edge_worker.<project-ref>:<senha>@<host-do-pooler>:6543/postgres" --project-ref <project-ref>
+ * --
+ * -- 3.3 Conferência: faça uma chamada que use o banco (ex.: uma simulação) e,
+ * --    logo em seguida, no SQL Editor do projeto:
+ * --
+ * --      select usename, application_name, state
+ * --      from pg_stat_activity
+ * --      where usename = 'db_edge_worker';
+ * --
+ * --    Deve aparecer db_edge_worker com application_name = Supavisor. Vazio
+ * --    com tudo parado é normal (idle_timeout fecha as conexões ociosas).
+ * --
+ * --    E as permissões do passo 2 (as duas colunas têm que vir true):
+ * --
+ * --      select has_schema_privilege('db_edge_worker', 'public', 'USAGE')         as usage_schema_public,
+ * --             has_table_privilege ('db_edge_worker', 'public.visits', 'SELECT') as select_visits;
+ *
+ * -- Rotação de senha (ex: exposição acidental): passo 3.1 (c) + (d) -- os
+ * -- dois lados (ALTER ROLE e secret) precisam ficar sincronizados.
  */
 
 // 🛡️ [SBXW-31 FIX]: versão fixa (era sem versão — resolvia sempre para a

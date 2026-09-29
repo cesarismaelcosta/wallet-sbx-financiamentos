@@ -2,15 +2,16 @@
  * @fileoverview Rate Limiting via Postgres (sem infra externa)
  * @path supabase/functions/_shared/rate-limit.ts
  *
- * SETUP DE INFRAESTRUTURA (rodar uma vez no SQL Editor do projeto -- em
- * produção e em homologação, pra manter os dois ambientes em sincronia.
+ * SETUP DE INFRAESTRUTURA (rodar uma vez no SQL Editor de CADA ambiente --
+ * dev, homologação e produção -- pra manter os ambientes em sincronia.
  * Não roda automaticamente por deploy nenhum -- é responsabilidade manual):
  *
  * -- =============================================================================
  * -- Rate Limiting (Edge Functions) -- tabela + function
  * -- =============================================================================
- * -- Reaproveita o role `db_edge_worker` já existente (criado no setup do
- * -- DB_POOLER_URL) -- não cria nenhum role novo, nenhum secret novo.
+ * -- Chamado pela API REST (PostgREST) com a service_role -- ver
+ * -- [FIX 2026-09-29 v2] abaixo. NÃO usa o db_edge_worker nem o DB_POOLER_URL;
+ * -- não cria nenhum role novo, nenhum secret novo.
  * --
  * -- Design: 1 linha por par (função, IP), sobrescrita a cada janela de tempo,
  * -- não 1 linha por requisição -- o tamanho da tabela cresce com o número de
@@ -24,8 +25,8 @@
  *
  * -- RLS habilitado sem nenhuma policy: bloqueia por padrão qualquer acesso
  * -- via PostgREST (anon/authenticated), mesmo que alguém conceda grant por
- * -- engano no futuro. O db_edge_worker já tem BYPASSRLS (ver setup
- * -- original em db.ts), então não é afetado por isso.
+ * -- engano no futuro. A service_role (quem chama a RPC) tem BYPASSRLS,
+ * -- então não é afetada por isso.
  * alter table public.edge_rate_limits enable row level security;
  *
  * -- =============================================================================
@@ -93,10 +94,19 @@
  * end;
  * $$;
  *
- * -- Só o necessário para o db_edge_worker -- nunca ALL PRIVILEGES.
- * grant select, insert, update on public.edge_rate_limits to db_edge_worker;
- * grant select, insert, update on public.edge_rate_limit_blocks to db_edge_worker;
- * grant execute on function public.check_rate_limit(text, integer, integer) to db_edge_worker;
+ * -- Permissões: só a service_role, e só o necessário -- nunca ALL PRIVILEGES.
+ * -- Sem DELETE: a function não apaga nada; a limpeza roda como postgres, no
+ * -- cron abaixo. anon/authenticated ficam sem acesso nenhum (além do RLS).
+ * -- SELECT/INSERT/UPDATE são exigidos pelo INSERT ... ON CONFLICT DO UPDATE
+ * -- ... RETURNING da function.
+ * revoke all on public.edge_rate_limits       from anon, authenticated, service_role;
+ * revoke all on public.edge_rate_limit_blocks from anon, authenticated, service_role;
+ * grant select, insert, update on public.edge_rate_limits       to service_role;
+ * grant select, insert, update on public.edge_rate_limit_blocks to service_role;
+ * revoke execute on function public.check_rate_limit(text, integer, integer) from public, anon, authenticated;
+ * grant  execute on function public.check_rate_limit(text, integer, integer) to service_role;
+ * -- Os grants antigos para o db_edge_worker (da versão via pooler) não são
+ * -- mais usados e podem ser revogados.
  *
  * -- Limpeza automática: pg_cron já habilitado neste projeto (mesmo
  * -- mecanismo do job de geo do login_history, via a function log-access).
@@ -123,18 +133,17 @@
  * Cada bucket (função+IP) é 1 linha só, sobrescrita a cada janela -- o
  * crescimento da tabela é limitado ao número de pares distintos vistos, não
  * ao volume de tráfego. Limpeza das linhas antigas fica a cargo de um job
- * pg_cron diário (ver a migração SQL que criou `edge_rate_limits`), não
- * deste arquivo.
+ * pg_cron diário (ver o `cron.schedule` acima), não deste arquivo.
  *
  * O log de bloqueios (`edge_rate_limit_blocks`) roda inteiro dentro do
- * `check_rate_limit` -- não existe nenhuma chamada nova de rede/DB no lado
- * do Deno (`checkRateLimit` abaixo NÃO mudou) -- é a mesma consulta única de
- * sempre, só que a function no Postgres agora também grava quando bloqueia.
+ * `check_rate_limit` -- do lado do Deno é uma única chamada RPC por
+ * requisição; a function no Postgres é que também grava quando bloqueia.
  * Fail-open cobre esse log também: se a function inteira falhar por
  * qualquer motivo, o catch abaixo libera a requisição igual.
  *
  * [FAIL-OPEN]: se a checagem falhar por qualquer motivo (banco fora do ar,
- * timeout, DB_POOLER_URL ausente nesta function, etc.), a requisição é
+ * timeout de RATE_LIMIT_TIMEOUT_MS, SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY
+ * ausentes, falta de grant, etc.), a requisição é
  * LIBERADA -- rate limiting não deve virar um novo jeito de derrubar o app.
  *
  * @author César Ismael Pereira da Costa
