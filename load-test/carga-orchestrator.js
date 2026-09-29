@@ -26,6 +26,9 @@
  * Rodar (PowerShell, na pasta load-test):
  *   k6 run -e BASE_URL=https://<ref>.supabase.co -e ANON_KEY=<anon> -e SESSION_TOKEN=<token> carga-orchestrator.js
  *
+ * Stress (200 -> 300 -> 400 -> 500 VUs, ~12 min, aborta com >10% de erro):
+ *   .\rodar.ps1 -Stress   (precisa de 500 visitas no visitas.csv)
+ *
  * Smoke test (confere o script com 3 requisições, sem estourar o rate limit):
  *   k6 run -e SMOKE=1 -e BASE_URL=... -e ANON_KEY=... -e SESSION_TOKEN=... carga-orchestrator.js
  *
@@ -59,9 +62,25 @@ const VISITAS = new SharedArray("visitas", () =>
     }),
 );
 
+// STRESS: degraus de 200/300/400/500 VUs (2 min cada) para achar onde quebra.
+// Aborta sozinho se o erro passar de 10% por 30s -- para de martelar quando quebrou.
+const STRESS = {
+  stages: [
+    { duration: "1m", target: 200 }, { duration: "2m", target: 200 },
+    { duration: "30s", target: 300 }, { duration: "2m", target: 300 },
+    { duration: "30s", target: 400 }, { duration: "2m", target: 400 },
+    { duration: "30s", target: 500 }, { duration: "2m", target: 500 },
+    { duration: "1m", target: 0 },
+  ],
+  thresholds: {
+    http_req_failed: [{ threshold: "rate<0.10", abortOnFail: true, delayAbortEval: "30s" }],
+    http_req_duration: ["p(95)<8000"],
+  },
+};
+
 export const options = __ENV.SMOKE
   ? { vus: 1, iterations: 3 }
-  : {
+  : __ENV.STRESS ? STRESS : {
       stages: [
         { duration: "1m", target: 5 },  // aquece
         { duration: "3m", target: 20 }, // carga normal
@@ -76,8 +95,9 @@ export const options = __ENV.SMOKE
 
 export function setup() {
   if (VISITAS.length === 0) throw new Error("visitas.csv vazio.");
-  if (!__ENV.SMOKE && VISITAS.length < 50) {
-    console.warn(`Só ${VISITAS.length} visitas para até 50 VUs: algumas serão compartilhadas (disputa de trava).`);
+  const maxVus = __ENV.SMOKE ? 1 : __ENV.STRESS ? 500 : 50;
+  if (VISITAS.length < maxVus) {
+    console.warn(`Só ${VISITAS.length} visitas para até ${maxVus} VUs: algumas serão compartilhadas (disputa de trava na mesma visita).`);
   }
 }
 

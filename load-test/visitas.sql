@@ -1,10 +1,10 @@
 -- =============================================================================
--- Gera 60 visitas de TESTE para o teste de carga (SÓ DEV/HOMOL, nunca produção)
+-- Gera 500 visitas de TESTE para o teste de carga (SÓ DEV/HOMOL, nunca produção)
 -- =============================================================================
 -- Pré-requisito: fazer login UMA vez no app deste ambiente (isso cria uma
 -- visita "molde" com o seu perfil em visit_entities).
 --
--- O script copia essa visita 60 vezes (visits + visit_entities + o
+-- O script copia essa visita 500 vezes (visits + visit_entities + o
 -- visit_update mais recente), com ids novos e utm_campaign = 'k6_load_test'
 -- (é por essa marca que o limpar-visitas.sql apaga tudo depois).
 --
@@ -22,7 +22,7 @@ with molde as (
 ),
 novas as (
   select gen_random_uuid() as visit_id, gen_random_uuid() as update_id
-  from generate_series(1, 60)
+  from generate_series(1, 500)
 ),
 ins_v as (
   insert into visits

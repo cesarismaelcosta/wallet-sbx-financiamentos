@@ -1,7 +1,8 @@
 ﻿# Roda o teste do orchestrator com k6.
 #   .\rodar.ps1            -> smoke (3 requisições)
 #   .\rodar.ps1 -Carga     -> carga completa (cuidado com o rate limit)
-param([switch]$Carga)
+#   .\rodar.ps1 -Stress    -> degraus 200/300/400/500 VUs (~12 min)
+param([switch]$Carga, [switch]$Stress)
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
@@ -19,5 +20,6 @@ if (-not $env:SESSION_TOKEN -or -not $env:SESSION_TOKEN.StartsWith("eyJ")) {
   $env:SESSION_TOKEN = (Read-Host "Cole o x-session-token").Trim()
 }
 
-if ($Carga) { k6 run carga-orchestrator.js }
+if ($Stress)    { k6 run -e STRESS=1 carga-orchestrator.js }
+elseif ($Carga) { k6 run carga-orchestrator.js }
 else        { k6 run -e SMOKE=1 carga-orchestrator.js }
