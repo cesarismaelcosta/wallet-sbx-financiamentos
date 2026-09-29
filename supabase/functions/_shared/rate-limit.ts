@@ -117,10 +117,8 @@
  *   $$
  * );
  *
- * Usa a MESMA conexão do resto da function (`sql` de `_shared/db.ts`, role
- * `db_edge_worker`). [2026-09-29] Antes tinha um pool próprio (`max: 1`) por
- * instância -- a conexão extra esgotava a fila do Supavisor e travava a
- * requisição antes do handler. Ver o comentário [FIX 2026-09-29] mais abaixo.
+ * Chamada via API REST (PostgREST, `supabase.rpc`) -- a function não abre
+ * conexão ao pooler. Ver o comentário [FIX 2026-09-29 v2] mais abaixo.
  *
  * Cada bucket (função+IP) é 1 linha só, sobrescrita a cada janela -- o
  * crescimento da tabela é limitado ao número de pares distintos vistos, não
@@ -143,52 +141,82 @@
  * @author Gemini Pro
  */
 
-// [FIX 2026-09-29]: antes este arquivo abria um pool PRÓPRIO (postgres(...,
-// { max: 1 })) em cada instância da function. Somado ao pool principal de
-// db.ts (max: 5), isso esgotava a fila do Supavisor para o db_edge_worker
-// quando várias instâncias estavam vivas ao mesmo tempo -- a conexão do rate
-// limit NÃO falhava, ficava esperando vaga (77s medidos em dev), e como esta
-// checagem é o primeiro await do withSecurity, a requisição inteira travava
-// antes do handler (timeout de 90s no front). Agora reaproveita o `sql` de
-// db.ts (nenhuma conexão extra) e tem teto de tempo: se não responder em
-// RATE_LIMIT_TIMEOUT_MS, libera a requisição (mesmo fail-open de sempre).
-const RATE_LIMIT_TIMEOUT_MS = 2000;
+// [FIX 2026-09-29 v2]: a checagem agora vai pela API REST (PostgREST, via
+// `supabase.rpc`), NÃO por conexão direta ao pooler (postgres.js/Supavisor).
+//
+// Por quê (evidência nos logs de dev, function_edge_logs):
+//   - Até 27/09 20:25 UTC (deploy do rate limit via pooler), dezenas de pares
+//     de requisições simultâneas (OPTIONS+POST da financial-gateway, cron duplo
+//     do log-access) rodaram sem nenhuma trava.
+//   - A partir de 20:26 UTC, a 2ª requisição simultânea passou a ficar presa
+//     75-150s ANTES do handler: esperando conexão ao pooler, liberada só quando
+//     outra instância da mesma function morria (tempo de vida ocioso = 75s).
+//   - Funções que só usam a API REST (orchestrator-configs, sbx-offer,
+//     notification-dispatcher...) nunca travaram, nem com chamadas simultâneas.
+//
+// Pela API, a function não abre nem segura conexão nenhuma: o PostgREST tem o
+// próprio pool, sempre aberto, e empresta uma conexão por milissegundos.
+//
+// Segurança: chamada com a SERVICE_ROLE_KEY (secret do servidor, nunca vai ao
+// navegador). A function SQL roda como quem chama (não é SECURITY DEFINER) e
+// as tabelas têm RLS sem política -- `anon`/`authenticated` não gravam nelas
+// nem via RPC. Mesmo assim, a execução da function é restrita à service_role:
+//
+//   revoke execute on function public.check_rate_limit(text, integer, integer) from public, anon, authenticated;
+//   grant  execute on function public.check_rate_limit(text, integer, integer) to service_role;
+//
+// RATE_LIMIT_TIMEOUT_MS é só proteção (fail-open), não a correção.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const RATE_LIMIT_TIMEOUT_MS = 3000;
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+// Cliente HTTP (fetch) -- não mantém conexão com o banco.
+const rateLimitClient = supabaseUrl && serviceRoleKey
+  ? createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
+  : null;
 
 /**
  * @param bucketKey Chave do balde (ex: `${functionName}:${clientIp}`).
  * @param maxRequests Máximo de requisições permitidas dentro da janela.
  * @param windowSeconds Tamanho da janela, em segundos.
  * @returns `true` se a requisição pode seguir, `false` se deve ser bloqueada
- *   (429). Em qualquer falha de infraestrutura ou demora acima de
- *   RATE_LIMIT_TIMEOUT_MS, retorna `true` (fail-open).
+ *   (429). Em qualquer falha ou demora acima de RATE_LIMIT_TIMEOUT_MS,
+ *   retorna `true` (fail-open).
  */
 export async function checkRateLimit(
   bucketKey: string,
   maxRequests: number,
   windowSeconds: number,
 ): Promise<boolean> {
-  let timer: number | undefined;
+  if (!rateLimitClient) {
+    console.error("[rate-limit] SUPABASE_URL/SERVICE_ROLE_KEY ausentes -- rate limiting desativado nesta chamada.");
+    return true;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), RATE_LIMIT_TIMEOUT_MS);
+
   try {
-    // Import dinâmico: se DB_POOLER_URL faltar, db.ts lança na importação --
-    // cai no catch abaixo e libera, em vez de derrubar a function inteira.
-    const { sql } = await import("./db.ts");
+    const { data, error } = await rateLimitClient
+      .rpc("check_rate_limit", {
+        p_bucket_key: bucketKey,
+        p_max_requests: maxRequests,
+        p_window_seconds: windowSeconds,
+      })
+      .abortSignal(controller.signal);
 
-    const consulta = sql`
-      select public.check_rate_limit(${bucketKey}, ${maxRequests}, ${windowSeconds}) as allowed
-    `.then(([row]: any[]) => row?.allowed !== false);
-
-    const limite = new Promise<boolean>((resolve) => {
-      timer = setTimeout(() => {
-        console.error(`[rate-limit] Sem resposta em ${RATE_LIMIT_TIMEOUT_MS}ms -- liberando por padrão (${bucketKey}).`);
-        resolve(true);
-      }, RATE_LIMIT_TIMEOUT_MS);
-    });
-
-    return await Promise.race([consulta, limite]);
+    if (error) {
+      console.error("[rate-limit] Falha no check_rate_limit (RPC) -- liberando por padrão:", error.message);
+      return true;
+    }
+    return data !== false;
   } catch (err) {
-    console.error("[rate-limit] Falha ao consultar check_rate_limit -- liberando por padrão:", err);
+    console.error("[rate-limit] Erro/timeout no check_rate_limit (RPC) -- liberando por padrão:", err);
     return true;
   } finally {
-    if (timer !== undefined) clearTimeout(timer);
+    clearTimeout(timer);
   }
 }
