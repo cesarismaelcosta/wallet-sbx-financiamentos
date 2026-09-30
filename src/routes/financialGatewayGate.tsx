@@ -139,7 +139,7 @@ export const Route = createFileRoute("/financialGatewayGate")({
       <div className="flex min-h-screen flex-col items-center justify-center bg-white font-['Plus_Jakarta_Sans'] p-4">
         {/* Imagem de erro tratada em escala de cinza */}
         <img 
-          src="/assets/error/error.webp" 
+          src="/assets/error/error-320.webp" 
           alt="Erro" 
           className="w-34 h-34 object-contain relative saturate-[10%]" 
         />

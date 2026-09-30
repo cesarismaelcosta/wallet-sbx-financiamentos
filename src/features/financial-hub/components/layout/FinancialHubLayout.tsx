@@ -97,7 +97,7 @@ function ErrorCountdown({ fallbackUrl, message, title, onRetry }: ErrorCountdown
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-white dark:bg-black font-sans p-6 text-center text-neutral-900 dark:text-neutral-100">
       <img
-        src={nightMode ? "/assets/error/error-dark.webp" : "/assets/error/error.webp"}
+        src={nightMode ? "/assets/error/error-dark-320.webp" : "/assets/error/error-320.webp"}
         alt="Erro na simulação"
         className="w-32 h-32 object-contain mb-6 saturate-[10%]"
       />

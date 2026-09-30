@@ -212,7 +212,7 @@ export function Step1Simulation() {
         <div className="flex items-start gap-4">
           {/* Imagem totalmente solta sem nenhum box */}
           <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20 dark:bg-black">
-            <img src={nightMode ? "/assets/home/cartao-dark.webp" : "/assets/home/cartao.webp"} alt="Cartão" className="w-full h-full object-contain relative" />
+            <img src={nightMode ? "/assets/home/cartao-dark-240.webp" : "/assets/home/cartao-240.webp"} alt="Cartão" className="w-full h-full object-contain relative" />
           </div>
 
           <div className="space-y-0.5 flex-1 w-0 min-w-0">

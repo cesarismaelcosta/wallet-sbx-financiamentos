@@ -115,7 +115,7 @@ function DefaultErrorComponent({ error, reset }: ErrorComponentProps) {
           error.webp tem fundo branco, error-dark.webp tem fundo preto -- por isso
           o container acima casa a cor exata em vez de usar um neutro intermediário. */}
       <img
-        src={nightMode ? "/assets/error/error-dark.webp" : "/assets/error/error.webp"}
+        src={nightMode ? "/assets/error/error-dark-240.webp" : "/assets/error/error-240.webp"}
         alt="Erro"
         className="w-28 h-28 object-contain mb-6 saturate-[10%]"
       />

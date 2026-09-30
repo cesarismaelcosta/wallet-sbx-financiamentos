@@ -111,7 +111,7 @@ export function Step1PartnersPanel() {
         <div className="flex items-center gap-3">
           <div className="shrink-0 w-16 h-16 overflow-hidden flex items-center justify-center dark:bg-black">
             <img
-              src={nightMode ? "/assets/home/seguros-dark.webp" : "/assets/home/seguros.webp"}
+              src={nightMode ? "/assets/home/seguros-dark-240.webp" : "/assets/home/seguros-240.webp"}
               alt="Segurança"
               className="w-full h-full object-contain relative"
               onError={(e) => {

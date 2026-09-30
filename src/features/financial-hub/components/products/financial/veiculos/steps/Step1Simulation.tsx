@@ -220,7 +220,7 @@ export function Step1Simulation() {
         <div className="flex items-start gap-4">
           <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20 dark:bg-black">
             <img
-              src={nightMode ? "/assets/home/financiamentoveiculossimulacao-dark.webp" : "/assets/home/financiamentoveiculossimulacao.webp"}
+              src={nightMode ? "/assets/home/financiamentoveiculossimulacao-dark-240.webp" : "/assets/home/financiamentoveiculossimulacao-240.webp"}
               alt="Veículos"
               className="w-full h-full object-contain relative"
             />

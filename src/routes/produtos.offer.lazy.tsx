@@ -459,7 +459,7 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-white dark:bg-black p-6 text-center text-neutral-900 dark:text-neutral-100 rounded-none">
         <img
-          src={nightMode ? "/assets/error/error-dark.webp" : "/assets/error/error.webp"}
+          src={nightMode ? "/assets/error/error-dark-320.webp" : "/assets/error/error-320.webp"}
           alt="Erro"
           className="w-34 h-34 object-contain mb-6 saturate-[10%]"
         />

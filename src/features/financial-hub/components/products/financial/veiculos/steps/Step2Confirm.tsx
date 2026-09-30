@@ -98,7 +98,7 @@ export function Step2Confirm() {
               {/* Box com a Ilustração Fixa - Simetria 1:1 com o Step 1 */}
               <div className="hidden sm:flex shrink-0 items-center justify-center w-20 h-20 dark:bg-black">
                 <img
-                  src={nightMode ? "/assets/home/financiamentoveiculossimulacao-dark.webp" : "/assets/home/financiamentoveiculossimulacao.webp"}
+                  src={nightMode ? "/assets/home/financiamentoveiculossimulacao-dark-240.webp" : "/assets/home/financiamentoveiculossimulacao-240.webp"}
                   alt="Veículos"
                   className="w-full h-full object-contain relative"
                 />
@@ -223,7 +223,7 @@ export function Step2Confirm() {
             
             <div className="w-36 h-36 flex items-center justify-center dark:bg-black">
               <img
-                src={nightMode ? "/assets/home/financiamentocreditonegada-dark.webp" : "/assets/home/financiamentocreditonegada.webp"}
+                src={nightMode ? "/assets/home/financiamentocreditonegada-dark-320.webp" : "/assets/home/financiamentocreditonegada-320.webp"}
                 alt="Nenhuma oferta disponível"
                 className="w-full h-full object-contain relative"
               />

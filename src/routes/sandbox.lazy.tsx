@@ -1619,7 +1619,7 @@ function SandboxPage() {
               <Card className="rounded-none border-neutral-200 hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
-                    <img src="/assets/home/conta.webp" alt="Conta sbXPAY" className="h-full w-full object-contain relative saturate-[10%]" />
+                    <img src="/assets/home/conta-240.webp" alt="Conta sbXPAY" className="h-full w-full object-contain relative saturate-[10%]" />
                   </div>
                   <CardTitle className="text-lg text-neutral-900">Landing Wallet sbX</CardTitle>
                   <CardDescription className="text-xs text-neutral-500">
@@ -1660,7 +1660,7 @@ function SandboxPage() {
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
                     <img
-                      src="/assets/home/seguros.webp"
+                      src="/assets/home/seguros-240.webp"
                       alt="Seguros de Veículos"
                       className="h-full w-full object-contain relative saturate-[10%]"
                     />
@@ -1720,7 +1720,7 @@ function SandboxPage() {
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
                     <img
-                      src="/assets/home/carhomeequity.webp"
+                      src="/assets/home/carhomeequity-240.webp"
                       alt="Car Equity"
                       className="h-full w-full object-contain relative saturate-[10%]"
                     />

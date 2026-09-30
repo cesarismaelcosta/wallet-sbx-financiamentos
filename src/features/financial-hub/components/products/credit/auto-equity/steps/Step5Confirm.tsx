@@ -82,7 +82,7 @@ export function Step5Confirm() {
             <>
               <div className="w-36 h-36 flex items-center justify-center mb-2">
                 <img
-                  src={nightMode ? "/assets/home/carhomeequity-dark.webp" : "/assets/home/carhomeequity.webp"}
+                  src={nightMode ? "/assets/home/carhomeequity-dark-320.webp" : "/assets/home/carhomeequity-320.webp"}
                   alt="Proposta enviada"
                   className={`w-full h-auto object-contain relative ${nightMode ? "" : "mix-blend-multiply"}`}
                 />
@@ -110,7 +110,7 @@ export function Step5Confirm() {
             <>
               <div className="w-36 h-36 flex items-center justify-center mb-2">
                 <img
-                  src={nightMode ? "/assets/home/financiamentocreditonegada-dark.webp" : "/assets/home/financiamentocreditonegada.webp"}
+                  src={nightMode ? "/assets/home/financiamentocreditonegada-dark-320.webp" : "/assets/home/financiamentocreditonegada-320.webp"}
                   alt="Proposta não aprovada"
                   className={`w-full h-auto object-contain relative ${nightMode ? "" : "mix-blend-multiply"}`}
                 />
@@ -130,7 +130,7 @@ export function Step5Confirm() {
             <>
               <div className="w-36 h-36 flex items-center justify-center mb-2">
                 <img
-                  src="/assets/home/financiamentoveiculosnegada.png"
+                  src={nightMode ? "/assets/home/financiamentocreditonegada-dark-320.webp" : "/assets/home/financiamentocreditonegada-320.webp"}
                   alt="Erro na comunicação"
                   className={`w-full h-auto object-contain relative ${nightMode ? "" : "mix-blend-multiply"}`}
                 />

@@ -81,6 +81,30 @@ type DirectConfig = {
 
 type FlowConfig = ShowcaseConfig | DirectConfig;
 
+// 🖼️ [PERFORMANCE 29/09]: as imagens de produto eram os originais de ~2144x1984
+// px (100-300 KB cada, ~1,1 MB só no tema claro), exibidas em 96 px no celular e
+// ~480 px no desktop. Agora cada <img> usa a versão do tamanho certo, geradas ao
+// lado dos originais: `-240.webp` (celular, bloco !isDesktop) e `-960.webp`
+// (desktop). width/height reservam o espaço (proporção ~1,08:1) para o texto não
+// "pular" quando a imagem chega.
+//
+// revealOnLoad: a imagem nasce transparente e aparece com fade quando termina de
+// carregar (data-loaded="true" -> classe `data-[loaded=true]:opacity-100`).
+// O `ref` cobre a imagem que já veio do cache/SSR antes do React ligar o onLoad
+// (sem isso ela ficaria invisível); o onError libera também, para uma imagem
+// quebrada não sumir em silêncio.
+const revealOnLoad = {
+  onLoad: (e: React.SyntheticEvent<HTMLImageElement>) => {
+    e.currentTarget.dataset.loaded = "true";
+  },
+  onError: (e: React.SyntheticEvent<HTMLImageElement>) => {
+    e.currentTarget.dataset.loaded = "true";
+  },
+  ref: (el: HTMLImageElement | null) => {
+    if (el?.complete) el.dataset.loaded = "true";
+  },
+};
+
 const flowsConfig: Record<string, FlowConfig> = {
   cartao: { isDirect: false, route: "/produtos/offer", flowKey: "Cartão", disabled: false },
   carros: { isDirect: false, route: "/produtos/offer", flowKey: "Carros", disabled: false },
@@ -440,14 +464,28 @@ export function ProdutosHome() {
                           aplicado nas outras 6 seções de produto abaixo. */}
                       {!isDesktop && (
                         <div className="w-24 shrink-0 relative flex justify-start">
-                          <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
+                          <div className="absolute inset-0 animate-blob-float blob-shadow flex items-center justify-center">
+                            <svg
+                              viewBox="0 0 200 200"
+                              xmlns="http://www.w3.org/2000/svg"
+                              className={`w-full h-full ${nightMode ? "fill-neutral-800" : "fill-neutral-100"}`}
+                            >
+                              <path
+                                d="M43,-62.1C55.3,-53.4,64.8,-40.4,70.9,-25.6C77,-10.8,79.7,5.8,74.7,19.6C69.7,33.5,57,44.7,43.5,52.9C29.9,61.1,15,66.4,-1.3,68.2C-17.6,70,-35.1,68.3,-48.1,59.7C-61.1,51.1,-69.5,35.6,-73,19.1C-76.5,2.7,-75.1,-14.8,-67.7,-29C-60.3,-43.3,-46.8,-54.2,-32.8,-62.1C-18.8,-70,-9.4,-74.8,3.2,-79.2C15.8,-83.7,30.7,-87.8,43,-62.1Z"
+                                transform="translate(100 100)"
+                              />
+                            </svg>
+                          </div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
-                              src={nightMode ? "/assets/home/conta-dark.webp" : "/assets/home/conta.webp"}
+                              src={nightMode ? "/assets/home/conta-dark-240.webp" : "/assets/home/conta-240.webp"}
+                              width={240}
+                              height={222}
+                              {...revealOnLoad}
                               alt="Segurança sbX Wallet"
                               fetchPriority="high"
                               decoding="async"
-                              className={nightMode ? "w-full h-auto object-contain relative" : "mix-blend-multiply w-full h-auto object-contain relative"}
+                              className={nightMode ? "w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                             />
                           </div>
                         </div>
@@ -544,11 +582,14 @@ export function ProdutosHome() {
                           </svg>
                         </div>
                         <img
-                          src={nightMode ? "/assets/home/conta-dark.webp" : "/assets/home/conta.webp"}
+                          src={nightMode ? "/assets/home/conta-dark-960.webp" : "/assets/home/conta-960.webp"}
+                          width={960}
+                          height={888}
+                          {...revealOnLoad}
                           alt="Segurança sbX Wallet"
                           fetchPriority="high"
                           decoding="async"
-                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"}
+                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                         />
                       </div>
                     </div>
@@ -577,14 +618,28 @@ export function ProdutosHome() {
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
                         <div className="w-24 shrink-0 relative flex justify-start">
-                          <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
+                          <div className={`absolute inset-0 ${animacao} blob-shadow flex items-center justify-center`}>
+                            <svg
+                              viewBox="0 0 200 200"
+                              xmlns="http://www.w3.org/2000/svg"
+                              className={`w-full h-full ${nightMode ? "fill-neutral-800" : "fill-neutral-100"}`}
+                            >
+                              <path
+                                d="M54.5,-73.4C69.3,-64,79.1,-46.8,82,-28.9C84.9,-11,80.9,7.6,73.8,24.1C66.7,40.7,56.5,55.3,42.4,63.4C28.2,71.5,10.1,73,-6.9,71.2C-23.9,69.5,-39.8,64.4,-51.9,54.7C-64,45.1,-72.3,31,-75.4,15.4C-78.4,-0.2,-76.3,-17.3,-68.8,-32.1C-61.2,-46.9,-48.3,-59.4,-33.5,-68.8C-18.7,-78.2,-2.1,-84.5,14.9,-82.1C32,-79.7,46.8,-76.1,54.5,-73.4Z"
+                                transform="translate(100 100)"
+                              />
+                            </svg>
+                          </div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
-                              src={nightMode ? "/assets/home/cartao-dark.webp" : "/assets/home/cartao.webp"}
+                              src={nightMode ? "/assets/home/cartao-dark-240.webp" : "/assets/home/cartao-240.webp"}
+                              width={240}
+                              height={222}
+                              {...revealOnLoad}
                               alt="Cartão"
                               loading="lazy"
                               decoding="async"
-                              className={nightMode ? "w-full h-auto object-contain relative" : "mix-blend-multiply w-full h-auto object-contain relative"}
+                              className={nightMode ? "w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                             />
                           </div>
                         </div>
@@ -647,11 +702,14 @@ export function ProdutosHome() {
                           </svg>
                         </div>
                         <img
-                          src={nightMode ? "/assets/home/cartao-dark.webp" : "/assets/home/cartao.webp"}
+                          src={nightMode ? "/assets/home/cartao-dark-960.webp" : "/assets/home/cartao-960.webp"}
+                          width={960}
+                          height={888}
+                          {...revealOnLoad}
                           alt="Cartão"
                           loading="lazy"
                           decoding="async"
-                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"}
+                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                         />
                       </div>
                     </div>
@@ -675,14 +733,28 @@ export function ProdutosHome() {
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
                         <div className="w-24 shrink-0 relative flex justify-start">
-                          <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
+                          <div className={`absolute inset-0 ${animacao} blob-shadow flex items-center justify-center`}>
+                            <svg
+                              viewBox="0 0 200 200"
+                              xmlns="http://www.w3.org/2000/svg"
+                              className={`w-full h-full ${nightMode ? "fill-neutral-800" : "fill-neutral-100"}`}
+                            >
+                              <path
+                                d="M55.6,-68.8C70.6,-58.5,80.4,-40.4,82,-21.8C83.7,-3.3,77.3,15.7,68.4,32.7C59.5,49.7,48.2,64.7,32.9,71.5C17.6,78.3,-1.7,76.9,-19.7,71.2C-37.7,65.5,-54.3,55.5,-65.4,40.7C-76.5,25.9,-82,6.3,-79.8,-11.9C-77.5,-30,-67.4,-46.8,-52.9,-57.1C-38.3,-67.3,-19.1,-71.1,0.5,-71.7C20.1,-72.3,40.3,-69.7,55.6,-68.8Z"
+                                transform="translate(100 100)"
+                              />
+                            </svg>
+                          </div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
-                              src={nightMode ? "/assets/home/financiamentoveiculos-dark.webp" : "/assets/home/financiamentoveiculos.webp"}
+                              src={nightMode ? "/assets/home/financiamentoveiculos-dark-240.webp" : "/assets/home/financiamentoveiculos-240.webp"}
+                              width={240}
+                              height={222}
+                              {...revealOnLoad}
                               alt="Veículos"
                               loading="lazy"
                               decoding="async"
-                              className={nightMode ? "w-full h-auto object-contain relative" : "mix-blend-multiply w-full h-auto object-contain relative"}
+                              className={nightMode ? "w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                             />
                           </div>
                         </div>
@@ -747,11 +819,14 @@ export function ProdutosHome() {
                           </svg>
                         </div>
                         <img
-                          src={nightMode ? "/assets/home/financiamentoveiculos-dark.webp" : "/assets/home/financiamentoveiculos.webp"}
+                          src={nightMode ? "/assets/home/financiamentoveiculos-dark-960.webp" : "/assets/home/financiamentoveiculos-960.webp"}
+                          width={960}
+                          height={888}
+                          {...revealOnLoad}
                           alt="Veículos"
                           loading="lazy"
                           decoding="async"
-                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"}
+                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                         />
                       </div>
                     </div>
@@ -775,14 +850,28 @@ export function ProdutosHome() {
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
                         <div className="w-24 shrink-0 relative flex justify-start">
-                          <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
+                          <div className={`absolute inset-0 ${animacao} blob-shadow flex items-center justify-center`}>
+                            <svg
+                              viewBox="0 0 200 200"
+                              xmlns="http://www.w3.org/2000/svg"
+                              className={`w-full h-full ${nightMode ? "fill-neutral-800" : "fill-neutral-100"}`}
+                            >
+                              <path
+                                d="M48.2,-64.1C61.4,-53.4,70.1,-37.2,73.1,-20.1C76.1,-3,73.4,15,65,30.3C56.6,45.6,42.5,58.3,26,65.6C9.6,72.9,-9.2,74.8,-27.1,69.5C-45,64.3,-62.1,51.8,-70.6,35.1C-79.1,18.4,-79.1,-2.6,-73.2,-20.9C-67.4,-39.1,-55.8,-54.6,-40.8,-64.7C-25.8,-74.8,-7.4,-79.5,10.1,-78.9C27.6,-78.3,45.2,-72.4,48.2,-64.1Z"
+                                transform="translate(100 100)"
+                              />
+                            </svg>
+                          </div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
-                              src={nightMode ? "/assets/home/financiamentoimoveis-dark.webp" : "/assets/home/financiamentoimoveis.webp"}
+                              src={nightMode ? "/assets/home/financiamentoimoveis-dark-240.webp" : "/assets/home/financiamentoimoveis-240.webp"}
+                              width={240}
+                              height={222}
+                              {...revealOnLoad}
                               alt="Imóveis"
                               loading="lazy"
                               decoding="async"
-                              className={nightMode ? "w-full h-auto object-contain relative" : "mix-blend-multiply w-full h-auto object-contain relative"}
+                              className={nightMode ? "w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                             />
                           </div>
                         </div>
@@ -819,11 +908,14 @@ export function ProdutosHome() {
                           </svg>
                         </div>
                         <img
-                          src={nightMode ? "/assets/home/financiamentoimoveis-dark.webp" : "/assets/home/financiamentoimoveis.webp"}
+                          src={nightMode ? "/assets/home/financiamentoimoveis-dark-960.webp" : "/assets/home/financiamentoimoveis-960.webp"}
+                          width={960}
+                          height={888}
+                          {...revealOnLoad}
                           alt="Imóveis"
                           loading="lazy"
                           decoding="async"
-                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"}
+                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                         />
                       </div>
                     </div>
@@ -847,14 +939,28 @@ export function ProdutosHome() {
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
                         <div className="w-24 shrink-0 relative flex justify-start">
-                          <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
+                          <div className={`absolute inset-0 ${animacao} blob-shadow flex items-center justify-center`}>
+                            <svg
+                              viewBox="0 0 200 200"
+                              xmlns="http://www.w3.org/2000/svg"
+                              className={`w-full h-full ${nightMode ? "fill-neutral-800" : "fill-neutral-100"}`}
+                            >
+                              <path
+                                d="M42.2,-61.7C55,-54.6,65.8,-42.6,71.7,-28.4C77.5,-14.2,78.3,2.2,74.5,17.4C70.7,32.6,62.3,46.5,49.9,55.9C37.5,65.3,21.1,70.2,4.4,70.9C-12.4,71.7,-29.4,68.3,-43.3,59.8C-57.2,51.3,-68,37.6,-72.7,21.9C-77.4,6.2,-76,-11.5,-68.8,-26.3C-61.6,-41.1,-48.5,-53.1,-34.4,-59.5C-20.2,-65.9,-5.1,-66.7,10.2,-66.3C25.5,-65.9,39.4,-68.8,42.2,-61.7Z"
+                                transform="translate(100 100)"
+                              />
+                            </svg>
+                          </div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
-                              src={nightMode ? "/assets/home/carhomeequity-dark.webp" : "/assets/home/carhomeequity.webp"}
+                              src={nightMode ? "/assets/home/carhomeequity-dark-240.webp" : "/assets/home/carhomeequity-240.webp"}
+                              width={240}
+                              height={222}
+                              {...revealOnLoad}
                               alt="Rentabilize Ativos"
                               loading="lazy"
                               decoding="async"
-                              className={nightMode ? "w-full h-auto object-contain relative" : "mix-blend-multiply w-full h-auto object-contain relative"}
+                              className={nightMode ? "w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                             />
                           </div>
                         </div>
@@ -893,11 +999,14 @@ export function ProdutosHome() {
                           </svg>
                         </div>
                         <img
-                          src={nightMode ? "/assets/home/carhomeequity-dark.webp" : "/assets/home/carhomeequity.webp"}
+                          src={nightMode ? "/assets/home/carhomeequity-dark-960.webp" : "/assets/home/carhomeequity-960.webp"}
+                          width={960}
+                          height={888}
+                          {...revealOnLoad}
                           alt="Rentabilize Ativos"
                           loading="lazy"
                           decoding="async"
-                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"}
+                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                         />
                       </div>
                     </div>
@@ -921,14 +1030,28 @@ export function ProdutosHome() {
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
                         <div className="w-24 shrink-0 relative flex justify-start">
-                          <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
+                          <div className={`absolute inset-0 ${animacao} blob-shadow flex items-center justify-center`}>
+                            <svg
+                              viewBox="0 0 200 200"
+                              xmlns="http://www.w3.org/2000/svg"
+                              className={`w-full h-full ${nightMode ? "fill-neutral-800" : "fill-neutral-100"}`}
+                            >
+                              <path
+                                d="M49.2,-65.8C62.7,-56.3,71.9,-39.9,75.1,-22.4C78.4,-4.9,75.7,13.7,68,30C60.3,46.3,47.5,60.2,31.7,68.4C15.8,76.6,-3.2,79.1,-21.8,75C-40.4,71,-58.6,60.3,-69.5,44.7C-80.4,29.1,-84,8.5,-80.7,-10.1C-77.4,-28.7,-67.2,-45.3,-52.9,-55.1C-38.6,-64.9,-20.2,-67.9,-1.2,-66.5C17.8,-65.1,35.6,-75.3,49.2,-65.8Z"
+                                transform="translate(100 100)"
+                              />
+                            </svg>
+                          </div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
-                              src="/assets/home/floorplan.webp"
+                              src="/assets/home/floorplan-240.webp"
+                              width={240}
+                              height={222}
+                              {...revealOnLoad}
                               alt="Floor Plan"
                               loading="lazy"
                               decoding="async"
-                              className={nightMode ? "w-full h-auto object-contain relative" : "mix-blend-multiply w-full h-auto object-contain relative"}
+                              className={nightMode ? "w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                             />
                           </div>
                         </div>
@@ -964,11 +1087,14 @@ export function ProdutosHome() {
                           </svg>
                         </div>
                         <img
-                          src="/assets/home/floorplan.webp"
+                          src="/assets/home/floorplan-960.webp"
+                          width={960}
+                          height={888}
+                          {...revealOnLoad}
                           alt="Floor Plan"
                           loading="lazy"
                           decoding="async"
-                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"}
+                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                         />
                       </div>
                     </div>
@@ -992,14 +1118,28 @@ export function ProdutosHome() {
                     <div className="flex flex-row items-center gap-4 -ml-2 sm:block sm:ml-0">
                       {!isDesktop && (
                         <div className="w-24 shrink-0 relative flex justify-start">
-                          <div className={`absolute inset-0 ${nightMode ? "bg-neutral-800" : "bg-neutral-100"} rounded-none filter blur-xs transform scale-90`}></div>
+                          <div className={`absolute inset-0 ${animacao} blob-shadow flex items-center justify-center`}>
+                            <svg
+                              viewBox="0 0 200 200"
+                              xmlns="http://www.w3.org/2000/svg"
+                              className={`w-full h-full ${nightMode ? "fill-neutral-800" : "fill-neutral-100"}`}
+                            >
+                              <path
+                                d="M41,-57C53.7,-49,64.9,-37.1,70.9,-22.4C76.9,-7.7,77.7,9.8,72.9,25.1C68.1,40.4,57.7,53.4,44.1,62C30.5,70.7,13.7,74.9,-1.9,77.5C-17.5,80.1,-35.1,81.1,-48.5,73.1C-61.9,65.1,-71.2,48.1,-75.4,30.3C-79.6,12.5,-78.7,-6.1,-72.6,-21.8C-66.5,-37.5,-55.2,-50.2,-41.2,-57.8C-27.2,-65.4,-10.6,-67.9,3,-72C16.6,-76.1,28.3,-65,41,-57Z"
+                                transform="translate(100 100)"
+                              />
+                            </svg>
+                          </div>
                           <div className="relative w-full p-0 flex items-center justify-center z-0">
                             <img
-                              src={nightMode ? "/assets/home/seguros-dark.webp" : "/assets/home/seguros.webp"}
+                              src={nightMode ? "/assets/home/seguros-dark-240.webp" : "/assets/home/seguros-240.webp"}
+                              width={240}
+                              height={222}
+                              {...revealOnLoad}
                               alt="Proteção sbX"
                               loading="lazy"
                               decoding="async"
-                              className={nightMode ? "w-full h-auto object-contain relative" : "mix-blend-multiply w-full h-auto object-contain relative"}
+                              className={nightMode ? "w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-full h-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                             />
                           </div>
                         </div>
@@ -1050,11 +1190,14 @@ export function ProdutosHome() {
                           </svg>
                         </div>
                         <img
-                          src={nightMode ? "/assets/home/seguros-dark.webp" : "/assets/home/seguros.webp"}
+                          src={nightMode ? "/assets/home/seguros-dark-960.webp" : "/assets/home/seguros-960.webp"}
+                          width={960}
+                          height={888}
+                          {...revealOnLoad}
                           alt="Proteção sbX"
                           loading="lazy"
                           decoding="async"
-                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative"}
+                          className={nightMode ? "w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100" : "mix-blend-multiply w-[90%] h-auto mx-auto object-contain relative opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"}
                         />
                       </div>
                     </div>
