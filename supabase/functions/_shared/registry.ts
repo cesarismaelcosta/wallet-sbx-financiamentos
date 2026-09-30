@@ -444,7 +444,10 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
     },
   },
   'sbx-offer-query': {
-    rateLimit: { maxRequests: 10, windowSeconds: 60 }, // 🛡️ [RATE LIMIT] 10 req/min por IP -- ver _shared/rate-limit.ts
+    // [F29]: 30 req/min por IP -- consulta pura de catálogo (sem efeito colateral);
+    // 10/min era apertado para navegação rápida (filtro/ordenação/paginação) e
+    // para vários usuários atrás do mesmo IP (NAT corporativo).
+    rateLimit: { maxRequests: 30, windowSeconds: 60 }, // 🛡️ [RATE LIMIT] 30 req/min por IP -- ver _shared/rate-limit.ts
     methods: ['GET'],
     requiredHeaders: ['x-original-url', 'x-session-token', 'x-auth-fallback-url'],
     // [v2.0.0 — MIGRADA, grupo 2]: sessão agora validada centralmente pelo

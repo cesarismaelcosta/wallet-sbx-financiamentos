@@ -28,6 +28,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { generateSessionToken, generateExchangeToken, hashUserAgent } from "../_shared/jwt.ts";
+import { getEdgeClientIp, signedClientIpHeaders } from "../_shared/client-ip.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
 import { getSafeRedirectUrl, getSafeCorsOrigin } from "../_shared/security.ts";
@@ -179,7 +180,9 @@ serve(
         headers: { Authorization: `Bearer ${sbx_access_token}` },
       });
 
-      if (userCheckRes.status === 401) {
+      // [F18]: a Superbid responde 403 (não só 401) para token inválido/expirado
+      // no /me -- ambos significam sessão de origem inválida, não falha técnica.
+      if (userCheckRes.status === 401 || userCheckRes.status === 403) {
         throw new Error("SESSION_EXPIRED: O token bruto da Superbid fornecido é inválido ou expirou na origem.");
       }
       if (!userCheckRes.ok) {
@@ -291,7 +294,8 @@ serve(
       debugLog("Iniciando Orquestração de Rota (Exclusive SBX Gateway)...");
       const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(return_uri)}`;
 
-      const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0] || req.headers.get("x-real-ip") || "0.0.0.0";
+      // [F7/F22/F40]: mesma ordem de headers de borda do infrastructure.ts (cf-connecting-ip primeiro)
+      const clientIp = getEdgeClientIp(req);
       const clientUa = req.headers.get("user-agent") || "";
 
       const orchestratorResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/orchestrator`, {
@@ -303,7 +307,8 @@ serve(
           "x-original-url": return_uri,
           "x-auth-fallback-url": loginFallbackUrl,
           "user-agent": clientUa,
-          "x-client-ip": clientIp.trim(),
+          // IP do usuário assinado — o orchestrator só confia nele com assinatura válida
+          ...(await signedClientIpHeaders(clientIp)),
         },
         body: JSON.stringify(rehydratedPayload),
       });

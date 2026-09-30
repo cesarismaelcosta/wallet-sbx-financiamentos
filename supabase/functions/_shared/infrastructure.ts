@@ -16,6 +16,7 @@
  */
 
 import type { OriginDetails } from "./types.ts";
+import { verifySignedClientIp } from "./client-ip.ts";
 
 // Timeout do fallback de geo (ip-api.com): teto de segurança para não travar a function
 // inteira se o serviço externo ficar indisponível — mas alto o bastante pra confiarmos que
@@ -57,7 +58,10 @@ export function parseUserAgent(ua: string) {
  * indica se ainda falta rodar `resolveGeoFallback` (a CDN não mandou geo e o
  * IP não é local) para completar country/state/city depois.
  */
-export function captureInfrastructureSync(req: Request): OriginDetails & { geoPending: boolean } {
+export function captureInfrastructureSync(
+  req: Request,
+  trustedClientIp: string | null = null,
+): OriginDetails & { geoPending: boolean } {
   const ua = req.headers.get("user-agent") || "";
 
   /**
@@ -72,7 +76,11 @@ export function captureInfrastructureSync(req: Request): OriginDetails & { geoPe
    * que não passam pela borda pública de novo) — aqui ele só é aceito depois
    * dos headers de borda confiáveis terem sido checados e ausentes.
    */
-  const rawIp = req.headers.get("cf-connecting-ip") ||
+  // [F7/F22/F40]: em chamada interna assinada (gate/sbx-auth → orchestrator),
+  // o IP real do usuário vem verificado em `trustedClientIp` e tem prioridade —
+  // os headers de borda aqui seriam do servidor da própria function.
+  const rawIp = trustedClientIp ||
+                req.headers.get("cf-connecting-ip") ||
                 req.headers.get("x-forwarded-for")?.split(",")[0] ||
                 req.headers.get("x-client-ip") ||
                 req.headers.get("x-real-ip") ||
@@ -185,7 +193,8 @@ export async function resolveGeoFallback(
  * agora é só `captureInfrastructureSync` + `resolveGeoFallback` quando falta.
  */
 export async function captureInfrastructure(req: Request): Promise<OriginDetails> {
-  const { geoPending, ...fast } = captureInfrastructureSync(req);
+  const trustedClientIp = await verifySignedClientIp(req);
+  const { geoPending, ...fast } = captureInfrastructureSync(req, trustedClientIp);
 
   if (!geoPending) {
     return fast as OriginDetails;

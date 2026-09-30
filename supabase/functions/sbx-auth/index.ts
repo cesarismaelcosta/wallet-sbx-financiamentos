@@ -22,6 +22,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { generateSessionToken } from "../_shared/jwt.ts";
+import { getEdgeClientIp, signedClientIpHeaders } from "../_shared/client-ip.ts";
 import { HOME_ROUTE, SIGNIN_ROUTE } from "../_shared/app-routes.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
@@ -68,7 +69,8 @@ const SUPERBID_ERROR_MAP: Record<
 
 serve(
   withSecurity("sbx-auth", async (req: Request) => {
-    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0] || "0.0.0.0";
+    // [F7/F22/F40]: mesma ordem de headers de borda do infrastructure.ts (cf-connecting-ip primeiro)
+    const clientIp = getEdgeClientIp(req);
     const userAgent = req.headers.get("user-agent") || ""; 
 
     try {
@@ -273,7 +275,8 @@ serve(
             "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
             "x-session-token": tokenData.session_token, 
             "x-original-url": safeOriginUrl,
-            "x-client-ip": clientIp,
+            // IP do usuário assinado — o orchestrator só confia nele com assinatura válida
+            ...(await signedClientIpHeaders(clientIp)),
             "user-agent": userAgent
           },
           body: JSON.stringify(orchestratorPayload)
