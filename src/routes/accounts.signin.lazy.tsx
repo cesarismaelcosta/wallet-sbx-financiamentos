@@ -131,6 +131,7 @@ export function CustomLogin() {
     env?: "staging" | "production";
     handoff_error?: "not_found" | "invalid" | "network" | "expired";
     handoff_token?: string;
+    reason?: "session_expired";
   };
 
   // =========================================================================
@@ -175,11 +176,15 @@ export function CustomLogin() {
 
   // Hidratação de erros decorrentes de rejeição no Handoff Guard
   useEffect(() => {
+    // [F26]: redirecionado pelo SessionGuard porque a sessão expirou.
+    if (mounted && !search.handoff_error && search.reason === "session_expired") {
+      setGeneralError("Sua sessão expirou. Entre novamente para continuar de onde parou.");
+    }
     if (mounted && search.handoff_error) {
       console.warn(`[UX Login] Handoff rejeitado pelo Guard. Motivo: ${search.handoff_error}`);
       setGeneralError(HANDOFF_ERROR_MSGS[search.handoff_error] || "Sessão expirada. Faça login para continuar.");
     }
-  }, [mounted, search.handoff_error]);
+  }, [mounted, search.handoff_error, search.reason]);
 
   // =========================================================================
   // [ORQUESTRADOR DE SUBMISSÃO E AUTENTICAÇÃO]

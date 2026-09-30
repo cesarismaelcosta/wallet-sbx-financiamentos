@@ -483,18 +483,22 @@ function respondWithError(
     );
   }
 
+  // [F17/F20]: a URL de erro leva só o necessário para a tela. A mensagem
+  // técnica e o payload original (entity_id, utm_*, etc.) NÃO vão na query
+  // string (histórico do navegador, logs de CDN, Referer) -- ficam nos logs
+  // da function. A tela traduz `code` em mensagem amigável.
+  console.error(`[financial-gateway-gate] Erro de jornada ${code}: ${message}`);
+
   const urlParams = new URLSearchParams({
     status: "error",
     code: code,
-    message: message,
     return_uri: safeReturnUri,
   });
 
-  if (originalPayload && typeof originalPayload === "object") {
-    for (const [key, value] of Object.entries(originalPayload)) {
-      if (key !== "auth_token" && value !== undefined && value !== null && !urlParams.has(key)) {
-        urlParams.set(key, String(value));
-      }
+  for (const key of ["offer_id", "product_id"]) {
+    const value = originalPayload?.[key];
+    if (value !== undefined && value !== null && value !== "") {
+      urlParams.set(key, String(value));
     }
   }
 

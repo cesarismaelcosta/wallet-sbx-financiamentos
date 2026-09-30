@@ -41,6 +41,8 @@ export interface SigninSearch {
   env?: SbxEnvironment;
   handoff_error?: HandoffError;
   handoff_token?: string;
+  /** [F26]: motivo do redirecionamento ao login (ex.: sessão expirada). */
+  reason?: "session_expired";
 }
 
 // =========================================================================
@@ -80,6 +82,7 @@ export const Route = createFileRoute("/accounts/signin")({
       env,
       handoff_error,
       handoff_token: sanitizeToken(search.handoff_token),
+      reason: search.reason === "session_expired" ? "session_expired" : undefined,
     };
   },
 });

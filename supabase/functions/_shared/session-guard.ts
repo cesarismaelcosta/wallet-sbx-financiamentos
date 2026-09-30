@@ -174,12 +174,13 @@ export async function resolveSessionPerimeter(
       });
 
       const cleanAuthPath = authPath.split("?")[0] || SIGNIN_ROUTE;
-      fallbackUrl = `${cleanAuthPath}?handoff_token=${handoffToken}`;
+      // [F26]: `reason=session_expired` faz a tela de login avisar o usuário.
+      fallbackUrl = `${cleanAuthPath}?handoff_token=${handoffToken}&reason=session_expired`;
 
       debugLog("[SessionGuard] Handoff Token emitido com sucesso.");
     } catch (jwtErr) {
       debugLog("[SessionGuard] Erro ao assinar Handoff Token. Roteando limpo.", jwtErr);
-      fallbackUrl = authPath.split("?")[0] || SIGNIN_ROUTE;
+      fallbackUrl = `${authPath.split("?")[0] || SIGNIN_ROUTE}?reason=session_expired`;
     }
 
     return {

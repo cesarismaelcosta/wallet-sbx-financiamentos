@@ -64,6 +64,17 @@ function sanitizeReturnUri(uri: unknown): string | undefined {
   }
 }
 
+// [F17]: dicionário código → mensagem exibida ao usuário.
+const DEFAULT_ERROR_MESSAGE = "Não foi possível carregar a simulação desta oferta. Tente novamente em instantes.";
+const FRIENDLY_ERROR_MESSAGES: Record<string, string> = {
+  SESSION_EXPIRED: "Sua sessão na Superbid expirou. Faça login novamente para continuar.",
+  OFFER_NOT_FOUND: "Esta oferta não está mais disponível para simulação.",
+  ORCHESTRATOR_FAIL_OFFER: "Esta oferta não está mais disponível para simulação.",
+  SBX_LOADER_FAIL_OFFER: "Não conseguimos carregar os dados desta oferta. Tente novamente em instantes.",
+  SBX_LOADER_FAIL_USER: "Não conseguimos confirmar seus dados na Superbid. Tente novamente em instantes.",
+  ORCHESTRATOR_FAIL_VALIDATION: "Esta oferta não pode ser simulada por aqui.",
+};
+
 export const Route = createFileRoute("/financialGatewayGate")({
   validateSearch: (search: Record<string, unknown>): SearchSchema => ({
     status: search.status as string | undefined,
@@ -90,7 +101,8 @@ export const Route = createFileRoute("/financialGatewayGate")({
         logSystemError({
           context: "Gateway Redirect (financialGatewayGate)",
           subject: `Erro de Jornada: ${code || "UNKNOWN"}`,
-          message: message || "Falha não especificada.",
+          // [F20]: detalhe técnico fica nos logs do gate; a URL traz só o código.
+          message: message || `Erro de jornada no gate (código ${code || "UNKNOWN"}). Detalhes nos logs da function financial-gateway-gate.`,
           raw_payload: {
             error_code: code || null,
             entity_id: entity_id || null,
@@ -122,15 +134,11 @@ export const Route = createFileRoute("/financialGatewayGate")({
     }, [countdown, targetReturnUrl]);
 
     // =====================================================================
-    // [TRATAMENTO DE MENSAGEM]: Higienização textual para exibição amigável
+    // [TRATAMENTO DE MENSAGEM]: [F17] mensagem amigável derivada do CÓDIGO.
+    // Nunca exibimos o texto técnico (`message`) -- ele pode ser um código cru
+    // como "OFFER_NOT_AVAILABLE" vindo do orchestrator.
     // =====================================================================
-    const rawMessage =
-      code === "SESSION_EXPIRED"
-        ? "Sua sessão na Superbid expirou. Faça login novamente para continuar."
-        : message || "Não foi possível carregar a simulação desta oferta.";
-    const cleanMessage = rawMessage.includes(":")
-      ? rawMessage.substring(rawMessage.indexOf(":") + 1).trim()
-      : rawMessage;
+    const cleanMessage = FRIENDLY_ERROR_MESSAGES[code || ""] || DEFAULT_ERROR_MESSAGE;
 
     // =====================================================================
     // [RENDERIZAÇÃO DE INTERFACE]: UI Padrão de Falha e Recuperação (Neutral Purity)
