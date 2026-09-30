@@ -449,12 +449,13 @@ function respondWithError(
 
   if (isAjax) {
     headers.set("Content-Type", "application/json");
+    // [F20]: devolve só campos não sensíveis do payload original (lista
+    // permitida) -- nunca entity_id, auth_token ou outros dados do chamador.
     const extraData: Record<string, any> = {};
-    if (originalPayload && typeof originalPayload === "object") {
-      for (const [key, value] of Object.entries(originalPayload)) {
-        if (key !== "auth_token" && value !== undefined && value !== null) {
-          extraData[key] = value;
-        }
+    for (const key of ["offer_id", "product_id", "return_uri"]) {
+      const value = originalPayload?.[key];
+      if (value !== undefined && value !== null && value !== "") {
+        extraData[key] = value;
       }
     }
     return new Response(

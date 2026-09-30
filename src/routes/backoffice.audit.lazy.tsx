@@ -32,17 +32,22 @@
  *
  *   WITH paginated_audit AS (
  *     SELECT lh.id, lh.email, lh.event, lh.success, lh.failure_reason, lh.ip_address, lh.country, lh.state, lh.city, lh.user_agent, lh.device_type, lh.operating_system, lh.origin_details, lh.created_at, lh.origin_page, lh.origin_function
- *     FROM login_history lh WHERE (p_date_from IS NULL OR lh.created_at >= p_date_from) AND (p_date_to IS NULL OR lh.created_at <= p_date_to) AND (p_status = 'all' OR (p_status = 'success' AND lh.success = true) OR (p_status = 'fail' AND lh.success = false)) AND (p_event = 'all' OR lh.event = p_event) AND (p_search IS NULL OR p_search = '' OR lh.email ILIKE '%' || p_search || '%' OR lh.ip_address ILIKE '%' || p_search || '%') ORDER BY lh.created_at DESC LIMIT p_limit OFFSET p_offset
+ *     FROM login_history lh WHERE (p_date_from IS NULL OR lh.created_at >= p_date_from) AND (p_date_to IS NULL OR lh.created_at <= p_date_to) AND (p_status = 'all' OR (p_status = 'success' AND lh.success = true) OR (p_status = 'fail' AND lh.success = false)) AND (p_event = 'all' OR lh.event = p_event) AND (p_search IS NULL OR p_search = '' OR lh.email ILIKE '%' || p_search || '%' OR lh.ip_address ILIKE '%' || p_search || '%' OR (length(regexp_replace(p_search, '\D', '', 'g')) IN (11, 14) AND EXISTS (SELECT 1 FROM login_history_details lhd WHERE lhd.login_history_id = lh.id AND lhd.subject_document_hash = public.document_sha256(p_search)))) ORDER BY lh.created_at DESC LIMIT p_limit OFFSET p_offset
  *   )
- *   SELECT jsonb_agg(jsonb_build_object('id', pa.id, 'email', pa.email, 'event', pa.event, 'success', pa.success, 'failure_reason', pa.failure_reason, 'ip_address', pa.ip_address, 'country', pa.country, 'state', pa.state, 'city', pa.city, 'user_agent', pa.user_agent, 'device_type', pa.device_type, 'operating_system', pa.operating_system, 'origin_details', pa.origin_details, 'created_at', pa.created_at, 'origin_page', pa.origin_page, 'origin_function', pa.origin_function)) INTO v_result FROM paginated_audit pa;
+ *   SELECT jsonb_agg(jsonb_build_object('id', pa.id, 'email', pa.email, 'event', pa.event, 'success', pa.success, 'failure_reason', pa.failure_reason, 'ip_address', pa.ip_address, 'country', pa.country, 'state', pa.state, 'city', pa.city, 'user_agent', pa.user_agent, 'device_type', pa.device_type, 'operating_system', pa.operating_system, 'origin_details', pa.origin_details, 'created_at', pa.created_at, 'origin_page', pa.origin_page, 'origin_function', pa.origin_function, 'details', (SELECT jsonb_agg(jsonb_build_object('id', lhd.id, 'record_type', lhd.record_type, 'record_id', lhd.record_id, 'created_at', lhd.created_at, 'ip_address', lhd.ip_address) ORDER BY lhd.created_at) FROM login_history_details lhd WHERE lhd.login_history_id = pa.id))) INTO v_result FROM paginated_audit pa;
  *   RETURN COALESCE(v_result, '[]'::jsonb);
  * END;
+ *
+ * [LGPD] RPC get_backoffice_access_summary(p_detail_id uuid) — migração 20260930190300.
+ *   Só admin. Lê login_history_details (record_type/record_id) e devolve o resumo MASCARADO
+ *   do registro acessado (mask_document/mask_phone/mask_email), usado pelo AccessDetailPanel.
+ *   Tabela login_history_details: migração 20260930190000 (FK login_history_id, RLS admin).
  * $$;
  * ============================================================================
  */
 
 import { createLazyFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Loader2, RefreshCw, Search, ChevronDown, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import { DateRange } from "react-day-picker";
 
@@ -54,13 +59,17 @@ import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui
 import { Calendar } from "@/components/ui/calendar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
+import { PanelEntity } from "@/features/financial-hub/components/shared/renderes/PanelEntity";
+import { PanelOffer } from "@/features/financial-hub/components/shared/renderes/PanelOffer";
+import { PanelSeller } from "@/features/financial-hub/components/shared/renderes/PanelSeller";
+import { PanelSimulation } from "@/features/financial-hub/components/shared/renderes/PanelSimulation";
 
 export const Route = createLazyFileRoute("/backoffice/audit")({ component: AuditoriaPage });
 
 type LoginRow = {
   id: string;
   email: string;
-  event: "login" | "logout" | "failed_attempt" | "blocked" | "refresh";
+  event: "login" | "logout" | "failed_attempt" | "blocked" | "refresh" | "page_view" | "pii_view";
   success: boolean;
   failure_reason: string | null;
   ip_address: string | null;
@@ -74,11 +83,18 @@ type LoginRow = {
   origin_function: string | null;
   origin_details: { occurred_at?: string | null; source?: string | null; } | null;
   created_at: string;
+  /** [LGPD]: presente nos eventos `pii_view` (login_history_details). */
+  /**
+   * [LGPD]: simulações/consultas abertas a partir desta linha (login_history_details).
+   * Preenchido na linha "Página visitada" de /backoffice/simulations e /backoffice/consults.
+   */
+  details?: { id: string; record_type: "simulation" | "consult"; record_id: string; created_at: string; ip_address: string | null }[] | null;
 };
 
 const EVENT_LABEL: Record<LoginRow["event"], string> = {
   login: "Login", logout: "Logout", failed_attempt: "Falha na autenticação",
   blocked: "Acesso bloqueado", refresh: "Atualização de Sessão",
+  page_view: "Página visitada", pii_view: "Acesso a dados pessoais",
 };
 
 const PERIOD_OPTIONS = [
@@ -102,6 +118,8 @@ const EVENT_OPTIONS = [
   { id: "failed_attempt", label: "Falha na autenticação" },
   { id: "blocked", label: "Acesso bloqueado" },
   { id: "refresh", label: "Atualização de Sessão" },
+  { id: "page_view", label: "Página visitada" },
+  { id: "pii_view", label: "Acesso a dados pessoais" },
 ];
 
 function formatDateTime(iso: string) {
@@ -155,6 +173,7 @@ function AuditoriaPage() {
   const [period, setPeriod] = useState<string>("7");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [accessRow, setAccessRow] = useState<LoginRow | null>(null);
 
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -427,13 +446,26 @@ function AuditoriaPage() {
                 filtered.map((r) => {
                   const dt = formatDateTime(getEventDateTime(r));
                   return (
-                    <tr key={r.id} className="border-b border-border hover:bg-muted transition-colors">
+                    <tr
+                      key={r.id}
+                      onClick={r.details?.length ? () => setAccessRow(r) : undefined}
+                      title={r.details?.length ? "Ver dados pessoais acessados a partir desta entrada" : undefined}
+                      className={`border-b border-border hover:bg-muted transition-colors ${r.details?.length ? "cursor-pointer" : ""}`}
+                    >
                       <td className="px-3 py-2.5 w-[120px] text-muted-foreground">
                         <div className="font-bold text-foreground">{dt.date}</div>
                         <div>{dt.time}</div>
                       </td>
                       <td className="px-3 py-2.5 w-[200px] truncate font-medium text-foreground" title={r.email}>{r.email}</td>
-                      <td className="px-3 py-2.5 w-[140px] text-muted-foreground font-medium">{EVENT_LABEL[r.event] || r.event}</td>
+                      <td className="px-3 py-2.5 w-[140px] text-muted-foreground font-medium">
+                        {EVENT_LABEL[r.event] || r.event}
+                        {/* [LGPD]: quantos registros foram abertos a partir desta entrada no menu */}
+                        {!!r.details?.length && (
+                          <div className="text-[11px] font-bold text-foreground">
+                            {r.details.length} {r.details.length === 1 ? "registro aberto" : "registros abertos"}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 w-[120px]">
                         {r.success ? (
                           <span className="text-success font-bold">Sucesso</span>
@@ -619,6 +651,11 @@ function AuditoriaPage() {
         </SheetContent>
       </Sheet>
 
+      {/* [LGPD]: painel lateral do evento pii_view (resumo mascarado + navegação) */}
+      <AccessDetailPanel
+        row={accessRow}
+        onClose={() => setAccessRow(null)}
+      />
     </div>
   );
 }
@@ -646,6 +683,198 @@ function StatCard({ label, value, tone = "default", highlight = false }: {
       <div className={`mt-2 text-xl font-semibold tracking-tight ${toneClass} whitespace-nowrap`}>
         {formattedValue}
       </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// [LGPD] PAINEL LATERAL DE ACESSO A DADOS PESSOAIS (evento `pii_view`)
+// =========================================================================
+/**
+ * @component AccessDetailPanel
+ * @description Painel lateral aberto ao clicar numa linha "Acesso a dados pessoais".
+ * Segue o mesmo padrão dos painéis de Simulações e Consultas (Sheet lateral com
+ * cabeçalho fixo, corpo rolável com os renderers compartilhados e rodapé de ações).
+ *
+ * [FONTE DE DADOS]:
+ * 1. RPC `get_backoffice_access_summary(p_detail_id)` — resumo MASCARADO do
+ *    registro acessado (CPF/telefone/e-mail parciais). Só admin.
+ * 2. "Ver dados completos" — chama a RPC de detalhe de origem
+ *    (`get_backoffice_simulation_details` / `get_backoffice_consult_details`), que
+ *    REGISTRA esse acesso do auditor em login_history_details, ligado à entrada DELE
+ *    no menu Auditoria (último page_view /backoffice/audit) — nunca ao grupo de quem
+ *    fez a consulta original (actor_email = quem clicou). Cada registro entra uma
+ *    vez por entrada no menu: reabrir os dados completos do mesmo registro não duplica.
+ *
+ * [NAVEGAÇÃO]: Anterior/Próximo percorrem SÓ os registros abertos a partir da linha
+ * clicada (row.details) — ex.: a entrada no menu Simulações e as simulações abertas
+ * a partir dela (migração 20260930190300).
+ */
+function AccessDetailPanel({
+  row, onClose,
+}: {
+  row: LoginRow | null;
+  onClose: () => void;
+}) {
+  const [summary, setSummary] = useState<any>(null);
+  const [fullEntity, setFullEntity] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingFull, setLoadingFull] = useState(false);
+  const [panelError, setPanelError] = useState<string | null>(null);
+  const [index, setIndex] = useState(0);
+
+  // Registros abertos a partir da linha clicada; volta ao primeiro ao trocar de linha.
+  const items = row?.details || [];
+  const item = items[index] || null;
+  useEffect(() => { setIndex(0); }, [row?.id]);
+
+  // Recarrega o resumo mascarado sempre que o evento selecionado muda.
+  useEffect(() => {
+    setSummary(null);
+    setFullEntity(null);
+    setPanelError(null);
+    if (!row || !item) return;
+
+    setLoading(true);
+    supabase
+      .rpc("get_backoffice_access_summary" as any, { p_detail_id: item?.id } as any)
+      .then(({ data, error: rpcError }) => {
+        if (rpcError) setPanelError(rpcError.message);
+        else if ((data as any)?.error) setPanelError("Sem permissão para ver este registro.");
+        else setSummary(data);
+      })
+      .then(() => setLoading(false), () => setLoading(false));
+  }, [row?.id, item?.id]);
+
+  const hasPrev = index > 0;
+  const hasNext = index < items.length - 1;
+
+  const rec = summary?.record || {};
+  const isConsult = summary?.record_type === "consult";
+  // Data/IP do acesso = do registro aberto (não da entrada no menu).
+  const dt = item ? formatDateTime(item.created_at) : null;
+
+  // [LGPD]: dado completo só sob demanda — e o próprio acesso fica auditado no banco.
+  async function handleLoadFull() {
+    if (!summary) return;
+    setLoadingFull(true);
+    try {
+      if (isConsult) {
+        const { data, error: rpcError } = await supabase.rpc(
+          "get_backoffice_consult_details" as any,
+          { p_visit_update_id: summary.record_id } as any,
+        );
+        if (rpcError) throw rpcError;
+        const visit: any = ((data as any)?.visits || [])[0] || {};
+        setFullEntity((visit.visit_entities || [])[0] || null);
+      } else {
+        const { data, error: rpcError } = await supabase.rpc(
+          "get_backoffice_simulation_details",
+          { p_simulation_id: summary.record_id } as any,
+        );
+        if (rpcError) throw rpcError;
+        setFullEntity(data);
+      }
+    } catch (err: any) {
+      setPanelError(err?.message || "Falha ao carregar dados completos.");
+    } finally {
+      setLoadingFull(false);
+    }
+  }
+
+  return (
+    <Sheet open={!!row} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-xl p-0 flex flex-col rounded-none bg-card border-l border-border">
+        {row && (
+          <>
+            {/* CABEÇALHO: produto + parceiro + nome do cliente (mesmo layout de Simulações/Consultas) */}
+            <div className="p-6 border-b border-border bg-card shrink-0">
+              <SheetHeader className="space-y-1 text-left">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">
+                    {rec.product || (isConsult ? "Consulta" : "Simulação")}
+                  </span>
+                  <span className="inline-flex items-center rounded-none px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider bg-accent text-foreground">
+                    {rec.partner || "Parceiro N/A"}
+                  </span>
+                  {loading && <Loader2 className="h-3 w-3 animate-spin text-brand-accent" />}
+                </div>
+                <SheetTitle className="text-lg sm:text-xl font-bold text-foreground break-words text-left w-full">
+                  {rec.name || "—"}
+                </SheetTitle>
+              </SheetHeader>
+            </div>
+
+            {/* CORPO: bloco de auditoria + renderers compartilhados */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Bloco de auditoria: quem acessou, quando e de onde (padrão visual do PanelVisit) */}
+              <div className="rounded-none border border-border bg-card p-4 space-y-3 shadow-xs">
+                <h4 className="text-[11px] font-semibold uppercase tracking-wider text-foreground border-b border-border pb-2">
+                  Acesso a dados pessoais
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <AuditField label="Acessado por" value={row.email} />
+                  <AuditField label="Data do acesso" value={dt ? `${dt.date} às ${dt.time}` : "—"} />
+                  <AuditField label="IP" value={item?.ip_address || row.ip_address} />
+                  <AuditField
+                    label="Localização"
+                    value={[row.city, row.state, row.country].filter((v) => v && v !== "N/A").join(" / ") || "—"}
+                  />
+                  <AuditField label="Dispositivo" value={`${row.device_type || "—"} · ${row.operating_system || "—"}`} />
+                  <AuditField
+                    label="Registro"
+                    value={summary ? `${isConsult ? "Consulta" : "Simulação"} ${String(summary.record_id).slice(0, 8)} (${index + 1} de ${items.length})` : "—"}
+                  />
+                </div>
+              </div>
+
+              {panelError && <div className="text-xs font-medium text-destructive">{panelError}</div>}
+
+              {summary && (
+                <>
+                  {/* Cliente: mascarado por padrão; completo só após "Ver dados completos" */}
+                  <PanelEntity entity={fullEntity || rec} />
+                  {/* Oferta e vendedor: mesmo registro usado por Simulações/Consultas (não é dado pessoal) */}
+                  {rec.offer && <PanelOffer offer={rec.offer} />}
+                  {rec.offer && <PanelSeller offer={rec.offer} />}
+                  {!isConsult && <PanelSimulation simulation={rec} />}
+                </>
+              )}
+            </div>
+
+            {/* RODAPÉ: navegação entre acessos + dados completos (auditado) */}
+            <div className="p-4 bg-card border-t border-border flex items-center justify-between gap-3 shrink-0 shadow-xs">
+              <Button variant="outline" className="rounded-none" disabled={!hasPrev} onClick={() => setIndex((i) => i - 1)}>
+                <ChevronLeft className="h-4 w-4" /> Anterior
+              </Button>
+              {summary && !fullEntity && (
+                <Button
+                  variant="outline"
+                  className="rounded-none"
+                  onClick={handleLoadFull}
+                  disabled={loadingFull}
+                  title="Este acesso também fica registrado na auditoria"
+                >
+                  {loadingFull ? <Loader2 className="h-4 w-4 animate-spin" /> : "Ver dados completos"}
+                </Button>
+              )}
+              <Button variant="outline" className="rounded-none" disabled={!hasNext} onClick={() => setIndex((i) => i + 1)}>
+                Próximo <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/** Campo rótulo/valor em micro-tipografia (mesmo padrão dos renderers do backoffice). */
+function AuditField({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex flex-col min-w-0">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className="text-foreground font-medium mt-0.5 break-words">{value || "—"}</span>
     </div>
   );
 }

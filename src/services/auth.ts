@@ -13,7 +13,7 @@
  * abre o cofre, lê a intenção segura, e devolve a `final_redirect_url` blindada.
  */
 
-import { setSessionToken, setSessionMetadata, USE_COOKIE } from "@/services/session";
+import { setSessionToken, USE_COOKIE } from "@/services/session";
 
 export const autenticateWalletsbX = async (
   user: string, 
@@ -59,12 +59,6 @@ export const autenticateWalletsbX = async (
             setSessionToken(payload.session_token);
           }
 
-          if (payload.server_now_ms && payload.expires_at) {
-            const serverTimeMs = payload.server_now_ms;
-            const localTimeMs = Date.now();
-            const timeDelta = serverTimeMs - localTimeMs;
-            setSessionMetadata(payload.expires_at, timeDelta);
-          }
         } catch (err) {
           console.warn("[auth.ts] Falha não bloqueante ao processar metadados temporais da sessão:", err);
         }

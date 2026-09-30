@@ -55,18 +55,9 @@ export function setSessionToken(token: string) {
 // [METADATA]: GERENCIAMENTO DE TEMPO E ESTADO LOCAL (ZERO LOCALSTORAGE)
 // =========================================================================
 
-/**
- * Salva os metadados temporais necessários para o frontend fazer logoff proativo.
- * @description Dados inofensivos salvos estritamente no sessionStorage (eliminando o localStorage)
- * para informar os Guards da UI sobre a validade da sessão durante o ciclo de vida da aba.
- * @param expiresAt Timestamp absoluto de expiração da sessão no servidor.
- * @param timeDelta Diferença em milissegundos entre o servidor e o cliente (Clock Drift).
- */
-export function setSessionMetadata(expiresAt: number, timeDelta: number) {
-  if (typeof window === "undefined") return;
-  sessionStorage.setItem("session_expires_at", expiresAt.toString());
-  sessionStorage.setItem("time_delta", timeDelta.toString());
-}
+// [F27]: `setSessionMetadata`/`getTimeDelta` (logoff proativo) removidos — eram
+// código morto: o sbx-auth nunca devolveu `expires_at`/`server_now_ms` e nada
+// lia esses valores. A expiração é tratada pelo SessionGuard (401 + handoff).
 
 /**
  * Purgador universal de sessão (Usado no Logoff ou Expiração).
@@ -199,11 +190,3 @@ export const hasSbxEnvironmentPreference = (): boolean => {
   return !!sessionStorage.getItem("sbx_env_pref");
 };
 
-/**
- * Recupera o desvio de relógio (Clock Drift) armazenado de forma segura.
- * @returns {number} O delta em milissegundos.
- */
-export function getTimeDelta(): number {
-  if (typeof window === "undefined") return 0;
-  return parseInt(sessionStorage.getItem("time_delta") || "0", 10);
-}

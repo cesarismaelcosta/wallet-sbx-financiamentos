@@ -51,7 +51,8 @@
  *   IF v_role IN ('admin', 'manager') THEN v_allowed_partners := '["*"]'::jsonb; v_allowed_products := '["*"]'::jsonb; END IF;
  * 
  *   SELECT jsonb_agg(jsonb_build_object(
- *       'id', s.id, 'financed_amount', s.financed_amount, 'document', s.document, 'created_at', s.created_at,
+ *     -- [LGPD] mig. 20260930190100: 'document' = document_fingerprint (md5 dos dígitos), só para contar CPFs únicos.
+ *       'id', s.id, 'financed_amount', s.financed_amount, 'document', public.document_fingerprint(s.document), 'created_at', s.created_at,
  *       'partner_id', s.partner_id, 'product_id', s.product_id,
  *       'status_types', CASE WHEN stt.id IS NOT NULL THEN jsonb_build_object('name', stt.name) ELSE NULL END,
  *       'partners', CASE WHEN p.id IS NOT NULL THEN jsonb_build_object('name', p.name) ELSE NULL END,
@@ -85,7 +86,7 @@
  * 
  *   SELECT jsonb_agg(jsonb_build_object(
  *       'id', v.id, 'action', v.action, 'utm_source', v.utm_source, 'created_at', v.created_at, 'ip_address', v.ip_address,
- *       'visit_entities', (SELECT jsonb_agg(jsonb_build_object('document', ve.document)) FROM visit_entities ve WHERE ve.visit_id = v.id),
+ *       'visit_entities', (SELECT jsonb_agg(jsonb_build_object('document', public.document_fingerprint(ve.document))) FROM visit_entities ve WHERE ve.visit_id = v.id),
  *       'visit_updates', (
  *         SELECT jsonb_agg(jsonb_build_object('id', vu.id, 'partner_id', vu.partner_id, 'product_id', vu.product_id, 'action', vu.action))
  *         FROM visit_updates vu
@@ -546,7 +547,8 @@ function DashboardPage() {
       visRows
         .map((v) => {
           const entity = Array.isArray(v.visit_entities) ? v.visit_entities[0] : v.visit_entities;
-          return entity?.document ? String(entity.document).replace(/\D/g, "") : null;
+          // [LGPD]: `document` já chega como impressão digital (md5 dos dígitos) -- usar como está.
+          return entity?.document ? String(entity.document) : null;
         })
         .filter(Boolean),
     );

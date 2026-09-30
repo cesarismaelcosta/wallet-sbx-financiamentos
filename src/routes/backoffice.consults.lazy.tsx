@@ -56,7 +56,13 @@
  * (paginated_results só contém visitas dentro do allowed_partners/
  * allowed_products do usuário) — elimina essa última leitura direta na tela.
  * CREATE FUNCTION get_backoffice_consults(
- *   ...
+ *   p_limit, p_offset, p_date_from, p_date_to, p_partner_ids, p_product_ids,
+ *   p_search text DEFAULT NULL  -- [LGPD] mig. 20260930190100: busca nome/CPF no banco (lista vem mascarada)
+ * ) ...
+ *   -- WHERE (além dos filtros de data/parceiro/produto/escopo):
+ *   --   AND (p_search IS NULL OR btrim(p_search) = '' OR EXISTS (SELECT 1 FROM visit_entities ves
+ *   --        WHERE ves.visit_id = v.id AND (ves.name ILIKE '%' || btrim(p_search) || '%'
+ *   --        OR regexp_replace(ves.document, '\D', '', 'g') LIKE '%' || regexp_replace(p_search, '\D', '', 'g') || '%')))
  *   WITH paginated_results AS (
  *     ...
  *   )
@@ -66,7 +72,7 @@
  *       'utm_source', pr.utm_source, 'state', pr.state,
  *       'partners', CASE WHEN pr.p_id IS NOT NULL THEN jsonb_build_object('name', pr.p_name, 'logo_url', pr.p_logo_url) ELSE NULL END,
  *       'product_types', CASE WHEN pr.pt_id IS NOT NULL THEN jsonb_build_object('name', pr.pt_name) ELSE NULL END,
- *       'visit_entities', (SELECT jsonb_agg(jsonb_build_object('name', ve.name, 'document', ve.document, 'phone', ve.phone, 'email', ve.email)) FROM visit_entities ve WHERE ve.visit_id = pr.v_id),
+ *       'visit_entities', (SELECT jsonb_agg(jsonb_build_object('name', ve.name, 'document', public.mask_document(ve.document), 'phone', public.mask_phone(ve.phone), 'email', public.mask_email(ve.email))) FROM visit_entities ve WHERE ve.visit_id = pr.v_id),
  *       'visit_offers', (
  *          SELECT jsonb_agg(jsonb_build_object(
  *            'visit_update_id', vo.visit_update_id, 'offer_id', vo.offer_id, 'offer_description', vo.offer_description,
@@ -146,6 +152,14 @@
  *     -- [FIX]: registro tem que estar dentro do escopo do usuário logado.
  *     AND (v_allowed_partners IS NULL OR v_allowed_partners ? '*' OR v_allowed_partners ? vu.partner_id::TEXT)
  *     AND (v_allowed_products IS NULL OR v_allowed_products ? '*' OR v_allowed_products ? vu.product_id::TEXT);
+ *   -- [LGPD] (migração 20260930190200): registra quem abriu o detalhe.
+ *   --   log_pii_view (mig. 20260930190300) grava 1 linha em login_history_details por registro aberto
+ *   --   (uma vez por registro em cada entrada no menu; reabrir no mesmo grupo não duplica)
+ *   --   (quem, registro, hash do CPF, IP, UA), ligada à última página visitada pelo usuário
+ *   --   (linha 'page_view' do menu onde ele está). Não cria linha nova em login_history.
+ *   IF v_result IS NOT NULL THEN
+ *     PERFORM public.log_pii_view('consult', p_visit_update_id);
+ *   END IF;
  *   RETURN v_result;
  * END;
  * $$;
@@ -370,6 +384,8 @@ function ConsultsPage() {
       // [ENTERPRISE ZERO-TRUST]: Consulta de Listagem via RPC do PostgreSQL
       // =========================================================================
       const { data: rpcData, error: rpcError } = await supabase.rpc("get_backoffice_consults", {
+        // [LGPD]: a lista traz o CPF mascarado -- a busca por nome/CPF é feita no banco.
+        p_search: search.trim() !== "" ? search.trim() : null,
         p_limit: PAGE_SIZE + 1,
         p_offset: offset,
         p_date_from,
@@ -439,18 +455,8 @@ function ConsultsPage() {
         };
       });
 
-      if (search.trim() !== "") {
-        const rawSearch = search.toLowerCase().trim();
-        const rawDocSearch = search.replace(/\D/g, "");
-        const localFiltered = normalized.filter((r: any) => {
-          const clientName = r.visit_entities?.name ?? "";
-          const rowDoc = r.visit_entities?.document?.replace(/\D/g, "") || "";
-          return clientName.toLowerCase().includes(rawSearch) || (rawDocSearch !== "" && rowDoc.includes(rawDocSearch));
-        });
-        setRows(localFiltered);
-      } else {
-        setRows(normalized);
-      }
+      // [LGPD]: o filtro de busca agora é aplicado no banco (p_search).
+      setRows(normalized);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(msg || "Falha ao carregar listagem.");

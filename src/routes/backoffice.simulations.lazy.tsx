@@ -80,7 +80,7 @@
  *     LIMIT p_limit OFFSET p_offset 
  *   ) 
  *   SELECT jsonb_agg(jsonb_build_object(
- *     'id', ps.id, 'created_at', ps.created_at, 'updated_at', ps.updated_at, 'name', ps.name, 'document', ps.document, 'phone', ps.phone, 'email', ps.email, 'financed_amount', ps.financed_amount, 'installment_value', ps.installment_value, 'installments', ps.installments, 'down_payment_percentage', ps.down_payment_percentage, 'partner_id', ps.partner_id, 'product_id', ps.product_id, 'status_id', ps.status_id, 'stage_id', ps.stage_id, 
+ *     'id', ps.id, 'created_at', ps.created_at, 'updated_at', ps.updated_at, 'name', ps.name, 'document', public.mask_document(ps.document), 'phone', public.mask_phone(ps.phone), 'email', public.mask_email(ps.email), 'financed_amount', ps.financed_amount, 'installment_value', ps.installment_value, 'installments', ps.installments, 'down_payment_percentage', ps.down_payment_percentage, 'partner_id', ps.partner_id, 'product_id', ps.product_id, 'status_id', ps.status_id, 'stage_id', ps.stage_id, 
  *     'partners', CASE WHEN ps.p_id IS NOT NULL THEN jsonb_build_object('id', ps.p_id, 'name', ps.p_name, 'logo_url', ps.p_logo_url) ELSE NULL END, 
  *     'product_types', CASE WHEN ps.pt_id IS NOT NULL THEN jsonb_build_object('id', ps.pt_id, 'name', ps.pt_name) ELSE NULL END, 
  *     'stage_types', CASE WHEN ps.st_id IS NOT NULL THEN jsonb_build_object('id', ps.st_id, 'name', ps.st_name) ELSE NULL END, 
@@ -150,6 +150,15 @@
  *     -- [FIX]: registro tem que estar dentro do escopo do usuário logado.
  *     AND (v_allowed_partners IS NULL OR v_allowed_partners ? '*' OR v_allowed_partners ? s.partner_id::TEXT)
  *     AND (v_allowed_products IS NULL OR v_allowed_products ? '*' OR v_allowed_products ? s.product_id::TEXT);
+ *
+ *   -- [LGPD] (migração 20260930190200): registra quem abriu o detalhe.
+ *   --   log_pii_view (mig. 20260930190300) grava 1 linha em login_history_details por registro aberto
+ *   --   (uma vez por registro em cada entrada no menu; reabrir no mesmo grupo não duplica)
+ *   --   (quem, registro, hash do CPF, IP, UA), ligada à última página visitada pelo usuário
+ *   --   (linha 'page_view' do menu onde ele está). Não cria linha nova em login_history.
+ *   IF v_result IS NOT NULL THEN
+ *     PERFORM public.log_pii_view('simulation', p_simulation_id);
+ *   END IF;
  *
  *   RETURN v_result;
  * END;
