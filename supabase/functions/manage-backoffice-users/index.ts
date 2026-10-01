@@ -104,7 +104,8 @@ async function ensureAdmin(authHeader: string | null) {
   }
   
   debugLog("DEBUG [ensureAdmin]: Administrador validado com sucesso.");
-  return { ok: true as const };
+  // [AUDITORIA]: e-mail do admin vai em `updated_by` -> trigger grava backoffice_user_details.
+  return { ok: true as const, email: user.email.toLowerCase() };
 }
 
 serve(withSecurity('manage-backoffice-users', async (req: Request) => {
@@ -150,6 +151,7 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
           name: payload.name, 
           role: payload.role, 
           is_active: true,
+          updated_by: adminCheck.email,
           // ATUALIZADO: Salva as permissões já na criação
           allowed_partners: payload.allowed_partners || ["*"],
           allowed_products: payload.allowed_products || ["*"]
@@ -171,7 +173,7 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
 
       const { data, error } = await adminClient
         .from("backoffice_users")
-        .update({ is_active: payload.is_active })
+        .update({ is_active: payload.is_active, updated_by: adminCheck.email })
         .eq("id", payload.id)
         .select().single();
         
@@ -200,7 +202,7 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
       }
       
       // ATUALIZADO: Prepara o objeto de atualização com a Role
-      const updateData: any = { role: payload.role };
+      const updateData: any = { role: payload.role, updated_by: adminCheck.email };
       
       // Se houver instruções de limpar JSONB (Admin/Manager), acopla no update
       if (payload.allowed_partners) updateData.allowed_partners = payload.allowed_partners;
@@ -222,7 +224,8 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
         .from("backoffice_users")
         .update({ 
           allowed_partners: payload.allowed_partners,
-          allowed_products: payload.allowed_products
+          allowed_products: payload.allowed_products,
+          updated_by: adminCheck.email,
         })
         .eq("id", payload.id)
         .select().single();
