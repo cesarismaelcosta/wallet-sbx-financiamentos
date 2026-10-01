@@ -776,20 +776,20 @@ function UsuariosPage() {
                     <td className="px-3 py-2.5 text-right whitespace-nowrap">
                       {isAdmin && (
                         <div className="flex items-center justify-end gap-1">
-                          {/* [AUDITORIA]: botão Histórico aparece ao passar o mouse na linha (padrão de Rotas) */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setHistoryUser(u)}
-                            className="rounded-none hover:bg-accent text-foreground font-medium text-xs h-8 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-                          >
-                            <GradientIcon icon={History} size={12} className="mr-1" /> Histórico
-                          </Button>
                           {u.role === "viewer" && (
                             <Button variant="ghost" size="sm" onClick={() => openEditPermissions(u)} className="rounded-none hover:bg-accent text-foreground font-medium text-xs h-8">
                               <GradientIcon icon={Settings2} size={12} className="mr-1" /> Permissões
                             </Button>
                           )}
+                          {/* [AUDITORIA]: botão Histórico sempre visível, colado ao Ativar/Desativar (mesma posição em todas as linhas) */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setHistoryUser(u)}
+                            className="rounded-none hover:bg-accent text-foreground font-medium text-xs h-8"
+                          >
+                            <GradientIcon icon={History} size={12} className="mr-1" /> Histórico
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => toggleActive(u)} disabled={isMe} className="rounded-none hover:bg-accent text-foreground font-medium text-xs h-8">
                             {u.is_active ? (
                               <><UserX className="mr-1 h-3 w-3 text-destructive" /> Desativar</>
@@ -825,7 +825,7 @@ function UsuariosPage() {
 /**
  * @component UserHistoryPanel
  * @description Painel lateral aberto pelo botão "Histórico" da linha do usuário (só admin;
- * o botão aparece ao passar o mouse, e fica sempre visível no celular).
+ * o botão fica sempre visível, entre Permissões e Ativar/Desativar).
  * Mesmo padrão do painel da Auditoria: Sheet lateral (tela cheia no celular),
  * tokens bg-card/text-foreground/border-border (modo claro e escuro).
  *
@@ -841,7 +841,7 @@ const ACTION_LABEL: Record<string, string> = {
   ROLE_CHANGE: "Cargo alterado",
   PERMISSIONS_CHANGE: "Permissões alteradas",
 };
-const ROLE_LABEL: Record<string, string> = { admin: "Administrador", manager: "Gestor", viewer: "Visualizador" };
+const ROLE_LABEL: Record<string, string> = { admin: "Administrador", manager: "Gerente", viewer: "Visualizador" };
 
 function UserHistoryPanel({
   user, partners, products, onClose,
