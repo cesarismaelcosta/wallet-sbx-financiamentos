@@ -25,8 +25,8 @@
  *    resposta JSON padronizada sem vazamento de stack trace.
  * 6. Rate Limiting (PASSO 4.5, abaixo): limite de requisições por (função, IP),
  *    opcional e declarado por rota no `registry.ts`, verificado via Postgres
- *    (`_shared/rate-limit.ts`). Fail-open -- se a checagem falhar, a
- *    requisição passa. Rodar ANTES da blindagem de perímetro (PASSO 5) é
+ *    (`_shared/rate-limit.ts`). Fail-closed -- se a checagem falhar, a
+ *    requisição é recusada com 503. Rodar ANTES da blindagem de perímetro (PASSO 5) é
  *    proposital: cobre até força-bruta contra rotas de autenticação (ex:
  *    `sbx-auth`), não só tráfego já autenticado.
  *
@@ -220,7 +220,7 @@ export const withSecurity = (
     // -----------------------------------------------------------------------
     // Roda ANTES da blindagem de perímetro (PASSO 5) de propósito: cobre até
     // tentativas de força-bruta contra rotas de autenticação (ex: sbx-auth),
-    // não só tráfego já autenticado. Fail-open -- ver _shared/rate-limit.ts.
+    // não só tráfego já autenticado. Fail-closed (503) -- ver _shared/rate-limit.ts.
     //
     // O balde é por (função, IP) -- em rotas M2M (`log-access`,
     // `notification-dispatcher`, `notification-gateway`,
@@ -247,6 +247,18 @@ export const withSecurity = (
         config.rateLimit.maxRequests,
         config.rateLimit.windowSeconds,
       );
+
+      // [FAIL-CLOSED]: checagem indisponível (banco fora/lento) -> recusa com 503.
+      if (allowed === null) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            code: "SERVICE_UNAVAILABLE",
+            message: "Serviço indisponível no momento. Tente novamente em alguns instantes.",
+          }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
 
       if (!allowed) {
         return new Response(

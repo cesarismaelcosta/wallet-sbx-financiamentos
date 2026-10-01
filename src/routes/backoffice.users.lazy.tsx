@@ -76,7 +76,7 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { 
   Loader2, Plus, RefreshCw, ShieldCheck, UserCheck, 
-  UserX, Info, Filter, ChevronDown, Settings2 
+  UserX, Info, Filter, ChevronDown, Settings2, History 
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -748,18 +748,12 @@ function UsuariosPage() {
               {users.map((u) => {
                 const isMe = backofficeUser?.email?.toLowerCase() === u.email.toLowerCase();
                 return (
-                  <tr
-                    key={u.id}
-                    onClick={isAdmin ? () => setHistoryUser(u) : undefined}
-                    title={isAdmin ? "Ver histórico do usuário" : undefined}
-                    className={`border-b border-border hover:bg-muted transition-colors ${isAdmin ? "cursor-pointer" : ""}`}
-                  >
+                  <tr key={u.id} className="border-b border-border hover:bg-muted transition-colors group">
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <div className="font-medium text-foreground">{u.name}</div>
                       <div className="text-[11px] text-muted-foreground">{u.email}</div>
                     </td>
-                    {/* stopPropagation: trocar o cargo não abre o histórico */}
-                    <td className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 py-2.5 whitespace-nowrap">
                       <Select value={u.role} onValueChange={(v: Role) => changeRole(u, v)} disabled={!isAdmin || isMe}>
                         <SelectTrigger className={`h-7 w-36 text-[10px] uppercase tracking-wider rounded-none border-none focus:ring-0 shadow-none ${ROLE_BADGE[u.role]}`}>
                           <SelectValue />
@@ -779,9 +773,18 @@ function UsuariosPage() {
                         {u.is_active ? "Ativo" : "Inativo"}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
                       {isAdmin && (
                         <div className="flex items-center justify-end gap-1">
+                          {/* [AUDITORIA]: botão Histórico aparece ao passar o mouse na linha (padrão de Rotas) */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setHistoryUser(u)}
+                            className="rounded-none hover:bg-accent text-foreground font-medium text-xs h-8 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                          >
+                            <GradientIcon icon={History} size={12} className="mr-1" /> Histórico
+                          </Button>
                           {u.role === "viewer" && (
                             <Button variant="ghost" size="sm" onClick={() => openEditPermissions(u)} className="rounded-none hover:bg-accent text-foreground font-medium text-xs h-8">
                               <GradientIcon icon={Settings2} size={12} className="mr-1" /> Permissões
@@ -821,7 +824,8 @@ function UsuariosPage() {
 // =========================================================================
 /**
  * @component UserHistoryPanel
- * @description Painel lateral aberto ao clicar na linha de um usuário (só admin).
+ * @description Painel lateral aberto pelo botão "Histórico" da linha do usuário (só admin;
+ * o botão aparece ao passar o mouse, e fica sempre visível no celular).
  * Mesmo padrão do painel da Auditoria: Sheet lateral (tela cheia no celular),
  * tokens bg-card/text-foreground/border-border (modo claro e escuro).
  *

@@ -163,9 +163,9 @@
  * - `rateLimit`: limite de requisições por IP dentro de uma janela (ex:
  *   `{ maxRequests: 10, windowSeconds: 60 }`), verificado centralmente pelo
  *   wrapper via Postgres (ver `_shared/rate-limit.ts`). Opcional — ausência
- *   significa sem limite (comportamento anterior, inalterado). Fail-open:
- *   se a checagem em si falhar (banco fora do ar, timeout), a requisição
- *   passa — rate limiting não deve virar um novo jeito de derrubar o app.
+ *   significa sem limite (comportamento anterior, inalterado). Fail-closed:
+ *   se a checagem em si falhar (banco fora do ar, timeout), a requisição é
+ *   recusada com 503 — ela também dependeria do banco.
  *
  *   O balde é por (função, IP) — isso funciona bem quando quem chama é o
  *   navegador de um usuário final, já que cada pessoa tem seu próprio IP.
@@ -255,7 +255,7 @@ export type FunctionConfig = {
    * Limite de requisições por IP, aplicado centralmente pelo wrapper
    * (`_shared/server.ts`) via Postgres (`_shared/rate-limit.ts`). Opcional --
    * uma rota sem esse campo não tem rate limiting (comportamento anterior,
-   * inalterado). Fail-open: se a checagem em si falhar, a requisição passa.
+   * inalterado). Fail-closed: se a checagem em si falhar, a requisição é recusada (503).
    *
    * O balde é por (função, IP) -- para rotas chamadas M2M (pg_cron,
    * function-to-function sem propagar IP, ou um parceiro externo cujo

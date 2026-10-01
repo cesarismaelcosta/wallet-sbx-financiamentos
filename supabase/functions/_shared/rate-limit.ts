@@ -138,13 +138,15 @@
  * O log de bloqueios (`edge_rate_limit_blocks`) roda inteiro dentro do
  * `check_rate_limit` -- do lado do Deno é uma única chamada RPC por
  * requisição; a function no Postgres é que também grava quando bloqueia.
- * Fail-open cobre esse log também: se a function inteira falhar por
- * qualquer motivo, o catch abaixo libera a requisição igual.
+ * Se a function inteira falhar por qualquer motivo, a checagem é tratada
+ * como indisponível (ver [FAIL-CLOSED] abaixo).
  *
- * [FAIL-OPEN]: se a checagem falhar por qualquer motivo (banco fora do ar,
- * timeout de RATE_LIMIT_TIMEOUT_MS, SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY
- * ausentes, falta de grant, etc.), a requisição é
- * LIBERADA -- rate limiting não deve virar um novo jeito de derrubar o app.
+ * [FAIL-CLOSED - 2026-10-01]: se a checagem falhar por qualquer motivo (banco
+ * fora do ar, timeout de RATE_LIMIT_TIMEOUT_MS, SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY
+ * ausentes, falta de grant, etc.), retorna `null` e o wrapper (`server.ts`)
+ * RECUSA a requisição com 503. Antes era fail-open (liberava tudo); mudou porque
+ * a própria requisição também depende do banco -- liberar não ganhava
+ * disponibilidade e tirava a proteção justamente na instabilidade.
  *
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
@@ -174,10 +176,10 @@
 //   revoke execute on function public.check_rate_limit(text, integer, integer) from public, anon, authenticated;
 //   grant  execute on function public.check_rate_limit(text, integer, integer) to service_role;
 //
-// RATE_LIMIT_TIMEOUT_MS é só proteção (fail-open), não a correção.
+// RATE_LIMIT_TIMEOUT_MS: quanto esperamos o banco antes de considerar a checagem indisponível (503).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const RATE_LIMIT_TIMEOUT_MS = 3000;
+const RATE_LIMIT_TIMEOUT_MS = 10000;
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -192,17 +194,17 @@ const rateLimitClient = supabaseUrl && serviceRoleKey
  * @param maxRequests Máximo de requisições permitidas dentro da janela.
  * @param windowSeconds Tamanho da janela, em segundos.
  * @returns `true` se a requisição pode seguir, `false` se deve ser bloqueada
- *   (429). Em qualquer falha ou demora acima de RATE_LIMIT_TIMEOUT_MS,
- *   retorna `true` (fail-open).
+ *   (429), `null` se a checagem não pôde ser feita (falha ou demora acima de
+ *   RATE_LIMIT_TIMEOUT_MS) -- o wrapper responde 503 (fail-closed).
  */
 export async function checkRateLimit(
   bucketKey: string,
   maxRequests: number,
   windowSeconds: number,
-): Promise<boolean> {
+): Promise<boolean | null> {
   if (!rateLimitClient) {
-    console.error("[rate-limit] SUPABASE_URL/SERVICE_ROLE_KEY ausentes -- rate limiting desativado nesta chamada.");
-    return true;
+    console.error("[rate-limit] SUPABASE_URL/SERVICE_ROLE_KEY ausentes -- checagem indisponível (503).");
+    return null;
   }
 
   const controller = new AbortController();
@@ -218,13 +220,13 @@ export async function checkRateLimit(
       .abortSignal(controller.signal);
 
     if (error) {
-      console.error("[rate-limit] Falha no check_rate_limit (RPC) -- liberando por padrão:", error.message);
-      return true;
+      console.error("[rate-limit] Falha no check_rate_limit (RPC) -- recusando (503):", error.message);
+      return null;
     }
     return data !== false;
   } catch (err) {
-    console.error("[rate-limit] Erro/timeout no check_rate_limit (RPC) -- liberando por padrão:", err);
-    return true;
+    console.error("[rate-limit] Erro/timeout no check_rate_limit (RPC) -- recusando (503):", err);
+    return null;
   } finally {
     clearTimeout(timer);
   }
