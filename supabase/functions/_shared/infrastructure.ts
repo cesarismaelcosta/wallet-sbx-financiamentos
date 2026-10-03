@@ -70,11 +70,10 @@ export function captureInfrastructureSync(
    * borda Cloudflare e não pode ser falsificado pelo cliente. A ordem antiga
    * priorizava `x-client-ip` (header comum, sem autenticação alguma) — em uma
    * requisição direta de um cliente externo, qualquer um podia forjar esse
-   * header. `x-client-ip` continua no fallback porque é assim que o próprio
-   * `financial-gateway-gate` propaga o IP real do cliente em chamadas
-   * internas server-to-server (onde `cf-connecting-ip` não está presente, já
-   * que não passam pela borda pública de novo) — aqui ele só é aceito depois
-   * dos headers de borda confiáveis terem sido checados e ausentes.
+   * header. [2026-10-01]: o `x-client-ip` SEM assinatura saiu de vez da lista
+   * (era forjável). O IP real do usuário em chamadas internas (gate/sbx-auth →
+   * orchestrator) chega só pelo IP ASSINADO (`trustedClientIp`, ver
+   * `client-ip.ts`). Mesma regra do limite de requisições em `server.ts`.
    */
   // [F7/F22/F40]: em chamada interna assinada (gate/sbx-auth → orchestrator),
   // o IP real do usuário vem verificado em `trustedClientIp` e tem prioridade —
@@ -82,7 +81,6 @@ export function captureInfrastructureSync(
   const rawIp = trustedClientIp ||
                 req.headers.get("cf-connecting-ip") ||
                 req.headers.get("x-forwarded-for")?.split(",")[0] ||
-                req.headers.get("x-client-ip") ||
                 req.headers.get("x-real-ip") ||
                 "0.0.0.0";
 

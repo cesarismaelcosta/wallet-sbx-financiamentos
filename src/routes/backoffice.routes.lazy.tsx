@@ -16,6 +16,93 @@
  *   e expunham os dicionários. Tudo foi envelopado na RPC `get_backoffice_orchestrator_data`.
  * - (ESCRITA): Inserções e Atualizações (Upserts) são roteadas para a RPC 
  *   `save_backoffice_orchestrator_config`, blindando as regras de parsing.
+ *
+ * [EXIBIÇÃO NA HOME] (aba Geral > "Exibição na Home"):
+ * - home_key: botão da home (chave do flowsConfig em produtos.index.lazy.tsx).
+ * - home_status: visible | coming_soon (Em breve, desabilitado) | hidden.
+ * - home_order: ordem do botão. Migração: 20261003120000_orchestrator_configs_home_fields.sql
+ *
+ * ---------------------------------------------------------------------------
+ * SQL DAS RPCs (referência — manter sincronizado com o banco)
+ * ---------------------------------------------------------------------------
+ *
+ * CREATE OR REPLACE FUNCTION public.get_backoffice_orchestrator_data()
+ *  RETURNS jsonb
+ *  LANGUAGE plpgsql
+ *  SECURITY DEFINER
+ *  SET search_path TO 'public', 'pg_temp'
+ * AS $function$
+ * DECLARE
+ *   v_result JSONB;
+ *   v_actor RECORD;
+ * BEGIN
+ *   SELECT * INTO v_actor FROM public.current_backoffice_actor();
+ *   IF v_actor.role IS NULL OR v_actor.role != 'admin' THEN
+ *       RETURN jsonb_build_object('error', 'forbidden');
+ *   END IF;
+ *
+ *   -- configs: row_to_json devolve todas as colunas (inclui home_key, home_status, home_order)
+ *   SELECT jsonb_build_object(
+ *     'configs', (SELECT COALESCE(jsonb_agg(row_to_json(oc)), '[]'::jsonb) FROM (SELECT * FROM orchestrator_configs ORDER BY id ASC) oc),
+ *     'products', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', pt.id, 'name', pt.name)), '[]'::jsonb) FROM product_types pt),
+ *     'categories', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', ct.id, 'name', ct.name)), '[]'::jsonb) FROM category_types ct),
+ *     'partners', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name, 'logo_url', p.logo_url)), '[]'::jsonb) FROM partners p)
+ *   ) INTO v_result;
+ *
+ *   RETURN v_result;
+ * END;
+ * $function$;
+ *
+ * CREATE OR REPLACE FUNCTION public.save_backoffice_orchestrator_config(p_payload jsonb)
+ *  RETURNS void
+ *  LANGUAGE plpgsql
+ *  SECURITY DEFINER
+ *  SET search_path TO 'public'
+ * AS $function$
+ * DECLARE
+ *   v_actor RECORD;
+ * BEGIN
+ *   SELECT * INTO v_actor FROM public.current_backoffice_actor();
+ *   IF v_actor.role IS NULL OR v_actor.role != 'admin' THEN
+ *       RAISE EXCEPTION 'forbidden';
+ *   END IF;
+ *
+ *   IF p_payload ? 'id' THEN
+ *     UPDATE orchestrator_configs SET
+ *       lookup_id = p_payload->>'lookup_id',
+ *       config_type = p_payload->>'config_type',
+ *       entity_type = p_payload->>'entity_type',
+ *       page_url = p_payload->>'page_url',
+ *       integration_method = p_payload->>'integration_method',
+ *       partner_id = (p_payload->>'partner_id')::INT,
+ *       is_active = (p_payload->>'is_active')::BOOLEAN,
+ *       home_key = NULLIF(TRIM(p_payload->>'home_key'), ''),
+ *       home_status = COALESCE(NULLIF(p_payload->>'home_status', ''), 'hidden'),
+ *       home_order = NULLIF(p_payload->>'home_order', '')::INT,
+ *       is_integrated = (p_payload->>'is_integrated')::BOOLEAN,
+ *       integration_details = p_payload->'integration_details',
+ *       rules = p_payload->'rules',
+ *       page_configs = p_payload->'page_configs',
+ *       consent_configs = p_payload->'consent_configs',
+ *       page_faqs = p_payload->'page_faqs',
+ *       updated_at = NOW()
+ *     WHERE id = (p_payload->>'id')::INT;
+ *   ELSE
+ *     INSERT INTO orchestrator_configs (
+ *       lookup_id, config_type, entity_type, page_url, integration_method, partner_id, is_active,
+ *       home_key, home_status, home_order, is_integrated,
+ *       integration_details, rules, page_configs, consent_configs, page_faqs
+ *     ) VALUES (
+ *       p_payload->>'lookup_id', p_payload->>'config_type', p_payload->>'entity_type', p_payload->>'page_url',
+ *       p_payload->>'integration_method', (p_payload->>'partner_id')::INT, COALESCE((p_payload->>'is_active')::BOOLEAN, true),
+ *       NULLIF(TRIM(p_payload->>'home_key'), ''), COALESCE(NULLIF(p_payload->>'home_status', ''), 'hidden'),
+ *       NULLIF(p_payload->>'home_order', '')::INT,
+ *       COALESCE((p_payload->>'is_integrated')::BOOLEAN, true), p_payload->'integration_details', p_payload->'rules',
+ *       p_payload->'page_configs', p_payload->'consent_configs', p_payload->'page_faqs'
+ *     );
+ *   END IF;
+ * END;
+ * $function$;
  * ============================================================================
  * 
  * @author César Ismael Pereira da Costa
@@ -52,6 +139,25 @@ export const Route = createLazyFileRoute("/backoffice/routes")({
   component: OrchestratorConfigsBackofficePage,
 });
 
+/** Botões da home (chaves do flowsConfig em src/routes/produtos.index.lazy.tsx). */
+const HOME_KEY_OPTIONS = [
+  { value: "cartao", label: "Cartão" },
+  { value: "carros", label: "Carros" },
+  { value: "caminhoes", label: "Caminhões" },
+  { value: "imoveis", label: "Imóveis" },
+  { value: "floorPlan", label: "Floor Plan (Vendedor)" },
+  { value: "equityCarro", label: "Crédito com carro (Car Equity)" },
+  { value: "equityImovel", label: "Crédito com imóvel (Home Equity)" },
+  { value: "seguroResidencial", label: "Seguro Residencial" },
+  { value: "seguroAuto", label: "Seguro Auto" },
+];
+
+const HOME_STATUS_OPTIONS = [
+  { value: "visible", label: "Visível" },
+  { value: "coming_soon", label: "Em breve" },
+  { value: "hidden", label: "Oculto" },
+];
+
 type OrchestratorRow = {
   id?: string | number;
   lookup_id: string;
@@ -61,6 +167,9 @@ type OrchestratorRow = {
   integration_method: string;
   partner_id?: string | number | null;
   is_active?: boolean;
+  home_key?: string | null;
+  home_status?: string;
+  home_order?: number | null;
   is_integrated?: boolean;
   page_configs?: any;
   integration_details?: any;
@@ -369,6 +478,9 @@ function OrchestratorConfigEditor({
     integration_method: initialData?.integration_method || "API",
     partner_id: initialData?.partner_id ? String(initialData.partner_id) : "none",
     is_active: initialData?.is_active ?? true,
+    home_key: initialData?.home_key || "none",
+    home_status: initialData?.home_status || "hidden",
+    home_order: initialData?.home_order != null ? String(initialData.home_order) : "",
     is_integrated: initialData?.is_integrated ?? true,
   });
 
@@ -431,6 +543,9 @@ function OrchestratorConfigEditor({
         integration_method: formData.integration_method,
         partner_id: Number(formData.partner_id),
         is_active: formData.is_active,
+        home_key: formData.home_key === "none" ? null : formData.home_key,
+        home_status: formData.home_key === "none" ? "hidden" : formData.home_status,
+        home_order: formData.home_key === "none" || formData.home_order === "" ? null : Number(formData.home_order),
         is_integrated: formData.is_integrated,
         integration_details: integrationDetailsToSave,
         rules: parsedPreview.rules || JSON.parse(jsonEditors.rules || "{}"),
@@ -547,6 +662,35 @@ function OrchestratorConfigEditor({
                         {partnersList.map((p) => <SelectItem key={p.id} value={String(p.id)} className="rounded-none cursor-pointer">{p.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="col-span-2 p-3.5 bg-muted border border-border rounded-none space-y-3">
+                    <h4 className="font-medium text-xs text-foreground">Exibição na Home</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-medium text-muted-foreground uppercase">Botão</label>
+                        <Select value={formData.home_key} onValueChange={(v) => setFormData({ ...formData, home_key: v })}>
+                          <SelectTrigger className="h-10 rounded-none border-border text-xs bg-background"><SelectValue /></SelectTrigger>
+                          <SelectContent className="rounded-none border-border text-xs">
+                            <SelectItem value="none" className="rounded-none cursor-pointer">Nenhum</SelectItem>
+                            {HOME_KEY_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="rounded-none cursor-pointer">{o.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-medium text-muted-foreground uppercase">Status</label>
+                        <Select value={formData.home_status} onValueChange={(v) => setFormData({ ...formData, home_status: v })} disabled={formData.home_key === "none"}>
+                          <SelectTrigger className="h-10 rounded-none border-border text-xs bg-background"><SelectValue /></SelectTrigger>
+                          <SelectContent className="rounded-none border-border text-xs">
+                            {HOME_STATUS_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="rounded-none cursor-pointer">{o.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-medium text-muted-foreground uppercase">Ordem</label>
+                        <Input type="number" min={1} value={formData.home_order} onChange={(e) => setFormData({ ...formData, home_order: e.target.value })} disabled={formData.home_key === "none"} className="h-10 rounded-none text-xs border-border bg-background focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" placeholder="Ex: 1" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">Visível: aparece e pode clicar · Em breve: aparece desabilitado · Oculto: não aparece.</p>
                   </div>
                   <div className="col-span-2 grid grid-cols-2 gap-4 pt-2">
                     <div className="p-3.5 bg-muted border border-border rounded-none flex items-center justify-between">

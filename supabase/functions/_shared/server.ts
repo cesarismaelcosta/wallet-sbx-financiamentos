@@ -74,6 +74,7 @@ import { verifyHmacSignature } from "./hmac.ts";
 import { resolveSessionPerimeter } from "./session-guard.ts";
 import { debugLog } from "./logger.ts";
 import { checkRateLimit } from "./rate-limit.ts";
+import { verifySignedClientIp } from "./client-ip.ts";
 
 export interface StandardResponse {
   status: number;
@@ -229,16 +230,19 @@ export const withSecurity = (
     // mais altos que o padrão de 10/min (ver detalhamento no cabeçalho
     // deste arquivo e no JSDoc de `rateLimit` em `registry.ts`).
     if (config.rateLimit) {
-      // [FIX]: `x-client-ip` foi adicionado ao fallback porque é assim que
-      // `financial-gateway-gate` e `sbx-auth` propagam o IP real do usuário
-      // em chamadas internas server-to-server pro `orchestrator` (onde
-      // `cf-connecting-ip`/`x-forwarded-for` não existem, pois a chamada não
-      // passa pela borda pública de novo) -- mesma ordem de precedência já
-      // usada em `infrastructure.ts` (captureInfrastructureSync).
+      // [FIX 2026-10-01]: mesma regra de IP da auditoria (`infrastructure.ts`).
+      // 1) IP ASSINADO (`client-ip.ts`): em chamada interna do
+      //    `financial-gateway-gate`/`sbx-auth` para o `orchestrator`, conta pelo
+      //    IP real do usuário -- antes essas chamadas caíam no `x-forwarded-for`
+      //    (IP do servidor da própria function) e TODOS os usuários dividiam um
+      //    único contador.
+      // 2) cabeçalhos de borda (`cf-connecting-ip`, `x-forwarded-for`, `x-real-ip`).
+      // O `x-client-ip` SEM assinatura válida não é mais aceito (forjável).
+      const trustedClientIp = await verifySignedClientIp(req);
       const clientIp =
+        trustedClientIp ||
         req.headers.get("cf-connecting-ip") ||
         req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-        req.headers.get("x-client-ip") ||
         req.headers.get("x-real-ip") ||
         "0.0.0.0";
 

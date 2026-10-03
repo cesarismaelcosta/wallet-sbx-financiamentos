@@ -377,6 +377,9 @@ export type Database = {
           consent_configs: Json | null
           created_at: string | null
           entity_type: string | null
+          home_key: string | null
+          home_order: number | null
+          home_status: string
           id: number
           integration_details: Json | null
           integration_method: string | null
@@ -395,6 +398,9 @@ export type Database = {
           consent_configs?: Json | null
           created_at?: string | null
           entity_type?: string | null
+          home_key?: string | null
+          home_order?: number | null
+          home_status?: string
           id?: never
           integration_details?: Json | null
           integration_method?: string | null
@@ -413,6 +419,9 @@ export type Database = {
           consent_configs?: Json | null
           created_at?: string | null
           entity_type?: string | null
+          home_key?: string | null
+          home_order?: number | null
+          home_status?: string
           id?: never
           integration_details?: Json | null
           integration_method?: string | null
