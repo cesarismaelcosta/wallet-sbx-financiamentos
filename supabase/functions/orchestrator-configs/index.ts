@@ -12,6 +12,17 @@
  * - MODO LEITURA (GET): Hidrata componentes e drawers do front-end com base no 
  *   contexto flexível do card (event, seller, product, category) 
  *   e perfil do cliente (PF/PJ), replicando a cascata de prioridade oficial.
+ *
+ * - MODO HOME (GET ?mode=home[&entity_type=PF|PJ]): devolve como cada botão
+ *   da home (/produtos) deve aparecer, a partir das colunas home_key,
+ *   home_status e home_order de `orchestrator_configs`:
+ *     { products: [{ key, status: "visible" | "coming_soon", order }] }
+ *   - Considera só linhas com home_key preenchido e compatíveis com o perfil
+ *     (PF, PJ ou PF+PJ; sem perfil conhecido, considera todas).
+ *   - Mais de uma linha para o mesmo botão (ex.: Carros PF e PJ): vale o
+ *     estado mais aberto (visible > coming_soon > hidden) e a menor ordem.
+ *   - `hidden` e botões sem linha na tabela NÃO vêm na resposta (não aparecem).
+ *   - Independe de is_active (que segue valendo só para a cascata).
  * 
  * @author César Ismael Pereira da Costa
  * @description Single Source of Truth para metadados e regras de páginas do ecossistema sbX.
@@ -93,6 +104,48 @@ async function resolveOrchestratorConfigs(
 }
 
 /**
+ * @function resolveHomeProducts
+ * @description Estado de exibição dos botões da home (modo `?mode=home`).
+ * @param {any} supabase - Cliente Supabase com privilégios de Service Role.
+ * @param {string|null} [entityType] - "F" | "J" | "PF" | "PJ" (opcional).
+ * @returns {Promise<Array<{key: string, status: string, order: number|null}>>}
+ */
+async function resolveHomeProducts(supabase: any, entityType?: string | null) {
+  const { data, error } = await supabase
+    .from("orchestrator_configs")
+    .select("home_key, home_status, home_order, entity_type")
+    .not("home_key", "is", null);
+
+  if (error) throw new Error(`Falha ao ler configurações da home: ${error.message}`);
+
+  const profile = entityType === "J" || entityType === "PJ"
+    ? "PJ"
+    : entityType === "F" || entityType === "PF"
+      ? "PF"
+      : null;
+
+  const rank: Record<string, number> = { hidden: 0, coming_soon: 1, visible: 2 };
+  const byKey = new Map<string, { key: string; status: string; order: number | null }>();
+
+  for (const row of data || []) {
+    if (profile && row.entity_type && row.entity_type !== "PF+PJ" && row.entity_type !== profile) continue;
+    const status = rank[row.home_status] !== undefined ? row.home_status : "hidden";
+    const order = typeof row.home_order === "number" ? row.home_order : null;
+    const current = byKey.get(row.home_key);
+
+    if (!current || rank[status] > rank[current.status]) {
+      byKey.set(row.home_key, { key: row.home_key, status, order });
+    } else if (rank[status] === rank[current.status] && order !== null && (current.order === null || order < current.order)) {
+      current.order = order;
+    }
+  }
+
+  return [...byKey.values()]
+    .filter((p) => p.status !== "hidden")
+    .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+}
+
+/**
  * ============================================================================
  * HANDLER PRINCIPAL (E/S SEGURA DE CONFIGURAÇÕES DE ROTA)
  * ============================================================================
@@ -129,8 +182,9 @@ serve(withSecurity('orchestrator-configs', async (req: Request, ctx?: RequestCon
     const categoryId = url.searchParams.get("category_id");
     const productId = url.searchParams.get("product_id");
     const entityType = url.searchParams.get("entity_type");
+    const mode = url.searchParams.get("mode");
 
-    if (!eventId && !sellerId && !productId && !categoryId) {
+    if (mode !== "home" && !eventId && !sellerId && !productId && !categoryId) {
       return {
         status: 400,
         data: { 
@@ -165,6 +219,17 @@ serve(withSecurity('orchestrator-configs', async (req: Request, ctx?: RequestCon
       if (entityData) {
         resolvedType = entityData.entity_type;
       }
+    }
+
+    // =========================================================================
+    // 5.1 MODO HOME: estado de exibição dos botões da home (/produtos)
+    // =========================================================================
+    if (mode === "home") {
+      const products = await resolveHomeProducts(supabase, resolvedType);
+      return {
+        status: 200,
+        data: { success: true, data: { products } }
+      };
     }
 
     // =========================================================================

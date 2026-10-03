@@ -48,7 +48,7 @@ import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/Th
 import { PanelHeader, HeaderLink } from "@/features/financial-hub/components/layout/PanelHeader";
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { USE_COOKIE } from "@/services/session";
-import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
+import { callOrchestrator, callOrchestratorConfigs } from "@/features/financial-hub/core/services/gateway";
 import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { UserDataContext } from "@/routes/produtos.lazy";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -67,14 +67,12 @@ type ShowcaseConfig = {
   isDirect: false;
   route: string;
   flowKey: string;
-  disabled: boolean;
   productId?: never;
 };
 
 type DirectConfig = {
   isDirect: true;
   productId: string;
-  disabled: boolean;
   route?: never;
   flowKey?: never;
 };
@@ -105,16 +103,20 @@ const revealOnLoad = {
   },
 };
 
+// Exibição de cada botão (visible / coming_soon / oculto) vem do banco:
+// orchestrator_configs.home_key / home_status / home_order, lidos pela edge
+// `orchestrator-configs?mode=home` (ver cabeçalho daquela função).
+// Botão sem linha na tabela (ou com home_status = hidden) não aparece.
 const flowsConfig: Record<string, FlowConfig> = {
-  cartao: { isDirect: false, route: "/produtos/offer", flowKey: "Cartão", disabled: false },
-  carros: { isDirect: false, route: "/produtos/offer", flowKey: "Carros", disabled: false },
-  caminhoes: { isDirect: false, route: "/produtos/offer", flowKey: "Caminhões", disabled: false },
-  imoveis: { isDirect: false, route: "/produtos/offer", flowKey: "Imóveis", disabled: true },
-  floorPlan: { isDirect: false, route: "/produtos/offer", flowKey: "Vendedor", disabled: true },
-  equityCarro: { isDirect: true, productId: "7", disabled: false },
-  equityImovel: { isDirect: true, productId: "6", disabled: true },
-  seguroResidencial: { isDirect: true, productId: "10", disabled: true },
-  seguroAuto: { isDirect: true, productId: "9", disabled: false },
+  cartao: { isDirect: false, route: "/produtos/offer", flowKey: "Cartão" },
+  carros: { isDirect: false, route: "/produtos/offer", flowKey: "Carros" },
+  caminhoes: { isDirect: false, route: "/produtos/offer", flowKey: "Caminhões" },
+  imoveis: { isDirect: false, route: "/produtos/offer", flowKey: "Imóveis" },
+  floorPlan: { isDirect: false, route: "/produtos/offer", flowKey: "Vendedor" },
+  equityCarro: { isDirect: true, productId: "7" },
+  equityImovel: { isDirect: true, productId: "6" },
+  seguroResidencial: { isDirect: true, productId: "10" },
+  seguroAuto: { isDirect: true, productId: "9" },
 };
 
 type AppJourney = HeaderLink & { ativo: boolean };
@@ -148,6 +150,10 @@ export function ProdutosHome() {
   const [loading, setLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  // Estado dos botões vindo de orchestrator-configs?mode=home.
+  // null = carregando; homeProductsError = falha (botões ficam desabilitados).
+  const [homeProducts, setHomeProducts] = useState<Record<string, string> | null>(null);
+  const [homeProductsError, setHomeProductsError] = useState(false);
   // Chave do botão com falha na última tentativa -- mesma UX de CardOfferV:
   // barra de preenchimento passivo (5s) até o usuário tentar de novo ou o
   // tempo esgotar (limpa sozinho).
@@ -340,6 +346,28 @@ export function ProdutosHome() {
     }
   };
 
+  // Carrega o estado de exibição dos botões da home (visible / coming_soon)
+  useEffect(() => {
+    if (!isMounted || !sessionToken) return;
+    let cancelled = false;
+    setHomeProductsError(false);
+    callOrchestratorConfigs({ mode: "home" })
+      .then((res: any) => {
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        (res?.products || []).forEach((p: any) => {
+          if (p?.key) map[p.key] = p.status;
+        });
+        setHomeProducts(map);
+      })
+      .catch(() => {
+        if (!cancelled) setHomeProductsError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isMounted, sessionToken]);
+
   // 1. Unificamos o esqueleto do botão para evitar diferenças de espessura (anti-aliasing)
   const baseButtonClasses =
     "flex items-center justify-center gap-2 px-5 py-2 font-normal rounded-none transition-colors text-sm w-full md:w-auto";
@@ -382,7 +410,15 @@ export function ProdutosHome() {
       );
     }
 
-    if (config.disabled) {
+    // Exibição vinda do banco (orchestrator-configs?mode=home):
+    // carregando ou erro -> desabilitado | sem status -> não aparece |
+    // coming_soon -> desabilitado com "Em breve" | visible -> ativo
+    const homeStatus = homeProducts?.[configKey];
+    const isHomeLoading = homeProducts === null || homeProductsError;
+    if (!isHomeLoading && !homeStatus) return null;
+
+    if (isHomeLoading || homeStatus === "coming_soon") {
+      const isComingSoon = !isHomeLoading && homeStatus === "coming_soon";
       return (
         <button 
           disabled 
@@ -390,7 +426,13 @@ export function ProdutosHome() {
           className={`${baseButtonClasses} border border-neutral-200 dark:border-neutral-800 text-neutral-400 dark:text-neutral-600 bg-neutral-50 dark:bg-neutral-900 cursor-not-allowed`}
         >
           <span className="font-jakarta tracking-tight text-center">{label}</span>
-          <ArrowRight className="w-4 h-4" strokeWidth={1.25} />
+          {isComingSoon ? (
+            <span className="shrink-0 border border-neutral-300 dark:border-neutral-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+              Em breve
+            </span>
+          ) : (
+            <ArrowRight className="w-4 h-4" strokeWidth={1.25} />
+          )}
         </button>
       );
     }
