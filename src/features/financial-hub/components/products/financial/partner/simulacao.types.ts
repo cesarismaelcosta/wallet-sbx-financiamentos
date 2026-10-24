@@ -11,41 +11,29 @@
  * - Layout: Propriedades customizadas de `theme` forçam a consistência de espaçamentos, margens e paddings em todos os componentes do Simulador.
  */
 
-export interface PageConfig {
-  offer_panel: {
-    partner: {
-      name: string;
-      label: string;
-    };
-    headline: {
-      parts: { text: string; type: 'normal' | 'highlight' | 'bold' }[];
-    };
-    description: {
-      parts: { text: string; type: 'normal' | 'highlight' | 'bold' }[];
-    };
-    benefits: {
-      icon: string;
-      title: string;
-      description: string;
-    }[];
-  };
-  footer?: {
-    links: { url: string; text: string }[];
-    template_text: string;
-  };
-}
+import type {
+  ConsentConfig,
+  Event,
+  GatewayResult,
+  HubData,
+  HubEntity,
+  Offer,
+  PageConfigs,
+  ProductRules,
+} from "@/features/financial-hub/components/shared/types";
 
-export interface SimulacaoWizardData extends Record<string, any> {
-  page_configs: PageConfig;
-  offer: any;
-  rules: any;
-  consent_configs: any[];
-  simulationResult?: any;
+export interface SimulacaoWizardData extends HubData {
+  page_configs: PageConfigs;
+  offer: Partial<Offer>;
+  rules: ProductRules | null; // o servidor manda null quando o produto não tem regras
+  consent_configs: ConsentConfig[];
+  simulationResult?: GatewayResult | null;
   // Estados Reativos do Simulador
+  valorOferta?: number;
   valorVeiculo: number;
   valorEntrada: number;
   parcelas: number;
   taxa: number;
-  entity: any;
-  event: any;
+  entity: HubEntity;
+  event: Partial<Event>;
 }

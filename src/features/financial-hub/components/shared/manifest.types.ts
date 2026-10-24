@@ -15,6 +15,10 @@ export interface WizardManifest {
     layoutConfig?: {
       gridCols?: string; 
     };
+    // Grid desktop usado pelo BaseWizardLayout (ex.: "lg:grid-cols-[1fr_1.2fr]")
+    layout?: {
+      gridTemplate?: string;
+    };
     steps: {
       [stepNumber: number]: {
         label?: string;      // Rótulo curto para a régua

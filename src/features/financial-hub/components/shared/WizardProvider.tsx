@@ -5,35 +5,33 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from "react";
+import { HubData } from "@/features/financial-hub/components/shared/types";
 
 // 1. Tipagens do Estado
-export interface WizardState<T = any> {
+export interface WizardState<T = HubData> {
   isReady?: boolean;
   meta: {
     step: number;
-    [key: string]: any;
+    [key: string]: unknown;
   };
-  data: {
-    page_configs?: any;
-    [key: string]: any;
-  } & T;
+  data: HubData & T;
 }
 
 // 2. Tipagens do Contrato (API exposta pelo hook)
-export interface WizardContextValue<T = any> {
+export interface WizardContextValue<T = HubData> {
   state: WizardState<T>;
   update: (patch: Partial<WizardState<T>>) => void;
   updateData: (dataPatch: Partial<WizardState<T>["data"]>) => void;
   goTo: (step: number) => void;
   next: () => void;
   back: () => void;
-  reset: (initialData?: any) => void;
+  reset: (initialData?: Partial<HubData>) => void;
 }
 
 const WizardContext = createContext<WizardContextValue | undefined>(undefined);
 
 // 3. Provedor
-export function WizardProvider({ children, initialData = {} }: { children: ReactNode; initialData?: any }) {
+export function WizardProvider({ children, initialData = {} }: { children: ReactNode; initialData?: Partial<HubData> }) {
   const [state, setState] = useState<WizardState>({
     isReady: false,
     meta: { step: 1 },
@@ -103,10 +101,10 @@ export function WizardProvider({ children, initialData = {} }: { children: React
 }
 
 // 4. Hook de Consumo Seguro
-export const useWizard = <T = any>() => {
+export const useWizard = <T = HubData>() => {
   const context = useContext(WizardContext);
   if (!context) {
     throw new Error("useWizard deve ser utilizado dentro de um WizardProvider");
   }
-  return context as WizardContextValue<T>;
+  return context as unknown as WizardContextValue<T>;
 };

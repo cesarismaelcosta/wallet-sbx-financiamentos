@@ -18,8 +18,9 @@
  */
 
 import { FileText } from "lucide-react";
+import type { PageConfigs } from "@/features/financial-hub/components/shared/types";
 
-export function PanelFooter({ footer }: { footer: any }) {
+export function PanelFooter({ footer }: { footer: PageConfigs["footer"] | null | undefined }) {
   if (!footer?.template_text) return null;
   const { template_text, links = [] } = footer;
 
@@ -28,7 +29,7 @@ export function PanelFooter({ footer }: { footer: any }) {
     const parts = template_text.split(/\{([^}]+)\}/g);
     
     return parts.map((part: string, index: number) => {
-      const linkMatch = links.find((l: any) => l.text === part);
+      const linkMatch = links.find((l) => l.text === part);
       
       if (linkMatch) {
         return (

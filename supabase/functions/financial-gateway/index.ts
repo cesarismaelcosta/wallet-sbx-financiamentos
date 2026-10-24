@@ -3,7 +3,7 @@
  * @path supabase/functions/financial-gateway/index.ts
  *
  * @version 2.1.0
- * @description Ponto central de orquestração entre o ecossistema sbX e parceiros financeiros (Fandi, Creditas).
+ * @description Ponto central de orquestração entre o ecossistema sbX e parceiros financeiros (Fandi, FlowCredi).
  *
  * ============================================================================
  * 🤖 GEMINI ARCHITECTURE SPECIFICATION: ZERO-TRUST & HYDRATION
@@ -148,7 +148,7 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
       }
 
       // 🏗️ [REMONTAGEM SEGURA]:
-      // Monta o payload gordo para os Parceiros (Fandi/Creditas) EXCLUSIVAMENTE com o dado Confiável.
+      // Monta o payload gordo para os Parceiros (Fandi/FlowCredi) EXCLUSIVAMENTE com o dado Confiável.
       payload = {
         ...thin, // Traz intention, simulation_details (prazo, entrada) e IDs
 
@@ -210,12 +210,12 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
       payload.__integrity_validated = true;
 
       // ---------------------------------------------------------------------
-      // 4. PROCESSAMENTO DE SIMULAÇÃO (Integração Fandi / Creditas)
+      // 4. PROCESSAMENTO DE SIMULAÇÃO (Integração Fandi / FlowCredi)
       // ---------------------------------------------------------------------
       // Se chegou até aqui, o usuário é dono da visita, a oferta é real, e os dados são in-hackeáveis.
 
       // Determina o "step" do funil financeiro (Ex: Eligibility vs Execution)
-      const step = thin.step === "CHECK_ELIGIBILITY" ? "CHECK_ELIGIBILITY" : "EXECUTE_SIMULATION";
+      const step = thin.step === "SUBMIT_LEAD" ? "SUBMIT_LEAD" : "EXECUTE_SIMULATION";
 
       debugLog(`🚀 [Gateway POST] Repassando Payload Hidratado para o Motor de Simulação (Step: ${step} | Partner: ${trustedPartnerId})...`);
       const result = await processSimulation(req, payload, step);

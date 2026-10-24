@@ -15,9 +15,8 @@
  * `payload.rules = config.rules` antes de chegar aqui, mas os motores não devem
  * depender disso para serem seguros).
  *
- * Creditas (Auto Equity / Home Equity) não usa nenhuma destas barreiras: é
- * empréstimo com garantia (sem conceito de entrada, diferente de compra
- * financiada), ainda em mock/pré-contrato — sem regra de negócio definida ainda.
+ * FlowCredi (Car Equity / Home Equity / Imóveis) não usa nenhuma destas barreiras:
+ * os limites ficam nos serviços flowcredi-*-service.ts (rules do orchestrator_configs).
  *
  * @author Cesar Ismael Pereira da Costa
  */

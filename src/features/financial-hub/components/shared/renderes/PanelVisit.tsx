@@ -17,8 +17,9 @@
 
 import { Calendar as CalendarIcon } from "lucide-react";
 import { formatDate } from "@/features/financial-hub/components/shared/formatters";
+import type { VisitRow } from "@/features/financial-hub/components/shared/types";
 
-export function PanelVisit({ visitData, updateData }: { visitData: any; updateData?: any }) {
+export function PanelVisit({ visitData, updateData }: { visitData: VisitRow | null | undefined; updateData?: Record<string, unknown> | null }) {
   if (!visitData) return null;
 
   // Como o join da simulação traz a visita vinculada em 'visits', 

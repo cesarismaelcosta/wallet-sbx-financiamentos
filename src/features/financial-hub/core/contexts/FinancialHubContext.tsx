@@ -6,11 +6,17 @@
  */
 
 import { createContext, useContext } from "react";
+import { HubData } from "@/features/financial-hub/components/shared/types";
+
+/** Dados da jornada + controle da cortina (esqueleto) do layout. */
+export type HubContextValue = HubData & {
+  setIsOrchestratorHydrating?: (value: boolean) => void;
+};
 
 // 1. Criação do Contexto React
 // AJUSTE: Iniciamos com 'undefined' em vez de 'null'. 
 // 'undefined' significa que não há Provider por perto. 'null' significará que os dados estão carregando.
-export const FinancialHubContext = createContext<any>(undefined);
+export const FinancialHubContext = createContext<HubContextValue | undefined>(undefined);
 
 // 2. Hook Customizado (Atalho com Failsafe)
 export function useProductConsult() {

@@ -192,10 +192,13 @@ import { PanelAcceptedConsents } from "@/features/financial-hub/components/share
 import { PanelConsents } from "@/features/financial-hub/components/shared/renderes/PanelConsents";
 import { PanelFooter } from "@/features/financial-hub/components/shared/renderes/PanelFooter";
 import { PanelSimulation } from "@/features/financial-hub/components/shared/renderes/PanelSimulation";
+import { PanelFlowcredi } from "@/features/financial-hub/components/shared/renderes/PanelFlowcredi";
 import { PanelVisit } from "@/features/financial-hub/components/shared/renderes/PanelVisit";
 import { PanelFAQ } from "@/features/financial-hub/components/shared/renderes/PanelFAQ";
 
 import { supabase } from "@/integrations/supabase/client";
+import type { FaqItem, PageConfigs } from "@/features/financial-hub/components/shared/types";
+import type { RpcArgs } from "@/integrations/supabase/client";
 
 // ============================================================================
 // [TIPAGENS FORTES - PREVENÇÃO DE ANY]
@@ -263,14 +266,21 @@ const safeArray = <T,>(data: T | T[] | null | undefined): T[] => {
 // ============================================================================
 // ✨ [DESIGN SYSTEM: NEUTRAL PURITY] - Paleta monocromática restrita
 // ============================================================================
+// Chave: nome do status sem acento e em minúsculas (status_types.name)
 const STATUS_STYLES: Record<string, string> = {
-  simulacao: "bg-primary/10 text-primary",
-  "em análise": "bg-status-pending/10 text-status-pending",
-  analise: "bg-status-pending/10 text-status-pending",
+  "com ofertas": "bg-brand-accent/10 text-brand-accent",
+  enviado: "bg-brand-accent/10 text-brand-accent",
+  "pre-aprovado": "bg-status-approved/15 text-status-approved",
   aprovada: "bg-status-approved/15 text-status-approved",
+  "contrato assinado": "bg-status-approved/15 text-status-approved",
+  paga: "bg-status-approved/15 text-status-approved",
+  "em analise": "bg-status-pending/10 text-status-pending",
+  "em formalizacao": "bg-status-pending/10 text-status-pending",
+  "pendente documentos": "bg-status-pending/10 text-status-pending",
+  "sem ofertas": "bg-status-rejected/10 text-status-rejected",
+  negado: "bg-status-rejected/10 text-status-rejected",
   recusada: "bg-status-rejected/10 text-status-rejected",
   falha: "bg-status-rejected/10 text-status-rejected",
-  "pendente docs": "bg-muted text-muted-foreground",
   default: "bg-muted text-muted-foreground",
 };
 
@@ -336,7 +346,7 @@ function SimulationsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
-  const [stats, setStats] = useState({ total: 0, em_simulacao: 0, em_analise: 0, aprovadas: 0, volume_aprovado: 0 });
+  const [stats, setStats] = useState({ total: 0, com_condicoes: 0, leads_enviados: 0, pre_aprovadas: 0, volume: 0 });
 
   useEffect(() => {
     async function loadDropdowns() {
@@ -383,6 +393,7 @@ function SimulationsPage() {
     if (!backofficeUser) return;
     const timeoutId = setTimeout(() => { setPage(0); load(0); loadStats(); }, 400);
     return () => clearTimeout(timeoutId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega só quando os filtros mudam
   }, [search, selectedPartners, selectedProducts, dateRange, customRange]);
 
   async function load(targetPage: number) {
@@ -404,7 +415,7 @@ function SimulationsPage() {
           p_search: search.trim() || null,
           p_partner_ids: selectedPartners.length > 0 ? selectedPartners.map(Number) : null,
           p_product_ids: selectedProducts.length > 0 ? selectedProducts.map(Number) : null
-        }),
+        } as RpcArgs<"get_backoffice_simulations">),
         supabase.from("status_types").select("name")
       ]);
 
@@ -437,20 +448,21 @@ function SimulationsPage() {
       p_product_ids: selectedProducts.length > 0 ? selectedProducts.map(Number) : null,
       p_search: search.trim() || null,
       p_status: selectedStatus.length > 0 ? selectedStatus : null,
-    });
+    } as RpcArgs<"simulation_stats">);
 
     if (error) { console.error("Erro ao carregar estatísticas:", error); return; }
     
-    type StatsRecord = { total?: number; em_simulacao?: number; em_analise?: number; aprovadas?: number; volume_aprovado?: number };
+    // simulation_stats: contagem por id de status (ver migration 20261025130000)
+    type StatsRecord = { total?: number; com_condicoes?: number; leads_enviados?: number; pre_aprovadas?: number; volume?: number };
     const firstRow = Array.isArray(data) ? data[0] : data;
-    const s = (firstRow ?? { total: 0, em_simulacao: 0, em_analise: 0, aprovadas: 0, volume_aprovado: 0 }) as StatsRecord;
+    const s = (firstRow ?? {}) as StatsRecord;
     
     setStats({
       total: Number(s.total ?? 0),
-      em_simulacao: Number(s.em_simulacao ?? 0),
-      em_analise: Number(s.em_analise ?? 0),
-      aprovadas: Number(s.aprovadas ?? 0),
-      volume_aprovado: Number(s.volume_aprovado ?? 0),
+      com_condicoes: Number(s.com_condicoes ?? 0),
+      leads_enviados: Number(s.leads_enviados ?? 0),
+      pre_aprovadas: Number(s.pre_aprovadas ?? 0),
+      volume: Number(s.volume ?? 0),
     });
     setTotalPages(Math.ceil(Number(s.total ?? 0) / PAGE_SIZE));
   }
@@ -499,7 +511,7 @@ function SimulationsPage() {
       const bank = sim.financial_institutions;
       const created = formatDate(sim.created_at);
       const rawOffer = safeArray<Record<string, unknown>>(sim.simulation_offers);
-      const offerRow: OfferView = { ...rawOffer[0], category_types: safeArray(rawOffer[0]?.category_types)[0] as any || null };
+      const offerRow: OfferView = { ...rawOffer[0], category_types: safeArray(rawOffer[0]?.category_types as OfferView["category_types"])[0] || null };
       const eventoFull = offerRow?.event_description ? `[${offerRow?.event_id || "—"}] ${offerRow?.event_description}` : "—";
       return {
         ID: sim.id, Data: `${created.d} ${created.h}`, Cliente: sim.name || "—", Documento: sim.document || "—",
@@ -540,11 +552,11 @@ function SimulationsPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_1.4fr]">
         {[
-          { label: "Propostas (filtro)", value: Number(stats.total).toLocaleString("pt-BR"), special: false },
-          { label: "Em simulação", value: Number(stats.em_simulacao).toLocaleString("pt-BR"), special: false },
-          { label: "Em análise", value: Number(stats.em_analise).toLocaleString("pt-BR"), special: false },
-          { label: "Aprovadas", value: Number(stats.aprovadas).toLocaleString("pt-BR"), special: false },
-          { label: "Volume aprovado", value: BRL(Number(stats.volume_aprovado)), special: true },
+          { label: "Total", value: Number(stats.total).toLocaleString("pt-BR"), special: false },
+          { label: "Simulações com ofertas", value: Number(stats.com_condicoes).toLocaleString("pt-BR"), special: false },
+          { label: "Leads enviados", value: Number(stats.leads_enviados).toLocaleString("pt-BR"), special: false },
+          { label: "Pré-aprovadas", value: Number(stats.pre_aprovadas).toLocaleString("pt-BR"), special: false },
+          { label: "Volume (leads + pré-aprovadas)", value: BRL(Number(stats.volume)), special: true },
         ].map((t) => (
           <div 
             key={t.label} 
@@ -666,7 +678,7 @@ function SimulationsPage() {
                 const stageName = r.stage_types?.name ?? "—";
                 const productName = r.product_types?.name ?? "—";
                 const parcela = r.installments && r.installment_value ? `${r.installments}x ${BRL(r.installment_value)}` : "—";
-                const rawOffers = safeArray<Record<string, any>>(r.simulation_offers);
+                const rawOffers = safeArray<Record<string, unknown>>(r.simulation_offers);
                 const offer = rawOffers[0] || {};
                 const endEvent = offer?.event_end_date ? new Date(String(offer.event_end_date)).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
                 const bank = r.financial_institutions;
@@ -681,7 +693,7 @@ function SimulationsPage() {
                   <td className="px-3 py-2.5 w-[140px]"><div className="font-medium text-foreground">{stageName}</div><div className="text-[11px] text-muted-foreground">{productName}</div><div className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-tight">{r.partners?.name || "—"}</div></td>
                   <td className="px-3 py-2.5 max-w-[190px] sm:max-w-[220px]"><div className="font-medium text-foreground truncate">{String(offer?.offer_description || "—")}</div><div className="text-[11px] text-muted-foreground truncate mt-0.5">{String(offer?.event_id || "—")} - {String(offer?.event_description || "—")}</div><div className="text-[10px] text-muted-foreground mt-0.5">{BRL(Number(offer?.offer_value || 0))} {endEvent ? `(Fim: ${endEvent})` : ""}</div></td>
                   <td className="px-3 py-2.5 w-[130px] text-right"><div className="font-semibold text-foreground">{BRL(r.financed_amount)}</div><div className="text-[10px] text-muted-foreground">{r.down_payment_percentage === 0 ? "Sem entrada" : r.down_payment_percentage != null ? `Entrada: ${r.down_payment_percentage.toFixed(0)}%` : "—"}</div><div className="text-[10px] text-muted-foreground">{parcela}</div></td>
-                  <td className="px-3 py-2.5 w-[150px]"><div className="flex flex-col items-start gap-1"><span className={`inline-flex items-center rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusClass(statusName)}`}>{statusName}</span><span className="text-[10px] text-muted-foreground">{updated.d} {updated.h}</span></div></td>
+                  <td className="px-3 py-2.5 w-[150px]"><div className="flex flex-col items-start gap-1"><span className={`inline-flex items-center rounded-none px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusClass(statusName)}`}>{statusName}</span><span className="text-[11px] font-medium text-foreground">{stageName}</span><span className="text-[10px] text-muted-foreground">{updated.d} {updated.h}</span></div></td>
                   <td className="px-3 py-2.5 w-[130px]">
                       <div className="flex items-center gap-1.5">
                         <div className="flex h-9 w-9 items-center justify-center bg-transparent shrink-0 rounded-[6px] overflow-hidden">
@@ -733,7 +745,7 @@ function SimulationsPage() {
           const sim = activeSimulation;
           const rawOffers = safeArray<Record<string, unknown>>(sim.simulation_offers);
           const baseOffer = rawOffers[0] || {};
-          const offerRow: OfferView = { ...baseOffer, category_types: safeArray(baseOffer.category_types)[0] as any || null };
+          const offerRow: OfferView = { ...baseOffer, category_types: safeArray(baseOffer.category_types as OfferView["category_types"])[0] || null };
               
               const bank = sim.financial_institutions || {};
               const ed = sim.entity_details || {};
@@ -746,7 +758,7 @@ function SimulationsPage() {
               ) as Record<string, unknown> | null;
 
               const pageConfigs = (rawPayloadObj?.page_configs as Record<string, unknown>) || null;
-              const pageFaqs = safeArray((rawPayloadObj as any)?.page_faqs);
+              const pageFaqs = safeArray((rawPayloadObj as { page_faqs?: FaqItem[] | FaqItem | null } | null)?.page_faqs);
               const consentConfigsRaw = (rawPayloadObj?.consent_configs as Array<Record<string, unknown>>) || [];
               const extractedConsentConfigs = safeArray(consentConfigsRaw).filter(
                 (c): c is Record<string, unknown> => c !== null && typeof c === 'object' && Object.keys(c).length > 0
@@ -791,19 +803,19 @@ function SimulationsPage() {
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    <PanelVisit visitData={sim as any} updateData={firstUpdate} />
-                    <PanelEntity entity={sim as any} entityDetails={ed} />
+                    <PanelVisit visitData={sim} updateData={firstUpdate} />
+                    <PanelEntity entity={sim} entityDetails={ed} />
                     
                     {Object.keys(offerRow).length > 0 && <PanelOffer offer={offerRow} />}
                     {Object.keys(offerRow).length > 0 && <PanelSeller offer={offerRow} />}
                     
                     {validConsents.length > 0 && <PanelAcceptedConsents consents={validConsents} />}
-                    <PanelSimulation simulation={sim as any} bank={bank} />
+                    {Number(sim.partner_id) === 3 ? <PanelFlowcredi simulation={sim} /> : <PanelSimulation simulation={sim} bank={bank} />}
                     
                     {pageConfigs && <PanelProduct config={pageConfigs} />}
                     {extractedConsentConfigs.length > 0 && <PanelConsents configs={extractedConsentConfigs} />}
                     {pageFaqs.length > 0 && <PanelFAQ faqs={pageFaqs} isPrint={false} />}
-                    {!!pageConfigs?.footer && <PanelFooter footer={pageConfigs.footer as any} />}
+                    {!!pageConfigs?.footer && <PanelFooter footer={pageConfigs.footer} />}
                   </div>
 
                   <div className="p-4 bg-card border-t border-border flex items-center justify-between gap-3 shrink-0 shadow-xs">
@@ -823,14 +835,14 @@ function SimulationsPage() {
               const sim = activeSimulation;
               const rawOffers = safeArray<Record<string, unknown>>(sim.simulation_offers);
               const baseOffer = rawOffers[0] || {};
-              const offerRow: OfferView = { ...baseOffer, category_types: safeArray(baseOffer.category_types)[0] as any || null };
+              const offerRow: OfferView = { ...baseOffer, category_types: safeArray(baseOffer.category_types as OfferView["category_types"])[0] || null };
 
               const bank = sim.financial_institutions || {};
               const ed = sim.entity_details || {};
               const firstUpdate = safeArray(sim.simulation_updates)[0] || {};
               const rawPayloadObj = typeof sim.raw_payload === "string" ? (() => { try { return JSON.parse(sim.raw_payload); } catch { return {}; } })() : sim.raw_payload || {};
-              const pageConfigs = (rawPayloadObj as any).page_configs || null;
-              const pageFaqs = safeArray((rawPayloadObj as any)?.page_faqs);
+              const pageConfigs = (rawPayloadObj as { page_configs?: PageConfigs | null }).page_configs || null;
+              const pageFaqs = safeArray((rawPayloadObj as { page_faqs?: FaqItem[] | FaqItem | null } | null)?.page_faqs);
               const consentConfigsRaw = (rawPayloadObj?.consent_configs as Array<Record<string, unknown>>) || [];
               const extractedConsentConfigs = safeArray(consentConfigsRaw).filter(
                 (c): c is Record<string, unknown> => c !== null && typeof c === 'object' && Object.keys(c).length > 0
@@ -851,18 +863,18 @@ function SimulationsPage() {
                     </div>
                   </div>
 
-                  <PanelVisit visitData={sim as any} updateData={firstUpdate} />
-                  <PanelEntity entity={sim as any} entityDetails={ed} />
+                  <PanelVisit visitData={sim} updateData={firstUpdate} />
+                  <PanelEntity entity={sim} entityDetails={ed} />
 
                   {Object.keys(offerRow).length > 0 && <PanelOffer offer={offerRow} />}
                   {Object.keys(offerRow).length > 0 && <PanelSeller offer={offerRow} />}
                   {validConsents.length > 0 && <PanelAcceptedConsents consents={validConsents} />}
-                  <PanelSimulation simulation={sim as any} bank={bank} />
+                  {Number(sim.partner_id) === 3 ? <PanelFlowcredi simulation={sim} /> : <PanelSimulation simulation={sim} bank={bank} />}
 
                   {pageConfigs && <PanelProduct config={pageConfigs} />}
                   {extractedConsentConfigs.length > 0 && <PanelConsents configs={extractedConsentConfigs} />}
                   {pageFaqs.length > 0 && <PanelFAQ faqs={pageFaqs} isPrint={true} />}
-                  {!!pageConfigs?.footer && <div className="pt-2 break-inside-avoid"><PanelFooter footer={pageConfigs.footer as any} /></div>}
+                  {!!pageConfigs?.footer && <div className="pt-2 break-inside-avoid"><PanelFooter footer={pageConfigs.footer} /></div>}
                 </div>
               );
             })()}

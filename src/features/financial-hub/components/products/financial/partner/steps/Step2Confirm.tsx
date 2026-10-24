@@ -12,11 +12,14 @@ import { Button } from "@/components/ui/button";
 import { ButtonWhatsApp } from "@/features/financial-hub/components/layout/ButtonWhatsApp";
 import { ThumbsUp, ShieldCheck, ArrowLeft, ExternalLink } from "lucide-react";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
+import { STATUS } from "@/features/financial-hub/components/shared/types";
+import type { ConsentConfig, GatewayConsult, Offer } from "@/features/financial-hub/components/shared/types";
+import type { SimulacaoWizardData } from "../simulacao.types";
 
 // =========================================================================
 // Link para oferta na plataforma sbX
 // =========================================================================
-const getSuperbidUrl = (offerData: any) => {
+const getSuperbidUrl = (offerData: Partial<Offer> | undefined) => {
   if (!offerData?.offer_id) return "#";
   const slug = (offerData.offer_description || "")
     .toLowerCase()
@@ -28,9 +31,9 @@ const getSuperbidUrl = (offerData: any) => {
 };
 
 export function Step2Confirm() {
-  const { state, back } = useWizard<any>();
+  const { state, back } = useWizard<SimulacaoWizardData>();
   const result = state.data.simulationResult;
-  const isApproved = result?.status_id === 1;
+  const isApproved = result?.status_id === STATUS.COM_CONDICOES;
   const mainConsult = result?.consults?.[0];
   
   // Extraindo a config para verificar o WhatsApp
@@ -47,8 +50,8 @@ export function Step2Confirm() {
   const valorOferta = state.data?.valorOferta || offer?.offer_value || 0;
   
   // PEGANDO OS VALORES EXATOS DO RETORNO DA API (Entrada + Valor Financiado)
-  const valorEntradaAPI = mainConsult?.down_payment_amount || result?.retorno?.valorEntrada || result?.valorEntrada || state.data?.valorEntrada || 0;
-  const valorFinanciadoAPI = mainConsult?.financed_amount || result?.retorno?.valorFinanciado || result?.valorFinanciado || 0;
+  const valorEntradaAPI = mainConsult?.down_payment_amount || state.data?.valorEntrada || 0;
+  const valorFinanciadoAPI = mainConsult?.financed_amount || 0;
 
   return (
     // Max-w-lg e mx-auto centralizam e dão respiro lateral em telas grandes

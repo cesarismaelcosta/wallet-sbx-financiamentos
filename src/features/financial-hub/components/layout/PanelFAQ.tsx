@@ -38,7 +38,7 @@ interface FAQItem {
 }
 
 interface PanelFAQProps {
-  items?: FAQItem[];
+  items?: FAQItem[] | null; // page_faqs vem null quando o produto não tem FAQ
 }
 
 // =========================================================================

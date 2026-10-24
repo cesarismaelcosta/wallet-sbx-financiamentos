@@ -96,6 +96,9 @@ const ChartTooltipContent = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
     React.ComponentProps<"div"> & {
+      // recharts 3: payload/label chegam no conteúdo da dica, não nas props do Tooltip
+      payload?: RechartsPrimitive.TooltipPayload;
+      label?: string | number;
       hideLabel?: boolean;
       hideIndicator?: boolean;
       indicator?: "line" | "dot" | "dashed";
@@ -174,7 +177,7 @@ const ChartTooltipContent = React.forwardRef<
 
               return (
                 <div
-                  key={item.dataKey}
+                  key={item.dataKey as React.Key /* nos gráficos do app o dataKey é sempre texto */}
                   className={cn(
                     "flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground",
                     indicator === "dot" && "items-center",
@@ -243,7 +246,11 @@ const ChartLegend = RechartsPrimitive.Legend;
 const ChartLegendContent = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> &
-    Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
+    // recharts 3: a legenda recebe a lista de itens (LegendPayload) no conteúdo
+    {
+      payload?: ReadonlyArray<RechartsPrimitive.LegendPayload>;
+      verticalAlign?: "top" | "bottom" | "middle";
+    } & {
       hideIcon?: boolean;
       nameKey?: string;
     }

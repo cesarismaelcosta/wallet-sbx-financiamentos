@@ -15,15 +15,16 @@
 
 import { Building2 } from "lucide-react";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
+import type { ConsultRow, FinancialInstitutionRef, SimulationRow } from "@/features/financial-hub/components/shared/types";
 
 export function PanelSimulation({ 
   simulation, 
   bank, 
   consults 
 }: { 
-  simulation: any; 
-  bank?: any; 
-  consults?: any[]; 
+  simulation: SimulationRow | null | undefined; 
+  bank?: FinancialInstitutionRef | null; 
+  consults?: ConsultRow[]; 
 }) {
   if (!simulation && (!consults || consults.length === 0)) return null;
 
@@ -55,15 +56,18 @@ export function PanelSimulation({
       {/* ROTEAMENTO: Múltiplas Opções vs Oferta Única */}
       {hasMultiple ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {listConsults.map((item: any, idx: number) => {
-            const itemTotal = item.installments * item.installment_value;
+          {listConsults.map((item, idx: number) => {
+            // Com parcela decrescente (SAC) o total não é parcelas × 1ª parcela: não exibe
+            const decreasing = item.last_installment_value != null && Number(item.last_installment_value) !== Number(item.installment_value);
+            const itemTotal = decreasing ? null : (item.installments as number) * (item.installment_value as number);
+            const label = item.financial_institutions?.name || item.financial_institution_name || item.description || `Opção ${idx + 1}`;
             const cet = item.cet_rate ? Number(item.cet_rate).toFixed(2) : null;
 
             return (
               <div key={idx} className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-3 space-y-2 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors shadow-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-neutral-900 dark:text-neutral-100">
-                    {item.description || `Opção ${idx + 1}`}
+                    {label}
                   </span>
                   {cet && (
                     <span className="text-[10px] font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 px-2 py-0.5 rounded-none border border-neutral-200 dark:border-neutral-800">
@@ -76,9 +80,11 @@ export function PanelSimulation({
                     <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                       {item.installments}x <span className="text-neutral-900 dark:text-neutral-100">{BRL(item.installment_value)}</span>
                     </div>
-                    <div className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
-                      Total: {BRL(itemTotal)}
-                    </div>
+                    {itemTotal != null && (
+                      <div className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
+                        Total: {BRL(itemTotal)}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

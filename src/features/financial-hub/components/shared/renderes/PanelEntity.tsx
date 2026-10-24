@@ -16,9 +16,10 @@
 
 import { User } from "lucide-react";
 import { formatDocument, formatDate } from "@/features/financial-hub/components/shared/formatters";
+import type { EntityDisplay } from "@/features/financial-hub/components/shared/types";
 
-export function PanelEntity({ entity, entityDetails }: { entity: any, entityDetails?: any }) {
-  const data = { ...entityDetails, ...entity };
+export function PanelEntity({ entity, entityDetails }: { entity: EntityDisplay | null | undefined; entityDetails?: EntityDisplay | null }) {
+  const data: EntityDisplay = { ...entityDetails, ...entity };
   if (!data || Object.keys(data).length === 0) return null;
 
   const rawDoc = (data.document || "").replace(/\D/g, "");
@@ -64,7 +65,7 @@ export function PanelEntity({ entity, entityDetails }: { entity: any, entityDeta
         
         <div className="flex flex-col overflow-hidden">
           <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400 dark:text-neutral-500">E-mail</span> 
-          <span className="text-neutral-900 dark:text-neutral-100 font-medium mt-0.5 truncate" title={data.email}>
+          <span className="text-neutral-900 dark:text-neutral-100 font-medium mt-0.5 truncate" title={data.email as string | undefined}>
             {data.email || "—"}
           </span>
         </div>

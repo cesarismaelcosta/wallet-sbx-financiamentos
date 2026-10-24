@@ -37,7 +37,7 @@ export function useOrchestratorHistorySync() {
   const navigate = useNavigate();
   const location = useRouterState({ select: (s) => s.location });
 
-  const searchObj = (location.search as Record<string, any>) || {};
+  const searchObj = (location.search as Record<string, string | undefined>) || {};
   const visitId = searchObj.visit_id as string | undefined;
   const updateId = searchObj.visit_update_id as string | undefined;
   const pathname = location.pathname;
@@ -72,7 +72,7 @@ export function useOrchestratorHistorySync() {
 
     const syncTemporalAnchor = async () => {
       try {
-        const searchParams = new URLSearchParams(searchObj as any);
+        const searchParams = new URLSearchParams(searchObj as Record<string, string>);
         const currentFullUrl = pathname + "?" + searchParams.toString();
         const absoluteUrl = window.location.origin + currentFullUrl;
 
@@ -141,5 +141,6 @@ export function useOrchestratorHistorySync() {
 
     syncTemporalAnchor();
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- searchObj muda a cada render; visitId/updateId já cobrem a URL
   }, [pathname, visitId, updateId, navigate]); 
 }

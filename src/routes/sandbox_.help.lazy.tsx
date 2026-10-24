@@ -155,7 +155,7 @@ function SandboxHelpPage() {
                         a: "O design system e as regras de negócio visuais estão desacoplados em subpastas dedicadas:",
                         bullets: [
                           <><b>Componentes de Layout:</b> Elementos reutilizáveis como <code className={codeBadge}>ButtonWhatsApp.tsx</code>, <code className={codeBadge}>DynamicConsents.tsx</code>, <code className={codeBadge}>FAQSection.tsx</code> e <code className={codeBadge}>Footer.tsx</code>.</>,
-                          <><b>Módulos Sequenciais (Wizards):</b> Produtos como o Auto Equity possuem passos estruturados de <code className={codeBadge}>Step1Eligibility.tsx</code> até <code className={codeBadge}>Step5Confirm.tsx</code>, validados por schemas próprios e controlados pelo motor central em <code className={codeBadge}>WizardEngine.tsx</code>.</>,
+                          <><b>Módulos Sequenciais (Wizards):</b> Produtos como o Auto Equity possuem passos estruturados de <code className={codeBadge}>Step1Vehicle.tsx</code> até <code className={codeBadge}>Step5Confirm.tsx</code>, controlados pelo motor central em <code className={codeBadge}>WizardEngine.tsx</code>.</>,
                           <><b>Core State:</b> O gerenciamento de estado e navegação utiliza hooks dedicados como <code className={codeBadge}>useOrchestrator.ts</code>, <code className={codeBadge}>useNavigation.ts</code> e o contexto global do hub.</>
                         ]
                       }

@@ -143,8 +143,11 @@ function generateSystemErrorEmailHtml(data: SystemAlertPayload): EmailTemplateRe
         <td align="center">
           <table width="100%" style="width: 100%; max-width: 640px; background-color: #ffffff; border: 1px solid ${line}; border-radius: 0; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);">
             <tr>
-              <td align="left" style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid ${line};">
-                <img src="${logoSrc}" alt="Wallet sbX" width="140" style="display: block; border: 0;" />
+              <!-- Cabeçalho = uma imagem só (fundo branco + logo, PNG 960x114 ~2 KB, exibida em 640x76 com altura reservada).
+                   Leitores de e-mail não alteram imagens, então o cabeçalho continua branco no modo escuro do Gmail.
+                   O alt estilizado aparece no lugar do ícone enquanto a imagem carrega ou se for bloqueada. -->
+              <td align="left" bgcolor="#ffffff" style="padding: 0; background-color: #ffffff; border-bottom: 1px solid ${line};">
+                <img src="${logoSrc}" alt="Wallet sbX" width="640" height="76" style="display: block; border: 0; width: 100%; max-width: 640px; height: auto; font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 700; line-height: 76px; color: #1d1d1b;" />
               </td>
             </tr>
             <tr>
@@ -192,7 +195,7 @@ function generateSystemErrorEmailHtml(data: SystemAlertPayload): EmailTemplateRe
 
   return {
     html: html,
-    attachments: [{ content_id: "logo-wallet", storage_path: "logos/wallet-sbx-200_60.png" }]
+    attachments: [{ content_id: "logo-wallet", storage_path: "logos/wallet-sbx-header-email.png" }]
   };
 }
 

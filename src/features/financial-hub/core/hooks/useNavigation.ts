@@ -1,5 +1,5 @@
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
-import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
+import { callOrchestrator, GatewayErrorResponse } from "@/features/financial-hub/core/services/gateway";
 import { useState } from "react";
 
 /**
@@ -25,7 +25,7 @@ export const NAVIGATION_INTENTS = {
  * devidamente registrada no backend via `orchestrateNavigation` antes da execução.
  */
 export function useNavigation() {
-  const { state } = useWizard<any>();
+  const { state } = useWizard();
   const [loading, setLoading] = useState(false);
 
   /**
@@ -37,7 +37,7 @@ export function useNavigation() {
   const handleRedirect = async (
     intent: typeof NAVIGATION_INTENTS[keyof typeof NAVIGATION_INTENTS], 
     externalUrl?: string,
-    consentsData?: any[]  
+    consentsData?: Record<string, unknown>[]  
   ) => {
 
     setLoading(true);
@@ -67,7 +67,8 @@ export function useNavigation() {
       if (externalUrl) {
         window.open(externalUrl, intent.target);
       }
-    } catch (error: any) {
+    } catch (caught: unknown) {
+      const error = caught as Partial<GatewayErrorResponse> | null;
       // =========================================================================
       // INTERCEPTADOR DE SESSÃO
       // A fonte da verdade é o Backend (Gateway). Se ele envia um fallback_url,

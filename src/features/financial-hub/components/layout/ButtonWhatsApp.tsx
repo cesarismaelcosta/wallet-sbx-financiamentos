@@ -36,18 +36,26 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDocument, BRL } from "../shared/formatters";
 import { useNavigation, NAVIGATION_INTENTS } from "../../core/hooks/useNavigation";
+import type { HubData } from "@/features/financial-hub/components/shared/types";
 
 // =========================================================================
 // [CONTRATOS E INTERFACES TIPADAS]
 // =========================================================================
+/** integration_details do produto: contato de WhatsApp do parceiro. */
+interface WhatsAppConfig {
+  urlWhatsApp?: string;
+  whatsapp_number?: string;
+  [key: string]: unknown;
+}
+
 interface ButtonWhatsAppProps {
   variant?: "button" | "card";
-  config: any;
-  data?: any;
+  config: WhatsAppConfig | null | undefined;
+  data?: HubData & { valorEntrada?: number };
   productName?: string;
-  consents?: any[];
+  consents?: Record<string, unknown>[];
   areConsentsValid?: boolean;
-  onAction?: (url: string, consents: any) => void;
+  onAction?: (url: string, consents: Record<string, unknown>[] | undefined) => void;
   disabled?: boolean;
   // Permite ao chamador sobrepor a cor padrão (institucional neutra) sem
   // duplicar o componente — mesclado com cn()/twMerge, então as classes

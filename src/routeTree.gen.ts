@@ -45,8 +45,14 @@ const BackofficeUsersLazyRouteImport = createFileRoute('/backoffice/users')()
 const EmprestimosAutoEquityLazyRouteImport = createFileRoute(
   '/emprestimos/auto-equity',
 )()
+const EmprestimosHomeEquityLazyRouteImport = createFileRoute(
+  '/emprestimos/home-equity',
+)()
 const FinanciamentosCartaoLazyRouteImport = createFileRoute(
   '/financiamentos/cartao',
+)()
+const FinanciamentosImoveisLazyRouteImport = createFileRoute(
+  '/financiamentos/imoveis',
 )()
 const FinanciamentosSimulacaoLazyRouteImport = createFileRoute(
   '/financiamentos/simulacao',
@@ -194,6 +200,14 @@ const EmprestimosAutoEquityLazyRoute =
   } as any).lazy(() =>
     import('./routes/emprestimos.auto-equity.lazy').then((d) => d.Route),
   )
+const EmprestimosHomeEquityLazyRoute =
+  EmprestimosHomeEquityLazyRouteImport.update({
+    id: '/home-equity',
+    path: '/home-equity',
+    getParentRoute: () => EmprestimosRoute,
+  } as any).lazy(() =>
+    import('./routes/emprestimos.home-equity.lazy').then((d) => d.Route),
+  )
 const FinanciamentosCartaoLazyRoute =
   FinanciamentosCartaoLazyRouteImport.update({
     id: '/cartao',
@@ -201,6 +215,14 @@ const FinanciamentosCartaoLazyRoute =
     getParentRoute: () => FinanciamentosRoute,
   } as any).lazy(() =>
     import('./routes/financiamentos.cartao.lazy').then((d) => d.Route),
+  )
+const FinanciamentosImoveisLazyRoute =
+  FinanciamentosImoveisLazyRouteImport.update({
+    id: '/imoveis',
+    path: '/imoveis',
+    getParentRoute: () => FinanciamentosRoute,
+  } as any).lazy(() =>
+    import('./routes/financiamentos.imoveis.lazy').then((d) => d.Route),
   )
 const FinanciamentosSimulacaoLazyRoute =
   FinanciamentosSimulacaoLazyRouteImport.update({
@@ -264,7 +286,9 @@ export interface FileRoutesByFullPath {
   '/backoffice/simulations': typeof BackofficeSimulationsLazyRoute
   '/backoffice/users': typeof BackofficeUsersLazyRoute
   '/emprestimos/auto-equity': typeof EmprestimosAutoEquityLazyRoute
+  '/emprestimos/home-equity': typeof EmprestimosHomeEquityLazyRoute
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
+  '/financiamentos/imoveis': typeof FinanciamentosImoveisLazyRoute
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/produtos/offer': typeof ProdutosOfferLazyRoute
@@ -292,7 +316,9 @@ export interface FileRoutesByTo {
   '/backoffice/simulations': typeof BackofficeSimulationsLazyRoute
   '/backoffice/users': typeof BackofficeUsersLazyRoute
   '/emprestimos/auto-equity': typeof EmprestimosAutoEquityLazyRoute
+  '/emprestimos/home-equity': typeof EmprestimosHomeEquityLazyRoute
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
+  '/financiamentos/imoveis': typeof FinanciamentosImoveisLazyRoute
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/produtos/offer': typeof ProdutosOfferLazyRoute
@@ -323,7 +349,9 @@ export interface FileRoutesById {
   '/backoffice/simulations': typeof BackofficeSimulationsLazyRoute
   '/backoffice/users': typeof BackofficeUsersLazyRoute
   '/emprestimos/auto-equity': typeof EmprestimosAutoEquityLazyRoute
+  '/emprestimos/home-equity': typeof EmprestimosHomeEquityLazyRoute
   '/financiamentos/cartao': typeof FinanciamentosCartaoLazyRoute
+  '/financiamentos/imoveis': typeof FinanciamentosImoveisLazyRoute
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/produtos/offer': typeof ProdutosOfferLazyRoute
@@ -355,7 +383,9 @@ export interface FileRouteTypes {
     | '/backoffice/simulations'
     | '/backoffice/users'
     | '/emprestimos/auto-equity'
+    | '/emprestimos/home-equity'
     | '/financiamentos/cartao'
+    | '/financiamentos/imoveis'
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/produtos/offer'
@@ -383,7 +413,9 @@ export interface FileRouteTypes {
     | '/backoffice/simulations'
     | '/backoffice/users'
     | '/emprestimos/auto-equity'
+    | '/emprestimos/home-equity'
     | '/financiamentos/cartao'
+    | '/financiamentos/imoveis'
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/produtos/offer'
@@ -413,7 +445,9 @@ export interface FileRouteTypes {
     | '/backoffice/simulations'
     | '/backoffice/users'
     | '/emprestimos/auto-equity'
+    | '/emprestimos/home-equity'
     | '/financiamentos/cartao'
+    | '/financiamentos/imoveis'
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/produtos/offer'
@@ -585,11 +619,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmprestimosAutoEquityLazyRouteImport
       parentRoute: typeof EmprestimosRoute
     }
+    '/emprestimos/home-equity': {
+      id: '/emprestimos/home-equity'
+      path: '/home-equity'
+      fullPath: '/emprestimos/home-equity'
+      preLoaderRoute: typeof EmprestimosHomeEquityLazyRouteImport
+      parentRoute: typeof EmprestimosRoute
+    }
     '/financiamentos/cartao': {
       id: '/financiamentos/cartao'
       path: '/cartao'
       fullPath: '/financiamentos/cartao'
       preLoaderRoute: typeof FinanciamentosCartaoLazyRouteImport
+      parentRoute: typeof FinanciamentosRoute
+    }
+    '/financiamentos/imoveis': {
+      id: '/financiamentos/imoveis'
+      path: '/imoveis'
+      fullPath: '/financiamentos/imoveis'
+      preLoaderRoute: typeof FinanciamentosImoveisLazyRouteImport
       parentRoute: typeof FinanciamentosRoute
     }
     '/financiamentos/simulacao': {
@@ -639,10 +687,12 @@ declare module '@tanstack/react-router' {
 
 interface EmprestimosRouteChildren {
   EmprestimosAutoEquityLazyRoute: typeof EmprestimosAutoEquityLazyRoute
+  EmprestimosHomeEquityLazyRoute: typeof EmprestimosHomeEquityLazyRoute
 }
 
 const EmprestimosRouteChildren: EmprestimosRouteChildren = {
   EmprestimosAutoEquityLazyRoute: EmprestimosAutoEquityLazyRoute,
+  EmprestimosHomeEquityLazyRoute: EmprestimosHomeEquityLazyRoute,
 }
 
 const EmprestimosRouteWithChildren = EmprestimosRoute._addFileChildren(
@@ -651,12 +701,14 @@ const EmprestimosRouteWithChildren = EmprestimosRoute._addFileChildren(
 
 interface FinanciamentosRouteChildren {
   FinanciamentosCartaoLazyRoute: typeof FinanciamentosCartaoLazyRoute
+  FinanciamentosImoveisLazyRoute: typeof FinanciamentosImoveisLazyRoute
   FinanciamentosSimulacaoLazyRoute: typeof FinanciamentosSimulacaoLazyRoute
   FinanciamentosVeiculosLazyRoute: typeof FinanciamentosVeiculosLazyRoute
 }
 
 const FinanciamentosRouteChildren: FinanciamentosRouteChildren = {
   FinanciamentosCartaoLazyRoute: FinanciamentosCartaoLazyRoute,
+  FinanciamentosImoveisLazyRoute: FinanciamentosImoveisLazyRoute,
   FinanciamentosSimulacaoLazyRoute: FinanciamentosSimulacaoLazyRoute,
   FinanciamentosVeiculosLazyRoute: FinanciamentosVeiculosLazyRoute,
 }

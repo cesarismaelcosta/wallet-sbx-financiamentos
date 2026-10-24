@@ -14,12 +14,13 @@ import {
   Banknote, Zap, Star, Gift, TrendingUp, Landmark, FileCheck, BadgePercent, 
   Users, Monitor 
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 /**
  * Mapeamento centralizado de ícones.
  * O JSON do backend envia a string, este objeto resolve o componente.
  */
-export const ICON_MAP: Record<string, any> = {
+export const ICON_MAP: Record<string, LucideIcon> = {
   Percent: Percent,             // Taxas, juros, descontos
   Clock: Clock,                 // Prazos, tempo de aprovação
   ShieldCheck: ShieldCheck,     // Segurança, privacidade, garantia

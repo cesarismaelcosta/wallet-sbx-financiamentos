@@ -57,6 +57,7 @@ import {
   Consultation, 
   SimulationFinancials 
 } from "../_shared/types.ts";
+import { STAGE, STAGE_OF_STATUS } from "../_shared/types.ts";
 
 import { debugLog } from "../_shared/logger.ts";
 
@@ -109,6 +110,65 @@ function buildAuditPayload(payload: SimulationPayload): Record<string, any> {
     config_matched_by: (payload as any).config_matched_by ?? null,
     orchestrator_config_id: (payload as any).orchestrator_config_id ?? null,
   };
+}
+
+/**
+ * GARANTIA (simulation_collateral_vehicle / simulation_collateral_home)
+ * @description Grava o bem dado em garantia nas jornadas FlowCredi a partir de
+ * `simulation_details` (informado pelo cliente): veículo (`vehicle_*`, Car Equity)
+ * ou imóvel (`property_*`, Home Equity). Uma linha por simulação: atualiza se já
+ * existe (cliente refez a simulação), senão insere. Sem DELETE (padrão das filhas).
+ * Financiamento imobiliário não tem garantia informada (o imóvel é a oferta).
+ */
+async function persistCollateral(t: any, simulationId: string | number, payload: SimulationPayload): Promise<void> {
+  const sim = (payload.simulation_details ?? {}) as Record<string, any>;
+  const n = (v: unknown) => (v === undefined || v === null || v === "" || isNaN(Number(v)) ? null : Number(v));
+  const int = (v: unknown) => { const x = n(v); return x === null ? null : Math.trunc(x); };
+  const str = (v: unknown) => (v === undefined || v === null || String(v).trim() === "" ? null : String(v).trim());
+
+  if (sim.vehicle_plate) {
+    const paid = sim.vehicle_paid === true;
+    const row = {
+      license_plate: str(sim.vehicle_plate)?.toUpperCase() ?? null,
+      licensing_state: str(sim.vehicle_state),
+      brand: str(sim.vehicle_brand),
+      model: str(sim.vehicle_model),
+      manufacture_year: int(sim.vehicle_year),
+      model_year: int(sim.vehicle_model_year),
+      doors: int(sim.vehicle_doors),
+      declared_value: n(sim.vehicle_value),
+      is_debt_free: paid,
+      debt_amount: paid ? 0 : n(sim.outstanding_balance) ?? 0,
+      kinship_degree: sim.vehicle_owner === true ? "SELF" : "OTHERS",
+      collateral_details: t.json(sim.vehicle_fuel ? { fuel_type: sim.vehicle_fuel } : {}),
+    };
+    const [existing] = await t`SELECT id FROM simulation_collateral_vehicle WHERE simulation_id = ${simulationId} LIMIT 1`;
+    if (existing) {
+      await t`UPDATE simulation_collateral_vehicle SET ${t(row)} WHERE id = ${existing.id}`;
+    } else {
+      await t`INSERT INTO simulation_collateral_vehicle ${t({ simulation_id: simulationId, ...row })}`;
+    }
+    return;
+  }
+
+  if (sim.property_type) {
+    const paid = sim.property_paid === true;
+    const row = {
+      real_estate_type: str(sim.property_type),
+      estimated_value: n(sim.property_value),
+      is_debt_free: paid,
+      debt_amount: paid ? 0 : n(sim.outstanding_balance) ?? 0,
+      city: str(sim.property_city),
+      state: str(sim.property_state),
+      collateral_details: t.json({}),
+    };
+    const [existing] = await t`SELECT id FROM simulation_collateral_home WHERE simulation_id = ${simulationId} LIMIT 1`;
+    if (existing) {
+      await t`UPDATE simulation_collateral_home SET ${t(row)} WHERE id = ${existing.id}`;
+    } else {
+      await t`INSERT INTO simulation_collateral_home ${t({ simulation_id: simulationId, ...row })}`;
+    }
+  }
 }
 
 /**
@@ -188,6 +248,56 @@ export async function resolvePartnerResult(
 }
 
 /**
+ * ETAPA DO REGISTRO
+ * @description A etapa vem do status (cada status pertence a uma etapa: STAGE_OF_STATUS).
+ * Status sem etapa própria (Falha, Cancelada, Pendente envio) ficam na etapa da chamada:
+ * envio do lead → Lead; Fandi (pré-análise direta) → Pré-análise; demais → Simulação.
+ */
+function stageFor(statusId: number | null | undefined, step: string, partnerId: unknown): number {
+  const byStatus = statusId != null ? STAGE_OF_STATUS[statusId] : undefined;
+  if (byStatus) return byStatus;
+  if (step === 'SUBMIT_LEAD') return STAGE.LEAD;
+  if (Number(partnerId) === 2) return STAGE.PRE_ANALISE;
+  return STAGE.SIMULACAO;
+}
+
+/**
+ * CONSENTIMENTOS (simulation_consents)
+ * @description Linhas de aceite com o snapshot legal (prova de consentimento, LGPD).
+ * Usado no INSERT e no UPDATE: nas jornadas em que a simulação vem antes (FlowCredi
+ * imóveis/home equity), os aceites só chegam no envio do lead, que é um UPDATE.
+ */
+function buildConsentRows(t: any, simulationId: string | number, payload: SimulationPayload, infra: any): any[] {
+  const consents = payload.consents ?? [];
+  if (!Array.isArray(consents) || consents.length === 0) return [];
+  const entity = (payload.entity as Entity) ?? {};
+  const manager = (payload.manager as Manager) ?? {};
+  const seller = (payload.seller as Seller) ?? {};
+  const event = (payload.event as Event) ?? {};
+  const offer = (payload.offer as Offer) ?? {};
+  return consents.map((c: any) => {
+    const isAccepted = c.accepted === true || c.acceptedConsents === true;
+    const acceptedAt = c.accepted_at || c.acceptedConsents_at || new Date().toISOString();
+    return {
+      simulation_id: simulationId, consent_id: c.consent_id ?? null, accepted: isAccepted, accepted_at: acceptedAt, 
+      partner_id: payload.partner_id ?? null, product_id: payload.product_id,
+      entity_id: entity.entity_id ?? null, document: entity.document ?? null, name: entity.name ?? null, 
+      email: entity.email ?? null, phone: entity.phone ?? null, birth_date: entity.birth_date ?? null, gender: entity.gender ?? null, 
+      entity_details: t.json(entity ?? {}), ip_address: infra.ip_address ?? null, country: infra.country ?? null, 
+      state: infra.state ?? null, city: infra.city ?? null, user_agent: infra.user_agent ?? null, 
+      device_type: infra.device_type ?? null, operating_system: infra.operating_system ?? null,
+      origin_details: t.json(infra ?? {}), manager_details: t.json(manager ?? {}), seller_details: t.json(seller ?? {}), 
+      event_details: t.json(event ?? {}), offer_details: t.json(offer ?? {}),
+      page_snapshot: t.json({ 
+          branding: payload.page_configs || {}, rules: payload.rules || {}, faq: payload.page_faqs || [], 
+          consents_rendered: payload.consent_configs || [], legal_text: c.legal_text_snapshot || {} 
+      }), 
+      raw_payload: t.json(payload)
+    };
+  });
+}
+
+/**
  * PERSISTE DADOS DA SIMULAÇÃO (INSERT)
  * @description Executa a escrita primária de uma nova simulação. 
  * Realiza o "Triple-Write" (Simulations, Offers, Updates) de forma atômica.
@@ -199,7 +309,7 @@ export async function insertSimulationData(
   gatewayResult: SimulationResponse,
   action: 'VISIT' | 'CONSULT' | 'REDIRECT' | 'SIMULATE' | 'CONTACT',
   action_description: string,
-  step: 'CHECK_ELIGIBILITY' | 'EXECUTE_SIMULATION' = 'EXECUTE_SIMULATION',
+  step: 'EXECUTE_SIMULATION' | 'SUBMIT_LEAD' = 'EXECUTE_SIMULATION',
   syncVisit: boolean = true 
 ): Promise<{ simulation_id: string, simulation_update_id: string }> {
 
@@ -214,8 +324,6 @@ export async function insertSimulationData(
 
     const auditPayload = buildAuditPayload(payload);
 
-    const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
-    const stageId = stageMap[step];
 
     let bestConsult: Consultation = {
       status_id: null, is_selected: null, message: null, external_operation_id: null,
@@ -227,11 +335,14 @@ export async function insertSimulationData(
       installments: simulation.installments ?? null,
       cet_rate: simulation.cet_rate ?? null,
       installment_value: simulation.installment_value ?? null,
+      amortization_type: null,
+      last_installment_value: null,
     };
 
     let mainResultPartnerId = null;
 
-    if (step === 'EXECUTE_SIMULATION') {
+    // SUBMIT_LEAD também: no Car Equity o envio do lead é a primeira chamada (cria o registro).
+    if (step === 'EXECUTE_SIMULATION' || step === 'SUBMIT_LEAD') {
       let selectedConsult = gatewayResult.consults.find(c => c.is_selected === true) || gatewayResult.consults[0];
       if (selectedConsult) {
         bestConsult = selectedConsult;
@@ -245,6 +356,8 @@ export async function insertSimulationData(
       }
     }
 
+    const stageId = stageFor(bestConsult.status_id, step, payload.partner_id);
+
     return await sql.begin(async (t: any) => {
 
       // INSERT MESTRE: Salva a proposta na tabela 'simulations'.
@@ -252,14 +365,16 @@ export async function insertSimulationData(
         INSERT INTO simulations (
           id, visit_id, is_integrated, integration_method, partner_id, product_id,
           entity_id, entity_type, document, name, phone, email, birth_date, gender, entity_details,
-          financial_institution_id, requested_value, down_payment_amount, down_payment_percentage,
-          financed_amount, installments, cet_rate, installment_value, simulation_details,
+          financial_institution_id, amortization_type, installment_value, last_installment_value,
+          requested_value, down_payment_amount, down_payment_percentage,
+          financed_amount, installments, cet_rate, simulation_details,
           stage_id, status_id, result_partner_id, external_operation_id, raw_payload
         ) VALUES (
           ${payload.simulation_id}, ${payload.visit_id}, ${payload.is_integrated ?? false}, ${payload.integration_method}, ${payload.partner_id}, ${payload.product_id},
           ${entity.entity_id}, ${entity.entity_type}, ${entity.document}, ${entity.name}, ${entity.phone}, ${entity.email}, ${entity.birth_date}, ${entity.gender}, ${entity}::jsonb,
-          ${bestConsult.financial_institution_id}, ${bestConsult.requested_value}, ${bestConsult.down_payment_amount}, ${bestConsult.down_payment_percentage},
-          ${bestConsult.financed_amount}, ${bestConsult.installments}, ${bestConsult.cet_rate}, ${bestConsult.installment_value}, ${bestConsult}::jsonb,
+          ${bestConsult.financial_institution_id}, ${bestConsult.amortization_type ?? null}, ${bestConsult.installment_value}, ${bestConsult.last_installment_value ?? null},
+          ${bestConsult.requested_value}, ${bestConsult.down_payment_amount}, ${bestConsult.down_payment_percentage},
+          ${bestConsult.financed_amount}, ${bestConsult.installments}, ${bestConsult.cet_rate}, ${bestConsult}::jsonb,
           ${stageId}, ${bestConsult.status_id}, ${mainResultPartnerId}, ${bestConsult.external_operation_id}, ${auditPayload}::jsonb
         )
         RETURNING id
@@ -327,6 +442,7 @@ export async function insertSimulationData(
         const consultsRows = gatewayResult.consults.map(consult => ({
             simulation_id: simulationId, 
             financial_institution_id: consult.financial_institution_id?.toString() ?? null, 
+            is_selected: consult.is_selected === true,
             status_id: consult.status_id ?? null, 
             requested_value: consult.requested_value ?? null,
             down_payment_amount: consult.down_payment_amount ?? null,
@@ -335,6 +451,8 @@ export async function insertSimulationData(
             installments: consult.installments ?? null,
             cet_rate: consult.cet_rate ?? null,
             installment_value: consult.installment_value ?? null,
+            amortization_type: consult.amortization_type ?? null,
+            last_installment_value: consult.last_installment_value ?? null,
             external_operation_id: consult.external_operation_id ?? null,
             simulation_details: t.json(consult ?? {}), 
             raw_payload: t.json(auditPayload)
@@ -343,27 +461,8 @@ export async function insertSimulationData(
       }
 
       // 📦 PERSISTE CONSENTIMENTOS (BULK INSERT)
-      if (consents && consents.length > 0) {
-        const consentRows = consents.map(c => {
-          const isAccepted = c.accepted === true || c.acceptedConsents === true;
-          const acceptedAt = c.accepted_at || c.acceptedConsents_at || new Date().toISOString();
-          return {
-            simulation_id: simulationId, consent_id: c.consent_id ?? null, accepted: isAccepted, accepted_at: acceptedAt, 
-            partner_id: payload.partner_id ?? null, product_id: payload.product_id,
-            entity_id: entity.entity_id ?? null, document: entity.document ?? null, name: entity.name ?? null, 
-            email: entity.email ?? null, phone: entity.phone ?? null, birth_date: entity.birth_date ?? null, gender: entity.gender ?? null, 
-            entity_details: t.json(entity ?? {}), ip_address: infra.ip_address ?? null, country: infra.country ?? null, 
-            state: infra.state ?? null, city: infra.city ?? null, user_agent: infra.user_agent ?? null, 
-            device_type: infra.device_type ?? null, operating_system: infra.operating_system ?? null,
-            origin_details: t.json(infra ?? {}), manager_details: t.json(manager ?? {}), seller_details: t.json(seller ?? {}), 
-            event_details: t.json(event ?? {}), offer_details: t.json(offer ?? {}),
-            page_snapshot: t.json({ 
-                branding: payload.page_configs || {}, rules: payload.rules || {}, faq: payload.page_faqs || [], 
-                consents_rendered: payload.consent_configs || [], legal_text: c.legal_text_snapshot || {} 
-            }), 
-            raw_payload: t.json(payload)
-          };
-        });
+      const consentRows = buildConsentRows(t, simulationId, payload, infra);
+      if (consentRows.length > 0) {
         parallelTasks.push(t`INSERT INTO simulation_consents ${t(consentRows)}`);
       }
 
@@ -379,6 +478,9 @@ export async function insertSimulationData(
         }));
         parallelTasks.push(t`INSERT INTO public.notification_outbox ${t(notifRows)}`);
       }
+
+      // 🚗🏠 GARANTIA (Car Equity / Home Equity)
+      parallelTasks.push(persistCollateral(t, simulationId, payload));
 
       // 📦 ATUALIZAÇÃO DO FUNIL DE VISITAS
       if (syncVisit && payload.visit_id) {
@@ -507,7 +609,7 @@ export async function updateSimulationData(
   gatewayResult: SimulationResponse,
   action: string,
   action_description: string,
-  step: 'CHECK_ELIGIBILITY' | 'EXECUTE_SIMULATION' = 'EXECUTE_SIMULATION'
+  step: 'EXECUTE_SIMULATION' | 'SUBMIT_LEAD' = 'EXECUTE_SIMULATION'
 ): Promise<string | number> {
   try {
     const auditPayload = buildAuditPayload(payload);
@@ -515,8 +617,7 @@ export async function updateSimulationData(
     let bestConsult = gatewayResult.consults.find(c => c.is_selected === true) || gatewayResult.consults[0];
     if (!bestConsult.is_selected) bestConsult.is_selected = true;
 
-    const stageMap: Record<string, number> = { 'CHECK_ELIGIBILITY': 1, 'EXECUTE_SIMULATION': 2 };
-    const stageId = stageMap[step];
+    const stageId = stageFor(bestConsult.status_id, step, payload.partner_id);
 
     // 🔒 [PERFORMANCE] Mesmo raciocínio do insertSimulationData: resolvido com `sql`,
     // não com `t`, pra não prender o advisory lock do parceiro pela transação de UPDATE inteira.
@@ -560,6 +661,7 @@ export async function updateSimulationData(
         const consultsRows = gatewayResult.consults.map(consult => ({
           simulation_id: simulationId,
           financial_institution_id: consult.financial_institution_id?.toString() ?? null,
+          is_selected: consult.is_selected === true,
           status_id: consult.status_id ?? null,
           requested_value: consult.requested_value ?? null,
           down_payment_amount: consult.down_payment_amount ?? null,
@@ -568,6 +670,8 @@ export async function updateSimulationData(
           installments: consult.installments ?? null,
           cet_rate: consult.cet_rate ?? null,
           installment_value: consult.installment_value ?? null,
+          amortization_type: consult.amortization_type ?? null,
+          last_installment_value: consult.last_installment_value ?? null,
           external_operation_id: consult.external_operation_id ?? null,
           simulation_details: t.json(consult ?? {}),
           raw_payload: t.json(auditPayload)
@@ -586,6 +690,15 @@ export async function updateSimulationData(
         }));
         parallelTasks.push(t`INSERT INTO public.notification_outbox ${t(notifRows)}`);
       }
+
+      // 📦 CONSENTIMENTOS (aceites do envio do lead)
+      const consentRows = buildConsentRows(t, simulationId, payload, infra);
+      if (consentRows.length > 0) {
+        parallelTasks.push(t`INSERT INTO simulation_consents ${t(consentRows)}`);
+      }
+
+      // 🚗🏠 GARANTIA (Car Equity / Home Equity)
+      parallelTasks.push(persistCollateral(t, simulationId, payload));
 
       await Promise.all(parallelTasks);
 

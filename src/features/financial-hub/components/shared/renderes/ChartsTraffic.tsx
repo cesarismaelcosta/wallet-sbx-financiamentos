@@ -41,6 +41,13 @@ const defaultChartConfig = {
 // ============================================================================
 // [COMPONENTE PRINCIPAL]
 // ============================================================================
+/** Item de gráfico de barras (origem, ação, produto). */
+type ChartItem = { name: string; count: number };
+/** Ponto do gráfico diário (dia já formatado). */
+type DailyPoint = { day: string; count: number };
+/** Indicadores usados aqui (o painel do backoffice manda o objeto completo). */
+type TrafficChartKpis = { bySource?: ChartItem[]; byAction?: ChartItem[]; byProduct?: ChartItem[] };
+
 export default function TrafficCharts({
   loading,
   visitKpis,
@@ -48,8 +55,8 @@ export default function TrafficCharts({
   periodLabel,
 }: {
   loading: boolean;
-  visitKpis: any;
-  visDailyData: any[];
+  visitKpis: TrafficChartKpis | null | undefined;
+  visDailyData: DailyPoint[];
   periodLabel: string;
 }) {
   // ✨ Hook de responsividade injetado na raiz do componente
@@ -83,7 +90,7 @@ export default function TrafficCharts({
                 <YAxis hide />
                 <ChartTooltip cursor={{ fill: "hsl(var(--muted))", opacity: 0.8 }} content={<ChartTooltipContent className="rounded-none shadow-md border-border" />} />
                 <Bar dataKey="count" fill={darkInk} radius={[0, 0, 0, 0]}>
-                  <LabelList dataKey="count" position="top" offset={6} className="fill-foreground" fontSize={11} fontWeight={700} formatter={(v: any) => (v > 0 ? v : "")} />
+                  <LabelList dataKey="count" position="top" offset={6} className="fill-foreground" fontSize={11} fontWeight={700} formatter={(v: unknown) => (Number(v) > 0 ? (v as number | string) : "")} />
                 </Bar>
               </BarChart>
             </ChartContainer>

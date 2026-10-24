@@ -21,6 +21,7 @@ import {
 import { 
   Offer
 } from "../_shared/types.ts";
+import { STATUS } from "../_shared/types.ts";
 
 import {
   generateUserEmailNotificationHtml,
@@ -137,7 +138,7 @@ export async function processSimulationPartner(
       message: `O prazo de ${installments} parcelas não está disponível para esta modalidade.`,
       consults: [
         {
-          status_id: 8, // Falha de Negócio / Regra Não Atendida
+          status_id: STATUS.FALHA, // Falha de Negócio / Regra Não Atendida
           is_selected: false,
           external_operation_id: null,
           message: `Prazo inválido para a tabela de fatores do parceiro.`,
@@ -170,7 +171,7 @@ export async function processSimulationPartner(
 
   // 3. OBJETO COM O RESULTADO DA CONSULTA
   const consult: Consultation = {
-    status_id: 1, 
+    status_id: STATUS.COM_CONDICOES, 
     is_selected: true,
     external_operation_id: `SIM-PRC-${Date.now()}`,
     message: "Referência de taxa e parcela gerada com sucesso.",

@@ -16,14 +16,15 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 // 🧹 FIX: Importando getTokenForPayload para ler do Cookie em Prod
 import { manualLogout, clearSession, setSessionToken, authHeaders, getTokenForPayload } from "@/services/session";
+import type { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
 
 
 interface FinancialAuthContextType {
   sessionToken: string | null;
   userId: string | null;
-  userProfile: any | null; // 👈 Perfil unificado (/me) propagado em memória
+  userProfile: Partial<BFFUserProfile> | null; // 👈 Perfil unificado (/me) propagado em memória
   isLoading: boolean;
-  setSession: (token: string, userId?: string, profile?: any) => void;
+  setSession: (token: string, userId?: string, profile?: Partial<BFFUserProfile>) => void;
   logout: (opts?: { purgeEnv?: boolean }) => void;
 }
 
@@ -32,7 +33,7 @@ const FinancialAuthContext = createContext<FinancialAuthContextType | undefined>
 export function FinancialAuthProvider({ children }: { children: React.ReactNode }) {
   const [sessionToken, setSessionTokenState] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [userProfile, setUserProfile] = useState<any | null>(null); // 👈 Estado reativo do perfil
+  const [userProfile, setUserProfile] = useState<Partial<BFFUserProfile> | null>(null); // 👈 Estado reativo do perfil
   const [isLoading, setIsLoading] = useState(true);
 
   // -----------------------------------------------------------------------
@@ -44,7 +45,7 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
    * e atualiza o estado reativo do contexto.
    */
   // 🧹 FIX: useCallback adicionado para evitar re-criação da função a cada render
-  const setSession = useCallback((token: string, newUserId?: string, profile?: any) => {
+  const setSession = useCallback((token: string, newUserId?: string, profile?: Partial<BFFUserProfile>) => {
     if (typeof window !== "undefined") {
       setSessionToken(token); // Delega para session.ts (respeita USE_COOKIE e TOKEN_KEY)
 

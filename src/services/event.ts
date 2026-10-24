@@ -22,6 +22,7 @@
 import { BFFErrorResponse } from "@/features/financial-hub/components/shared/types";
 import { fetchOptions, authHeaders } from "@/services/session";
 import { ROOT_ROUTE } from "@/config/routes";
+import type { CaughtError } from "@/features/financial-hub/components/shared/types";
 
 interface FetchEventOptions {
   signal?: AbortSignal;
@@ -43,7 +44,7 @@ interface FetchEventOptions {
 export const fetchEventDetails = async (
   eventId: string,
   { signal, originUrl }: FetchEventOptions = {}
-): Promise<any> => { // Caso já tenha a tipagem BFFEventDetails, você pode substituir o 'any' aqui
+): Promise<Record<string, unknown>> => {
   
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -105,7 +106,8 @@ export const fetchEventDetails = async (
     const result = await response.json();
     return result.data || result;
 
-  } catch (error: any) {
+  } catch (caught: unknown) {
+    const error = caught as CaughtError;
     // Trata aborto de requisição pelo React (Clean-up de useEffect)
     if (error.name === 'AbortError' || signal?.aborted) {
       throw error;

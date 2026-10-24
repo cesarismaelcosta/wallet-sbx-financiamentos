@@ -12,9 +12,10 @@
 
 import { useWizard } from "./WizardProvider";
 import { WizardHeader } from "./WizardHeader";
+import type { WizardManifest } from "./manifest.types";
 
 interface WizardEngineProps {
-  manifest: any;
+  manifest: WizardManifest;
 }
 
 export function WizardEngine({ manifest }: WizardEngineProps) {

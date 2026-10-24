@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 
 interface WizardHeaderProps {
   currentStep: number;
-  stepsInfo: Record<number, { label: string; title: string; description: string }>;
+  stepsInfo: Record<number, { label?: string; title: string; description: string }>; // passo final pode não ter label (fora da régua)
 }
 
 export function WizardHeader({ currentStep, stepsInfo }: WizardHeaderProps) {

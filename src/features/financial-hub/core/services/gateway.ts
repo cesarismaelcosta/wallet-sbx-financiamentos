@@ -24,7 +24,7 @@
 
 import { authHeaders, fetchOptions } from "@/services/session";
 import { buildSigninRedirect } from "@/config/routes";
-import { OrchestratorPayload } from "@/features/financial-hub/components/shared/types";
+import { GatewayResult, HubData, InteractionContext, OrchestratorConfigsResult, OrchestratorPayload, OrchestratorPostResponse } from "@/features/financial-hub/components/shared/types";
 
 /** Contrato único de erro do Gateway consumido por hooks, steps e wrappers. */
 export interface GatewayErrorResponse {
@@ -33,7 +33,7 @@ export interface GatewayErrorResponse {
   message: string;
   status: number;
   fallback_url: string;
-  details: any;
+  details: unknown;
 }
 
 /** Timeouts por natureza da chamada (ms). */
@@ -76,8 +76,8 @@ const THIN_KEYS = [
  * Achata o payload para intenção + identificadores. Extrai IDs de objetos
  * aninhados legados e garante o formato exigido pelo Edge.
  */
-export function toThinPayload(payload: Record<string, any> = {}): Record<string, any> {
-  const thin: Record<string, any> = {};
+export function toThinPayload(payload: Record<string, unknown> = {}): Record<string, unknown> {
+  const thin: Record<string, unknown> = {};
 
   // Extração direta das chaves autorizadas
   for (const key of THIN_KEYS) {
@@ -89,7 +89,7 @@ export function toThinPayload(payload: Record<string, any> = {}): Record<string,
   // (entity/seller/event não são mais enviados — vêm do contexto confiável.)
   const nested: Array<[string, string]> = [["offer", "offer_id"]];
   for (const [obj, idKey] of nested) {
-    const id = payload?.[obj]?.[idKey];
+    const id = (payload?.[obj] as Record<string, unknown> | undefined)?.[idKey];
     if (thin[idKey] === undefined && id !== undefined && id !== null && id !== "") {
       thin[idKey] = id;
     }
@@ -97,7 +97,7 @@ export function toThinPayload(payload: Record<string, any> = {}): Record<string,
 
   // Preserva contexto de tracking (GPS da visita, sem PII)
   if (payload.interaction_context) {
-    const { utm_source, utm_medium, utm_campaign, origin_url } = payload.interaction_context;
+    const { utm_source, utm_medium, utm_campaign, origin_url } = payload.interaction_context as Partial<InteractionContext>;
     thin.interaction_context = { utm_source, utm_medium, utm_campaign, origin_url };
   }
 
@@ -106,7 +106,7 @@ export function toThinPayload(payload: Record<string, any> = {}): Record<string,
   // na estrutura correta (`simulation_details`) que o Back-end (Zero-Trust) exige.
   if (payload.installments || payload.down_payment || payload.term || payload.requested_value) {
     thin.simulation_details = {
-      ...(thin.simulation_details || {}),
+      ...((thin.simulation_details as Record<string, unknown>) || {}),
       installments: payload.installments || payload.term || null,
       down_payment_amount: payload.down_payment || null,
       requested_value: payload.requested_value || null,
@@ -139,7 +139,16 @@ function sanitizePayloadForLogs(data: unknown): unknown {
 }
 
 /** Fábrica centralizada de erros: qualquer falha vira contrato previsível. */
-function buildGatewayError(errorData: any, status: number, currentPath: string): GatewayErrorResponse {
+/** Corpo de erro que pode vir do Edge (ou montado aqui). */
+interface RawGatewayError {
+  message?: string;
+  error?: string;
+  code?: string;
+  fallback_url?: string;
+  [key: string]: unknown;
+}
+
+function buildGatewayError(errorData: RawGatewayError | null | undefined, status: number, currentPath: string): GatewayErrorResponse {
   const message = errorData?.message || errorData?.error || `Erro de rede ou servidor (Status: ${status})`;
   const code = errorData?.code || "GATEWAY_ERROR";
   const defaultFallback = buildSigninRedirect(currentPath);
@@ -185,8 +194,8 @@ async function fetchWithTimeout(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...options, signal: controller.signal });
-  } catch (err: any) {
-    if (err?.name === "AbortError") {
+  } catch (err: unknown) {
+    if ((err as { name?: string } | null)?.name === "AbortError") {
       throw buildGatewayError(
         { code: "GATEWAY_TIMEOUT", message: `Tempo limite excedido (${timeoutMs / 1000}s). Tente novamente.`, fallback_url: currentPath },
         504,
@@ -217,10 +226,12 @@ async function throwFromResponse(response: Response, currentPath: string, code: 
  * GET  -> hidratação (exige visit_id + visit_update_id).
  * POST -> registro de intenção (ThinPayload) e decisão de roteamento.
  */
+export async function callOrchestrator(payload: OrchestratorPayload | object, method: "GET"): Promise<HubData>;
+export async function callOrchestrator(payload: OrchestratorPayload | object, method: "POST"): Promise<OrchestratorPostResponse>;
 export async function callOrchestrator(
-  payload: OrchestratorPayload | Record<string, any>,
+  payload: OrchestratorPayload | object,
   method: "GET" | "POST",
-): Promise<any> {
+): Promise<HubData | OrchestratorPostResponse> {
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orchestrator`;
   const { currentPath, loginFallbackUrl } = currentContext();
 
@@ -234,7 +245,7 @@ export async function callOrchestrator(
   let timeoutToUse = TIMEOUT_FAST; // Padrão: 8s
 
   if (method === "POST") {
-    const thin = toThinPayload(payload as Record<string, any>);
+    const thin = toThinPayload(payload as Record<string, unknown>);
     options.body = JSON.stringify(thin);
 
     // ✨ Decisão cirúrgica baseada na intenção (action)
@@ -243,7 +254,7 @@ export async function callOrchestrator(
       timeoutToUse = TIMEOUT_SIMULATION; // 90s para transações pesadas (motor de crédito / upstream externo)
     }
   } else {
-    const p = payload as Record<string, any>;
+    const p = payload as Record<string, unknown>;
     if (!p?.visit_id || !p?.visit_update_id) {
       throw buildGatewayError(
         {
@@ -272,9 +283,9 @@ export async function callOrchestrator(
  * entity/offer/regras são hidratados no Edge (hydrate-data).
  */
 export async function callSimulation(
-  payload: OrchestratorPayload | Record<string, any>,
-  step: "CHECK_ELIGIBILITY" | "EXECUTE_SIMULATION" = "EXECUTE_SIMULATION",
-): Promise<any> {
+  payload: OrchestratorPayload | object,
+  step: "EXECUTE_SIMULATION" | "SUBMIT_LEAD" = "EXECUTE_SIMULATION",
+): Promise<GatewayResult> {
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-gateway`;
   const { currentPath, loginFallbackUrl } = currentContext();
 
@@ -284,7 +295,7 @@ export async function callSimulation(
       method: "POST",
       ...fetchOptions,
       headers: baseHeaders(currentPath, loginFallbackUrl),
-      body: JSON.stringify({ ...toThinPayload(payload as Record<string, any>), step }),
+      body: JSON.stringify({ ...toThinPayload(payload as Record<string, unknown>), step }),
     },
     TIMEOUT_SIMULATION,
     currentPath,
@@ -298,7 +309,7 @@ export async function callSimulation(
  * callOrchestratorConfigs
  * GET de metadados dinâmicos (wizard, steps, FAQs).
  */
-export async function callOrchestratorConfigs(params: Record<string, any>): Promise<any> {
+export async function callOrchestratorConfigs(params: Record<string, unknown>): Promise<OrchestratorConfigsResult> {
   const queryParams = new URLSearchParams();
   Object.entries(params || {}).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "" && key !== "title") {

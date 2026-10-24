@@ -18,6 +18,18 @@
 import { useState } from "react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 
+interface SliderCustomizadoProps {
+  value: number | null | undefined;
+  onValueChange?: (value: number) => void;
+  onValueCommit?: (value: number) => void;
+  min?: number | null;
+  max?: number | null;
+  step?: number;
+  isCurrency?: boolean;
+  disabled?: boolean;
+  active?: boolean;
+}
+
 export const SliderCustomizado = ({ 
   value, 
   onValueChange, 
@@ -28,7 +40,7 @@ export const SliderCustomizado = ({
   isCurrency = false,
   disabled = false,
   active = false, // Controle externo: força a exibição do badge (ex: input em foco)
-}: any) => {
+}: SliderCustomizadoProps) => {
   
   // SEGURANÇA: Garantimos que o valor seja tratado como 0 se for undefined/null
   const safeValue = value ?? 0;
@@ -46,7 +58,7 @@ export const SliderCustomizado = ({
 
   return (
     <SliderPrimitive.Root
-      className="relative flex w-full touch-none select-none items-center h-6"
+      className="relative flex w-full touch-none select-none items-center h-6 data-[disabled]:opacity-50 data-[disabled]:grayscale data-[disabled]:cursor-not-allowed"
       value={[safeValue]}
       disabled={disabled}
       onPointerDown={() => setIsDragging(true)}

@@ -9,6 +9,7 @@ import {
  * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
 import { debugLog } from "../_shared/logger.ts";
+import { OFFER_BUTTON_CSS, renderOfferButton } from "./email-offer-button.ts";
 
 /**
  * Gera o HTML completo de notificação de e-mail para simulações de parcelamento.
@@ -76,8 +77,8 @@ export function generateUserEmailNotificationHtml(
     const links = config.links || [];
     const parts = config.template_text.split(/\{([^}]+)\}/g);
 
-    return parts.map((part) => {
-      const linkMatch = links.find((l) => l.text === part);
+    return parts.map((part: string) => {
+      const linkMatch = links.find((l: { text: string; url: string }) => l.text === part);
 
       return linkMatch
         ? `<a href="${linkMatch.url}" style="text-decoration: underline; color: ${muted}; font-weight: 500;">${part}</a>`
@@ -88,8 +89,8 @@ export function generateUserEmailNotificationHtml(
   // 2. Montagem do Grid de Parcelas (Agora Zero-Radius, Neutral e com Hairline divider)
   let htmlParcelas = "";
   consults.forEach((item, index) => {
-    const valorFormatado = item.installment_value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-    const totalFormatado = (item.installments * item.installment_value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const valorFormatado = (item.installment_value ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const totalFormatado = ((item.installments ?? 0) * (item.installment_value ?? 0)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
     if (index % 2 === 0) htmlParcelas += `<tr>`;
     htmlParcelas += `
@@ -144,6 +145,11 @@ export function generateUserEmailNotificationHtml(
     <meta name="color-scheme" content="light dark">
     <meta name="supported-color-schemes" content="light dark">
     <style>
+      ${OFFER_BUTTON_CSS}
+      /* "Consultar oferta" fica branco também no modo escuro */
+      @media (prefers-color-scheme: dark) { td.sbx-offer-btn { background-color: #ffffff !important; } td.sbx-offer-btn a { color: #171717 !important; } }
+      [data-ogsc] td.sbx-offer-btn { background-color: #ffffff !important; }
+      [data-ogsc] td.sbx-offer-btn a { color: #171717 !important; }
       @media only screen and (max-width: 600px) {
         .col-responsive { display: block !important; width: 100% !important; }
         .spacer-responsive { display: none !important; }
@@ -172,8 +178,11 @@ export function generateUserEmailNotificationHtml(
         <td align="center">
           <table width="100%" bgcolor="#ffffff" class="dark-card" style="width: 100%; max-width: 640px; background-color: #ffffff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); border: 1px solid ${line};">
             <tr>
-              <td align="left" bgcolor="#ffffff" class="dark-card" style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid ${line};">
-                <img src="${logoSrc}" alt="Wallet sbX" width="140" class="logo-invertible" style="display: block; border: 0;" />
+                            <!-- Cabeçalho = uma imagem só (fundo branco + logo, PNG 960x114 ~2 KB, exibida em 640x76 com altura reservada).
+                                 Leitores de e-mail não alteram imagens, então o cabeçalho continua branco no modo escuro do Gmail.
+                                 O alt estilizado aparece no lugar do ícone enquanto a imagem carrega ou se for bloqueada. -->
+                            <td align="left" bgcolor="#ffffff" style="padding: 0; background-color: #ffffff; border-bottom: 1px solid ${line};">
+                <img src="${logoSrc}" alt="Wallet sbX" width="640" height="76" style="display: block; border: 0; width: 100%; max-width: 640px; height: auto; font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 700; line-height: 76px; color: #1d1d1b;" />
               </td>
             </tr>
             <tr>
@@ -194,6 +203,7 @@ export function generateUserEmailNotificationHtml(
                 </table>
                 <table width="100%" border="0" cellspacing="0" cellpadding="0">${htmlParcelas}</table>
                 ${dicasPagamento}
+                ${renderOfferButton(payload.offer, 24, fontStack)}
 
                 <p style="margin-top: 24px; font-size: 12px; color: ${disclaimerText}; font-weight: 500; line-height: 1.5;">
                   * Considera o valor de um lance ou proposta para a oferta no momento da simulação, sem adicionar eventuais comissões ou outras taxas que também podem ser parceladas.
@@ -221,7 +231,7 @@ export function generateUserEmailNotificationHtml(
     attachments: [
       {
         content_id: "logo-wallet",
-        storage_path: "logos/wallet-sbx-200_60.png"
+        storage_path: "logos/wallet-sbx-header-email.png"
       }
     ]
   };

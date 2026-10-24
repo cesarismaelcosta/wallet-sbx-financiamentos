@@ -74,6 +74,8 @@ import { PanelProduct } from "@/features/financial-hub/components/shared/rendere
 import { PanelConsents } from "@/features/financial-hub/components/shared/renderes/PanelConsents";
 import { PanelFAQ } from "@/features/financial-hub/components/shared/renderes/PanelFAQ";
 import { PanelFooter } from "@/features/financial-hub/components/shared/renderes/PanelFooter";
+import type { CaughtError } from "@/features/financial-hub/components/shared/types";
+import type { BFFOfferDetails, ConsentConfig, FaqItem, IntegrationDetails, PageConfigs, ProductRules } from "@/features/financial-hub/components/shared/types";
 
 /**
  * [CONTRATO DE PERFIL DO BFF]
@@ -100,7 +102,7 @@ export interface BFFUserProfile {
     zip_code: string;
     country: string;
   } | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -165,12 +167,39 @@ const autenticarAccountsSBX = async (username: string, password: string, environ
   };
 };
 
+/** Item da vitrine do sandbox (produto/oferta de teste). */
+type SandboxFlowItem = {
+  key?: string;
+  label?: string;
+  title?: string;
+  product_id?: number | string;
+  flowKey?: string;
+  offerId?: string;
+  disabled?: boolean;
+  variant?: string;
+};
+
+/** Configuração de rota devolvida pelo orchestrator-configs (linha de orchestrator_configs). */
+type SandboxRouteConfig = {
+  id?: string | number;
+  config_type?: string;
+  entity_type?: string;
+  lookup_id?: string | number;
+  page_url?: string;
+  integration_method?: string;
+  integration_details?: IntegrationDetails | null;
+  rules?: ProductRules | null;
+  page_configs?: PageConfigs | null;
+  consent_configs?: ConsentConfig[] | null;
+  page_faqs?: FaqItem[] | null;
+};
+
 /**
  * =========================================================================
  * [LOGIN DO SANDBOX EM DOIS SALTOS — MESMO CONTRATO DO HANDOFF]
  * =========================================================================
  */
-const trocarTokenNaEdgeFunction = async (rawTokenPayload: any, environment: "staging" | "production") => {
+const trocarTokenNaEdgeFunction = async (rawTokenPayload: { access_token?: string; [key: string]: unknown }, environment: "staging" | "production") => {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
   const sbxAccessToken = rawTokenPayload?.access_token || "";
@@ -237,27 +266,27 @@ function SandboxPage() {
 
   const [customOfferId, setCustomOfferId] = useState("4755461");
   const [tempOfferId, setTempOfferId] = useState("4755461");
-  const [apiOfferData, setApiOfferData] = useState<any>(null);
+  const [apiOfferData, setApiOfferData] = useState<BFFOfferDetails | null>(null);
   const [userData, setUserData] = useState<BFFUserProfile | null>(null);
-  const [vitrineOffers, setVitrineOffers] = useState<Record<string, any>>({});
+  const [vitrineOffers, setVitrineOffers] = useState<Record<string, BFFOfferDetails>>({});
   const [cardFotoIndex, setCardFotoIndex] = useState<Record<string, number>>({});
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [selectedOfferPayload, setSelectedOfferPayload] = useState<any>(null);
-  const [selectedEventPayload, setSelectedEventPayload] = useState<any>(null);
+  const [selectedOfferPayload, setSelectedOfferPayload] = useState<BFFOfferDetails | null>(null);
+  const [selectedEventPayload, setSelectedEventPayload] = useState<Record<string, unknown> | null>(null);
   const [drawerFotoAtiva, setDrawerFotoAtiva] = useState(0);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerOfferId, setDrawerOfferId] = useState("");
 
   const [isRouteDrawerOpen, setIsRouteDrawerOpen] = useState(false);
-  const [routeConfigData, setRouteConfigData] = useState<any>(null);
+  const [routeConfigData, setRouteConfigData] = useState<SandboxRouteConfig | null>(null);
   const [routeDrawerLoading, setRouteDrawerLoading] = useState(false);
   const [routeDrawerTitle, setRouteDrawerTitle] = useState("");
 
   const [isErrorDrawerOpen, setIsErrorDrawerOpen] = useState(false);
-  const [errorDrawerConfig, setErrorDrawerConfig] = useState<any>(null);
-  const [simulationResult, setSimulationResult] = useState<any>(null);
+  const [errorDrawerConfig, setErrorDrawerConfig] = useState<{ type: "offer" | "direct"; title: string; item?: SandboxFlowItem } | null>(null);
+  const [simulationResult, setSimulationResult] = useState<{ status: number; ok?: boolean; data: unknown } | null>(null);
   const [simulating, setSimulating] = useState(false);
 
   const handleExpiredSession = () => {
@@ -271,7 +300,7 @@ function SandboxPage() {
     setVitrineOffers({});
 
     if (logout) {
-      logout({ purgeEnv: true } as any);
+      logout({ purgeEnv: true });
     }
   };
 
@@ -334,6 +363,7 @@ function SandboxPage() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- registrado uma vez por sessão
   }, [sessionToken]);
 
   useEffect(() => {
@@ -354,6 +384,7 @@ function SandboxPage() {
       window.removeEventListener("pageshow", handlePageShow);
       window.removeEventListener("focus", handleFocus);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- registrado uma vez por sessão
   }, [sessionToken]);
 
   useEffect(() => {
@@ -401,6 +432,7 @@ function SandboxPage() {
         }
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- carrega só quando a sessão muda
   }, [sessionToken]);
 
   const [tipoPessoa, setTipoPessoa] = useState<"F" | "J">("F");
@@ -487,7 +519,8 @@ function SandboxPage() {
 
                 const firstOffer = data?.offers?.[0] || null;
                 return { key: item.key, data: firstOffer };
-              } catch (err: any) {
+              } catch (caught: unknown) {
+                const err = caught as CaughtError;
                 console.error(`Falha na query de ${item.key}:`, err);
                 return { key: item.key, data: null };
               }
@@ -499,7 +532,7 @@ function SandboxPage() {
           setApiOfferData(offerResult);
         }
 
-        const newVitrine: Record<string, any> = {};
+        const newVitrine: Record<string, BFFOfferDetails> = {};
         vitrineResults.forEach((res) => {
           if (res && res.data) {
             newVitrine[res.key] = res.data;
@@ -507,7 +540,8 @@ function SandboxPage() {
         });
 
         setVitrineOffers(newVitrine);
-      } catch (err: any) {
+      } catch (caught: unknown) {
+        const err = caught as CaughtError;
         if (!checkAndHandleSessionError(err.message)) {
           setError(err.message || "Erro ao carregar dados do sandbox.");
         }
@@ -517,6 +551,7 @@ function SandboxPage() {
     };
 
     loadSandboxData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- carrega só quando token/oferta/ambiente mudam
   }, [activeToken, sessionToken, customOfferId, ambienteAtivo]);
 
   const handleInspectOffer = async () => {
@@ -535,7 +570,8 @@ function SandboxPage() {
     try {
       const offer = await fetchOfferDetails(tempOfferId);
       setApiOfferData(offer);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as CaughtError;
       if (!checkAndHandleSessionError(err.message)) {
         setError(err.message || `Oferta não encontrada (Lote: ${tempOfferId}).`);
       }
@@ -568,7 +604,8 @@ function SandboxPage() {
         const eventData = await fetchEventDetails(eventId);
         setSelectedEventPayload(eventData);
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as CaughtError;
       console.error("[DRAWER_FETCH_ERROR]:", err);
       checkAndHandleSessionError(err.message);
     } finally {
@@ -576,7 +613,7 @@ function SandboxPage() {
     }
   };
 
-  const handleOpenConsultarRota = async (item: any) => {
+  const handleOpenConsultarRota = async (item: SandboxFlowItem) => {
     if (!item) return;
 
     if (!validateSessionBeforeAction()) return;
@@ -592,7 +629,7 @@ function SandboxPage() {
     setRouteConfigData(null);
 
     try {
-      const contextParams: Record<string, any> = {};
+      const contextParams: Record<string, unknown> = {};
 
       if (item.offerId) {
         try {
@@ -610,8 +647,9 @@ function SandboxPage() {
       }
 
       const data = await callOrchestratorConfigs(contextParams);
-      setRouteConfigData(data);
-    } catch (err: any) {
+      setRouteConfigData(data as SandboxRouteConfig);
+    } catch (caught: unknown) {
+      const err = caught as CaughtError;
       console.error("[ROUTE_CONFIG_ERROR]:", err);
       checkAndHandleSessionError(err.message);
     } finally {
@@ -619,7 +657,7 @@ function SandboxPage() {
     }
   };
 
-  const handleOpenSimularErro = (type: "offer" | "direct", item?: any) => {
+  const handleOpenSimularErro = (type: "offer" | "direct", item?: SandboxFlowItem) => {
     if (!validateSessionBeforeAction()) return;
 
     setSimulationResult(null);
@@ -643,18 +681,18 @@ function SandboxPage() {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
     const gatewayUrl = `${supabaseUrl}/functions/v1/financial-gateway-gate`;
 
-    const invalidOfferId = errorTarget === "offer" ? "9999" : errorDrawerConfig.item?.offerId || "4846218";
+    const invalidOfferId = errorTarget === "offer" ? "9999" : errorDrawerConfig!.item?.offerId || "4846218";
     const invalidToken =
       errorTarget === "token"
         ? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid_token_payload_test.signature"
         : accessTokenSBX || sessionStorage.getItem("access_token_sbx");
-    const invalidProductId = errorTarget === "product" ? "999" : errorDrawerConfig.item?.product_id || "8";
+    const invalidProductId = errorTarget === "product" ? "999" : errorDrawerConfig!.item?.product_id || "8";
 
     const payload = {
       environment: ambienteAtivo,
       auth_token: invalidToken,
-      offer_id: errorDrawerConfig.type === "offer" ? invalidOfferId : undefined,
-      product_id: errorDrawerConfig.type === "direct" ? invalidProductId : errorDrawerConfig.item?.product_id || "",
+      offer_id: errorDrawerConfig!.type === "offer" ? invalidOfferId : undefined,
+      product_id: errorDrawerConfig!.type === "direct" ? invalidProductId : errorDrawerConfig!.item?.product_id || "",
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox_error_simulation",
       utm_medium: "debug",
@@ -681,7 +719,8 @@ function SandboxPage() {
           ok: res.ok,
           data,
         });
-      } catch (err: any) {
+      } catch (caught: unknown) {
+        const err = caught as CaughtError;
         setSimulationResult({
           status: 500,
           ok: false,
@@ -708,7 +747,8 @@ function SandboxPage() {
       document.body.appendChild(form);
       try {
         form.submit();
-      } catch (err: any) {
+      } catch (caught: unknown) {
+        const err = caught as CaughtError;
         setSimulationResult({ status: 500, data: { error: err.message } });
         setSimulating(false);
         document.body.removeChild(form);
@@ -775,7 +815,8 @@ function SandboxPage() {
       } else {
         setPasswordError("Usuário ou senha inválidos.");
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as CaughtError;
       setGeneralError(err.message || "Erro de comunicação ao autenticar na sbX.");
     } finally {
       setIsLoggingIn(false);
@@ -796,7 +837,7 @@ function SandboxPage() {
       setApiOfferData(null);
       setVitrineOffers({});
 
-      if (logout) logout({ purgeEnv: true } as any);
+      if (logout) logout({ purgeEnv: true });
 
       setLoadingAction(null);
     }, 50);
@@ -855,7 +896,8 @@ function SandboxPage() {
     
     try {
       form.submit();
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as CaughtError;
       console.error("[FORM_POST_ERROR]:", err);
       setError(`Erro ao submeter formulário: ${err.message}`);
       setLoadingAction(null);
@@ -917,7 +959,8 @@ function SandboxPage() {
       });
       setIsErrorDrawerOpen(true);
 
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as CaughtError;
       console.error("[AJAX_GATEWAY_ERROR]:", err);
       setSimulationResult({
         status: 500,
@@ -974,7 +1017,8 @@ function SandboxPage() {
 
     try {
       form.submit();
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as CaughtError;
       console.error("[FORM_POST_ERROR]:", err);
       setError(`Erro ao submeter formulário: ${err.message}`);
       setLoadingAction(null);
@@ -1037,7 +1081,8 @@ function SandboxPage() {
       });
       setIsErrorDrawerOpen(true);
 
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as CaughtError;
       console.error("[AJAX_GATEWAY_ERROR]:", err);
       setSimulationResult({
         status: 500,
@@ -1094,7 +1139,8 @@ function SandboxPage() {
 
     try {
       form.submit();
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as CaughtError;
       console.error("[FORM_POST_ERROR]:", err);
       setError(`Erro ao submeter formulário: ${err.message}`);
       setLoadingAction(null);
@@ -1157,7 +1203,8 @@ function SandboxPage() {
       });
       setIsErrorDrawerOpen(true);
 
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as CaughtError;
       console.error("[AJAX_GATEWAY_ERROR]:", err);
       setSimulationResult({
         status: 500,
@@ -1189,7 +1236,7 @@ function SandboxPage() {
     if (!selectedOfferPayload?.offer?.photos) return [];
     return [...selectedOfferPayload.offer.photos]
       .sort((a, b) => (a.highlight === b.highlight ? 0 : a.highlight ? -1 : 1))
-      .map((p: any) => p.link);
+      .map((p) => p.link);
   }, [selectedOfferPayload]);
 
   const ghostBtn =
@@ -1466,12 +1513,12 @@ function SandboxPage() {
                     (() => {
                       const rawPhotos = apiOfferData?.offer?.photos || [];
                       const sortedPhotos = [...rawPhotos]
-                        .sort((a: any, b: any) => {
+                        .sort((a, b) => {
                           if (a.highlight && !b.highlight) return -1;
                           if (!a.highlight && b.highlight) return 1;
                           return 0;
                         })
-                        .map((p: any) => p.link);
+                        .map((p) => p.link);
 
                       const currentCardIndex = cardFotoIndex["inspection"] || 0;
                       const activePhotoUrl =
@@ -1789,16 +1836,16 @@ function SandboxPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {FLOW_OFFERS.map((item) => {
                   const data = vitrineOffers[item.key];
-                  const resolvedOfferId = data?.offer?.offer_id || data?.offer_id || data?.id || "";
+                  const resolvedOfferId = (data?.offer?.offer_id || data?.offer_id || data?.id || "") as string;
 
                   const rawPhotos = data?.offer?.photos || data?.photos || [];
                   const sortedPhotos = [...rawPhotos]
-                    .sort((a: any, b: any) => {
+                    .sort((a, b) => {
                       if (a.highlight && !b.highlight) return -1;
                       if (!a.highlight && b.highlight) return 1;
                       return 0;
                     })
-                    .map((p: any) => p.link);
+                    .map((p) => p.link);
 
                   const fotoAtualIndex = cardFotoIndex[item.key] || 0;
                   const photoUrl = sortedPhotos.length > 0 ? sortedPhotos[fotoAtualIndex % sortedPhotos.length] : null;
@@ -1992,7 +2039,7 @@ function SandboxPage() {
                   <div className="bg-white p-4 rounded-none shadow-sm border border-neutral-200">
                     <h2 className="text-xs font-black uppercase text-neutral-900 mb-2">Oferta Relacionada</h2>
                     <p className="font-bold text-sm mb-4 text-neutral-900">
-                      {selectedOfferPayload.offer.offer_description}
+                      {selectedOfferPayload.offer?.offer_description}
                     </p>
 
                     {drawerImagens.length > 0 && (

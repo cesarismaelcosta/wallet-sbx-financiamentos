@@ -60,18 +60,52 @@ import { Button } from "@/components/ui/button";
 // =========================================================================
 // [INTERFACES E HELPERS]
 // =========================================================================
+/** Oferta como vem da busca de ofertas da Superbid (campos usados no card). */
+interface CardOfferData {
+  offer_id?: string | number;
+  offer_description?: string;
+  offer_value?: number;
+  offer_type_id?: number;
+  is_shopping?: boolean;
+  lot_number?: string | number;
+  price_formatted?: string;
+  system_metric?: string;
+  photos?: { link?: string; highlight?: boolean }[];
+  location?: { city?: string; state?: string };
+  offer_status?: { sold?: boolean };
+  offer_status_sold?: boolean;
+  [key: string]: unknown;
+}
+
+/** Evento (leilão) da oferta. */
+interface CardEventData {
+  event_end_date?: string;
+  modality_id?: number;
+  modality_desc?: string;
+  [key: string]: unknown;
+}
+
+/** Item da lista de ofertas: oferta + evento + vendedor. */
+export interface CardOfferItem {
+  offer?: CardOfferData;
+  event?: CardEventData;
+  seller?: { trade_name?: string; [key: string]: unknown };
+  is_simulated?: boolean;
+  [key: string]: unknown;
+}
+
 interface CardOfferVProps {
-  item: any;
+  item: CardOfferItem;
   idx: number;
   isCartao: boolean;
   loading: boolean;
   disabled?: boolean;
   hasError?: boolean;
   onErrorTimeout?: () => void;
-  onSimulate: (item: any, idx: number) => void;
+  onSimulate: (item: CardOfferItem, idx: number) => void;
 }
 
-const getSuperbidUrl = (offerData: any) => {
+const getSuperbidUrl = (offerData: CardOfferData | undefined) => {
   if (!offerData?.offer_id) return "#";
   const slug = (offerData.offer_description || "")
     .toLowerCase()
@@ -113,7 +147,7 @@ type OfferCategory =
   | "leilao_tradicional"
   | "sem_categoria";
 
-const getOfferCategory = (offerData: any, eventData: any, formattedDate: string): OfferCategory => {
+const getOfferCategory = (offerData: CardOfferData, eventData: CardEventData, formattedDate: string): OfferCategory => {
   if (offerData?.is_shopping === true) {
     if (offerData.offer_type_id === 10) return "compre_ja_balcao";
     if (offerData.offer_type_id === 8) return "compre_ja";
@@ -177,8 +211,8 @@ function ModalityTag({ category, formattedDate }: { category: OfferCategory; for
 // [COMPONENTE PRINCIPAL]: CardOfferV
 // =========================================================================
 function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError: hasSimulationError, onErrorTimeout, onSimulate }: CardOfferVProps) {
-  const offerData = item.offer || {};
-  const eventData = item.event || {};
+  const offerData: CardOfferData = item.offer || {};
+  const eventData: CardEventData = item.event || {};
   const sellerData = item.seller || {};
 
   // -------------------------------------------------------------------------
@@ -227,8 +261,8 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError:
   const sortedPhotos = useMemo(() => {
     const rawPhotos = offerData.photos || [];
     return [...rawPhotos]
-      .sort((a: any, b: any) => (a.highlight === b.highlight ? 0 : a.highlight ? -1 : 1))
-      .map((p: any) => p.link);
+      .sort((a, b) => (a.highlight === b.highlight ? 0 : a.highlight ? -1 : 1))
+      .map((p) => p.link);
   }, [offerData.photos]);
 
   const mainPhoto =
@@ -302,6 +336,10 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError:
     `R$ ${(offerData.offer_value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
   const showMetric = !isLeilao && !isTomadaDePreco && !!offerData.system_metric;
 
+  // Oferta vendida (a busca da Superbid lista algumas mesmo com searchType=opened, ex.: Mercado Balcão):
+  // selo "Vendido", foto em cinza, preço riscado e sem botão de simular (espaço mantido para alinhar o grid).
+  const isSold = Boolean(offerData.offer_status?.sold ?? offerData.offer_status_sold);
+
   return (
     <div className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group">
       <div className="flex flex-col h-full">
@@ -327,7 +365,7 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError:
               decoding="async"
               width="400"
               height="300"
-              className="h-full w-full object-cover transition-opacity duration-300"
+              className={`h-full w-full object-cover transition-opacity duration-300 ${isSold ? "grayscale opacity-70" : ""}`}
               onError={() => setImageError(true)}
             />
           )}
@@ -335,6 +373,12 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError:
           <span className="absolute bottom-2 left-2 bg-neutral-900/80 backdrop-blur-sm text-white font-mono text-[9px] font-light uppercase tracking-[0.18em] px-2 py-1 rounded-none z-10">
             Lote #{offerData.lot_number || offerData.offer_id}
           </span>
+
+          {isSold && (
+            <span className="absolute top-2 right-2 bg-[#2246A7] text-white font-mono text-[9px] font-light uppercase tracking-[0.18em] px-2 py-1 rounded-none z-10">
+              Vendido
+            </span>
+          )}
 
           {item.is_simulated && (
             <span className="absolute bottom-2 right-2 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 text-[10px] font-normal px-2.5 py-0.5 rounded-none z-10 shadow lowercase">
@@ -406,7 +450,11 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError:
           {/* ================================================================ */}
           <div className="pt-3 border-t border-neutral-200 dark:border-neutral-800 mt-auto">
             <div className="text-[10px] text-neutral-500 dark:text-neutral-400 font-normal uppercase mb-1">{priceLabel}</div>
-            <div className="text-lg md:text-xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100">
+            <div
+              className={`text-lg md:text-xl font-bold tracking-tight ${
+                isSold ? "text-neutral-400 dark:text-neutral-500 line-through" : "text-neutral-900 dark:text-neutral-100"
+              }`}
+            >
               {priceFormatted}
               {showMetric && (
                 <span className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 ml-1 uppercase">
@@ -422,7 +470,9 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError:
       {/* CALL TO ACTION (CTA)                                             */}
       {/* ================================================================ */}
       <div className="p-4 pt-0">
-        {hasSimulationError ? (
+        {isSold ? (
+          <div className="h-11" aria-hidden="true" />
+        ) : hasSimulationError ? (
           <div className="relative w-full h-11 overflow-hidden rounded-none border border-neutral-200 dark:border-neutral-700 shadow-xs bg-white dark:bg-neutral-900">
             {/* Preenchimento passivo: cresce 0->100% em 5s, depois retorna ao estado normal (onErrorTimeout) */}
             <div

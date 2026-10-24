@@ -69,12 +69,12 @@
  *
  *   IF p_payload ? 'id' THEN
  *     UPDATE orchestrator_configs SET
- *       lookup_id = p_payload->>'lookup_id',
+ *       lookup_id = (p_payload->>'lookup_id')::BIGINT,
  *       config_type = p_payload->>'config_type',
  *       entity_type = p_payload->>'entity_type',
  *       page_url = p_payload->>'page_url',
  *       integration_method = p_payload->>'integration_method',
- *       partner_id = (p_payload->>'partner_id')::INT,
+ *       partner_id = (p_payload->>'partner_id')::BIGINT,
  *       is_active = (p_payload->>'is_active')::BOOLEAN,
  *       home_key = NULLIF(TRIM(p_payload->>'home_key'), ''),
  *       home_status = COALESCE(NULLIF(p_payload->>'home_status', ''), 'hidden'),
@@ -86,15 +86,15 @@
  *       consent_configs = p_payload->'consent_configs',
  *       page_faqs = p_payload->'page_faqs',
  *       updated_at = NOW()
- *     WHERE id = (p_payload->>'id')::INT;
+ *     WHERE id = (p_payload->>'id')::BIGINT;
  *   ELSE
  *     INSERT INTO orchestrator_configs (
  *       lookup_id, config_type, entity_type, page_url, integration_method, partner_id, is_active,
  *       home_key, home_status, home_order, is_integrated,
  *       integration_details, rules, page_configs, consent_configs, page_faqs
  *     ) VALUES (
- *       p_payload->>'lookup_id', p_payload->>'config_type', p_payload->>'entity_type', p_payload->>'page_url',
- *       p_payload->>'integration_method', (p_payload->>'partner_id')::INT, COALESCE((p_payload->>'is_active')::BOOLEAN, true),
+ *       (p_payload->>'lookup_id')::BIGINT, p_payload->>'config_type', p_payload->>'entity_type', p_payload->>'page_url',
+ *       p_payload->>'integration_method', (p_payload->>'partner_id')::BIGINT, COALESCE((p_payload->>'is_active')::BOOLEAN, true),
  *       NULLIF(TRIM(p_payload->>'home_key'), ''), COALESCE(NULLIF(p_payload->>'home_status', ''), 'hidden'),
  *       NULLIF(p_payload->>'home_order', '')::INT,
  *       COALESCE((p_payload->>'is_integrated')::BOOLEAN, true), p_payload->'integration_details', p_payload->'rules',
@@ -134,6 +134,8 @@ import { PanelProduct } from "@/features/financial-hub/components/shared/rendere
 import { PanelConsents } from "@/features/financial-hub/components/shared/renderes/PanelConsents";
 import { PanelFAQ } from "@/features/financial-hub/components/shared/renderes/PanelFAQ";
 import { PanelFooter } from "@/features/financial-hub/components/shared/renderes/PanelFooter";
+import type { ConsentConfig, FaqItem, IntegrationDetails, PageConfigs, ProductRules } from "@/features/financial-hub/components/shared/types";
+import type { Json } from "@/integrations/supabase/types";
 
 export const Route = createLazyFileRoute("/backoffice/routes")({
   component: OrchestratorConfigsBackofficePage,
@@ -171,12 +173,36 @@ type OrchestratorRow = {
   home_status?: string;
   home_order?: number | null;
   is_integrated?: boolean;
-  page_configs?: any;
-  integration_details?: any;
-  rules?: any;
-  consent_configs?: any[];
-  page_faqs?: any[];
+  page_configs?: PageConfigs | null;
+  integration_details?: IntegrationDetails | null;
+  rules?: ProductRules | null;
+  consent_configs?: ConsentConfig[] | null;
+  page_faqs?: FaqItem[] | null;
   created_at?: string;
+};
+
+// Rascunhos do editor: o JSON é digitado/montado aos poucos, então tudo é opcional.
+type DraftLink = { text?: string; type?: string; url?: string; tooltip_text?: string };
+type DraftConsent = { id?: string; template_text?: string; links?: DraftLink[]; position?: number; is_required?: boolean };
+type DraftTextPart = { text?: string; type?: string };
+type DraftBenefit = { icon?: string; title?: string; description?: string };
+type DraftFooter = { template_text?: string; links?: DraftLink[] };
+type DraftPageConfigs = {
+  offer_panel?: {
+    partner?: { name?: string; label?: string };
+    headline?: { parts?: DraftTextPart[] };
+    description?: { parts?: DraftTextPart[] };
+    benefits?: DraftBenefit[];
+  };
+  footer?: DraftFooter;
+};
+type DraftFaq = { question?: string; answer?: string; bullets?: string[]; position?: number };
+type RoutePreview = {
+  page_configs: DraftPageConfigs | null;
+  consent_configs: DraftConsent[] | null;
+  page_faqs: DraftFaq[] | null;
+  rules: ProductRules | null;
+  integration_details: IntegrationDetails | null;
 };
 
 // =========================================================================
@@ -184,16 +210,17 @@ type OrchestratorRow = {
 // =========================================================================
 
 function PaymentFactorsBuilder({ factors = {}, onChange }: { factors: Record<string, number>; onChange: (f: Record<string, number>) => void; }) {
-  const [entries, setEntries] = useState<Array<{ term: string; factor: any }>>(() => Object.entries(factors || {}).map(([term, factor]) => ({ term, factor })));
+  const [entries, setEntries] = useState<Array<{ term: string; factor: number | string }>>(() => Object.entries(factors || {}).map(([term, factor]) => ({ term, factor })));
 
   useEffect(() => {
     const currentEntriesObj = Object.entries(factors || {});
     if (currentEntriesObj.length !== entries.length) {
       setEntries(currentEntriesObj.map(([term, factor]) => ({ term, factor })));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- sincroniza só quando os fatores recebidos mudam
   }, [factors]);
 
-  const triggerChange = (newEntries: Array<{ term: string; factor: any }>) => {
+  const triggerChange = (newEntries: Array<{ term: string; factor: number | string }>) => {
     setEntries(newEntries);
     const newObj: Record<string, number> = {};
     newEntries.forEach((item) => {
@@ -241,14 +268,14 @@ function PaymentFactorsBuilder({ factors = {}, onChange }: { factors: Record<str
   );
 }
 
-function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: any; onUpdate: (c: any) => void; onRemove: () => void; }) {
+function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: DraftConsent; onUpdate: (c: DraftConsent) => void; onRemove: () => void; }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleTextChange = (newText: string) => {
     const matches = newText.match(/\{([^}]+)\}/g) || [];
     const currentTags = matches.map((m) => m.replace(/[{}]/g, ""));
     const existingLinks = consent.links || [];
-    const newLinks = currentTags.map((tag) => existingLinks.find((l: any) => l.text === tag) || { text: tag, type: "web", url: "", tooltip_text: "" });
+    const newLinks = currentTags.map((tag) => existingLinks.find((l) => l.text === tag) || { text: tag, type: "web", url: "", tooltip_text: "" });
     onUpdate({ ...consent, template_text: newText, links: newLinks });
   };
 
@@ -265,7 +292,7 @@ function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: any; onU
     setTimeout(() => textarea.focus(), 0);
   };
 
-  const updateLinkConfig = (index: number, updates: any) => {
+  const updateLinkConfig = (index: number, updates: DraftLink) => {
     const newLinks = [...(consent.links || [])];
     newLinks[index] = { ...newLinks[index], ...updates };
     onUpdate({ ...consent, links: newLinks });
@@ -297,7 +324,7 @@ function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: any; onU
         {consent.links && consent.links.length > 0 && (
           <div className="bg-muted rounded-none p-3 border border-border space-y-2 mt-1">
             <h5 className="text-[10px] font-medium text-muted-foreground uppercase mb-2">Configuração dos Links</h5>
-            {consent.links.map((link: any, idx: number) => (
+            {consent.links.map((link, idx: number) => (
               <div key={idx} className="flex flex-col gap-2.5 bg-card p-3 rounded-none border border-border shadow-sm">
                 <div className="flex items-start justify-between gap-3 w-full">
                   <div className="flex-1">
@@ -330,7 +357,7 @@ function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: any; onU
   );
 }
 
-function TextPartsBuilder({ label, parts = [], onChange }: { label: string; parts: any[]; onChange: (p: any[]) => void; }) {
+function TextPartsBuilder({ label, parts = [], onChange }: { label: string; parts: DraftTextPart[] | undefined; onChange: (p: DraftTextPart[]) => void; }) {
   return (
     <div className="space-y-1.5">
       <label className="text-[10px] font-medium text-muted-foreground uppercase">{label}</label>
@@ -357,7 +384,7 @@ function TextPartsBuilder({ label, parts = [], onChange }: { label: string; part
   );
 }
 
-function BenefitsBuilder({ benefits = [], onChange }: { benefits: any[]; onChange: (b: any[]) => void }) {
+function BenefitsBuilder({ benefits = [], onChange }: { benefits: DraftBenefit[] | undefined; onChange: (b: DraftBenefit[]) => void }) {
   const iconOptions = Object.keys(ICON_MAP);
   return (
     <div className="space-y-3">
@@ -399,14 +426,14 @@ function BenefitsBuilder({ benefits = [], onChange }: { benefits: any[]; onChang
   );
 }
 
-function FooterBuilder({ footer = {}, onChange }: { footer: any; onChange: (f: any) => void }) {
+function FooterBuilder({ footer = {}, onChange }: { footer: DraftFooter | undefined; onChange: (f: DraftFooter) => void }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleTextChange = (newText: string) => {
     const matches = newText.match(/\{([^}]+)\}/g) || [];
     const currentTags = matches.map((m) => m.replace(/[{}]/g, ""));
     const existingLinks = footer.links || [];
-    const newLinks = currentTags.map((tag) => existingLinks.find((l: any) => l.text === tag) || { text: tag, url: "" });
+    const newLinks = currentTags.map((tag) => existingLinks.find((l) => l.text === tag) || { text: tag, url: "" });
     onChange({ ...footer, template_text: newText, links: newLinks });
   };
 
@@ -433,7 +460,7 @@ function FooterBuilder({ footer = {}, onChange }: { footer: any; onChange: (f: a
       {footer.links && footer.links.length > 0 && (
         <div className="bg-muted rounded-none p-3 border border-border space-y-2 mt-2">
           <h5 className="text-[10px] font-medium text-muted-foreground uppercase mb-2">URLs Mapeadas</h5>
-          {footer.links.map((link: any, idx: number) => (
+          {footer.links.map((link, idx: number) => (
             <div key={idx} className="flex flex-col gap-2.5 bg-card p-3 rounded-none border border-border shadow-sm">
               <div className="w-full">
                 <span className="text-[9px] font-medium text-muted-foreground block uppercase mb-0.5">Texto Destacado</span>
@@ -492,7 +519,7 @@ function OrchestratorConfigEditor({
     page_faqs: initialData?.page_faqs && initialData.page_faqs.length > 0 ? JSON.stringify(initialData.page_faqs, null, 2) : "[\n  \n]",
   });
 
-  const [parsedPreview, setParsedPreview] = useState<any>({
+  const [parsedPreview, setParsedPreview] = useState<RoutePreview>({
     page_configs: initialData?.page_configs || null,
     consent_configs: initialData?.consent_configs || null,
     page_faqs: initialData?.page_faqs || null,
@@ -506,16 +533,17 @@ function OrchestratorConfigEditor({
     setJsonEditors((prev) => ({ ...prev, [field]: value }));
     if (!value.trim() || value === "{}" || value === "[]") {
       setJsonErrors((prev) => ({ ...prev, [field]: null }));
-      setParsedPreview((prev: any) => ({ ...prev, [field]: null }));
+      setParsedPreview((prev) => ({ ...prev, [field]: null }));
       return;
     }
     try {
       const parsed = JSON.parse(value);
       setJsonErrors((prev) => ({ ...prev, [field]: null }));
       if (["page_configs", "consent_configs", "page_faqs", "rules", "integration_details"].includes(field)) {
-        setParsedPreview((prev: any) => ({ ...prev, [field]: parsed }));
+        setParsedPreview((prev) => ({ ...prev, [field]: parsed }));
       }
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = caught as Error; // erros do Supabase/edge trazem message
       setJsonErrors((prev) => ({ ...prev, [field]: `JSON Inválido: ${e.message}` }));
     }
   };
@@ -554,7 +582,9 @@ function OrchestratorConfigEditor({
         page_faqs: parsedPreview.page_faqs || JSON.parse(jsonEditors.page_faqs || "[]"),
       };
       await onSave(payload);
-    } catch (e: any) { alert(`Erro ao salvar: ${e.message}`); } 
+    } catch (caught: unknown) {
+      const e = caught as Error;
+      alert(`Erro ao salvar: ${e.message}`); } 
     finally { setIsSaving(false); }
   };
 
@@ -709,8 +739,8 @@ function OrchestratorConfigEditor({
                 {(() => {
                   const rules = parsedPreview.rules || {};
                   const integration = parsedPreview.integration_details || {};
-                  const updateRules = (newRules: any) => { setParsedPreview({ ...parsedPreview, rules: newRules }); setJsonEditors({ ...jsonEditors, rules: JSON.stringify(newRules, null, 2) }); };
-                  const updateIntegration = (newInt: any) => { setParsedPreview({ ...parsedPreview, integration_details: newInt }); setJsonEditors({ ...jsonEditors, integration_details: JSON.stringify(newInt, null, 2) }); };
+                  const updateRules = (newRules: ProductRules) => { setParsedPreview({ ...parsedPreview, rules: newRules }); setJsonEditors({ ...jsonEditors, rules: JSON.stringify(newRules, null, 2) }); };
+                  const updateIntegration = (newInt: IntegrationDetails) => { setParsedPreview({ ...parsedPreview, integration_details: newInt }); setJsonEditors({ ...jsonEditors, integration_details: JSON.stringify(newInt, null, 2) }); };
 
                   return (
                     <div className="space-y-5">
@@ -748,7 +778,7 @@ function OrchestratorConfigEditor({
                   const config = parsedPreview.page_configs || {};
                   const offer = config.offer_panel || { partner: {}, headline: { parts: [] }, description: { parts: [] }, benefits: [] };
                   const footer = config.footer || { template_text: "", links: [] };
-                  const updateConfig = (newConfig: any) => { setParsedPreview({ ...parsedPreview, page_configs: newConfig }); setJsonEditors({ ...jsonEditors, page_configs: JSON.stringify(newConfig, null, 2) }); };
+                  const updateConfig = (newConfig: DraftPageConfigs) => { setParsedPreview({ ...parsedPreview, page_configs: newConfig }); setJsonEditors({ ...jsonEditors, page_configs: JSON.stringify(newConfig, null, 2) }); };
 
                   return (
                     <div className="space-y-5">
@@ -780,8 +810,8 @@ function OrchestratorConfigEditor({
                     {!parsedPreview.consent_configs || parsedPreview.consent_configs.length === 0 ? (
                       <div className="text-center p-5 border border-dashed border-border rounded-none text-muted-foreground text-xs bg-muted/50">Nenhum termo configurado.</div>
                     ) : (
-                      parsedPreview.consent_configs.map((consent: any, index: number) => (
-                        <ConsentItemBuilder key={index} consent={consent} onUpdate={(updatedConsent) => { const updatedList = [...parsedPreview.consent_configs]; updatedList[index] = updatedConsent; setParsedPreview({ ...parsedPreview, consent_configs: updatedList }); setJsonEditors({ ...jsonEditors, consent_configs: JSON.stringify(updatedList, null, 2) }); }} onRemove={() => { const updatedList = parsedPreview.consent_configs.filter((_: any, i: number) => i !== index); setParsedPreview({ ...parsedPreview, consent_configs: updatedList }); setJsonEditors({ ...jsonEditors, consent_configs: JSON.stringify(updatedList, null, 2) }); }} />
+                      parsedPreview.consent_configs.map((consent, index: number) => (
+                        <ConsentItemBuilder key={index} consent={consent} onUpdate={(updatedConsent) => { const updatedList = [...parsedPreview.consent_configs!]; updatedList[index] = updatedConsent; setParsedPreview({ ...parsedPreview, consent_configs: updatedList }); setJsonEditors({ ...jsonEditors, consent_configs: JSON.stringify(updatedList, null, 2) }); }} onRemove={() => { const updatedList = parsedPreview.consent_configs!.filter((_, i: number) => i !== index); setParsedPreview({ ...parsedPreview, consent_configs: updatedList }); setJsonEditors({ ...jsonEditors, consent_configs: JSON.stringify(updatedList, null, 2) }); }} />
                       ))
                     )}
                   </div>
@@ -796,12 +826,12 @@ function OrchestratorConfigEditor({
                     {!parsedPreview.page_faqs || parsedPreview.page_faqs.length === 0 ? (
                       <div className="text-center p-5 border border-dashed border-border rounded-none text-muted-foreground text-xs bg-muted/50">Nenhuma FAQ configurada.</div>
                     ) : (
-                      parsedPreview.page_faqs.map((faq: any, index: number) => (
+                      parsedPreview.page_faqs.map((faq, index: number) => (
                         <div key={index} className="bg-card border border-border rounded-none p-3.5 shadow-sm relative group">
-                          <button onClick={() => { const updated = parsedPreview.page_faqs.filter((_: any, i: number) => i !== index); setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"><X size={14} /></button>
+                          <button onClick={() => { const updated = parsedPreview.page_faqs!.filter((_, i: number) => i !== index); setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="absolute top-3 right-3 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"><X size={14} /></button>
                           <div className="grid gap-3 pr-5">
-                            <Input value={faq.question} onChange={(e) => { const updated = [...parsedPreview.page_faqs]; updated[index].question = e.target.value; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="h-8 text-xs font-medium rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" placeholder="Pergunta..." />
-                            <textarea value={faq.answer} onChange={(e) => { const updated = [...parsedPreview.page_faqs]; updated[index].answer = e.target.value; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="w-full h-14 border border-border rounded-none p-2 text-xs outline-none focus:border-foreground focus:ring-1 focus:ring-foreground resize-none bg-muted" placeholder="Resposta..." />
+                            <Input value={faq.question} onChange={(e) => { const updated = [...parsedPreview.page_faqs!]; updated[index].question = e.target.value; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="h-8 text-xs font-medium rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" placeholder="Pergunta..." />
+                            <textarea value={faq.answer} onChange={(e) => { const updated = [...parsedPreview.page_faqs!]; updated[index].answer = e.target.value; setParsedPreview({ ...parsedPreview, page_faqs: updated }); setJsonEditors({ ...jsonEditors, page_faqs: JSON.stringify(updated, null, 2) }); }} className="w-full h-14 border border-border rounded-none p-2 text-xs outline-none focus:border-foreground focus:ring-1 focus:ring-foreground resize-none bg-muted" placeholder="Resposta..." />
                           </div>
                         </div>
                       ))
@@ -821,7 +851,7 @@ function OrchestratorConfigEditor({
           <div className="p-6 space-y-6 pb-20 max-w-xl mx-auto w-full">
             {parsedPreview.page_configs && Object.keys(parsedPreview.page_configs).length > 0 ? (
               <div className="bg-card p-5 rounded-none shadow-sm border border-border">
-                <PanelProduct config={parsedPreview.page_configs} />
+                <PanelProduct config={parsedPreview.page_configs as PageConfigs | null} />
               </div>
             ) : (<div className="text-center p-5 border border-dashed border-border rounded-none text-muted-foreground text-xs">Page Configs vazio.</div>)}
             
@@ -833,13 +863,13 @@ function OrchestratorConfigEditor({
             
             {parsedPreview.page_faqs && parsedPreview.page_faqs.length > 0 && (
               <div className="bg-card p-4 rounded-none shadow-sm border border-border">
-                <PanelFAQ faqs={parsedPreview.page_faqs} isPrint={false} />
+                <PanelFAQ faqs={parsedPreview.page_faqs as FaqItem[]} isPrint={false} />
               </div>
             )}
             
             {parsedPreview.page_configs?.footer && (
               <div className="pt-2">
-                <PanelFooter footer={parsedPreview.page_configs.footer} />
+                <PanelFooter footer={parsedPreview.page_configs.footer as PageConfigs["footer"]} />
               </div>
             )}
           </div>
@@ -873,22 +903,28 @@ function OrchestratorConfigsBackofficePage() {
   async function load() {
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('get_backoffice_orchestrator_data');
+      const { data: rpcData, error } = await supabase.rpc('get_backoffice_orchestrator_data');
       if (error) throw error;
+      const data = rpcData as {
+        configs?: OrchestratorRow[];
+        products?: { id: number; name: string }[];
+        categories?: { id: number; name: string }[];
+        partners?: { id: number; name: string; logo_url: string }[];
+      } | null;
 
       if (data) {
         setRows((data.configs as OrchestratorRow[]) || []);
         
         const pMap: Record<string, string> = {};
-        (data.products || []).forEach((p: any) => pMap[String(p.id)] = p.name);
+        (data.products || []).forEach((p: { id: number; name: string }) => pMap[String(p.id)] = p.name);
         setProductsMap(pMap);
 
         const cMap: Record<string, string> = {};
-        (data.categories || []).forEach((c: any) => cMap[String(c.id)] = c.name);
+        (data.categories || []).forEach((c: { id: number; name: string }) => cMap[String(c.id)] = c.name);
         setCategoriesMap(cMap);
 
         const ptMap: Record<string, { name: string; logo_url: string }> = {};
-        (data.partners || []).forEach((pt: any) => ptMap[String(pt.id)] = { name: pt.name, logo_url: pt.logo_url });
+        (data.partners || []).forEach((pt: { id: number; name: string; logo_url: string }) => ptMap[String(pt.id)] = { name: pt.name, logo_url: pt.logo_url });
         setPartnersMap(ptMap);
       }
     } catch (err) {
@@ -902,7 +938,6 @@ function OrchestratorConfigsBackofficePage() {
   useEffect(() => { load(); }, []);
 
   const handleDuplicateRoute = (config: OrchestratorRow) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, created_at, ...rest } = config;
     setEditingConfig(rest);
     setIsRouteDrawerOpen(false); 
@@ -912,13 +947,14 @@ function OrchestratorConfigsBackofficePage() {
   const handleSaveRoute = async (payload: OrchestratorRow) => {
     try {
       const { error } = await supabase.rpc('save_backoffice_orchestrator_config', {
-        p_payload: payload
+        p_payload: payload as unknown as Json, // linha da configuração enviada como JSON
       });
       if (error) throw error;
 
       setIsEditorOpen(false);
       load();
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as Error; // erros do Supabase/edge trazem message
       console.error("Erro de BD ao salvar a rota:", err);
       throw new Error(err.message || "Erro desconhecido ao comunicar com o banco de dados.");
     }
@@ -948,8 +984,8 @@ function OrchestratorConfigsBackofficePage() {
         if (!query) return true;
         const prodName = getProductOrCategoryName(r).toLowerCase();
         return (
-          (String(r.id) ?? "").toLowerCase().includes(query) ||
-          (r.lookup_id ?? "").toLowerCase().includes(query) ||
+          String(r.id ?? "").toLowerCase().includes(query) ||
+          String(r.lookup_id ?? "").toLowerCase().includes(query) ||
           (r.page_url ?? "").toLowerCase().includes(query) ||
           (r.config_type ?? "").toLowerCase().includes(query) ||
           (r.entity_type ?? "").toLowerCase().includes(query) ||
@@ -961,6 +997,7 @@ function OrchestratorConfigsBackofficePage() {
         const idB = Number(b.id) || 0;
         return idA - idB;
       });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- getProductOrCategoryName depende de productsMap/categoriesMap, já listados
   }, [rows, search, statusFilter, productsMap, categoriesMap]);
 
   const partnersList = useMemo(() => Object.entries(partnersMap).map(([id, p]) => ({ id, name: p.name })), [partnersMap]);

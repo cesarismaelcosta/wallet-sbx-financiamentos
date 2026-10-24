@@ -20,6 +20,7 @@
 
 import { Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, LabelList } from "recharts";
+import type { LabelProps } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 // ✨ [PERFORMANCE]: Hook canônico do projeto (matchMedia + evento "change"), em vez de uma
 // definição local ouvindo "resize" bruto — que disparava um re-render (incluindo os BarChart
@@ -47,6 +48,13 @@ const defaultChartConfig = {
 // ============================================================================
 // [COMPONENTE PRINCIPAL]
 // ============================================================================
+/** Item de gráfico de barras (status, produto, parceiro). */
+type ChartItem = { name: string; count: number; volume: number };
+/** Ponto do gráfico diário (dia já formatado). */
+type DailyPoint = { day: string; count: number };
+/** Indicadores usados aqui (o painel do backoffice manda o objeto completo). */
+type SimChartKpis = { byStatus?: ChartItem[]; byProduct?: ChartItem[]; byPartner?: ChartItem[] };
+
 export default function SimulationCharts({
   loading,
   simKpis,
@@ -54,8 +62,8 @@ export default function SimulationCharts({
   periodLabel,
 }: {
   loading: boolean;
-  simKpis: any;
-  simDailyData: any[];
+  simKpis: SimChartKpis | null | undefined;
+  simDailyData: DailyPoint[];
   periodLabel: string;
 }) {
   // ✨ Hook de responsividade injetado
@@ -89,7 +97,7 @@ export default function SimulationCharts({
                 <YAxis hide />
                 <ChartTooltip cursor={{ fill: "hsl(var(--muted))", opacity: 0.8 }} content={<ChartTooltipContent className="rounded-none shadow-md border-border" />} />
                 <Bar dataKey="count" fill={darkInk} radius={[0, 0, 0, 0]}>
-                  <LabelList dataKey="count" position="top" offset={6} className="fill-foreground" fontSize={11} fontWeight={700} formatter={(v: any) => (v > 0 ? v : "")} />
+                  <LabelList dataKey="count" position="top" offset={6} className="fill-foreground" fontSize={11} fontWeight={700} formatter={(v: unknown) => (Number(v) > 0 ? (v as number | string) : "")} />
                 </Bar>
               </BarChart>
             </ChartContainer>
@@ -161,8 +169,8 @@ export default function SimulationCharts({
                     <LabelList
                       dataKey="count"
                       position="right"
-                      content={(props: any) => {
-                        const item = chart.data![props.index];
+                      content={(props: LabelProps) => {
+                        const item = chart.data![props.index as number];
                         if (!item) return null;
                         
                         // Cálculos precisos de ancoragem para o texto do Recharts

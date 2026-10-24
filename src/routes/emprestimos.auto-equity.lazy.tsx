@@ -53,21 +53,23 @@ function AutoEquityConsultPage() {
   // 1. [RESGATE]: Consome os dados PII e do Carrinho providos pelo Guardião Pai
   const simData = useProductConsult();
 
-  // Guard Clause Estrito: Se a entidade não foi hidratada, aborta a montagem
-  if (!simData?.entity) return null; 
-
   // =========================================================================
   // ✨ FIX: O INTERRUPTOR DA CORTINA (ZERO-FLICKER)
   // =========================================================================
   // Assim que a tela possui dados e a árvore do DOM nasce invisível,
   // avisamos o Layout Pai para abrir a cortina e cancelar o timeout de 10s.
+  const setIsOrchestratorHydrating = simData?.setIsOrchestratorHydrating;
   useEffect(() => {
-    if (simData?.setIsOrchestratorHydrating) {
-      const timer = setTimeout(() => simData.setIsOrchestratorHydrating(false), 50);
+    if (setIsOrchestratorHydrating) {
+      const timer = setTimeout(() => setIsOrchestratorHydrating(false), 50);
       return () => clearTimeout(timer);
     }
-  }, [simData?.setIsOrchestratorHydrating]);
+  }, [setIsOrchestratorHydrating]);
   // =========================================================================
+
+  // Guard Clause Estrito: Se a entidade não foi hidratada, aborta a montagem
+  // (depois dos hooks, para manter a ordem de hooks estável entre renders).
+  if (!simData?.entity) return null;
   
   return (
     <>

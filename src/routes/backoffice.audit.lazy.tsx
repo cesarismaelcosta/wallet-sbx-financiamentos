@@ -63,6 +63,8 @@ import { PanelEntity } from "@/features/financial-hub/components/shared/renderes
 import { PanelOffer } from "@/features/financial-hub/components/shared/renderes/PanelOffer";
 import { PanelSeller } from "@/features/financial-hub/components/shared/renderes/PanelSeller";
 import { PanelSimulation } from "@/features/financial-hub/components/shared/renderes/PanelSimulation";
+import type { EntityDisplay, OfferDisplay, SimulationRow } from "@/features/financial-hub/components/shared/types";
+import type { RpcArgs } from "@/integrations/supabase/client";
 
 export const Route = createLazyFileRoute("/backoffice/audit")({ component: AuditoriaPage });
 
@@ -189,6 +191,7 @@ function AuditoriaPage() {
       loadStats();
     }, 400);
     return () => clearTimeout(timeoutId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega só quando os filtros mudam
   }, [search, period, rangeFrom, rangeTo, statusFilter, eventFilter]);
 
   async function load(targetPage: number) {
@@ -210,7 +213,7 @@ function AuditoriaPage() {
         p_status: statusFilter,
         p_event: eventFilter,
         p_search: search.trim() || null
-      });
+      } as RpcArgs<"get_backoffice_audit">);
 
       if (err) throw err;
 
@@ -227,7 +230,8 @@ function AuditoriaPage() {
       
       setRows(slicedData);
       setTotalPages(hasMore ? targetPage + 2 : targetPage + 1);
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as Error; // erros do Supabase/edge trazem message
       setError(err.message);
       setRows([]);
     } finally {
@@ -245,7 +249,7 @@ function AuditoriaPage() {
       p_status: statusFilter,
       p_event: eventFilter,
       p_search: search.trim() || null,
-    });
+    } as RpcArgs<"audit_login_stats">);
 
     if (error) {
       console.error("Erro ao carregar stats:", error);
@@ -334,7 +338,7 @@ function AuditoriaPage() {
                         {EVENT_OPTIONS.map(opt => {
                           const isSelected = eventFilter === opt.id;
                           return (
-                            <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id as any)} className={`cursor-pointer rounded-none text-foreground hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}>
+                            <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id)} className={`cursor-pointer rounded-none text-foreground hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}>
                               <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                                 {isSelected && "✓"}
                               </div>
@@ -565,7 +569,7 @@ function AuditoriaPage() {
                         {EVENT_OPTIONS.map(opt => {
                           const isSelected = eventFilter === opt.id;
                           return (
-                            <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id as any)} className={`cursor-pointer rounded-none text-foreground hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}>
+                            <CommandItem key={opt.id} onSelect={() => setEventFilter(opt.id)} className={`cursor-pointer rounded-none text-foreground hover:bg-accent ${isSelected ? "bg-muted font-medium" : ""}`}>
                               <div className={`mr-2 flex h-4 w-4 items-center justify-center rounded-none border border-muted-foreground ${isSelected ? "bg-foreground text-background border-foreground" : "opacity-50"}`}>
                                 {isSelected && "✓"}
                               </div>
@@ -710,14 +714,30 @@ function StatCard({ label, value, tone = "default", highlight = false }: {
  * clicada (row.details) — ex.: a entrada no menu Simulações e as simulações abertas
  * a partir dela (migração 20260930190300).
  */
+/** Registro mascarado devolvido por get_backoffice_access_summary (cliente + simulação/consulta). */
+type AccessSummaryRecord = EntityDisplay &
+  SimulationRow & {
+    name?: string | null;
+    offer?: OfferDisplay | null;
+    partner?: string | null;
+    product?: string | null;
+  };
+
+type AccessSummary = {
+  record_type?: string; // "consult" | "simulation"
+  record_id?: string;
+  record?: AccessSummaryRecord;
+  error?: string;
+};
+
 function AccessDetailPanel({
   row, onClose,
 }: {
   row: LoginRow | null;
   onClose: () => void;
 }) {
-  const [summary, setSummary] = useState<any>(null);
-  const [fullEntity, setFullEntity] = useState<any>(null);
+  const [summary, setSummary] = useState<AccessSummary | null>(null);
+  const [fullEntity, setFullEntity] = useState<EntityDisplay | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingFull, setLoadingFull] = useState(false);
   const [panelError, setPanelError] = useState<string | null>(null);
@@ -737,19 +757,21 @@ function AccessDetailPanel({
 
     setLoading(true);
     supabase
-      .rpc("get_backoffice_access_summary" as any, { p_detail_id: item?.id } as any)
+      .rpc("get_backoffice_access_summary", { p_detail_id: item.id })
       .then(({ data, error: rpcError }) => {
+        const result = data as AccessSummary | null;
         if (rpcError) setPanelError(rpcError.message);
-        else if ((data as any)?.error) setPanelError("Sem permissão para ver este registro.");
-        else setSummary(data);
+        else if (result?.error) setPanelError("Sem permissão para ver este registro.");
+        else setSummary(result);
       })
       .then(() => setLoading(false), () => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- busca só quando o registro aberto muda
   }, [row?.id, item?.id]);
 
   const hasPrev = index > 0;
   const hasNext = index < items.length - 1;
 
-  const rec = summary?.record || {};
+  const rec: AccessSummaryRecord = summary?.record || {};
   const isConsult = summary?.record_type === "consult";
   // Data/IP do acesso = do registro aberto (não da entrada no menu).
   const dt = item ? formatDateTime(item.created_at) : null;
@@ -761,21 +783,22 @@ function AccessDetailPanel({
     try {
       if (isConsult) {
         const { data, error: rpcError } = await supabase.rpc(
-          "get_backoffice_consult_details" as any,
-          { p_visit_update_id: summary.record_id } as any,
+          "get_backoffice_consult_details",
+          { p_visit_update_id: summary.record_id as string },
         );
         if (rpcError) throw rpcError;
-        const visit: any = ((data as any)?.visits || [])[0] || {};
+        const visit = ((data as { visits?: { visit_entities?: EntityDisplay[] }[] } | null)?.visits || [])[0] || {};
         setFullEntity((visit.visit_entities || [])[0] || null);
       } else {
         const { data, error: rpcError } = await supabase.rpc(
           "get_backoffice_simulation_details",
-          { p_simulation_id: summary.record_id } as any,
+          { p_simulation_id: summary.record_id as string },
         );
         if (rpcError) throw rpcError;
-        setFullEntity(data);
+        setFullEntity(data as EntityDisplay | null);
       }
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as Error; // erros do Supabase/edge trazem message
       setPanelError(err?.message || "Falha ao carregar dados completos.");
     } finally {
       setLoadingFull(false);

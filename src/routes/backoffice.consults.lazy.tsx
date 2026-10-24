@@ -196,6 +196,8 @@ import { PanelFooter } from "@/features/financial-hub/components/shared/renderes
 import { PanelVisit } from "@/features/financial-hub/components/shared/renderes/PanelVisit";
 
 import { supabase } from "@/integrations/supabase/client";
+import type { FaqItem, PageConfigs } from "@/features/financial-hub/components/shared/types";
+import type { RpcArgs } from "@/integrations/supabase/client";
 
 export type ConsultEntity = {
   name?: string | null;
@@ -235,6 +237,42 @@ export type ConsultRow = {
   action?: string | null;
   raw_payload?: unknown;
   [key: string]: unknown;
+};
+
+/** Oferta da visita (visit_offers), com o update a que pertence. */
+type VisitOfferRow = ConsultOffer & { visit_update_id?: string | null; created_at?: string | null };
+
+/** Aceite da visita (visit_consents), com o update a que pertence. */
+type VisitConsentRow = Record<string, unknown> & { visit_update_id?: string | null };
+
+/** Visita como vem em get_backoffice_consult_details (visits[0]). */
+type ConsultVisit = {
+  id: string;
+  visit_offers?: VisitOfferRow[] | VisitOfferRow | null;
+  visit_consents?: VisitConsentRow[] | VisitConsentRow | null;
+  visit_entities?: ConsultEntity[] | ConsultEntity | null;
+  raw_payload?: unknown;
+  [key: string]: unknown;
+};
+
+/** Detalhe de uma consulta (get_backoffice_consult_details). */
+type ConsultDetail = {
+  id?: string;
+  visits?: ConsultVisit[] | ConsultVisit | null;
+  created_at: string | null;
+  action?: string | null;
+  raw_payload?: unknown;
+  partner_id?: number | null;
+  product_id?: number | null;
+  partners?: ConsultRow["partners"];
+  product_types?: ConsultRow["product_types"];
+};
+
+/** Partes do raw_payload usadas no detalhe (configuração do produto gravada na visita). */
+type ConsultRawPayload = {
+  page_configs?: PageConfigs | null;
+  page_faqs?: FaqItem[] | FaqItem | null;
+  consent_configs?: Array<Record<string, unknown>> | null;
 };
 
 export const Route = createLazyFileRoute("/backoffice/consults")({
@@ -298,8 +336,8 @@ function ConsultsPage() {
   const [selectedPartners, setSelectedPartners] = useState<string[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
-  const [partnersList, setPartnersList] = useState<any[]>([]);
-  const [productsList, setProductsList] = useState<any[]>([]);
+  const [partnersList, setPartnersList] = useState<{ id: number; name: string }[]>([]);
+  const [productsList, setProductsList] = useState<{ id: number; name: string }[]>([]);
 
   const [activeConsult, setActiveConsult] = useState<ConsultRow | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -356,6 +394,7 @@ function ConsultsPage() {
       loadStats();
     }, 400);
     return () => clearTimeout(timeoutId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega só quando os filtros mudam
   }, [search, selectedPartners, selectedProducts, dateRange, customRange]);
 
   async function load(targetPage: number) {
@@ -392,11 +431,11 @@ function ConsultsPage() {
         p_date_to,
         p_partner_ids: selectedPartners.length > 0 ? selectedPartners.map(Number) : null,
         p_product_ids: selectedProducts.length > 0 ? selectedProducts.map(Number) : null,
-      });
+      } as RpcArgs<"get_backoffice_consults">);
 
       if (rpcError) throw new Error(rpcError.message);
 
-      const visitsData = rpcData || [];
+      const visitsData = (rpcData as Record<string, unknown>[] | null) || [];
       if (!visitsData || visitsData.length === 0) {
         setRows([]);
         setTotalPages(targetPage + 1);
@@ -416,22 +455,25 @@ function ConsultsPage() {
       const normalized = slicedData.map((u: Record<string, unknown>) => {
         const entity = safeArray(u.visit_entities)[0] || null;
 
-        let updateOffers = safeArray(u.visit_offers).filter((o: any) => o.visit_update_id === u.row_id);
+        const visitOffers = safeArray(u.visit_offers as VisitOfferRow[] | VisitOfferRow | null);
+        let updateOffers = visitOffers.filter((o) => o.visit_update_id === u.row_id);
 
         // Se a busca pelo update não retornou nada, varre a raiz por legado (ofertas sem update_id gravado)
         if (updateOffers.length === 0) {
-          updateOffers = safeArray(u.visit_offers).filter((o: any) => !o.visit_update_id);
+          updateOffers = visitOffers.filter((o) => !o.visit_update_id);
         }
 
         const sortedOffers = updateOffers.sort(
-          (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+          (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
         );
 
         let eventPayload = {};
         if (typeof u.raw_payload === "string") {
           try {
             eventPayload = JSON.parse(u.raw_payload);
-          } catch (e) {}
+          } catch (e) {
+            // raw_payload não é JSON válido: mantém o objeto vazio
+          }
         } else {
           eventPayload = u.raw_payload || {};
         }
@@ -456,7 +498,7 @@ function ConsultsPage() {
       });
 
       // [LGPD]: o filtro de busca agora é aplicado no banco (p_search).
-      setRows(normalized);
+      setRows(normalized as ConsultRow[]); // linhas montadas acima a partir do JSON da função
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(msg || "Falha ao carregar listagem.");
@@ -489,7 +531,7 @@ function ConsultsPage() {
         p_to,
         p_partner_ids: selectedPartners.length > 0 ? selectedPartners.map(Number) : null,
         p_product_ids: selectedProducts.length > 0 ? selectedProducts.map(Number) : null,
-      });
+      } as RpcArgs<"visit_stats">);
       if (error) throw error;
 
       const s = data?.[0] ?? { total: 0, consultas: 0, sites_parceiros: 0, simulacoes: 0 };
@@ -512,9 +554,10 @@ function ConsultsPage() {
     setActiveConsult(row);
 
     try {
-      const { data: updateData, error } = await supabase.rpc("get_backoffice_consult_details", {
-        p_visit_update_id: row.row_id,
+      const { data: detailData, error } = await supabase.rpc("get_backoffice_consult_details", {
+        p_visit_update_id: row.row_id as string,
       });
+      const updateData = detailData as ConsultDetail | null;
 
       if (error) {
         toast.error(`Erro ao carregar detalhes: ${error.message}`);
@@ -522,21 +565,21 @@ function ConsultsPage() {
       }
 
       if (updateData) {
-        const visit: any = safeArray(updateData.visits)[0] || {};
+        const visit: ConsultVisit = safeArray<ConsultVisit>(updateData.visits)[0] || ({} as ConsultVisit);
 
         const rawOffers = safeArray(visit.visit_offers);
-        let updateOffers = rawOffers.filter((o: any) => o.visit_update_id === updateData.id);
-        if (updateOffers.length === 0) updateOffers = rawOffers.filter((o: any) => !o.visit_update_id); // legacy
+        let updateOffers = rawOffers.filter((o) => o.visit_update_id === updateData.id);
+        if (updateOffers.length === 0) updateOffers = rawOffers.filter((o) => !o.visit_update_id); // legacy
         const mainOffer =
           updateOffers.sort(
-            (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+            (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
           )[0] || null;
 
         // ✨ [CORREÇÃO]: A auditoria respeita rigorosamente o evento da timeline.
         const rawConsents = safeArray(visit.visit_consents);
-        let updateConsents = rawConsents.filter((c: any) => c.visit_update_id === updateData.id);
+        let updateConsents = rawConsents.filter((c) => c.visit_update_id === updateData.id);
 
-        if (updateConsents.length === 0) updateConsents = rawConsents.filter((c: any) => !c.visit_update_id);
+        if (updateConsents.length === 0) updateConsents = rawConsents.filter((c) => !c.visit_update_id);
 
         const { raw_payload: _, ...cleanVisit } = visit;
 
@@ -1154,7 +1197,7 @@ function ConsultsPage() {
                     {extractedConsentConfigs.length > 0 && <PanelConsents configs={extractedConsentConfigs} />}
 
                     {pageFaqs.length > 0 && <PanelFAQ faqs={pageFaqs} isPrint={false} />}
-                    {!!pageConfigs?.footer && <PanelFooter footer={pageConfigs.footer as any} />}
+                    {!!pageConfigs?.footer && <PanelFooter footer={pageConfigs.footer} />}
                   </div>
 
                   <div className="p-4 bg-card border-t border-border flex items-center justify-between gap-3 shrink-0 shadow-xs">
@@ -1193,11 +1236,11 @@ function ConsultsPage() {
                 ? (() => { try { return JSON.parse(sim.raw_payload); } catch { return {}; } })() 
                 : sim.raw_payload || {};
               
-              const pageConfigs = (rawPayloadObj as any).page_configs || null;
-              const pageFaqs = safeArray((rawPayloadObj as any).page_faqs);
+              const pageConfigs = (rawPayloadObj as ConsultRawPayload).page_configs || null;
+              const pageFaqs = safeArray((rawPayloadObj as ConsultRawPayload).page_faqs);
               
               // 2. Filtros de segurança contra null/vazios (Regra importada do Simulations)
-              const consentConfigsRaw = ((rawPayloadObj as any)?.consent_configs as Array<Record<string, unknown>>) || [];
+              const consentConfigsRaw = (rawPayloadObj as ConsultRawPayload)?.consent_configs || [];
               const extractedConsentConfigs = safeArray(consentConfigsRaw).filter(
                 (c): c is Record<string, unknown> => c !== null && typeof c === 'object' && Object.keys(c).length > 0
               );
@@ -1243,7 +1286,7 @@ function ConsultsPage() {
                   
                   {!!pageConfigs?.footer && (
                     <div className="pt-2 break-inside-avoid">
-                      <PanelFooter footer={pageConfigs.footer as any} />
+                      <PanelFooter footer={pageConfigs.footer} />
                     </div>
                   )}
                 </div>

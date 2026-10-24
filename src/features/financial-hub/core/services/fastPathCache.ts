@@ -25,14 +25,17 @@
  * @author Gemini Pro (Architectural Mechanics)
  */
 
-// Guardamos a chave junto com o estado
-let memoryCache: { key: string | null; state: any } | null = null;
+import type { HubData, OrchestratorPostResponse } from "@/features/financial-hub/components/shared/types";
 
-export const setFastPathState = (state: any) => {
+// Guardamos a chave junto com o estado
+let memoryCache: { key: string | null; state: HubData } | null = null;
+
+export const setFastPathState = (state: HubData | OrchestratorPostResponse) => {
   // Extrai a chave de forma defensiva (direto do estado ou dentro do nó visit)
-  const key = state?.visit_update_id ?? state?.visit?.visit_update_id ?? null;
+  const visit = state?.visit as { visit_update_id?: string } | undefined;
+  const key = (state?.visit_update_id as string | undefined) ?? visit?.visit_update_id ?? null;
   
-  memoryCache = { key, state };
+  memoryCache = { key, state: state as HubData };
 
   // TTL (Time To Live) Shield: 2 segundos de sobrevida antes da limpeza.
   setTimeout(() => {

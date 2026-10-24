@@ -166,7 +166,8 @@ function AlertsPage() {
       setRegisterOpen(false);
       setRegisterData({ name: "", email: "" });
       load();
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = caught as Error & { code?: string }; // erro do Postgres traz code (23505 = duplicado)
       if (e.message?.includes('duplicate key') || e.code === '23505') {
         toast.error("Este e-mail já está cadastrado.");
       } else {
@@ -189,7 +190,8 @@ function AlertsPage() {
       
       toast.success(`Alerta ${!r.is_active ? 'ativado' : 'desativado'} para ${r.name}.`);
       load();
-    } catch (e: any) { 
+    } catch (caught: unknown) {
+      const e = caught as Error; // erros do Supabase/edge trazem message 
       toast.error(e.message || "Erro ao atualizar status"); 
     }
   }
@@ -207,7 +209,8 @@ function AlertsPage() {
       
       toast.success("Destinatário removido com sucesso.");
       load();
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = caught as Error; // erros do Supabase/edge trazem message
       toast.error(e.message || "Erro ao remover destinatário.");
     }
   }

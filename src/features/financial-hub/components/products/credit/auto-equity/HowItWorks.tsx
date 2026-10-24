@@ -26,23 +26,23 @@ import { ThumbsUp, Sparkles, Calculator, Hourglass } from "lucide-react";
 // =========================================================================
 const steps = [
   {
-    t: "Verifique sua elegibilidade",
-    d: "Confirme sua elegibilidade com CPF e e-mail em segundos de forma totalmente digital.",
+    t: "Informe o veículo",
+    d: "Cadastre os dados do veículo que vai ficar em garantia e quanto você precisa.",
     i: <ThumbsUp className="h-6 w-6 text-neutral-400 shrink-0" strokeWidth={1.5} />,
   },
   {
-    t: "Cadastre veículo e renda",
-    d: "Informe os dados do seu veículo e sua renda mensal para estruturar a proposta.",
+    t: "Crédito analisado",
+    d: "Especialistas da FlowCredi levam sua solicitação às instituições parceiras.",
     i: <Sparkles className="h-6 w-6 text-neutral-400 shrink-0" strokeWidth={1.5} />,
   },
   {
-    t: "Simule valor e parcela",
-    d: "Escolha quanto quer pegar e em quantas parcelas deseja pagar no simulador.",
+    t: "Formalização",
+    d: "Com o crédito aprovado, você assina o contrato e o veículo fica em garantia.",
     i: <Calculator className="h-6 w-6 text-neutral-400 shrink-0" strokeWidth={1.5} />,
   },
   {
-    t: "Receba o crédito",
-    d: "Confirme a proposta e receba o valor diretamente na sua conta com suporte especializado.",
+    t: "Pagamento",
+    d: "O valor é liberado na sua conta e você continua usando o veículo.",
     i: <Hourglass className="h-6 w-6 text-neutral-400 shrink-0" strokeWidth={1.5} />,
   },
 ];

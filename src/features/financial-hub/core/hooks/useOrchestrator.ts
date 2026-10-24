@@ -23,6 +23,7 @@
 import { useState, useEffect, useRef } from "react";
 import { callOrchestrator, GatewayErrorResponse } from "@/features/financial-hub/core/services/gateway";
 import { consumeFastPathState, setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
+import type { HubData } from "@/features/financial-hub/components/shared/types";
 
 /** Backoff exponencial simples. */
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
@@ -75,7 +76,7 @@ export function useOrchestratorHydration(visitId: string | null, visitUpdateId?:
     return consumeFastPathState(resolvedUpdateId) || consumeFastPathState(undefined);
   });
 
-  const [simData, setSimData] = useState<any | null>(initialCache || null);
+  const [simData, setSimData] = useState<HubData | null>(initialCache || null);
   const [loading, setLoading] = useState<boolean>(!initialCache);
   const [error, setError] = useState<Partial<GatewayErrorResponse> | null>(null);
   const [retryCount, setRetryCount] = useState<number>(0);
@@ -146,7 +147,7 @@ export function useOrchestratorHydration(visitId: string | null, visitUpdateId?:
  */
 export const orchestrateNavigation = async (
   action: OrchestratorAction,
-  Payload: ThinInteractionPayload & Record<string, any> = {},
+  Payload: ThinInteractionPayload & HubData = {},
 ): Promise<void> => {
   if (typeof window === "undefined") {
     console.warn(`⚠️ [orchestrateNavigation] Navegação no servidor abortada para a ação: ${action}.`);
@@ -212,7 +213,8 @@ export const orchestrateNavigation = async (
     } else {
       console.warn("⚠️ [useOrchestrator] Backend processou o payload, mas reteve a URL de destino.");
     }
-  } catch (err: any) {
+  } catch (caught: unknown) {
+    const err = caught as { fallback_url?: string; message?: string; code?: string } | null;
     console.error("❌ [useOrchestrator] Aborto crítico no fluxo de orquestração:", err);
 
     if (err?.fallback_url) {
@@ -226,6 +228,6 @@ export const orchestrateNavigation = async (
       return;
     }
 
-    throw err;
+    throw caught;
   }
 };

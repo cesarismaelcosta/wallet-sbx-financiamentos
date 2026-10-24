@@ -26,6 +26,7 @@ import {
 } from "../_shared/types.ts";
 
 import { Entity, Offer } from "../_shared/types.ts";
+import { STATUS } from "../_shared/types.ts";
 import { generateUserEmailNotificationHtml } from "./credit-card-notifications.ts";
 import { debugLog } from "../_shared/logger.ts";
 import { validateCardBounds } from "../_shared/simulation-bounds.ts";
@@ -144,7 +145,7 @@ export async function processSimulationCreditCard(
     const cetRate = calculateRate(-amountToFinance, Number(installmentValue.toFixed(2)), prazo);
   
     return {
-      status_id: 1, // Aprovado / Gerado
+      status_id: STATUS.COM_CONDICOES, // Simulação · Com condições (condição comercial gerada)
       is_selected: prazo === prazoPadrao, // Acende `true` apenas na parcela de maior prazo
       external_operation_id: `SIM-CARD-${Date.now()}-${prazo}`, // Mock de rastreabilidade
       message: "Condição comercial gerada.",

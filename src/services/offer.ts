@@ -25,6 +25,7 @@
 import { BFFOfferDetails, BFFErrorResponse } from "@/features/financial-hub/components/shared/types";
 import { fetchOptions, authHeaders } from "@/services/session";
 import { ROOT_ROUTE } from "@/config/routes";
+import type { CaughtError } from "@/features/financial-hub/components/shared/types";
 
 interface FetchOfferOptions {
   signal?: AbortSignal;
@@ -37,6 +38,8 @@ interface FetchOffersQueryParams {
   pageNumber?: number;
   pageSize?: number;
   categoryFilter?: string | null;
+  propertyCategory?: string | null; // imóveis: residenciais | comerciais | industriais | rurais
+  state?: string | null; // imóveis: UF (ex.: SP)
 }
 
 // =========================================================================
@@ -116,7 +119,8 @@ export const fetchOfferDetails = async (
     const result = await response.json();
     return result.data || result;
 
-  } catch (error: any) {
+  } catch (caught: unknown) {
+    const error = caught as CaughtError;
     if (error.name === 'AbortError' || signal?.aborted) {
       throw error;
     }
@@ -140,6 +144,13 @@ export const fetchOfferDetails = async (
 // [SERVIÇO CORE 2]: Engine de Busca em Massa (BFF sbx-offer-query via GET)
 // =========================================================================
 
+/** Resultado da busca de ofertas: lista (cada item com oferta, evento e vendedor) + total. */
+export interface OffersQueryResult {
+  offers?: Record<string, unknown>[];
+  total?: number;
+  [key: string]: unknown;
+}
+
 /**
  * Consulta ao BFF responsável pela tradução de intenção estruturada de prateleira
  * para a linguagem bruta de banco de dados do catálogo externo.
@@ -154,7 +165,7 @@ export const fetchOfferDetails = async (
 export async function fetchOffersQuery(
   params: FetchOffersQueryParams,
   { signal, originUrl }: FetchOfferOptions = {}
-): Promise<any> {
+): Promise<OffersQueryResult> {
   
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -167,6 +178,8 @@ export async function fetchOffersQuery(
   queryParams.set("pageNumber", String(params.pageNumber || 1));
   queryParams.set("pageSize", String(params.pageSize || 20));
   if (params.categoryFilter) queryParams.set("categoryFilter", params.categoryFilter);
+  if (params.propertyCategory) queryParams.set("propertyCategory", params.propertyCategory);
+  if (params.state) queryParams.set("state", params.state);
 
   const url = `${supabaseUrl}/functions/v1/sbx-offer-query?${queryParams.toString()}`;
 
@@ -231,12 +244,13 @@ export async function fetchOffersQuery(
     // A MÁGICA AQUI: O Service Layer descasca o { status, data } de cada 
     // item da lista antes de entregar para o Front-end
     if (payload && Array.isArray(payload.offers)) {
-      payload.offers = payload.offers.map((item: any) => item.data || item);
+      payload.offers = payload.offers.map((item: { data?: Record<string, unknown> } & Record<string, unknown>) => item.data || item);
     }
 
     return payload;
 
-  } catch (error: any) {
+  } catch (caught: unknown) {
+    const error = caught as CaughtError;
     if (error.name === 'AbortError' || signal?.aborted) {
       throw error;
     }

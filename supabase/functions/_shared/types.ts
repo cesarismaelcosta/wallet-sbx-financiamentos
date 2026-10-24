@@ -206,6 +206,54 @@ export interface SimulationResponse {
 }
 
 /**
+ * ETAPAS E STATUS DO FUNIL (ids de stage_types / status_types)
+ * @description Cada status pertence a uma etapa (status_types.stage_id); Pendente envio,
+ * Cancelada e Falha valem em qualquer etapa. Ver migration 20261025120000_stage_status_types.sql.
+ */
+export const STAGE = {
+  PRE_ANALISE: 1,
+  SIMULACAO: 2,
+  PROPOSTA: 3,
+  FORMALIZACAO: 4,
+  PAGA: 5,
+  LEAD: 6,
+} as const;
+
+export const STATUS = {
+  PENDENTE_ENVIO: 0,
+  APROVADA: 1, // Proposta
+  RECUSADA: 2, // Proposta
+  EM_ANALISE: 3, // Proposta
+  PENDENTE_DOCUMENTOS: 4, // Proposta
+  CONTRATO_ASSINADO: 5, // Formalização
+  PAGA: 6, // Paga
+  CANCELADA: 7,
+  FALHA: 8,
+  COM_CONDICOES: 9, // Simulação
+  SEM_CONDICOES: 10, // Simulação
+  ENVIADO: 11, // Lead
+  PRE_APROVADO: 12, // Pré-análise
+  NEGADO: 13, // Pré-análise
+  EM_FORMALIZACAO: 14, // Formalização
+} as const;
+
+/** Etapa de cada status (status_types.stage_id). Ausente = vale em qualquer etapa. */
+export const STAGE_OF_STATUS: Record<number, number> = {
+  [STATUS.COM_CONDICOES]: STAGE.SIMULACAO,
+  [STATUS.SEM_CONDICOES]: STAGE.SIMULACAO,
+  [STATUS.ENVIADO]: STAGE.LEAD,
+  [STATUS.PRE_APROVADO]: STAGE.PRE_ANALISE,
+  [STATUS.NEGADO]: STAGE.PRE_ANALISE,
+  [STATUS.EM_ANALISE]: STAGE.PROPOSTA,
+  [STATUS.PENDENTE_DOCUMENTOS]: STAGE.PROPOSTA,
+  [STATUS.APROVADA]: STAGE.PROPOSTA,
+  [STATUS.RECUSADA]: STAGE.PROPOSTA,
+  [STATUS.EM_FORMALIZACAO]: STAGE.FORMALIZACAO,
+  [STATUS.CONTRATO_ASSINADO]: STAGE.FORMALIZACAO,
+  [STATUS.PAGA]: STAGE.PAGA,
+};
+
+/**
  * @interface Consultation
  * @description Representa cada linha de consulta individual (Marketplace).
  * Cada item aqui será uma linha na tabela 'simulation_consults'.
@@ -225,7 +273,9 @@ export interface Consultation {
   financed_amount: number | null;
   installments: number | null;
   cet_rate: number | null;
-  installment_value: number | null;
+  installment_value: number | null; // 1ª parcela (no PRICE, a parcela fixa)
+  amortization_type?: string | null; // SAC | PRICE
+  last_installment_value?: number | null; // última parcela
 }
 
 /**
@@ -316,7 +366,7 @@ export interface SimulationPayload {
   page_configs?: any;
   consent_configs?: any;
   page_faqs?: any;
-  step?: "CHECK_ELIGIBILITY" | "EXECUTE_SIMULATION";
+  step?: "EXECUTE_SIMULATION" | "SUBMIT_LEAD";
   [key: string]: any; // Permite novos nós na raiz do payload
 }
 

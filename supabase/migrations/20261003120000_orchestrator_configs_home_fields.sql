@@ -187,12 +187,12 @@ BEGIN
 
   IF p_payload ? 'id' THEN
     UPDATE orchestrator_configs SET
-      lookup_id = p_payload->>'lookup_id',
+      lookup_id = (p_payload->>'lookup_id')::BIGINT,
       config_type = p_payload->>'config_type',
       entity_type = p_payload->>'entity_type',
       page_url = p_payload->>'page_url',
       integration_method = p_payload->>'integration_method',
-      partner_id = (p_payload->>'partner_id')::INT,
+      partner_id = (p_payload->>'partner_id')::BIGINT,
       is_active = (p_payload->>'is_active')::BOOLEAN,
       home_key = NULLIF(TRIM(p_payload->>'home_key'), ''),
       home_status = COALESCE(NULLIF(p_payload->>'home_status', ''), 'hidden'),
@@ -204,15 +204,15 @@ BEGIN
       consent_configs = p_payload->'consent_configs',
       page_faqs = p_payload->'page_faqs',
       updated_at = NOW()
-    WHERE id = (p_payload->>'id')::INT;
+    WHERE id = (p_payload->>'id')::BIGINT;
   ELSE
     INSERT INTO orchestrator_configs (
       lookup_id, config_type, entity_type, page_url, integration_method, partner_id, is_active,
       home_key, home_status, home_order, is_integrated,
       integration_details, rules, page_configs, consent_configs, page_faqs
     ) VALUES (
-      p_payload->>'lookup_id', p_payload->>'config_type', p_payload->>'entity_type', p_payload->>'page_url',
-      p_payload->>'integration_method', (p_payload->>'partner_id')::INT, COALESCE((p_payload->>'is_active')::BOOLEAN, true),
+      (p_payload->>'lookup_id')::BIGINT, p_payload->>'config_type', p_payload->>'entity_type', p_payload->>'page_url',
+      p_payload->>'integration_method', (p_payload->>'partner_id')::BIGINT, COALESCE((p_payload->>'is_active')::BOOLEAN, true),
       NULLIF(TRIM(p_payload->>'home_key'), ''), COALESCE(NULLIF(p_payload->>'home_status', ''), 'hidden'),
       NULLIF(p_payload->>'home_order', '')::INT,
       COALESCE((p_payload->>'is_integrated')::BOOLEAN, true), p_payload->'integration_details', p_payload->'rules',

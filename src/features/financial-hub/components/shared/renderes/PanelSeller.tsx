@@ -15,8 +15,9 @@
  */
 
 import { Briefcase } from "lucide-react";
+import type { OfferDisplay } from "@/features/financial-hub/components/shared/types";
 
-export function PanelSeller({ offer, managerDetails }: { offer: any, managerDetails?: any }) {
+export function PanelSeller({ offer, managerDetails }: { offer: OfferDisplay | null | undefined; managerDetails?: { manager_id?: string | null } | null }) {
   // Se não tiver nenhum dado de organizador ou vendedor, o painel nem é renderizado
   if (!offer?.manager_name && !offer?.legal_name && !offer?.seller_id) return null;
 

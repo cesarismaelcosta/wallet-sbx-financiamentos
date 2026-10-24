@@ -60,6 +60,7 @@ function BackofficeLogin() {
       }
     };
     handleInitialSession();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- revalida só quando o usuário do contexto muda
   }, [backofficeUser]);
 
   // =========================================================================

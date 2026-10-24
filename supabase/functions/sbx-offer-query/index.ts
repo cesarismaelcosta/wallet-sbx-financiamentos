@@ -36,6 +36,24 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
 
+/** Imóveis: categoria escolhida na tela → categoria da Superbid (lista fechada). */
+const PROPERTY_CATEGORY_MAP: Record<string, string> = {
+  residenciais: "imoveis-residenciais",
+  comerciais: "imoveis-comerciais",
+  industriais: "imoveis-industriais",
+  rurais: "imoveis-rurais",
+};
+
+/** Imóveis: UF escolhida na tela → nome do estado como a Superbid filtra (lista fechada). */
+const UF_STATE_MAP: Record<string, string> = {
+  AC: "Acre", AL: "Alagoas", AP: "Amapá", AM: "Amazonas", BA: "Bahia", CE: "Ceará",
+  DF: "Distrito Federal", ES: "Espírito Santo", GO: "Goiás", MA: "Maranhão", MT: "Mato Grosso",
+  MS: "Mato Grosso do Sul", MG: "Minas Gerais", PA: "Pará", PB: "Paraíba", PR: "Paraná",
+  PE: "Pernambuco", PI: "Piauí", RJ: "Rio de Janeiro", RN: "Rio Grande do Norte",
+  RS: "Rio Grande do Sul", RO: "Rondônia", RR: "Roraima", SC: "Santa Catarina",
+  SP: "São Paulo", SE: "Sergipe", TO: "Tocantins",
+};
+
 const OFFER_BASE_URLS = {
   production: "https://offer-query.superbid.net",
   staging: "https://offer-query.stage.superbid.net",
@@ -109,6 +127,9 @@ serve(
       const pageSize = Number(incomingParams.get("pageSize")) || 30;
       const sort = incomingParams.get("sort") || "encerramento_proximo";
       const categoryFilter = incomingParams.get("categoryFilter") || null;
+      // Imóveis: filtros da tela (só valores das listas fechadas acima)
+      const propertyCategory = PROPERTY_CATEGORY_MAP[incomingParams.get("propertyCategory") || ""] || null;
+      const stateName = UF_STATE_MAP[(incomingParams.get("state") || "").toUpperCase()] || null;
 
       debugLog(
         `[DEBUG] 🔍 Parâmetros extraídos -> productId: ${productId}, sort: ${sort}, page: ${pageNumber}, size: ${pageSize}, categoryFilter: ${categoryFilter}`,
@@ -153,8 +174,12 @@ serve(
           filter = "product.subCategory.category.description:maquinas_pesadas";
           break;
         case "Fin. Imobiliário":
-          keyword = "financiamentosuperbidpay";
-          filter = "product.subCategory.category.description:imoveis";
+          // Sem a keyword "financiamentosuperbidpay" por enquanto: o financiamento de
+          // imóveis é da FlowCredi e vale para qualquer imóvel aberto da categoria.
+          keyword = "";
+          filter = "product.productType.description:imoveis";
+          if (propertyCategory) filter += `;product.subCategory.category.description:${propertyCategory}`;
+          if (stateName) filter += `;product.location.state:${stateName}`;
           break;
         case "Cartão de Crédito":
           keyword = "";

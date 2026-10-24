@@ -39,11 +39,15 @@ import {
   Consultation, 
   SimulationFinancials
 } from "../_shared/types.ts";
+import { STATUS } from "../_shared/types.ts";
 
 import { resolveOrchestratorConfigs } from "../_shared/orchestrator-configs.ts";
 import { processSimulationFandi } from "./fandi-service.ts";
 import { processSimulationCreditCard } from "./credit-card-service.ts";
-import { processSimulationCreditasAutoEquity } from "./creditas-auto-equity-service.ts";
+import { isFlowcrediMortgage, processFlowcrediMortgage } from "./flowcredi-mortgage-service.ts";
+import { isFlowcrediHomeEquity, processFlowcrediHomeEquity } from "./flowcredi-home-equity-service.ts";
+import { isFlowcrediAutoEquity, processFlowcrediAutoEquity } from "./flowcredi-auto-equity-service.ts";
+import { isFlowBusinessError } from "./flowcredi-service.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 
 const supabase = createClient(
@@ -61,12 +65,12 @@ const supabase = createClient(
  * 
  * @param req - Objeto de requisição HTTP (utilizado para extração infra/geo).
  * @param payload - `SimulationPayload` hidratado com os Trusted Types.
- * @param step - Fase do fluxo ('CHECK_ELIGIBILITY' | 'EXECUTE_SIMULATION').
+ * @param step - Fase do fluxo ('EXECUTE_SIMULATION' | 'SUBMIT_LEAD').
  */
 export async function processSimulation(
   req: Request, 
   payload: SimulationPayload, 
-  step: 'CHECK_ELIGIBILITY' | 'EXECUTE_SIMULATION' = 'EXECUTE_SIMULATION'
+  step: 'EXECUTE_SIMULATION' | 'SUBMIT_LEAD' = 'EXECUTE_SIMULATION'
 ) {
 
   if (!payload) throw new Error("INVALID_PAYLOAD: Payload não fornecido para a simulação.");
@@ -196,9 +200,20 @@ export async function processSimulation(
     success: false,
     message: "Serviço indisponível no parceiro no momento.",
     consults: [{
-      status_id: 99, // ⚠️ Substitua pelo ID real do seu banco para "Erro de Integração/Timeout"
+      status_id: STATUS.FALHA, // Falha (status_types 8): parceiro fora do ar / timeout
       is_selected: true,
-      message: err?.message || "Timeout/Falha na API do Parceiro"
+      message: err?.message || "Timeout/Falha na API do Parceiro",
+      // Campos do contrato Consultation: gravados no UPDATE/INSERT (postgres.js recusa undefined)
+      external_operation_id: null,
+      financial_institution_id: null,
+      financial_institution_name: null,
+      requested_value: null,
+      down_payment_amount: null,
+      down_payment_percentage: null,
+      financed_amount: null,
+      installments: null,
+      cet_rate: null,
+      installment_value: null,
     }],
     raw: { error: err?.message, stack: err?.stack }
   });
@@ -252,50 +267,56 @@ export async function processSimulation(
       break;
 
     // -----------------------------------------------------------------------
-    // PARCEIRO 3: CREDITAS (Garantia de Veículos/Imóveis)
+    // PARCEIRO 3: FLOWCREDI (id que antes era da Creditas) — Garantia de Veículos/Imóveis
+    // e Financiamento Imobiliário
     // -----------------------------------------------------------------------
     case 3: 
-      debugLog(`🏦 INICIO FLUXO CREDITAS - PRODUTO: ${payload.product_id} | FASE: ${step}`, payload.simulation_id);
+      debugLog(`🏦 INICIO FLUXO PARCEIRO 3 - PRODUTO: ${payload.product_id} | FASE: ${step}`, payload.simulation_id);
 
-      if (Number(payload.product_id) === 7) { // CAR EQUITY (Auto Equity)
-        
-        if (step === 'CHECK_ELIGIBILITY') {
-          payload.simulation_id = payload.simulation_id || crypto.randomUUID();
-          payload.action_description = 'SIMULATION_CHECK_ELIGIBILITY';
-          
-          debugLog(`🏦 CHECK_ELIGIBILITY - PRODUTO: ${payload.product_id} | FASE: ${step}`, payload.simulation_id);
-
-          try {
-            gatewayResult = await processSimulationCreditasAutoEquity(payload, step);
-          } catch (err: any) {
+      // 🏠🚗 FLOWCREDI — Financiamento Imobiliário ("mortgage"), Home Equity ("home_equity") e
+      // Car Equity ("auto_equity"), ativados por configuração (`rules.flowcredi_product` no
+      // orchestrator_configs, nunca pelo front).
+      // step EXECUTE_SIMULATION: simular (com as parcelas da melhor condição de cada banco) · SUBMIT_LEAD: enviar o lead.
+      // Car Equity não tem simulação: o lead é a primeira chamada, então o simulation_id nasce aqui (vai no refId).
+      if (isFlowcrediMortgage(resolvedConfig.rules) || isFlowcrediHomeEquity(resolvedConfig.rules) || isFlowcrediAutoEquity(resolvedConfig.rules)) {
+        const processFlow = isFlowcrediMortgage(resolvedConfig.rules)
+          ? processFlowcrediMortgage
+          : isFlowcrediHomeEquity(resolvedConfig.rules) ? processFlowcrediHomeEquity : processFlowcrediAutoEquity;
+        const isNewSimulation = !payload.simulation_id;
+        if (isNewSimulation) payload.simulation_id = crypto.randomUUID();
+        let flow: Awaited<ReturnType<typeof processFlowcrediMortgage>>;
+        try {
+          flow = await processFlow(payload, resolvedConfig.rules ?? {}, step);
+        } catch (err: any) {
+          if (isNewSimulation) (payload as any).simulation_id = undefined;
+          // Erro de validação (mensagem amigável) não vira registro; falha do parceiro sim.
+          if (!isFlowBusinessError(err) && payload.simulation_id) {
             gatewayResult = buildFallbackResult(err);
-            await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, step, true);
-            throw err;
+            await updateSimulationData(sql, payload.simulation_id, payload, infra, gatewayResult, action, 'FLOWCREDI_ERROR', step);
           }
+          throw err;
+        }
 
-          const resultCreditas = await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, step, true);
-          payload.simulation_update_id = String(resultCreditas.simulation_update_id);
-          
+        gatewayResult = flow.result;
+        if (!flow.persist) {
+          if (isNewSimulation) (payload as any).simulation_id = undefined;
+          break;
+        }
+
+        payload.action_description = flow.action === 'LEAD' ? 'SUBMIT_PROPOSAL' : 'SIMULATE_CONDITIONS';
+        if (isNewSimulation) {
+          const resultFlow = await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, step, true);
+          payload.simulation_id = String(resultFlow.simulation_id);
+          payload.simulation_update_id = String(resultFlow.simulation_update_id);
         } else {
-          // EXECUTE_SIMULATION (Fase de cotação final e efetivação)
-          if (!payload.simulation_id) throw new Error("O simulation_id é obrigatório para avançar à fase de EXECUTE_SIMULATION.");
-          payload.action_description = 'SIMULATE_CONDITIONS';
-          
-          try {
-            gatewayResult = await processSimulationCreditasAutoEquity(payload, step);
-          } catch (err: any) {
-            gatewayResult = buildFallbackResult(err);
-            // ⚠️ Aqui usamos UPDATE, porque a simulação já existe no banco da fase CHECK_ELIGIBILITY
-            await updateSimulationData(sql, payload.simulation_id, payload, infra, gatewayResult, action, payload.action_description, step);
-            throw err;
-          }
-          
           const simulationUpdateId = await updateSimulationData(sql, payload.simulation_id, payload, infra, gatewayResult, action, payload.action_description, step);
           payload.simulation_update_id = String(simulationUpdateId);
         }
-        
-      } else if (payload.product_id === 6) { // HOME EQUITY
-        // ... (Mantém o seu código atual do Home Equity) ...
+        break;
+      }
+
+      if (Number(payload.product_id) === 7) { // CAR EQUITY sem `rules.flowcredi_product = "auto_equity"`
+        throw new Error("Produto temporariamente indisponível.");
       }
       break;
 

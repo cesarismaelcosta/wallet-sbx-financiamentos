@@ -22,18 +22,19 @@
 import { CheckCircle2, FileText, MapPin, Smartphone } from "lucide-react";
 import { formatDate } from "@/features/financial-hub/components/shared/formatters";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { AcceptedConsentRow, ConsentLink } from "@/features/financial-hub/components/shared/types";
 
-const safeArray = (data: any) => {
+const safeArray = <T,>(data: T | T[] | null | undefined): T[] => {
   if (!data) return [];
   return Array.isArray(data) ? data : [data];
 };
 
-export function PanelAcceptedConsents({ consents }: { consents: any | any[] }) {
+export function PanelAcceptedConsents({ consents }: { consents: AcceptedConsentRow | AcceptedConsentRow[] | null | undefined }) {
   const normalizedConsents = safeArray(consents);
   if (normalizedConsents.length === 0) return null;
 
   const sortedConsents = [...normalizedConsents].sort(
-    (a, b) => new Date(a.accepted_at).getTime() - new Date(b.accepted_at).getTime()
+    (a, b) => new Date(a.accepted_at as string).getTime() - new Date(b.accepted_at as string).getTime()
   );
 
   return (
@@ -43,7 +44,7 @@ export function PanelAcceptedConsents({ consents }: { consents: any | any[] }) {
       </h4>
 
       <div className="bg-white dark:bg-neutral-900 rounded-none border border-neutral-200 dark:border-neutral-800 shadow-xs divide-y divide-neutral-100 dark:divide-neutral-800 overflow-hidden">
-        {sortedConsents.map((consent: any, index: number) => {
+        {sortedConsents.map((consent, index: number) => {
           const acceptedAt = formatDate(consent.accepted_at);
           
           let snap = consent.page_snapshot;
@@ -51,7 +52,9 @@ export function PanelAcceptedConsents({ consents }: { consents: any | any[] }) {
             try { snap = JSON.parse(snap); } catch (e) { snap = {}; }
           }
           
-          const legalTextSnapshot = snap?.legal_text || {};
+          // page_snapshot já convertido de texto para objeto acima
+          const legalTextSnapshot: { template_text?: string; links?: ConsentLink[] } =
+            (snap as { legal_text?: { template_text?: string; links?: ConsentLink[] } } | null | undefined)?.legal_text || {};
           const templateText = legalTextSnapshot.template_text || "";
           const links = safeArray(legalTextSnapshot.links);
 
@@ -86,7 +89,7 @@ export function PanelAcceptedConsents({ consents }: { consents: any | any[] }) {
                     templateText.split(/(\{.*?\})/g).map((part: string, i: number) => {
                       if (part.startsWith("{") && part.endsWith("}")) {
                         const cleanText = part.replace(/[{}]/g, "");
-                        const linkConfig = links.find((l: any) => l.text === cleanText);
+                        const linkConfig = links.find((l) => l.text === cleanText);
 
                         if (!linkConfig) {
                           return <span key={i} className="underline font-bold inline mx-0.5 text-neutral-900 dark:text-neutral-100">{cleanText}</span>;

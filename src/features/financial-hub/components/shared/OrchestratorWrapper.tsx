@@ -14,18 +14,19 @@ import React, { useMemo } from "react";
 import { useOrchestratorHydration } from "@/features/financial-hub/core/hooks/useOrchestrator";
 import { GatewayErrorResponse } from "@/features/financial-hub/core/services/gateway";
 import { ROOT_ROUTE } from "@/config/routes";
+import { HubData } from "@/features/financial-hub/components/shared/types";
 
 interface OrchestratorWrapperProps {
   visitId: string;
   visitUpdateId?: string | null;
-  children: (simData: any) => React.ReactNode;
+  children: (simData: HubData) => React.ReactNode;
 }
 
 export function OrchestratorWrapper({ visitId, visitUpdateId, children }: OrchestratorWrapperProps) {
   // 1. LÓGICA DE API: Delegamos a busca de dados ao hook especializado
   const { simData, loading, error } = useOrchestratorHydration(visitId, visitUpdateId);
 
-  const payload = useMemo(() => {
+  const payload = useMemo<HubData>(() => {
     // Se houver erro, extraímos os dados conforme a estrutura do Gateway
     if (error) {
       // O 'error' aqui é o objeto que você deu throw no gateway.ts

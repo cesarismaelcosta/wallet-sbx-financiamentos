@@ -21,9 +21,13 @@ import React from "react";
 import { Layers, CheckCircle2 } from "lucide-react";
 import { ICON_MAP } from "@/features/financial-hub/components/shared/icons-map";
 import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
+import type { PageConfigs, TextPart } from "@/features/financial-hub/components/shared/types";
 
-export function PanelProduct({ config }: { config: any }) {
-  const panel = config?.offer_panel || config;
+type OfferPanel = NonNullable<PageConfigs["offer_panel"]>;
+
+// Aceita o page_configs inteiro ou só o offer_panel.
+export function PanelProduct({ config }: { config: PageConfigs | OfferPanel | null | undefined }) {
+  const panel = ((config as PageConfigs | null | undefined)?.offer_panel || config) as OfferPanel | null | undefined;
   if (!panel?.headline?.parts || !panel?.description?.parts) return null;
 
   // =========================================================================
@@ -61,14 +65,14 @@ export function PanelProduct({ config }: { config: any }) {
         {/* 1. HEADLINE E DESCRIÇÃO (ESCALA COMPACTA) */}
         <div className="space-y-1.5">
           <h2 className="text-lg sm:text-xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100">
-            {panel.headline.parts.map((part: any, i: number) => (
+            {panel.headline.parts.map((part: TextPart, i: number) => (
               <span key={i} className={getHeadlineStyle(part.type)}>
                 {part.text}
               </span>
             ))}
           </h2>
           <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-            {panel.description.parts.map((part: any, i: number) => (
+            {panel.description.parts.map((part: TextPart, i: number) => (
               <span key={i} className={getDescriptionStyle(part.type)}>
                 {part.text}
               </span>
@@ -79,7 +83,7 @@ export function PanelProduct({ config }: { config: any }) {
         {/* 2. LISTA DE BENEFÍCIOS (ÍCONES MENORES E TEXTO 10PX/12PX) */}
         {panel.benefits && Array.isArray(panel.benefits) && (
           <ul className="flex flex-col gap-2.5 pt-1">
-            {panel.benefits.map((b: any, i: number) => {
+            {panel.benefits.map((b, i: number) => {
               const IconComponent = ICON_MAP[b.icon] || ICON_MAP[b.icon?.toLowerCase()] || CheckCircle2;
               return (
                 <li key={i} className="flex items-start gap-2.5">

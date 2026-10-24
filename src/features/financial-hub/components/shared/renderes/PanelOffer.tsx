@@ -16,8 +16,15 @@
 
 import { CreditCard } from "lucide-react";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
+import type { OfferDisplay } from "@/features/financial-hub/components/shared/types";
 
-export function PanelOffer({ offer, offerDetails, eventDetails }: any) {
+interface PanelOfferProps {
+  offer: OfferDisplay | null | undefined;
+  offerDetails?: { category?: string | null; lot_number?: string | number | null } | null;
+  eventDetails?: { event_description?: string | null } | null;
+}
+
+export function PanelOffer({ offer, offerDetails, eventDetails }: PanelOfferProps) {
   if (!offer?.offer_description && !offer?.offer_id) return null;
 
   return (

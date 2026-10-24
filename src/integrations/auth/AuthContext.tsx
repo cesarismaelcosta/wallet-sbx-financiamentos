@@ -66,6 +66,7 @@
 import { createContext, useCallback, useContext, useState, type ReactNode, useEffect, useRef } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import type { NullableRpcArgs, RpcArgs } from "@/integrations/supabase/client";
 
 // =========================================================================
 // 🛡️ TIPAGENS RIGOROSAS
@@ -139,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false; 
       subscription.unsubscribe(); 
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- assinatura de sessão criada uma vez na montagem
   }, []);
 
   // =========================================================================
@@ -182,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           p_origin_page: window.location.pathname,
           p_origin_function: "validateUserAccess",
           p_failure_reason: errorMsg
-        }).then(({ error }) => { if (error) console.error(error); });
+        } as RpcArgs<"log_access_event">).then(({ error }) => { if (error) console.error(error); });
         hasLoggedThisSession.current = true;
       }
 
@@ -201,7 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           p_origin_page: window.location.pathname,
           p_origin_function: "validateUserAccess",
           p_failure_reason: null
-        }).then(({ error }) => { if (error) console.error(error); });
+        } satisfies NullableRpcArgs<"log_access_event"> as unknown as RpcArgs<"log_access_event">).then(({ error }) => { if (error) console.error(error); });
         hasLoggedThisSession.current = true;
       }
       
@@ -236,7 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       p_origin_page: window.location.pathname,
       p_origin_function: "signOut",
       p_failure_reason: null
-    }).then(({ error }) => { if (error) console.error(error); });
+    } satisfies NullableRpcArgs<"log_access_event"> as unknown as RpcArgs<"log_access_event">).then(({ error }) => { if (error) console.error(error); });
 
     hasLoggedThisSession.current = false;
     await supabase.auth.signOut();

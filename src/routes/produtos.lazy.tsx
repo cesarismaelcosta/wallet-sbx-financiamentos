@@ -48,12 +48,13 @@ import { useOrchestratorHistorySync } from "@/features/financial-hub/core/hooks/
 export const Route = createLazyFileRoute("/produtos")({
   component: ProdutosLayOut,
 });
+import type { CaughtError } from "@/features/financial-hub/components/shared/types";
 
 /**
  * 🔐 [CONTRATO DE CONTEXTO]
  */
 export const UserDataContext = createContext<{
-  userData: BFFUserProfile | null;
+  userData: Partial<BFFUserProfile> | null;
   performLogout: () => void;
   isVerifying: boolean;
 }>({
@@ -180,7 +181,7 @@ export function ProdutosLayOut() {
     logoutRef.current = logout;
   }, [logout]);
 
-  const [userData, setUserData] = useState<BFFUserProfile | null>(contextProfile || null);
+  const [userData, setUserData] = useState<Partial<BFFUserProfile> | null>(contextProfile || null);
   const [isVerifying, setIsVerifying] = useState<boolean>(!contextProfile);
   const [isClientMounted, setIsClientMounted] = useState(false);
 
@@ -227,11 +228,11 @@ export function ProdutosLayOut() {
       try {
         // 🔒 ZERO PII: nenhum fallback de perfil vindo do sessionStorage.
         // O perfil só existe em memória (contexto) ou é reidratado pelo backend via JWT.
-        let userProfile = contextProfile as BFFUserProfile | null;
+        let userProfile = contextProfile as Partial<BFFUserProfile> | null;
 
         const searchParams = new URLSearchParams(window.location.search);
-        let vId = searchParams.get("visit_id");
-        let vUpId = searchParams.get("visit_update_id");
+        const vId = searchParams.get("visit_id");
+        const vUpId = searchParams.get("visit_update_id");
 
         // =====================================================================
         // 👻 [STEP 2]: GERAÇÃO DE PAGEVIEW (PHANTOM VISIT POST)
@@ -329,7 +330,8 @@ export function ProdutosLayOut() {
           setUserData(userProfile);
           setIsVerifying(false);
         }
-      } catch (err: any) {
+      } catch (caught: unknown) {
+        const err = caught as CaughtError;
         if (isRedirecting.current) return;
         isRedirecting.current = true;
 

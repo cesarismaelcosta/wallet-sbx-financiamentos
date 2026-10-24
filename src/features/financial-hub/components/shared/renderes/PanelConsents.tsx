@@ -22,14 +22,19 @@
 
 import { CheckSquare } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { ConsentConfig } from "@/features/financial-hub/components/shared/types";
 
 // Helper de segurança para garantir que o payload seja sempre um Array iterável
-const safeArray = (data: any) => {
+const safeArray = <T,>(data: T | T[] | null | undefined): T[] => {
   if (!data) return [];
   return Array.isArray(data) ? data : [data];
 };
 
-export function PanelConsents({ configs }: { configs: any[] }) {
+// `required`: nome antigo de is_required em configurações antigas
+type ConsentConfigView = ConsentConfig & { required?: boolean };
+
+// O backoffice ainda passa as linhas sem tipo (Record) — tipadas na área do backoffice.
+export function PanelConsents({ configs }: { configs: ConsentConfigView[] | Record<string, unknown>[] | null | undefined }) {
   // Verificação dupla: se não for array ou estiver vazio, aborta imediatamente
   if (!Array.isArray(configs) || configs.length === 0) return null;
 
@@ -39,7 +44,7 @@ export function PanelConsents({ configs }: { configs: any[] }) {
         <CheckSquare className="h-3.5 w-3.5" /> Regras de Aceite (Tela)
       </h4>
       <div className="bg-white dark:bg-neutral-900 rounded-none border border-neutral-200 dark:border-neutral-800 shadow-xs divide-y divide-neutral-100 dark:divide-neutral-800">
-        {configs.map((config: any, index: number) => {
+        {(configs as ConsentConfigView[]).map((config, index: number) => {
           // Garante que links internos também sejam arrays iteráveis
           const links = safeArray(config.links);
           
@@ -60,7 +65,7 @@ export function PanelConsents({ configs }: { configs: any[] }) {
                       const cleanText = part.replace(/[{}]/g, "");
                       
                       // Agora podemos usar .find() com segurança porque links é garantidamente um array
-                      const linkConfig = links.find((l: any) => l.text === cleanText);
+                      const linkConfig = links.find((l) => l.text === cleanText);
                       
                       if (!linkConfig) {
                         return (

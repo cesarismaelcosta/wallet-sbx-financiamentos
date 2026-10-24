@@ -58,7 +58,7 @@ interface ConsentConfig {
 }
 
 interface DynamicConsentsProps {
-  configs: ConsentConfig[];
+  configs: ConsentConfig[] | null | undefined; // null quando o produto não tem aceites (tratado abaixo)
   value: Record<string, boolean>;
   onChange: (value: Record<string, boolean>) => void;
 }
@@ -169,17 +169,17 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                 ) : (
                   /* Fallback de compatibilidade para contratos legados */
                   <>
-                    {(opt as any).prefix}
+                    {opt.prefix}
                     <a 
-                      href={(opt as any).url} 
+                      href={opt.url} 
                       target="_blank" 
                       rel="noopener noreferrer" 
                       className="font-semibold text-neutral-900 dark:text-neutral-100 underline underline-offset-2 mx-1 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {(opt as any).link_text}
+                      {opt.link_text}
                     </a>
-                    {(opt as any).suffix}
+                    {opt.suffix}
                   </>
                 )}
               </label>

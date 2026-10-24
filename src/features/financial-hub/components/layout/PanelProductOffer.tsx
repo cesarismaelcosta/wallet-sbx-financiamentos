@@ -26,9 +26,10 @@
 import { ICON_MAP } from "../shared/icons-map";
 import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
 import { PanelProductOfferSkeleton } from "./PanelProductOfferSkeleton";
+import type { PageConfigs, TextPart } from "@/features/financial-hub/components/shared/types";
 
 interface PanelProductOfferProps {
-  config: any;
+  config: PageConfigs | null | undefined;
 }
 
 export function PanelProductOffer({ config }: PanelProductOfferProps) {
@@ -42,6 +43,7 @@ export function PanelProductOffer({ config }: PanelProductOfferProps) {
   // =========================================================================
   // 2. PARSER DINÂMICO DE TEXTO SELETIVO & HIERARQUIA
   // =========================================================================
+  // headline/description já garantidos pela checagem acima
   const { offer_panel } = config;
 
   const getHeadlineStyle = (type: string) => {
@@ -72,14 +74,14 @@ export function PanelProductOffer({ config }: PanelProductOfferProps) {
       {/* 1. HEADLINE E DESCRIÇÃO */}
       <div className="space-y-4">
         <h1 className="text-2xl sm:text-3xl font-semibold leading-tight tracking-tight text-neutral-900 dark:text-neutral-100">
-          {offer_panel.headline.parts.map((part: any, i: number) => (
+          {offer_panel.headline!.parts.map((part: TextPart, i: number) => (
             <span key={i} className={getHeadlineStyle(part.type)}>
               {part.text}
             </span>
           ))}
         </h1>
         <p className="mt-3 text-sm md:text-base text-neutral-600 dark:text-neutral-400 leading-relaxed">
-          {offer_panel.description.parts.map((part: any, i: number) => (
+          {offer_panel.description!.parts.map((part: TextPart, i: number) => (
             <span key={i} className={getDescriptionStyle(part.type)}>
               {part.text}
             </span>
@@ -90,7 +92,7 @@ export function PanelProductOffer({ config }: PanelProductOfferProps) {
       {/* 2. LISTA DE BENEFÍCIOS */}
       {offer_panel.benefits && Array.isArray(offer_panel.benefits) && (
         <ul className="flex flex-col gap-4 pt-2">
-          {offer_panel.benefits.map((b: any, i: number) => {
+          {offer_panel.benefits.map((b, i: number) => {
             const Icon = ICON_MAP[b.icon];
             return (
               <li key={i} className="flex items-start gap-3">

@@ -35,11 +35,12 @@ import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { SimulacaoWizardData } from "../simulacao.types";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
+import type { ConsentConfig, GatewayConsult, Offer } from "@/features/financial-hub/components/shared/types";
 
 // =========================================================================
 // 🤖 [UTILITY ARCHITECTURE]: Slugificação Segura para Ofertas sbX
 // =========================================================================
-const getSuperbidUrl = (offerData: any) => {
+const getSuperbidUrl = (offerData: Partial<Offer> | undefined) => {
   if (!offerData?.offer_id) return "#";
   const slug = (offerData.offer_description || "")
     .toLowerCase()
@@ -69,7 +70,7 @@ export function Step1Simulation() {
   // 🤖 [UX ARCHITECTURE]: Roteiro de Loading Progressivo
   // =========================================================================
   useEffect(() => {
-    let timers: NodeJS.Timeout[] = [];
+    const timers: NodeJS.Timeout[] = [];
     
     if (loading) {
       setLoadingMessage("Iniciando simulação...");
@@ -100,7 +101,7 @@ export function Step1Simulation() {
   // =========================================================================
   // 🤖 [RENDER GUARD ARCHITECTURE]: Proteção contra Regressões de Ciclo
   // =========================================================================
-  const initializedOfferIdRef = useRef<any>(null);
+  const initializedOfferIdRef = useRef<unknown>(null);
 
   useEffect(() => {
     const currentOfferId = state?.data?.offer?.offer_id;
@@ -119,8 +120,8 @@ export function Step1Simulation() {
   const areConsentsValid = useMemo(() => {
     const configs = state.data?.consent_configs || [];
     return configs
-      .filter((opt: any) => opt.is_required)
-      .every((opt: any) => acceptedConsents[opt.id] === true);
+      .filter((opt: ConsentConfig) => opt.is_required)
+      .every((opt: ConsentConfig) => acceptedConsents[opt.id] === true);
   }, [state.data?.consent_configs, acceptedConsents]);
 
   const isSimulating = useRef(false);
@@ -156,8 +157,8 @@ export function Step1Simulation() {
           cet_rate: state.data.taxa || 0,
         },
         consents: state.data.consent_configs
-          ?.filter((c: any) => acceptedConsents[c.id])
-          .map((c: any) => ({
+          ?.filter((c: ConsentConfig) => acceptedConsents[c.id])
+          .map((c: ConsentConfig) => ({
             consent_id: c.id,
             acceptedConsents: true,
             acceptedConsents_at: new Date().toISOString(),
@@ -191,7 +192,7 @@ export function Step1Simulation() {
           }),
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[Erro na Simulação]:", error);
       
       // Disparo de evento global estruturado para o ErrorCountdown do layout

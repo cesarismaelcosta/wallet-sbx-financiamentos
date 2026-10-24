@@ -34,11 +34,13 @@ import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
+import type { ConsentConfig, GatewayConsult, Offer } from "@/features/financial-hub/components/shared/types";
+import type { VeiculosWizardData } from "../veiculos.types";
 
 // =========================================================================
 // 🤖 [UTILITY ARCHITECTURE]: Slugificação Segura para Ofertas sbX
 // =========================================================================
-const getSuperbidUrl = (offerData: any) => {
+const getSuperbidUrl = (offerData: Partial<Offer> | undefined) => {
   if (!offerData?.offer_id) return "#";
   const slug = (offerData.offer_description || "")
     .toLowerCase()
@@ -58,7 +60,7 @@ export function Step1Simulation() {
   const [acceptedConsents, setAcceptedConsents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [entradaFocused, setEntradaFocused] = useState(false); // controla o badge do slider de Entrada enquanto o input está em foco
-  const { state, updateData, update } = useWizard<any>();
+  const { state, updateData, update } = useWizard<VeiculosWizardData>();
   const [loadingMessage, setLoadingMessage] = useState("Consultando ofertas...");
 
   // Estados locais para controle fluido do Slider (evita race condition)
@@ -70,7 +72,7 @@ export function Step1Simulation() {
   // 🤖 [UX ARCHITECTURE]: Roteiro de Loading Progressivo (Mitiga latência Fandi)
   // =========================================================================
   useEffect(() => {
-    let timers: NodeJS.Timeout[] = [];
+    const timers: NodeJS.Timeout[] = [];
     
     if (loading) {
       setLoadingMessage("Iniciando simulação...");
@@ -101,14 +103,14 @@ export function Step1Simulation() {
   // =========================================================================
   // 🤖 [RENDER GUARD ARCHITECTURE]: Proteção contra Regressões de Ciclo
   // =========================================================================
-  const initializedOfferIdRef = useRef<any>(null);
+  const initializedOfferIdRef = useRef<unknown>(null);
 
   useEffect(() => {
     const currentOfferId = state?.data?.offer?.offer_id || state?.data?.offer?.id;
     
     if (currentOfferId && initializedOfferIdRef.current !== currentOfferId) {
       initializedOfferIdRef.current = currentOfferId;
-      setLocalValorVeiculo(state.data.offer.offer_value ?? 0);
+      setLocalValorVeiculo(state.data.offer!.offer_value ?? 0); // offer existe: o id veio dela
       setLocalPercentualEntrada(state.data.rules?.min_down_payment_percentage ?? 0);
       setLocalParcelas(state.data.rules?.default_installments ?? null);
     }
@@ -119,7 +121,7 @@ export function Step1Simulation() {
   // =========================================================================
   const areConsentsValid = useMemo(() => {
     const configs = state.data?.consent_configs || [];
-    return configs.filter((opt: any) => opt.is_required).every((opt: any) => acceptedConsents[opt.id] === true);
+    return configs.filter((opt: ConsentConfig) => opt.is_required).every((opt: ConsentConfig) => acceptedConsents[opt.id] === true);
   }, [state.data?.consent_configs, acceptedConsents]);
 
   const isSimulating = useRef(false);
@@ -153,8 +155,8 @@ export function Step1Simulation() {
           cet_rate: state.data.taxa || 0,
         },
         consents: state.data.consent_configs
-          ?.filter((c: any) => acceptedConsents[c.id])
-          .map((c: any) => ({
+          ?.filter((c: ConsentConfig) => acceptedConsents[c.id])
+          .map((c: ConsentConfig) => ({
             consent_id: c.id,
             acceptedConsents: true,
             acceptedConsents_at: new Date().toISOString(),
@@ -182,7 +184,7 @@ export function Step1Simulation() {
           }),
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[Erro na Simulação Veículos]:", error);
       window.dispatchEvent(new CustomEvent("app-error", { detail: error }));
     } finally {

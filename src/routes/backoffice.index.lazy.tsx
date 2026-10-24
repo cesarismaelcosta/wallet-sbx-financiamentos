@@ -161,6 +161,7 @@ import { useAuth } from "@/integrations/auth/AuthContext";
 
 // Conexão com Banco de Dados
 import { supabase } from "@/integrations/supabase/client";
+import type { RpcArgs } from "@/integrations/supabase/client";
 
 // ============================================================================
 // LAZY LOADING DOS GRÁFICOS (FORA DO BUNDLE INICIAL)
@@ -376,6 +377,7 @@ function DashboardPage() {
     }, 400);
 
     return () => clearTimeout(timeoutId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega só quando os filtros mudam
   }, [dateRange, customRange, selectedPartners, selectedProducts, backofficeUser]);
 
   async function load() {
@@ -420,7 +422,7 @@ function DashboardPage() {
       p_end: end.toISOString(),
       p_partner_ids: cleanPartners.length > 0 ? cleanPartners : null,
       p_product_ids: cleanProducts.length > 0 ? cleanProducts : null
-    });
+    } as RpcArgs<"get_dashboard_simulations_raw">);
 
     const queryVis = supabase.rpc('get_dashboard_visits_raw', {
       p_start: start.toISOString(),

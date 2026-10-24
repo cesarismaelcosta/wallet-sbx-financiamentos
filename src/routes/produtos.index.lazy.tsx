@@ -52,6 +52,7 @@ import { callOrchestrator, callOrchestratorConfigs } from "@/features/financial-
 import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { UserDataContext } from "@/routes/produtos.lazy";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import type { CaughtError } from "@/features/financial-hub/components/shared/types";
 
 // ============================================================================
 // [REGISTRO DA ROTA TANSTACK ROUTER]
@@ -121,6 +122,25 @@ const flowsConfig: Record<string, FlowConfig> = {
 
 type AppJourney = HeaderLink & { ativo: boolean };
 
+// Cache em memória (por aba) da resposta de orchestrator-configs?mode=home.
+// Evita chamar a edge a cada volta para a home (rate limit compartilhado com
+// a jornada). Validade: 60s. F5 limpa (o módulo é recarregado).
+const HOME_PRODUCTS_TTL_MS = 60_000;
+let homeProductsCache: { at: number; map: Record<string, string> } | null = null;
+
+// Botões de cada prateleira (seção) da home. A prateleira some -- junto com o
+// link do menu -- quando TODOS os botões dela estão ocultos (sem linha em
+// orchestrator_configs ou home_status = hidden). Seção fora deste mapa
+// (ex.: "seguranca") é institucional e sempre aparece.
+const SECTION_BUTTONS: Record<string, string[]> = {
+  cartao: ["cartao"],
+  veiculos: ["carros", "caminhoes"],
+  imoveis: ["imoveis"],
+  emprestimos: ["equityCarro", "equityImovel"],
+  seguros: ["seguroAuto", "seguroResidencial"],
+  floorplan: ["floorPlan"],
+};
+
 const homeLinks: AppJourney[] = [
   { href: "seguranca", label: "Segurança", ativo: true },
   { href: "cartao", label: "Cartão", ativo: true },
@@ -178,7 +198,6 @@ export function ProdutosHome() {
       if (errorFillRaf2Ref.current !== null) cancelAnimationFrame(errorFillRaf2Ref.current);
       clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [errorKey]);
 
   // 🌙 Modo noturno da home: agora usa o MESMO tema global do resto do site
@@ -331,7 +350,8 @@ export function ProdutosHome() {
       } else {
         throw new Error("URL de visita ausente na resposta do orquestrador.");
       }
-    } catch (error: any) {
+    } catch (caught: unknown) {
+      const error = caught as CaughtError;
       if (error && error.code === "SESSION_EXPIRED" && error.fallback_url) {
         const safeUrl = new URL(error.fallback_url, window.location.origin);
         window.location.href = safeUrl.pathname + safeUrl.search;
@@ -351,17 +371,32 @@ export function ProdutosHome() {
     if (!isMounted || !sessionToken) return;
     let cancelled = false;
     setHomeProductsError(false);
+
+    if (homeProductsCache && Date.now() - homeProductsCache.at < HOME_PRODUCTS_TTL_MS) {
+      setHomeProducts(homeProductsCache.map);
+      return;
+    }
+
     callOrchestratorConfigs({ mode: "home" })
-      .then((res: any) => {
+      .then((res) => {
         if (cancelled) return;
         const map: Record<string, string> = {};
-        (res?.products || []).forEach((p: any) => {
-          if (p?.key) map[p.key] = p.status;
+        (res?.products || []).forEach((p) => {
+          if (p?.key) map[p.key] = p.status as string;
         });
+        homeProductsCache = { at: Date.now(), map };
         setHomeProducts(map);
       })
-      .catch(() => {
-        if (!cancelled) setHomeProductsError(true);
+      .catch((caught: unknown) => {
+        const error = caught as CaughtError;
+        if (cancelled) return;
+        // Sessão expirada: mesmo tratamento do clique nos botões (volta ao login)
+        if (error && error.code === "SESSION_EXPIRED" && error.fallback_url) {
+          const safeUrl = new URL(error.fallback_url, window.location.origin);
+          window.location.href = safeUrl.pathname + safeUrl.search;
+          return;
+        }
+        setHomeProductsError(true);
       });
     return () => {
       cancelled = true;
@@ -459,7 +494,13 @@ export function ProdutosHome() {
     );
   };
 
-  const linksAtivos = homeLinks.filter((link) => link.ativo);
+  // Enquanto carrega (ou se der erro) nenhuma prateleira é escondida.
+  const isSectionVisible = (href: string) => {
+    const buttons = SECTION_BUTTONS[href];
+    if (!buttons || homeProducts === null || homeProductsError) return true;
+    return buttons.some((key) => !!homeProducts[key]);
+  };
+  const linksAtivos = homeLinks.filter((link) => link.ativo && isSectionVisible(link.href));
   const productLinks = linksAtivos.filter((link) => link.href !== "seguranca");
 
   return (

@@ -9,6 +9,7 @@ import {
  * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
 import { debugLog } from "../_shared/logger.ts";
+import { OFFER_BUTTON_CSS, renderOfferButton, renderOfferButtonCell } from "./email-offer-button.ts";
 
 /**
  * Gera o HTML completo de notificação de e-mail para o CLIENTE, no fluxo de
@@ -141,13 +142,16 @@ export function generateUserEmailNotificationHtml(
       ? `${contact}?text=${encodeURIComponent(msg)}`
       : `https://wa.me/${numericContact}?text=${encodeURIComponent(msg)}`;
 
+    // "Consultar oferta" + WhatsApp lado a lado (no celular, um embaixo do outro)
+    const offerCell = renderOfferButtonCell(payload.offer, fontStack);
     htmlWhatsApp = `
       <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 24px;">
         <tr>
           <td align="center">
             <table border="0" cellspacing="0" cellpadding="0">
               <tr>
-                <td align="center" style="background-color: ${ink}; border-radius: 0;">
+                ${offerCell ? `${offerCell.replace('<td align="center" class="sbx-offer-btn"', '<td align="center" class="sbx-offer-btn btn-col"')}<td class="btn-gap" width="12" style="font-size:0; line-height:0;">&nbsp;</td>` : ""}
+                <td align="center" class="btn-col" style="background-color: ${ink}; border-radius: 0;">
                   <a href="${whatsappUrl}" target="_blank" style="font-size: 13px; font-family: ${fontStack}; font-weight: 600; color: #ffffff; text-decoration: none; padding: 12px 24px; display: inline-block; border-radius: 0;">
                     💬 Continuar pelo WhatsApp
                   </a>
@@ -160,12 +164,19 @@ export function generateUserEmailNotificationHtml(
     `;
   }
 
+  // Sem WhatsApp configurado: só o "Consultar oferta"
+  if (!htmlWhatsApp) htmlWhatsApp = renderOfferButton(payload.offer, 24, fontStack);
+
   // 5. Montagem Final do Documento HTML
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      ${OFFER_BUTTON_CSS}
+      @media only screen and (max-width:480px) { td.btn-col { display:block !important; width:100% !important; } td.btn-gap { display:block !important; height:10px !important; } }
+    </style>
     </head>
     <body style="margin: 0; padding: 0; background-color: ${surface}; font-family: ${fontStack};">
     <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: ${surface}; padding: 20px 10px;">
@@ -174,8 +185,11 @@ export function generateUserEmailNotificationHtml(
             <table width="100%" style="width: 100%; max-width: 640px; background-color: #ffffff; border: 1px solid ${line}; border-radius: 0; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);">
 
             <tr>
-                <td align="left" style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid ${line};">
-                <img src="${logoSrc}" alt="Logo" width="130" style="display: block; border: 0;" />
+                <!-- Cabeçalho = uma imagem só (fundo branco + logo, PNG 960x114 ~2 KB, exibida em 640x76 com altura reservada).
+                     Leitores de e-mail não alteram imagens, então o cabeçalho continua branco no modo escuro do Gmail.
+                     O alt estilizado aparece no lugar do ícone enquanto a imagem carrega ou se for bloqueada. -->
+                <td align="left" bgcolor="#ffffff" style="padding: 0; background-color: #ffffff; border-bottom: 1px solid ${line};">
+                <img src="${logoSrc}" alt="Wallet sbX" width="640" height="76" style="display: block; border: 0; width: 100%; max-width: 640px; height: auto; font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 700; line-height: 76px; color: #1d1d1b;" />
                 </td>
             </tr>
 
@@ -226,7 +240,7 @@ export function generateUserEmailNotificationHtml(
 
   return {
     html,
-    attachments: [{ content_id: "logo-wallet", storage_path: "logos/wallet-sbx-200_60.png" }]
+    attachments: [{ content_id: "logo-wallet", storage_path: "logos/wallet-sbx-header-email.png" }]
   };
 }
 
@@ -369,8 +383,11 @@ export function generatePartnerEmailNotificationHtml(
             <table width="100%" style="max-width: 650px; background-color: #ffffff; border: 1px solid ${line}; border-radius: 0; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);">
             
             <tr>
-                <td align="left" style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid ${line};">
-                  <img src="${logoSrc}" alt="Logo" width="130" style="display: block; border: 0;" />
+                <!-- Cabeçalho = uma imagem só (fundo branco + logo, PNG 960x114 ~2 KB, exibida em 640x76 com altura reservada).
+                     Leitores de e-mail não alteram imagens, então o cabeçalho continua branco no modo escuro do Gmail.
+                     O alt estilizado aparece no lugar do ícone enquanto a imagem carrega ou se for bloqueada. -->
+                <td align="left" bgcolor="#ffffff" style="padding: 0; background-color: #ffffff; border-bottom: 1px solid ${line};">
+                  <img src="${logoSrc}" alt="Wallet sbX" width="640" height="76" style="display: block; border: 0; width: 100%; max-width: 640px; height: auto; font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 700; line-height: 76px; color: #1d1d1b;" />
                 </td>
             </tr>
 
@@ -411,6 +428,6 @@ export function generatePartnerEmailNotificationHtml(
 
   return { 
     html, 
-    attachments: [{ content_id: "logo-wallet", storage_path: "logos/wallet-sbx-200_60.png" }] 
+    attachments: [{ content_id: "logo-wallet", storage_path: "logos/wallet-sbx-header-email.png" }] 
   };
 }

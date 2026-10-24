@@ -30,6 +30,7 @@ import { CardWizardData } from "../card.types";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
+import type { ConsentConfig, GatewayConsult, Offer } from "@/features/financial-hub/components/shared/types";
 
 // =========================================================================
 // 🤖 [UX ARCHITECTURE]: Hook de Distração Cognitiva para APIs de alta latência
@@ -63,7 +64,7 @@ function useLoadingMessages(isLoading: boolean) {
 // =========================================================================
 // 🤖 [UTILITY ARCHITECTURE]: Slugificação Segura para Ofertas sbX
 // =========================================================================
-const getSuperbidUrl = (offerData: any) => {
+const getSuperbidUrl = (offerData: Partial<Offer> | undefined) => {
   if (!offerData?.offer_id) return "#";
   const slug = (offerData.offer_description || "")
     .toLowerCase()
@@ -117,6 +118,7 @@ export function Step1Simulation() {
     if (offerValue && !simResult && !isSimulating.current && !hasAttempted.current) {
       handleSimular();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- dispara a simulação só quando a oferta ou o resultado mudam
   }, [offerValue, simResult]);
 
   // =========================================================================
@@ -178,7 +180,7 @@ export function Step1Simulation() {
           })
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[Erro na Simulação Card]:", error);
       window.dispatchEvent(new CustomEvent("app-error", { detail: error }));
     } finally {
@@ -278,10 +280,10 @@ export function Step1Simulation() {
           ) : (
             // [RESOLVED STATE]: Injeção dos dados reais com fundo bg-neutral-50 dark:bg-neutral-800 e fonte serifada de destaque no multiplicador
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl animate-in slide-in-from-bottom-4 fade-in duration-500 ease-out">
-              {(simulationResult?.consults || []).map((item: any, index: number) => {
+              {(simulationResult?.consults || []).map((item: GatewayConsult, index: number) => {
                 const qtdParcelas = item.installments;
                 const valorParcela = item.installment_value;
-                const totalOpcao = qtdParcelas * valorParcela;
+                const totalOpcao = (qtdParcelas as number) * (valorParcela as number); // cartão sempre devolve parcelas e valor
 
                 return (
                   <button

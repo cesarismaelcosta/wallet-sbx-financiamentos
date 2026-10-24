@@ -34,7 +34,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, createLazyFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, ChevronDown, SlidersHorizontal, ArrowUpDown } from "lucide-react";
+import { ArrowLeft, ChevronDown, SlidersHorizontal, ArrowUpDown, Building2, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { PanelHeader } from "@/features/financial-hub/components/layout/PanelHeader";
@@ -49,6 +49,9 @@ import { setFastPathState } from "@/features/financial-hub/core/services/fastPat
 import { CardOfferV } from "@/features/financial-hub/components/shared/renderes/CardOfferV";
 import { CardOfferVSkeleton } from "@/features/financial-hub/components/shared/renderes/CardOfferVSkeleton";
 import { HOME_ROUTE, buildSigninRedirect } from "@/config/routes";
+import type { CaughtError } from "@/features/financial-hub/components/shared/types";
+import type { LucideIcon } from "lucide-react";
+import type { CardOfferItem } from "@/features/financial-hub/components/shared/renderes/CardOfferV";
 
 // =========================================================================
 // [TAXONOMIA VISUAL]: Dicionário Estático de Categorias Oficiais
@@ -86,6 +89,28 @@ const SORT_OPTIONS = [
   { label: "Encerramento", value: "encerramento_proximo" },
 ];
 
+// Imóveis: filtros da vitrine (o sbx-offer-query converte para os filtros da Superbid)
+const PROPERTY_CATEGORY_OPTIONS = [
+  { label: "Todos os tipos", value: "" },
+  { label: "Residenciais", value: "residenciais" },
+  { label: "Comerciais", value: "comerciais" },
+  { label: "Industriais", value: "industriais" },
+  { label: "Rurais", value: "rurais" },
+];
+
+const UF_OPTIONS = [
+  { label: "Todos os estados", value: "" },
+  ...[
+    ["AC", "Acre"], ["AL", "Alagoas"], ["AP", "Amapá"], ["AM", "Amazonas"], ["BA", "Bahia"],
+    ["CE", "Ceará"], ["DF", "Distrito Federal"], ["ES", "Espírito Santo"], ["GO", "Goiás"],
+    ["MA", "Maranhão"], ["MT", "Mato Grosso"], ["MS", "Mato Grosso do Sul"], ["MG", "Minas Gerais"],
+    ["PA", "Pará"], ["PB", "Paraíba"], ["PR", "Paraná"], ["PE", "Pernambuco"], ["PI", "Piauí"],
+    ["RJ", "Rio de Janeiro"], ["RN", "Rio Grande do Norte"], ["RS", "Rio Grande do Sul"],
+    ["RO", "Rondônia"], ["RR", "Roraima"], ["SC", "Santa Catarina"], ["SP", "São Paulo"],
+    ["SE", "Sergipe"], ["TO", "Tocantins"],
+  ].map(([uf, name]) => ({ label: name, value: uf })),
+];
+
 // =========================================================================
 // [CONFIGURAÇÃO DE FLUXOS E PRODUTOS]
 // =========================================================================
@@ -112,7 +137,16 @@ export const Route = createLazyFileRoute("/produtos/offer")({
 // =========================================================================
 // [COMPONENTE DROPDOWN DESKTOP - SBX DESIGN SYSTEM]
 // =========================================================================
-function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = "left" }: any) {
+interface DesktopDropdownProps {
+  icon?: LucideIcon;
+  label: string;
+  value: string;
+  options: { label: string; value: string }[];
+  onChange: (value: string) => void;
+  align?: "left" | "right";
+}
+
+function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = "left" }: DesktopDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -124,7 +158,7 @@ function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const displayLabel = options.find((o: any) => o.value === value)?.label || label;
+  const displayLabel = options.find((o) => o.value === value)?.label || label;
 
   return (
     <div className="relative" ref={ref}>
@@ -143,9 +177,9 @@ function DesktopDropdown({ icon: Icon, label, value, options, onChange, align = 
         <div
           className={`absolute top-[calc(100%+4px)] ${
             align === "right" ? "right-0" : "left-0"
-          } min-w-full w-max bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-none shadow-md py-1 z-50 overflow-hidden`}
+          } min-w-full w-max max-h-[60vh] overflow-y-auto bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-none shadow-md py-1 z-50`}
         >
-          {options.map((opt: any) => (
+          {options.map((opt) => (
             <div
               key={opt.value}
               className={`px-3.5 py-2 text-xs cursor-pointer transition-colors ${
@@ -199,10 +233,11 @@ function OfferSkeletonLoader() {
 export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
   const { userId, sessionToken, userProfile, logout } = useFinancialAuth();
   const navigate = useNavigate();
-  const searchParams = Route.useSearch() as any;
+  const searchParams = Route.useSearch() as { visit_id?: string; visit_update_id?: string; redirect_uri?: string; return_uri?: string };
 
   const currentFlow = FLOW_MAP[flowKey || "Carros"] || FLOW_MAP["Carros"];
   const isCartao = currentFlow.product_id === 8;
+  const isImoveis = currentFlow.product_id === 1;
 
   const isMobile = useIsMobile();
   const isMobileRef = useRef(isMobile);
@@ -214,7 +249,7 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
   // de preenchimento passivo (5s) nesse índice até o usuário tentar de novo
   // ou o tempo esgotar (onErrorTimeout limpa este estado).
   const [errorIndex, setErrorIndex] = useState<number | null>(null);
-  const [offersList, setOffersList] = useState<any[]>([]);
+  const [offersList, setOffersList] = useState<CardOfferItem[]>([]);
   const [totalElements, setTotalElements] = useState<number>(0);
   const [fetchError, setFetchError] = useState<"TECHNICAL_INSTABILITY" | null>(null);
   const [countdown, setCountdown] = useState(5);
@@ -224,10 +259,14 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
 
   const [currentSort, setCurrentSort] = useState<string>("relevancia");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedPropertyCategory, setSelectedPropertyCategory] = useState<string>(""); // imóveis
+  const [selectedState, setSelectedState] = useState<string>(""); // imóveis (UF)
 
   // Mobile Menu States
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false); // imóveis
+  const [stateMenuOpen, setStateMenuOpen] = useState(false); // imóveis
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   // 🌙 Tema global compartilhado com o resto do app (useTheme/ThemeProvider) --
@@ -271,7 +310,7 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
     }
   })();
 
-  const mainPaddingTop = isMobile && isCartao ? "pt-[136px]" : "pt-[80px]";
+  const mainPaddingTop = isMobile && (isCartao || isImoveis) ? "pt-[136px]" : "pt-[80px]";
 
   const handleSortChange = (value: string) => {
     setCurrentSort(value);
@@ -285,11 +324,25 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
     setPageNumber(1);
   };
 
+  const handlePropertyCategoryChange = (value: string) => {
+    setSelectedPropertyCategory(value);
+    setOffersList([]);
+    setPageNumber(1);
+  };
+
+  const handleStateChange = (value: string) => {
+    setSelectedState(value);
+    setOffersList([]);
+    setPageNumber(1);
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
         setFilterMenuOpen(false);
         setSortMenuOpen(false);
+        setTypeMenuOpen(false);
+        setStateMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -331,6 +384,8 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
             pageNumber,
             pageSize,
             categoryFilter: selectedCategory || null,
+            propertyCategory: isImoveis ? selectedPropertyCategory || null : null,
+            state: isImoveis ? selectedState || null : null,
           },
           { signal: controller.signal },
         );
@@ -341,13 +396,14 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
           setTotalElements(data?.total || 0);
           if (pageNumber === 1 || !isMobileRef.current) window.scrollTo({ top: 0, behavior: "smooth" });
         }
-      } catch (error: any) {
+      } catch (caught: unknown) {
+        const error = caught as CaughtError;
         if (error.name === "AbortError" || controller.signal.aborted) return;
         logSystemError({
           context: "produtos/offer.tsx",
           subject: `Erro na Busca de Ofertas (${flowKey})`,
           message: error?.message || "Erro desconhecido",
-          payload: { user_id: userId || "UNAUTHENTICATED", flow_key: flowKey },
+          raw_payload: { user_id: userId || "UNAUTHENTICATED", flow_key: flowKey },
         });
         setFetchError("TECHNICAL_INSTABILITY");
       } finally {
@@ -357,7 +413,8 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
 
     loadOffers();
     return () => controller.abort();
-  }, [currentFlow.product_id, currentSort, pageNumber, sessionToken, flowKey, selectedCategory]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega só quando os filtros/página mudam
+  }, [currentFlow.product_id, currentSort, pageNumber, sessionToken, flowKey, selectedCategory, selectedPropertyCategory, selectedState]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -386,7 +443,7 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
   // 🚀 [PERFORMANCE]: useCallback — precisa chegar estável em CardOfferV pra
   // que o React.memo do card funcione (ver CardOfferV.tsx). Sem isso, cada
   // render do pai criava uma função nova e o memo nunca "pegava".
-  const handleSimulacao = useCallback(async (offerItem: any, idx: number) => {
+  const handleSimulacao = useCallback(async (offerItem: CardOfferItem, idx: number) => {
     setSimulatingIndex(idx);
     setErrorIndex(null);
 
@@ -434,7 +491,8 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
       } else {
         throw new Error("URL de redirecionamento ausente.");
       }
-    } catch (error: any) {
+    } catch (caught: unknown) {
+      const error = caught as CaughtError;
       if (error?.code === "SESSION_EXPIRED" || error?.status === 401 || error?.code === 401) {
         clearSession();
         const currentPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : HOME_ROUTE;
@@ -513,12 +571,44 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
             </div>
           )}
 
+          {/* 2A'. Tipo e Estado (Mobile · imóveis) */}
+          {isImoveis && (
+            <>
+              <div
+                className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-neutral-900 dark:text-neutral-100 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                onClick={() => {
+                  setTypeMenuOpen(!typeMenuOpen);
+                  setStateMenuOpen(false);
+                  setSortMenuOpen(false);
+                }}
+              >
+                <Building2 size={15} className="text-neutral-500" />
+                <span className="text-xs font-medium select-none">
+                  {PROPERTY_CATEGORY_OPTIONS.find((o) => o.value === selectedPropertyCategory && o.value)?.label || "Tipo"}
+                </span>
+              </div>
+              <div
+                className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-neutral-900 dark:text-neutral-100 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                onClick={() => {
+                  setStateMenuOpen(!stateMenuOpen);
+                  setTypeMenuOpen(false);
+                  setSortMenuOpen(false);
+                }}
+              >
+                <MapPin size={15} className="text-neutral-500" />
+                <span className="text-xs font-medium select-none">{selectedState || "Estado"}</span>
+              </div>
+            </>
+          )}
+
           {/* 2B. Ordenar (Mobile) */}
           <div
             className="flex-1 h-full flex items-center justify-center gap-2 cursor-pointer text-neutral-900 dark:text-neutral-100 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
             onClick={() => {
               setSortMenuOpen(!sortMenuOpen);
               setFilterMenuOpen(false);
+              setTypeMenuOpen(false);
+              setStateMenuOpen(false);
             }}
           >
             <ArrowUpDown size={15} className="text-neutral-500 dark:text-neutral-400" />
@@ -540,6 +630,48 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
                 onClick={() => {
                   handleCategoryChange(opt.value);
                   setFilterMenuOpen(false);
+                }}
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isImoveis && typeMenuOpen && (
+          <div className="absolute top-[48px] left-0 w-full bg-white dark:bg-neutral-900 shadow-lg border-b border-neutral-200 dark:border-neutral-700 max-h-[75vh] overflow-y-auto z-40 rounded-none">
+            {PROPERTY_CATEGORY_OPTIONS.map((opt) => (
+              <div
+                key={opt.value || "todos"}
+                className={`px-5 py-3 text-xs border-b border-neutral-100 dark:border-neutral-800 last:border-0 cursor-pointer ${
+                  selectedPropertyCategory === opt.value
+                    ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 font-semibold"
+                    : "text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                }`}
+                onClick={() => {
+                  handlePropertyCategoryChange(opt.value);
+                  setTypeMenuOpen(false);
+                }}
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isImoveis && stateMenuOpen && (
+          <div className="absolute top-[48px] left-0 w-full bg-white dark:bg-neutral-900 shadow-lg border-b border-neutral-200 dark:border-neutral-700 max-h-[75vh] overflow-y-auto z-40 rounded-none">
+            {UF_OPTIONS.map((opt) => (
+              <div
+                key={opt.value || "todos"}
+                className={`px-5 py-3 text-xs border-b border-neutral-100 dark:border-neutral-800 last:border-0 cursor-pointer ${
+                  selectedState === opt.value
+                    ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 font-semibold"
+                    : "text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                }`}
+                onClick={() => {
+                  handleStateChange(opt.value);
+                  setStateMenuOpen(false);
                 }}
               >
                 {opt.label}
@@ -588,6 +720,27 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
                 onChange={handleCategoryChange}
                 align="left"
               />
+            )}
+
+            {isImoveis && (
+              <>
+                <DesktopDropdown
+                  icon={Building2}
+                  label="Tipo de imóvel"
+                  value={selectedPropertyCategory}
+                  options={PROPERTY_CATEGORY_OPTIONS}
+                  onChange={handlePropertyCategoryChange}
+                  align="left"
+                />
+                <DesktopDropdown
+                  icon={MapPin}
+                  label="Estado"
+                  value={selectedState}
+                  options={UF_OPTIONS}
+                  onChange={handleStateChange}
+                  align="left"
+                />
+              </>
             )}
 
             <DesktopDropdown

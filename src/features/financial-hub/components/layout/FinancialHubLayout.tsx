@@ -47,6 +47,7 @@ import { PanelStepSkeleton } from "./PanelStepSkeleton";
 import { PanelFAQSkeleton } from "./PanelFAQSkeleton";
 import { PanelFooterSkeleton } from "./PanelFooterSkeleton";
 import { FinancialHubContext } from "@/features/financial-hub/core/contexts/FinancialHubContext";
+import { HubData } from "@/features/financial-hub/components/shared/types";
 import { useOrchestratorHistorySync } from "@/features/financial-hub/core/hooks/useOrchestratorHistorySync";
 
 // =========================================================================
@@ -157,6 +158,33 @@ function AuthGateSkeleton() {
 }
 
 // =========================================================================
+// [REDIRECIONAMENTO]: target_url divergente da rota atual → vai para a rota certa.
+// Componente próprio para o useEffect não ficar dentro de função interna.
+// =========================================================================
+function TargetUrlRedirect({ targetUrl }: { targetUrl?: string }) {
+  useEffect(() => {
+    if (targetUrl && typeof window !== "undefined") {
+      const currentPath = window.location.pathname.replace(/\/$/, "");
+      let intendedPath = "";
+      try {
+        intendedPath = new URL(targetUrl).pathname.replace(/\/$/, "");
+      } catch {
+        intendedPath = targetUrl.split("?")[0].replace(/\/$/, "");
+      }
+
+      if (currentPath !== intendedPath && intendedPath !== "") {
+        window.location.replace(`${targetUrl}${window.location.search}`);
+      }
+    }
+  }, [targetUrl]);
+
+  return null;
+}
+
+/** Erro disparado pelos passos via evento "app-error" (erro do gateway ou Error comum). */
+type RuntimeError = { code?: string; message?: string; fallback_url?: string };
+
+// =========================================================================
 // [ORQUESTRADOR INTERNO]: Assume que a sessão já foi confirmada pelo
 // FinancialHubLayout (guarda, abaixo). Cuida de OrchestratorWrapper,
 // hidratação, erros de runtime e o shell visual (header/faq/footer).
@@ -170,7 +198,7 @@ function FinancialHubOrchestrator({ children }: FinancialHubLayoutProps) {
   const nightMode = resolvedTheme === "dark";
 
   const [isOrchestratorHydrating, setIsOrchestratorHydrating] = useState(true);
-  const [runtimeError, setRuntimeError] = useState<any>(null);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   // 1. FAILSAFE DE SEGURANÇA (10s Hard Timeout)
   useEffect(() => {
@@ -187,8 +215,8 @@ function FinancialHubOrchestrator({ children }: FinancialHubLayoutProps) {
 
   // 2. LISTENER DE EVENTOS DE ERRO DE RUNTIME
   useEffect(() => {
-    const handleError = (e: any) => {
-      setRuntimeError(e.detail);
+    const handleError = (e: Event) => {
+      setRuntimeError((e as CustomEvent<RuntimeError>).detail);
     };
 
     window.addEventListener("app-error", handleError);
@@ -198,117 +226,110 @@ function FinancialHubOrchestrator({ children }: FinancialHubLayoutProps) {
   // 🛡️ Sincronização do cursor temporal OLAP e mitigação de botões de navegação
   useOrchestratorHistorySync();
 
+  // Conteúdo do hub (função comum, sem hooks: os hooks ficam no componente acima
+  // e no TargetUrlRedirect, como manda a regra dos hooks do React).
+  const renderHub = (simData: HubData) => {
+    // Tratamento de Erros de Runtime disparados por eventos globais
+    if (runtimeError) {
+      let uiTitle = "Ops! Tivemos um problema";
+      if (runtimeError.code === "SESSION_EXPIRED") uiTitle = "Sessão Expirada";
+      else if (runtimeError.code === "INVALID_RELATIONSHIP") uiTitle = "Acesso Restrito";
+      else if (runtimeError.code === "OFFER_NOT_FOUND") uiTitle = "Oferta Indisponível";
+
+      return (
+        <ErrorCountdown
+          title={uiTitle}
+          message={runtimeError.message}
+          fallbackUrl={runtimeError.fallback_url || ROOT_ROUTE}
+        />
+      );
+    }
+
+    // Tratamento de Respostas Negativas da API do Orquestrador
+    if (simData?.success === false) {
+      let uiTitle = "Ops! Tivemos um problema";
+      if (simData.code === "SESSION_EXPIRED") uiTitle = "Sessão Expirada";
+      else if (simData.code === "INVALID_RELATIONSHIP") uiTitle = "Acesso Restrito";
+      else if (simData.code === "OFFER_NOT_FOUND") uiTitle = "Oferta Indisponível";
+
+      return (
+        <ErrorCountdown
+          title={uiTitle}
+          message={simData.message}
+          fallbackUrl={simData.fallback_url || ROOT_ROUTE}
+        />
+      );
+    }
+
+    const contextPayload = {
+      ...simData,
+      setIsOrchestratorHydrating,
+    };
+
+    return (
+      <FinancialHubContext.Provider value={contextPayload}>
+        <div className="min-h-screen bg-surface-alt text-neutral-900 relative flex flex-col">
+          {/* Header Institucional Padronizado (64px) */}
+          <PanelHeader 
+            showNav={true}
+            links={[
+              { href: "simulacao", label: "Simulação" },
+              { href: "como-funciona", label: "Como funciona" },
+              { href: "duvidas", label: "Dúvidas" }
+            ]}
+            showAuth={true} 
+            sessionToken={sessionToken}
+            userData={userProfile} 
+            onLogout={() => logout({ purgeEnv: true })}
+            onNavigate={(path) => navigate({ to: path as any })}
+            nightMode={nightMode}
+            onToggleNightMode={() => setTheme(nightMode ? "light" : "dark")}
+          />
+
+          {/* Skeletons Estruturais durante Hidratação */}
+          {isOrchestratorHydrating && (
+            <>
+              <main className="flex-1 w-full flex flex-col pt-16 bg-white dark:bg-neutral-950">
+                <div className="max-w-7xl mx-auto px-6 py-12 w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+                  <PanelProductOfferSkeleton />
+                  <PanelStepSkeleton />
+                </div>
+              </main>
+              <PanelFAQSkeleton />
+              <PanelFooterSkeleton />
+            </>
+          )}
+
+          {/* Conteúdo Renderizado da Jornada */}
+          <main
+            className={`flex-1 w-full flex flex-col transition-opacity duration-300 pt-16 bg-white dark:bg-neutral-950 ${
+              isOrchestratorHydrating ? "opacity-0 pointer-events-none h-0 overflow-hidden" : "opacity-100"
+            }`}
+          >
+            {children}
+          </main>
+
+          {/* Rodapé e FAQ liberados pós-hidratação */}
+          {!isOrchestratorHydrating && (
+            <>
+              <PanelFAQ items={simData?.page_faqs} />
+              <PanelFooter config={simData?.page_configs?.footer} />
+            </>
+          )}
+        </div>
+      </FinancialHubContext.Provider>
+    );
+  };
+
   return (
     <OrchestratorWrapper visitId={search.visit_id ?? ""} visitUpdateId={search.visit_update_id}>
-      {(simData) => {
-        // Redirecionamento determinístico caso target_url divirja da rota atual
-        useEffect(() => {
-          if (simData?.target_url && typeof window !== "undefined") {
-            const currentPath = window.location.pathname.replace(/\/$/, "");
-            let intendedPath = "";
-            try {
-              intendedPath = new URL(simData.target_url).pathname.replace(/\/$/, "");
-            } catch {
-              intendedPath = simData.target_url.split("?")[0].replace(/\/$/, "");
-            }
-
-            if (currentPath !== intendedPath && intendedPath !== "") {
-              window.location.replace(`${simData.target_url}${window.location.search}`);
-            }
-          }
-        }, [simData?.target_url]);
-
-        // Tratamento de Erros de Runtime disparados por eventos globais
-        if (runtimeError) {
-          let uiTitle = "Ops! Tivemos um problema";
-          if (runtimeError.code === "SESSION_EXPIRED") uiTitle = "Sessão Expirada";
-          else if (runtimeError.code === "INVALID_RELATIONSHIP") uiTitle = "Acesso Restrito";
-          else if (runtimeError.code === "OFFER_NOT_FOUND") uiTitle = "Oferta Indisponível";
-
-          return (
-            <ErrorCountdown
-              title={uiTitle}
-              message={runtimeError.message}
-              fallbackUrl={runtimeError.fallback_url || ROOT_ROUTE}
-            />
-          );
-        }
-
-        // Tratamento de Respostas Negativas da API do Orquestrador
-        if (simData?.success === false) {
-          let uiTitle = "Ops! Tivemos um problema";
-          if (simData.code === "SESSION_EXPIRED") uiTitle = "Sessão Expirada";
-          else if (simData.code === "INVALID_RELATIONSHIP") uiTitle = "Acesso Restrito";
-          else if (simData.code === "OFFER_NOT_FOUND") uiTitle = "Oferta Indisponível";
-
-          return (
-            <ErrorCountdown
-              title={uiTitle}
-              message={simData.message}
-              fallbackUrl={simData.fallback_url || ROOT_ROUTE}
-            />
-          );
-        }
-
-        const contextPayload = {
-          ...simData,
-          setIsOrchestratorHydrating,
-        };
-
-        return (
-          <FinancialHubContext.Provider value={contextPayload}>
-            <div className="min-h-screen bg-surface-alt text-neutral-900 relative flex flex-col">
-              {/* Header Institucional Padronizado (64px) */}
-              <PanelHeader 
-                showNav={true}
-                links={[
-                  { href: "simulacao", label: "Simulação" },
-                  { href: "como-funciona", label: "Como funciona" },
-                  { href: "duvidas", label: "Dúvidas" }
-                ]}
-                showAuth={true} 
-                sessionToken={sessionToken}
-                userData={userProfile} 
-                onLogout={() => logout({ purgeEnv: true })}
-                onNavigate={(path) => navigate({ to: path as any })}
-                nightMode={nightMode}
-                onToggleNightMode={() => setTheme(nightMode ? "light" : "dark")}
-              />
-
-              {/* Skeletons Estruturais durante Hidratação */}
-              {isOrchestratorHydrating && (
-                <>
-                  <main className="flex-1 w-full flex flex-col pt-16 bg-white dark:bg-neutral-950">
-                    <div className="max-w-7xl mx-auto px-6 py-12 w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-                      <PanelProductOfferSkeleton />
-                      <PanelStepSkeleton />
-                    </div>
-                  </main>
-                  <PanelFAQSkeleton />
-                  <PanelFooterSkeleton />
-                </>
-              )}
-
-              {/* Conteúdo Renderizado da Jornada */}
-              <main
-                className={`flex-1 w-full flex flex-col transition-opacity duration-300 pt-16 bg-white dark:bg-neutral-950 ${
-                  isOrchestratorHydrating ? "opacity-0 pointer-events-none h-0 overflow-hidden" : "opacity-100"
-                }`}
-              >
-                {children}
-              </main>
-
-              {/* Rodapé e FAQ liberados pós-hidratação */}
-              {!isOrchestratorHydrating && (
-                <>
-                  <PanelFAQ items={simData?.page_faqs} />
-                  <PanelFooter config={simData?.page_configs?.footer} />
-                </>
-              )}
-            </div>
-          </FinancialHubContext.Provider>
-        );
-      }}
+      {(simData) => (
+        <>
+          {/* Redirecionamento determinístico caso target_url divirja da rota atual */}
+          <TargetUrlRedirect targetUrl={simData?.target_url} />
+          {renderHub(simData)}
+        </>
+      )}
     </OrchestratorWrapper>
   );
 }

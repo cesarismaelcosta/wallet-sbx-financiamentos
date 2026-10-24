@@ -73,7 +73,7 @@ interface PanelHeaderProps {
   showAuth?: boolean;
   links?: HeaderLink[];
   sessionToken?: string | null;
-  userData?: BFFUserProfile | null;
+  userData?: Partial<BFFUserProfile> | null;
   onLogout?: () => void;
   onNavigate?: (path: string) => void;
   showEnvironmentLinks?: boolean;
@@ -174,7 +174,12 @@ export function PanelHeader({
       } else {
         navigate({ to: HOME_ROUTE });
       }
-    } catch (error: any) {
+    } catch (caught: unknown) {
+      const error = caught as {
+        fallback_url?: string;
+        response?: { data?: { fallback_url?: string } };
+        data?: { fallback_url?: string };
+      } | null;
       console.error("[PanelHeader] Erro na orquestração ao clicar na Logo:", error);
       
       const fallbackUrl = 

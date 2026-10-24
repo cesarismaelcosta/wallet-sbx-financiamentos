@@ -24,6 +24,7 @@ import { useMemo, useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
+import type { ConsentConfig, GatewayConsult, Offer } from "@/features/financial-hub/components/shared/types";
 
 export function Step1PartnersPanel() {
 
@@ -62,7 +63,7 @@ export function Step1PartnersPanel() {
   // =========================================================================
   // 🤖 [LOCAL STATE ARCHITECTURE]: Gerenciamento de Wizard e Consentimentos
   // =========================================================================
-  const { state } = useWizard<any>();
+  const { state } = useWizard();
   const config = state.data?.integration_details;
 
   const { consent_configs } = state.data || {};
@@ -74,13 +75,13 @@ export function Step1PartnersPanel() {
   const areConsentsValid = useMemo(() => {
     const configs = consent_configs || [];
     return configs
-      .filter((opt: any) => opt.is_required)
-      .every((opt: any) => acceptedConsents[opt.id] === true);
+      .filter((opt: ConsentConfig) => opt.is_required)
+      .every((opt: ConsentConfig) => acceptedConsents[opt.id] === true);
   }, [consent_configs, acceptedConsents]);
 
   const consents = consent_configs
-    ?.filter((c: any) => acceptedConsents[c.id])
-    .map((c: any) => ({
+    ?.filter((c: ConsentConfig) => acceptedConsents[c.id])
+    .map((c: ConsentConfig) => ({
       consent_id: c.id,
       acceptedConsents: true,
       acceptedConsents_at: new Date().toISOString(),
@@ -96,7 +97,7 @@ export function Step1PartnersPanel() {
   const handleProceed = async () => {
     try {
       await execute(() => handleRedirect(NAVIGATION_INTENTS.REDIRECT_PARTNER_PAGE, config?.urlRedirect, consents));
-    } catch (err: any) {
+    } catch (err: unknown) {
       window.dispatchEvent(new CustomEvent('app-error', { detail: err }));
     }
   };

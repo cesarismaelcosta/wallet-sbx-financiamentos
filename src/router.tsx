@@ -51,7 +51,7 @@ function DefaultErrorComponent({ error, reset }: ErrorComponentProps) {
     error instanceof Error 
       ? error.message 
       : typeof error === "object" && error !== null && "message" in error 
-        ? String((error as any).message) 
+        ? String((error as { message?: unknown }).message) 
         : typeof error === "string" 
           ? error 
           : error 

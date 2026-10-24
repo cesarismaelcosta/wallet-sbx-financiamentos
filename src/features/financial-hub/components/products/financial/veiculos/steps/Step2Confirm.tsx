@@ -28,11 +28,14 @@ import { ButtonWhatsApp } from "@/features/financial-hub/components/layout/Butto
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
+import { STATUS } from "@/features/financial-hub/components/shared/types";
+import type { ConsentConfig, GatewayConsult, Offer } from "@/features/financial-hub/components/shared/types";
+import type { VeiculosWizardData } from "../veiculos.types";
 
 // =========================================================================
 // 🤖 [UTILITY ARCHITECTURE]: Slugificação Segura para Ofertas sbX
 // =========================================================================
-const getSuperbidUrl = (offerData: any) => {
+const getSuperbidUrl = (offerData: Partial<Offer> | undefined) => {
   if (!offerData?.offer_id) return "#";
   const slug = (offerData.offer_description || "")
     .toLowerCase()
@@ -49,9 +52,9 @@ export function Step2Confirm() {
   // =========================================================================
   const { theme, resolvedTheme } = useTheme();
   const nightMode = resolvedTheme === "dark";
-  const { state, back } = useWizard<any>();
+  const { state, back } = useWizard<VeiculosWizardData>();
   const result = state.data.simulationResult;
-  const isApproved = result?.status_id === 1;
+  const isApproved = result?.status_id === STATUS.PRE_APROVADO; // Fandi: Pré-análise · Pré-aprovado
   const mainConsult = result?.consults?.[0];
   
   // Extraindo a config para verificar o WhatsApp
@@ -68,20 +71,16 @@ export function Step2Confirm() {
   const loteSubIndex = offer?.lote_index || offer?.lote_numero || "1";
   const offerDescText = offer?.offer_description ? offer.offer_description.replace(/[.,]+$/, "") : "";
   
-  const valorOferta = state.data?.valorOferta || offer?.offer_value || 0;
+  const valorOferta = offer?.offer_value || 0;
   
   // PEGANDO OS VALORES EXATOS DO RETORNO DA API (Entrada + Valor Financiado)
   const valorEntradaAPI = 
     mainConsult?.down_payment_amount ?? 
-    result?.retorno?.valorEntrada ?? 
-    result?.valorEntrada ?? 
     state.data?.valorEntrada ?? 
     0;
 
   const valorFinanciadoAPI = 
     mainConsult?.financed_amount ?? 
-    result?.retorno?.valorFinanciado ?? 
-    result?.valorFinanciado ?? 
     0;
 
   return (

@@ -29,6 +29,7 @@ import {
 } from "../_shared/types.ts";
 
 import { Entity, Offer } from "../_shared/types.ts";
+import { STATUS } from "../_shared/types.ts";
 import { generateSignature } from '../_shared/crypto.ts';
 import { generateUserEmailNotificationHtml } from "./fandi-notifications.ts";
 import { sendSystemAlert } from "../_shared/alert.ts";
@@ -319,7 +320,7 @@ export async function processSimulationFandi(
 
   // 4.2 Consolidação de Dados
   const dadosSimulacao = {
-    status_id: isAprovada ? 1 : (isNegadaNegocio ? 2 : 8),
+    status_id: (isAprovada ? STATUS.PRE_APROVADO : (isNegadaNegocio ? STATUS.NEGADO : STATUS.FALHA)) as number,
     pre_aprovado: isAprovada,
     mensagem: simResult.message || (isAprovada ? "Aprovada" : "Negada"),
     financial_institution_id: retSimulacao?.institucional?.instituicaoFinanceiraId ?? null,
@@ -337,7 +338,7 @@ export async function processSimulationFandi(
   };
 
   // 🛡️ GUARD CLAUSE: Interrompe fluxo se o banco negou a simulação ou ocorreu falha grave.
-  if (dadosSimulacao.status_id !== 1) {
+  if (dadosSimulacao.status_id !== STATUS.PRE_APROVADO) {
     if (simResult.message) {
       await alertarErroCadastroFandi(simResult.message, "SIMULACAO");
     }
@@ -358,7 +359,7 @@ export async function processSimulationFandi(
     };
 
       return { 
-          success: dadosSimulacao.status_id === 2, 
+          success: dadosSimulacao.status_id === STATUS.NEGADO, 
           message: dadosSimulacao.mensagem,
           consults: [consultaNegadaOuFalha],
           raw: { simulacao: simResult }
@@ -368,7 +369,7 @@ export async function processSimulationFandi(
 
   // ==========================================================================
   // 💾 PASSO 5: INCLUSÃO (CONFIRMAÇÃO NO CRM DA FANDI)
-  // Só alcança esta etapa se a simulação foi previamente aprovada (status_id = 1).
+  // Só alcança esta etapa se a pré-análise foi aprovada (Pré-análise · Pré-aprovado).
   // ==========================================================================
   let externalOperationId = null;
   let incResult = null;
@@ -426,14 +427,14 @@ export async function processSimulationFandi(
           externalOperationId = incResult.retorno;
       } else {
           // Fallback Técnico: Se Inclusão falhou, a simulação não é considerada concretizada.
-          if (dadosSimulacao.status_id === 1) {
-              dadosSimulacao.status_id = 8;
+          if (dadosSimulacao.status_id === STATUS.PRE_APROVADO) {
+              dadosSimulacao.status_id = STATUS.FALHA;
               dadosSimulacao.mensagem = incResult.message || "Erro no registro da proposta (Inclusão).";
           }
       }
   } catch (error: any) {
-      if (dadosSimulacao.status_id === 1) {
-          dadosSimulacao.status_id = 8;
+      if (dadosSimulacao.status_id === STATUS.PRE_APROVADO) {
+          dadosSimulacao.status_id = STATUS.FALHA;
           dadosSimulacao.mensagem = "Falha na inclusão na Fandi.";
       }
   }
@@ -459,7 +460,7 @@ export async function processSimulationFandi(
 
   // Preparação de Notificações (Só notifica se a inclusão também passou limpa)
   let notificationsConfig = [];
-  if (dadosSimulacao.status_id === 1) {
+  if (dadosSimulacao.status_id === STATUS.PRE_APROVADO) {
     const emailTemplateData = generateUserEmailNotificationHtml([consultaIndividual], payload);
     notificationsConfig.push({
       channel: 'email',
@@ -473,7 +474,7 @@ export async function processSimulationFandi(
   }
 
   return {
-    success: dadosSimulacao.status_id === 1 || dadosSimulacao.status_id === 2,
+    success: dadosSimulacao.status_id === STATUS.PRE_APROVADO || dadosSimulacao.status_id === STATUS.NEGADO,
     message: dadosSimulacao.mensagem,
     consults: [consultaIndividual],
     raw: {

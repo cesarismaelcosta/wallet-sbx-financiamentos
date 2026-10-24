@@ -188,7 +188,13 @@ function UsuariosPage() {
     // =========================================================================
     // [ENTERPRISE ZERO-TRUST]: Chamada cega via RPC para carregar todos os dados
     // =========================================================================
-    const { data, error } = await supabase.rpc('get_backoffice_users_data');
+    const { data: rpcData, error } = await supabase.rpc('get_backoffice_users_data');
+    const data = rpcData as {
+      users?: BackofficeUserRow[];
+      domains?: string[];
+      partners?: SelectOption[];
+      products?: SelectOption[];
+    } | null;
 
     if (error) {
       toast.error("Erro ao carregar dados de usuários.");
@@ -228,7 +234,7 @@ function UsuariosPage() {
 
   const toggleEditPartner = (id: string) => {
     setEditPartners((prev) => {
-      let current = prev.filter(p => p !== "*");
+      const current = prev.filter(p => p !== "*");
       if (current.includes(id)) return current.filter(p => p !== id);
       return [...current, id];
     });
@@ -236,7 +242,7 @@ function UsuariosPage() {
 
   const toggleEditProduct = (id: string) => {
     setEditProducts((prev) => {
-      let current = prev.filter(p => p !== "*");
+      const current = prev.filter(p => p !== "*");
       if (current.includes(id)) return current.filter(p => p !== id);
       return [...current, id];
     });
@@ -270,7 +276,8 @@ function UsuariosPage() {
       setregisterOpen(false);
       setregisterData({ name: "", emailPrefix: "", domain: "", role: "viewer", partners: [], products: [] });
       load();
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = caught as Error; // erros do Supabase/edge trazem message
       toast.error(e.message || "Erro ao cadastrar usuário");
     } finally {
       setIsSaving(false);
@@ -299,7 +306,8 @@ function UsuariosPage() {
       setEditOpen(false);
       setEditingUser(null);
       load();
-    } catch (e: any) {
+    } catch (caught: unknown) {
+      const e = caught as Error; // erros do Supabase/edge trazem message
       toast.error(e.message || "Erro ao atualizar permissões");
     } finally {
       setIsUpdating(false);
@@ -315,19 +323,23 @@ function UsuariosPage() {
       await callManage({ action: "set_active", id: u.id, is_active: !u.is_active });
       toast.success(`Usuário ${!u.is_active ? 'ativado' : 'desativado'} com sucesso.`);
       load();
-    } catch (e: any) { toast.error(e.message || "Erro ao atualizar status"); }
+    } catch (caught: unknown) {
+      const e = caught as Error;
+      toast.error(e.message || "Erro ao atualizar status"); }
   }
 
   async function changeRole(u: BackofficeUserRow, newRole: Role) {
     try {
-      const payload: any = { action: "set_role", id: u.id, role: newRole };
+      const payload: Record<string, unknown> = { action: "set_role", id: u.id, role: newRole };
       if (newRole === "admin" || newRole === "manager") {
         payload.allowed_partners = ["*"];
         payload.allowed_products = ["*"];
       }
       await callManage(payload);
       load();
-    } catch (e: any) { toast.error(e.message); }
+    } catch (caught: unknown) {
+      const e = caught as Error;
+      toast.error(e.message); }
   }
 
   useEffect(() => { load(); }, []);
@@ -843,6 +855,24 @@ const ACTION_LABEL: Record<string, string> = {
 };
 const ROLE_LABEL: Record<string, string> = { admin: "Administrador", manager: "Gerente", viewer: "Visualizador" };
 
+/** Valores antes/depois de uma alteração de usuário (backoffice_user_details). */
+type UserHistoryValues = {
+  role?: string;
+  allowed_partners?: string[] | null;
+  allowed_products?: string[] | null;
+  [key: string]: unknown;
+};
+
+/** Uma linha do histórico (get_backoffice_user_history). */
+type UserHistoryItem = {
+  id: string;
+  action: string;
+  actor_email: string;
+  created_at: string;
+  old_values: UserHistoryValues | null;
+  new_values: UserHistoryValues | null;
+};
+
 function UserHistoryPanel({
   user, partners, products, onClose,
 }: {
@@ -851,7 +881,7 @@ function UserHistoryPanel({
   products: SelectOption[];
   onClose: () => void;
 }) {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<UserHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [panelError, setPanelError] = useState<string | null>(null);
 
@@ -861,22 +891,23 @@ function UserHistoryPanel({
     if (!user) return;
     setLoading(true);
     supabase
-      .rpc("get_backoffice_user_history" as any, { p_user_id: user.id } as any)
+      .rpc("get_backoffice_user_history", { p_user_id: user.id })
       .then(({ data, error }) => {
         if (error) setPanelError(error.message);
-        else if ((data as any)?.error) setPanelError("Sem permissão para ver este histórico.");
-        else setItems((data as any[]) || []);
+        else if ((data as { error?: string } | null)?.error) setPanelError("Sem permissão para ver este histórico.");
+        else setItems((data as UserHistoryItem[] | null) || []);
       })
       .then(() => setLoading(false), () => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- busca só quando o usuário aberto muda
   }, [user?.id]);
 
   // ["*"] = todos; ids viram nomes pela lista já carregada na tela.
-  const names = (ids: any, list: SelectOption[]) => {
+  const names = (ids: unknown, list: SelectOption[]) => {
     const arr: string[] = Array.isArray(ids) ? ids.map(String) : [];
     if (arr.includes("*")) return ["Todos"];
     return arr.map((id) => list.find((o) => String(o.id) === id)?.name || `#${id}`);
   };
-  const diff = (before: any, after: any, list: SelectOption[]) => {
+  const diff = (before: unknown, after: unknown, list: SelectOption[]) => {
     const b = names(before, list);
     const a = names(after, list);
     return { added: a.filter((x) => !b.includes(x)), removed: b.filter((x) => !a.includes(x)), after: a };
@@ -926,7 +957,7 @@ function UserHistoryPanel({
 
                     {h.action === "ROLE_CHANGE" && (
                       <div className="text-foreground">
-                        Cargo: {ROLE_LABEL[o.role] || o.role || "—"} → <strong>{ROLE_LABEL[n.role] || n.role}</strong>
+                        Cargo: {ROLE_LABEL[o.role as string] || o.role || "—"} → <strong>{ROLE_LABEL[n.role as string] || n.role}</strong>
                       </div>
                     )}
                     {h.action === "PERMISSIONS_CHANGE" && (
@@ -950,7 +981,7 @@ function UserHistoryPanel({
 
                     {/* Retrato do usuário APÓS a ação (antes: na linha anterior do histórico) */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-border">
-                      <HistoryField label="Cargo" value={ROLE_LABEL[n.role] || n.role} />
+                      <HistoryField label="Cargo" value={ROLE_LABEL[n.role as string] || n.role} />
                       <HistoryField label="Status" value={n.is_active ? "Ativo" : "Inativo"} />
                       <HistoryField label="Parceiros" value={pd.after.join(", ") || "—"} />
                       <HistoryField label="Produtos" value={prd.after.join(", ") || "—"} />
@@ -973,7 +1004,7 @@ function UserHistoryPanel({
 }
 
 /** Campo rótulo/valor em micro-tipografia (mesmo padrão do painel da Auditoria). */
-function HistoryField({ label, value }: { label: string; value: string }) {
+function HistoryField({ label, value }: { label: string; value: string | undefined }) {
   return (
     <div className="flex flex-col min-w-0">
       <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</span>

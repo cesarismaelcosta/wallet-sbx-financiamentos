@@ -14,8 +14,8 @@ import { fetchOptions, authHeaders } from './session.ts';
 export interface SystemErrorPayload {
   context: string;
   subject?: string;
-  message?: any;
-  raw_payload?: any;
+  message?: unknown;
+  raw_payload?: unknown;
   visit_id?: string | null;
   visit_update_id?: string | null;
   simulation_id?: string | null;
