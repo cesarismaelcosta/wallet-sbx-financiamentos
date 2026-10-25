@@ -19,6 +19,23 @@ import { generateSignature } from "../_shared/crypto.ts";
  * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
 import { debugLog } from "../_shared/logger.ts";
+import type { OriginDetails } from "../_shared/types.ts";
+
+/** Simulação devolvida pela Fandi no webhook (PascalCase ou camelCase). */
+type FandiWebhookSimulacao = {
+  CodigoBacen?: string; codigoBacen?: string;
+  QuantidadeParcelas?: number; quantidadeParcelas?: number;
+  ValorEntrada?: number; valorEntrada?: number;
+  ValorParcela?: number; valorParcela?: number;
+  NomeIF?: string; nomeIF?: string;
+};
+/** Corpo do webhook da Fandi. */
+type FandiWebhookBody = {
+  Simulacao?: FandiWebhookSimulacao; simulacao?: FandiWebhookSimulacao;
+  Veiculo?: { Valor?: number; valor?: number }; veiculo?: { Valor?: number; valor?: number };
+  CodigoProposta?: string | number; codigoProposta?: string | number;
+  [key: string]: unknown;
+};
 
 // Configurações de Segurança e Negócio
 const MAX_AGE_MS = 5 * 60 * 1000;   // 5 minutos - Janela de validade do Webhook
@@ -60,9 +77,9 @@ async function updateSimulationData(
   simulationUpdateId: string,
   statusFinalId: number,
   financialInstId: number | null,
-  infra: any,
-  rawPayload: any,
-  simulationDetails: any
+  infra: OriginDetails,
+  rawPayload: FandiWebhookBody,
+  simulationDetails: Record<string, unknown>
 ) {
   try {
     return await sql.begin(async (t: any) => {
@@ -215,7 +232,7 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
 
   // 4. Barreira de Idempotência (Em memória)
   const isDuplicate = simulation.simulation_updates?.some(
-    (simulationUpdate: any) => simulationUpdate.id === simulationUpdateId 
+    (simulationUpdate: { id: string }) => simulationUpdate.id === simulationUpdateId 
   );
 
   if (isDuplicate) {
@@ -228,7 +245,7 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
   // --------------------------------------------------------------------------
 
   const infra = await captureInfrastructure(req);
-  let body: any;
+  let body: FandiWebhookBody;
 
   try {
     body = await req.json();

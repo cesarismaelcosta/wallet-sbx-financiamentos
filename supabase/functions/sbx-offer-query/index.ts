@@ -35,6 +35,14 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
+import type { Vehicle } from "../_shared/types.ts";
+import type { UpstreamOffer, UpstreamAuction, UpstreamGroup, UpstreamProperty, UpstreamPhoto } from "../_shared/hydrate-data.ts";
+
+/** Simulação do cliente com os lotes vinculados (select ... simulation_offers!inner(offer_id)). */
+type UserSimulation = {
+  id: string | number;
+  simulation_offers: { offer_id?: string | number } | { offer_id?: string | number }[] | null;
+};
 
 /** Imóveis: categoria escolhida na tela → categoria da Superbid (lista fechada). */
 const PROPERTY_CATEGORY_MAP: Record<string, string> = {
@@ -205,7 +213,7 @@ serve(
       // =========================================================================
       // FASE 4: MONTAGEM DA REQUISIÇÃO UPSTREAM (Endpoint Dinâmico)
       // =========================================================================
-      const env = auth.environment || "staging";
+      const env = auth!.environment || "staging";
       const offerBaseUrl = OFFER_BASE_URLS[env] || OFFER_BASE_URLS.staging;
 
       const queryParams = new URLSearchParams();
@@ -262,7 +270,7 @@ serve(
       // =========================================================================
       // FASE 5: ENRIQUECIMENTO DE SIMULAÇÕES DO CLIENTE (Esquema DDL Correto)
       // =========================================================================
-      const offerIds = rawOffers.map((o: any) => String(o.id));
+      const offerIds = rawOffers.map((o: UpstreamOffer) => String(o.id));
       const simulatedMap = new Map();
 
       if (offerIds.length > 0 && auth?.user_id) {
@@ -286,10 +294,10 @@ serve(
           if (simError) {
             debugLog(`[ERROR] Erro na query do Supabase: ${JSON.stringify(simError)}`);
           } else if (userSims) {
-            userSims.forEach((sim: any) => {
+            (userSims as unknown as UserSimulation[]).forEach((sim) => {
               const offers = Array.isArray(sim.simulation_offers) ? sim.simulation_offers : [sim.simulation_offers];
 
-              offers.forEach((so: any) => {
+              offers.forEach((so) => {
                 if (so?.offer_id) {
                   simulatedMap.set(String(so.offer_id), sim.id);
                 }
@@ -304,18 +312,18 @@ serve(
       // =========================================================================
       // FASE 6: NORMALIZAÇÃO DE DADOS (Payload Idêntico ao de sbx-offer)
       // =========================================================================
-      const normalizedOffers = rawOffers.map((rawOffer: any) => {
+      const normalizedOffers = rawOffers.map((rawOffer: UpstreamOffer) => {
         const offerIdStr = String(rawOffer.id);
         const simulationId = simulatedMap.get(offerIdStr) || null;
         const isSimulated = !!simulationId;
         const productTypeId = rawOffer.product?.productType?.id;
-        const isVehicleCategory = [10, 11].includes(productTypeId);
-        let vehicleData: any | undefined;
+        const isVehicleCategory = [10, 11].includes(productTypeId as number);
+        let vehicleData: Vehicle | undefined;
 
         if (isVehicleCategory) {
           const groups = rawOffer.product?.template?.groups || [];
           const getGroupProp = (groupId: string, propId: string) =>
-            groups.find((g: any) => g.id === groupId)?.properties.find((p: any) => p.id === propId)?.value;
+            groups.find((g: UpstreamGroup) => g.id === groupId)?.properties.find((p: UpstreamProperty) => p.id === propId)?.value;
 
           vehicleData = {
             manufacture_year: Number(getGroupProp("identificacao", "anofabricacao")) || 0,
@@ -324,7 +332,7 @@ serve(
           };
         }
 
-        const eventData = rawOffer.auction || {};
+        const eventData: UpstreamAuction = rawOffer.auction || {};
 
         // EXATAMENTE IGUAL À SBX-OFFER
         return {
@@ -355,7 +363,7 @@ serve(
               },
               ...(vehicleData && { vehicle_details: vehicleData }),
               photos:
-                rawOffer.product?.galleryJson?.map((p: any) => ({
+                rawOffer.product?.galleryJson?.map((p: UpstreamPhoto) => ({
                   highlight: p.highlight || false,
                   link: p.link,
                   thumbnail: p.thumbnailUrl,
@@ -405,9 +413,10 @@ serve(
           offers: normalizedOffers,
         },
       };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as Error & { errorCode?: string };
       debugLog(`[DEBUG] 💥 ERRO OPERACIONAL: ${err.message} | Code: ${err.errorCode || "UNKNOWN"}`);
-      const statusCode = ["MISSING_PARAM", "INVALID_PRODUCT", "UNSUPPORTED_CATALOG_PRODUCT"].includes(err.errorCode)
+      const statusCode = ["MISSING_PARAM", "INVALID_PRODUCT", "UNSUPPORTED_CATALOG_PRODUCT"].includes(err.errorCode as string)
         ? 400
         : 500;
 

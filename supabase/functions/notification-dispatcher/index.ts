@@ -118,6 +118,9 @@
  */
 import { debugLog } from "../_shared/logger.ts";
 
+/** Linha de notification_outbox processada pelo dispatcher. */
+type OutboxTask = { id: string | number; retry_count?: number | null; max_retries?: number | null };
+
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { withSecurity } from "../_shared/server.ts";
@@ -176,7 +179,7 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
     debugLog(`4. Encontrei ${tasks.length} itens. Iniciando disparo com concorrência ${CONCURRENCY}.`);
 
     // 3. PROCESSAMENTO COM CONCORRÊNCIA CONTROLADA:
-    async function processTask(task: any): Promise<void> {
+    async function processTask(task: OutboxTask): Promise<void> {
       debugLog(`5. Processando ID: ${task.id}`);
 
       // 3.1. LOCK DE SEGURANÇA:
@@ -229,7 +232,8 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
           debugLog(`8. Gateway confirmou o envio do ID: ${task.id}`);
         }
 
-      } catch (networkError: any) {
+      } catch (caught: unknown) {
+        const networkError = caught as Error;
         debugLog(`7. Erro de rede ao chamar Gateway para ID ${task.id}:`, networkError);
 
         // 🚨 CONTROLE DE RETENTATIVAS PARA FALHA DE REDE CORRIGIDO
@@ -252,7 +256,8 @@ serve(withSecurity('notification-dispatcher', async (req: Request) => {
 
     return { status: 200, data: { message: "Processamento finalizado" } };
 
-  } catch (e: any) {
+  } catch (caught: unknown) {
+    const e = caught as Error;
     debugLog("8. ERRO CRÍTICO NO DISPATCHER:", e);
     return { status: 500, data: { error: "Erro no processamento" } };
   }

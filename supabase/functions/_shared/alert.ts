@@ -216,9 +216,10 @@ function generateSystemErrorEmailHtml(data: SystemAlertPayload): EmailTemplateRe
  * @param rawPayload - Corpo cru (ainda não escapado) do alerta.
  */
 export async function dispatchSystemAlert(
-  supabase: SupabaseClient,
+  client: unknown, // supabase-js de jsr: ou esm.sh (cópias diferentes do mesmo tipo)
   rawPayload: Record<string, unknown>,
 ): Promise<{ status: "queued" | "ignored"; reason?: string }> {
+  const supabase = client as SupabaseClient;
   if (!rawPayload?.context || !rawPayload?.message) {
     throw new Error("Parâmetros contratuais obrigatórios ('context' e 'message') ausentes.");
   }
@@ -297,7 +298,7 @@ export async function dispatchSystemAlert(
  * antes (objeto camelCase) e NUNCA propaga erro — uma falha no disparo de
  * alerta não pode derrubar a simulação do cliente.
  */
-export async function sendSystemAlert(supabase: SupabaseClient, params: AlertPayload): Promise<void> {
+export async function sendSystemAlert(supabase: unknown, params: AlertPayload): Promise<void> {
   try {
     await dispatchSystemAlert(supabase, {
       context: params.context,

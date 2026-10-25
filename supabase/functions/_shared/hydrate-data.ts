@@ -36,16 +36,52 @@ import { Vehicle, type ThinPayload } from "./types.ts";
 import type { S2SEntity } from "./s2s.ts";
 
 /** Grupos/propriedades do template do produto na API de ofertas da Superbid. */
-type UpstreamProperty = { id: string; value?: string };
-type UpstreamGroup = { id: string; properties: UpstreamProperty[] };
+export type UpstreamProperty = { id: string; value?: string };
+export type UpstreamGroup = { id: string; properties: UpstreamProperty[] };
 /** Foto da galeria (product.galleryJson) na API de ofertas. */
-type UpstreamPhoto = {
+export type UpstreamPhoto = {
   highlight?: boolean;
   link?: string;
   thumbnailUrl?: string;
   originalFileName?: string;
   type?: string;
   contentType?: string;
+};
+/** Leilão/evento da oferta (offer.auction) na API de ofertas. */
+export type UpstreamAuction = {
+  id?: string | number;
+  desc?: string;
+  beginDate?: string;
+  endDate?: string;
+  modalityId?: number | null;
+  modalityDesc?: string;
+  statusId?: number | null;
+};
+/** Oferta (lote) como vem da API de ofertas da Superbid: campos usados no mapeamento. */
+export type UpstreamOffer = {
+  id: string | number;
+  lotNumber?: number;
+  price?: number;
+  priceFormatted?: string;
+  systemMetric?: unknown;
+  offerStatus?: { available?: boolean; sold?: boolean } | string;
+  saleStatus?: string;
+  endDate?: string;
+  isShopping?: boolean;
+  offerTypeId?: number | null;
+  offerDescription?: { offerDescription?: string };
+  offerDetail?: { referenceValue?: number; referenceValueFormatted?: string };
+  product?: {
+    shortDesc?: string;
+    productType?: { id?: number; description?: string };
+    subCategory?: { id?: number | string; description?: string };
+    template?: { groups?: UpstreamGroup[] };
+    location?: { neighborhood?: string; city?: string; state?: string; country?: string };
+    galleryJson?: UpstreamPhoto[];
+  };
+  manager?: { id?: number; name?: string };
+  seller?: { id?: string | number; name?: string; company?: { fantasyName?: string }[] };
+  auction?: UpstreamAuction;
 };
 
 // =========================================================================

@@ -29,7 +29,7 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
 import { getSafeRedirectUrl } from "../_shared/security.ts";
@@ -55,12 +55,12 @@ import { getSafeRedirectUrl } from "../_shared/security.ts";
  * @returns {Promise<any|null>} O registro de configuração correspondente ou nulo.
  */
 async function resolveOrchestratorConfigs(
-  supabase: any,
-  eventId?: any,
-  sellerId?: any,
-  categoryId?: any,
-  productId?: any,
-  entityType?: "F" | "J" | "PF" | "PJ" | string, 
+  supabase: SupabaseClient,
+  eventId?: string | null,
+  sellerId?: string | null,
+  categoryId?: string | null,
+  productId?: string | null,
+  entityType?: "F" | "J" | "PF" | "PJ" | string | null, 
 ) {
   // 1. Determinação do Perfil Ativo Blindada (PF vs PJ)
   // Corrige o bug caso o input já venha explicitamente como "PJ" ou "PF"
@@ -110,7 +110,7 @@ async function resolveOrchestratorConfigs(
  * @param {string|null} [entityType] - "F" | "J" | "PF" | "PJ" (opcional).
  * @returns {Promise<Array<{key: string, status: string, order: number|null}>>}
  */
-async function resolveHomeProducts(supabase: any, entityType?: string | null) {
+async function resolveHomeProducts(supabase: SupabaseClient, entityType?: string | null) {
   const { data, error } = await supabase
     .from("orchestrator_configs")
     .select("home_key, home_status, home_order, entity_type")
@@ -255,10 +255,10 @@ serve(withSecurity('orchestrator-configs', async (req: Request, ctx?: RequestCon
     // 7. SANITIZAÇÃO E PARSEAMENTO DE CAMPOS JSON/JSONB
     // (Garante nomes perfeitamente casados com a sua tabela)
     // =========================================================================
-    const parseJson = (val: any, fallback: any) => {
+    const parseJson = (val: unknown, fallback: unknown): unknown => {
       if (!val) return fallback;
       if (typeof val === 'object') return val;
-      try { return JSON.parse(val); } catch { return fallback; }
+      try { return JSON.parse(String(val)); } catch { return fallback; }
     };
 
     const hydratedConfig = {
@@ -281,7 +281,8 @@ serve(withSecurity('orchestrator-configs', async (req: Request, ctx?: RequestCon
       }
     };
 
-  } catch (err: any) {
+  } catch (caught: unknown) {
+    const err = caught as Error;
     debugLog(`[orchestrator-configs Fatal Error]: ${err.message}`);
     
     // Failsafe de Erro Crítico

@@ -32,6 +32,19 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
 
+/** Estágio do pipeline do evento na API da Superbid. */
+type UpstreamStage = {
+  eventId?: number | string | null;
+  eventDesc?: string;
+  beginDate?: string;
+  endDate?: string;
+  statusId?: number | null;
+  isActive?: boolean;
+  isAfterMarket?: boolean;
+  initialBidValue?: number | null;
+  formattedInitialBidValue?: string | null;
+};
+
 const EVENT_BASE_URLS = {
   production: "https://event-query.superbid.net",
   staging: "https://event-query.stage.superbid.net"
@@ -126,7 +139,7 @@ serve(withSecurity('sbx-event', async (req: Request, ctx?: RequestContext) => {
             id: rawEvento.eventPipeline.id ?? null,
             description: rawEvento.eventPipeline.description || "",
             current_stage: rawEvento.eventPipeline.currentStage ?? null,
-            stages: rawEvento.eventPipeline.stages?.map((stage: any) => ({
+            stages: rawEvento.eventPipeline.stages?.map((stage: UpstreamStage) => ({
               event_id: stage.eventId ?? null,
               event_desc: stage.eventDesc || "",
               begin_date: stage.beginDate || "",
@@ -154,9 +167,10 @@ serve(withSecurity('sbx-event', async (req: Request, ctx?: RequestContext) => {
       }
     };
 
-  } catch (err: any) {
+  } catch (caught: unknown) {
+    const err = caught as Error & { errorCode?: string };
     debugLog(`[sbx-event] 💥 Falha: ${err.message} | Code: ${err.errorCode || 'UNKNOWN'}`);
-    const statusCode = ["MISSING_EVENT_ID", "EVENT_NOT_FOUND"].includes(err.errorCode) ? (err.errorCode === "EVENT_NOT_FOUND" ? 404 : 400) : 500;
+    const statusCode = ["MISSING_EVENT_ID", "EVENT_NOT_FOUND"].includes(err.errorCode as string) ? (err.errorCode === "EVENT_NOT_FOUND" ? 404 : 400) : 500;
     
     return {
       status: statusCode,

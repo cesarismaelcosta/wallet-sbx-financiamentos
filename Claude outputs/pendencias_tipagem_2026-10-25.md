@@ -72,4 +72,5 @@ sbx-offer e sbx-offer-query repetem o parse da oferta que já está tipado em _s
 ## Pontos de comportamento (decidir antes de mexer)
 1. Fandi webhook: sem `WEBHOOK_MASTER_SECRET` configurado, assina com chave vazia em vez de dar erro.
 2. Orchestrator: autocura de sessão expirada nunca roda (hidratação sempre devolve `visitExists = true`).
-3. Imports usam `../_shared/gateKeeper.ts`, o arquivo se chama `gatekeeper.ts` (Windows ok; Linux pode falhar).
+
+Obs.: o arquivo é `_shared/gateKeeper.ts` (nome usado em homol e nos imports). Nos zips, usar esse nome.

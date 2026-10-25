@@ -193,7 +193,7 @@ serve(withSecurity('log-access', async (_req: Request) => {
   let resolved = 0;
   let stillPending = 0;
 
-  await runWithConcurrency(pending, CONCURRENCY, async (row) => {
+  await runWithConcurrency(pending as { id: string | number; ip_address: string }[], CONCURRENCY, async (row) => {
     const geo = await resolveGeoFallback(row.ip_address);
 
     if (!geo) {

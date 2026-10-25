@@ -517,11 +517,18 @@ export interface EmailTemplateResult {
 // =========================================================================
 // [1] USUÁRIO: Perfil Identitário
 // =========================================================================
-export interface BFFUserProfile {
+/** Documento do usuário na API da Superbid (userAccounts[].documents). */
+export type UpstreamDocument = { typeName?: string; number?: string };
+/** Telefone do usuário na API da Superbid (userAccounts[].phones). */
+export type UpstreamPhone = { type?: number; fullPhoneNumber?: string };
+
+// type (e não interface) para ser aceito como Record<string, unknown> em signS2SEntity
+export type BFFUserProfile = {
   entity_id: string; // ID único do usuário no ecossistema
   entity_type: "F" | "J"; // Tipo de entidade: "F" (Física) ou "J" (Jurídica)
   name: string; // Nome completo
   document: string; // CPF/CNPJ (Mapeado)
+  document_rg?: string; // RG (pessoa física)
   email: string; // E-mail principal de contato
   phone: string; // Telefone formatado
   birth_date: string; // Data de nascimento ISO
@@ -542,7 +549,7 @@ export interface BFFUserProfile {
     processedAt: string;
     originIp: string;
   };
-}
+};
 
 // =========================================================================
 // [2] OFERTA: Detalhamento do Lote e Entidades Associadas

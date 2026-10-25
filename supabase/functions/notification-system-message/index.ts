@@ -57,7 +57,8 @@ serve(withSecurity('notification-system-message', async (req: Request, ctx?: Req
     const rawBody = JSON.parse(ctx?.rawBody || "");
     const result = await dispatchSystemAlert(supabase, rawBody);
     return { status: 200, data: result };
-  } catch (err: any) {
+  } catch (caught: unknown) {
+    const err = caught as Error;
     debugLog("[EDGE FUNCTION CRITICAL EXCEPTION]:", err.message);
     return { status: 500, data: { error: err.message } };
   }

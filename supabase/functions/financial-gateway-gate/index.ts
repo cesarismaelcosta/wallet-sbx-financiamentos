@@ -32,7 +32,22 @@ import { getEdgeClientIp, signedClientIpHeaders } from "../_shared/client-ip.ts"
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
 import { getSafeRedirectUrl, getSafeCorsOrigin } from "../_shared/security.ts";
-import { BFFUserProfile } from "../_shared/types.ts";
+import type { BFFUserProfile, UpstreamDocument, UpstreamPhone } from "../_shared/types.ts";
+
+/** Corpo aceito pelo gate (form ou JSON). */
+type GatePayload = {
+  environment?: string;
+  auth_token?: string;
+  offer_id?: string;
+  product_id?: string | number;
+  return_uri?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  target_url?: string;
+  entity_id?: string | null;
+  [key: string]: unknown;
+};
 import { signS2SEntity } from "../_shared/s2s.ts";
 
 const ENV_URLS = {
@@ -81,13 +96,13 @@ serve(
     const accept = req.headers.get("accept") || "";
     const isAjax = contentType.includes("application/json") || accept.includes("application/json");
 
-    let payload: any = {};
+    let payload: GatePayload = {};
     let userId = "";
 
     try {
       if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
         const formData = await req.formData();
-        payload = Object.fromEntries(formData.entries());
+        payload = Object.fromEntries(formData.entries()) as GatePayload;
       } else {
         // ✨ [FIX 1]: Parse do JSON acontece uma vez só
         payload = await req.json();
@@ -233,7 +248,7 @@ serve(
           const mainAddress = account?.addresses?.[0];
           const isJuridica = account?.type === "J";
           const targetDocTypeName = isJuridica ? "cnpj" : "cpf";
-          const rawDocument = account?.documents?.find((doc: any) => doc.typeName === targetDocTypeName)?.number || "";
+          const rawDocument = account?.documents?.find((doc: UpstreamDocument) => doc.typeName === targetDocTypeName)?.number || "";
           const cleanDocument = rawDocument.replace(/\D/g, "");
 
           const rawBirthDate = isJuridica ? account?.companyRepresentative?.dateOfBirth : account?.birthDate;
@@ -244,9 +259,9 @@ serve(
             entity_type: account?.type || "F",
             name: account?.basicInfo?.fullName || "",
             document: cleanDocument,
-            document_rg: account?.documents?.find((doc: any) => doc.typeName === "rg")?.number || "",
+            document_rg: account?.documents?.find((doc: UpstreamDocument) => doc.typeName === "rg")?.number || "",
             email: account?.basicInfo?.email?.address || "",
-            phone: account?.phones?.find((p: any) => p.type === 3)?.fullPhoneNumber || "",
+            phone: account?.phones?.find((p: UpstreamPhone) => p.type === 3)?.fullPhoneNumber || "",
             birth_date: formattedBirthDate,
             gender: isJuridica ? account?.companyRepresentative?.gender || "M" : account?.gender === "M" ? "M" : "F",
             login: account?.credentials?.login || "",
@@ -292,7 +307,7 @@ serve(
       };
 
       debugLog("Iniciando Orquestração de Rota (Exclusive SBX Gateway)...");
-      const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(return_uri)}`;
+      const loginFallbackUrl = `/accounts/signin?redirect_uri=${encodeURIComponent(return_uri as string)}`;
 
       // [F7/F22/F40]: mesma ordem de headers de borda do infrastructure.ts (cf-connecting-ip primeiro)
       const clientIp = getEdgeClientIp(req);
@@ -304,7 +319,7 @@ serve(
           "Content-Type": "application/json",
           Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
           "x-session-token": finalJwt,
-          "x-original-url": return_uri,
+          "x-original-url": return_uri as string,
           "x-auth-fallback-url": loginFallbackUrl,
           "user-agent": clientUa,
           // IP do usuário assinado — o orchestrator só confia nele com assinatura válida
@@ -387,7 +402,8 @@ serve(
       responseHeaders.set("Cache-Control", "no-store, no-cache, must-revalidate");
       return new Response(null, { status: 302, headers: responseHeaders });
 
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as Error;
       debugLog("🚨 [Edge Gateway] Erro interceptado:", err.message);
 
       const safeReturnUri = getSafeRedirectUrl(return_uri || originPath);
@@ -439,7 +455,7 @@ function respondWithError(
   message: string,
   safeReturnUri: string,
   req: Request,
-  originalPayload: Record<string, any> = {},
+  originalPayload: Record<string, unknown> = {},
 ): Response {
   const headers = new Headers();
   headers.set(
@@ -451,7 +467,7 @@ function respondWithError(
     headers.set("Content-Type", "application/json");
     // [F20]: devolve só campos não sensíveis do payload original (lista
     // permitida) -- nunca entity_id, auth_token ou outros dados do chamador.
-    const extraData: Record<string, any> = {};
+    const extraData: Record<string, unknown> = {};
     for (const key of ["offer_id", "product_id", "return_uri"]) {
       const value = originalPayload?.[key];
       if (value !== undefined && value !== null && value !== "") {

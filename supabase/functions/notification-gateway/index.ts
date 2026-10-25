@@ -66,7 +66,7 @@ serve(withSecurity('notification-gateway', async (req: Request) => {
     // Gateway busca o binário no bucket e converte para base64 em tempo real.
     let mailAttachments = [];
     if (notif.attachments && Array.isArray(notif.attachments)) {
-      mailAttachments = await Promise.all(notif.attachments.map(async (att: any) => {
+      mailAttachments = await Promise.all(notif.attachments.map(async (att: { content_id: string; storage_path: string }) => {
         // Divide a string storage_path na primeira barra
         const [bucket, ...pathParts] = att.storage_path.split('/');
         const path = pathParts.join('/'); // Reconstrói o caminho caso tenha subpastas
@@ -132,7 +132,8 @@ serve(withSecurity('notification-gateway', async (req: Request) => {
     console.log(`SUCESSO: Notificação ${targetId} enviada e arquivada.`);
     return { status: 200, data: { status: "success", id: targetId } };
 
-  } catch (err: any) {
+  } catch (caught: unknown) {
+    const err = caught as Error;
     debugLog("[GATEWAY FATAL]:", err.message);
     
     // 9. CONTROLE DE RETRY E DEAD LETTER QUEUE (DLQ)

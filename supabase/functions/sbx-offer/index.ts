@@ -24,6 +24,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { withSecurity, type RequestContext } from "../_shared/server.ts";
 import { Vehicle } from "../_shared/types.ts";
+import type { UpstreamGroup, UpstreamProperty, UpstreamPhoto } from "../_shared/hydrate-data.ts";
 import { debugLog } from "../_shared/logger.ts";
 
 const OFFER_BASE_URLS = {
@@ -107,7 +108,7 @@ serve(
       if (isVehicleCategory) {
         const groups = rawOffer.product?.template?.groups || [];
         const getGroupProp = (groupId: string, propId: string) =>
-          groups.find((g: any) => g.id === groupId)?.properties.find((p: any) => p.id === propId)?.value;
+          groups.find((g: UpstreamGroup) => g.id === groupId)?.properties.find((p: UpstreamProperty) => p.id === propId)?.value;
 
         vehicleData = {
           manufacture_year: Number(getGroupProp("identificacao", "anofabricacao")) || 0,
@@ -147,7 +148,7 @@ serve(
             },
             ...(vehicleData && { vehicle_details: vehicleData }),
             photos:
-              rawOffer.product?.galleryJson?.map((p: any) => ({
+              rawOffer.product?.galleryJson?.map((p: UpstreamPhoto) => ({
                 highlight: p.highlight || false,
                 link: p.link,
                 thumbnail: p.thumbnailUrl,
@@ -177,7 +178,8 @@ serve(
           },
         },
       };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as Error & { errorCode?: string };
       debugLog(`[sbx-offer] Falha operacional: ${err.message}`);
       return {
         status: err.errorCode === "OFFER_NOT_FOUND" ? 404 : 500,

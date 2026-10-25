@@ -30,7 +30,7 @@ import {
 
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
-import { BFFUserProfile } from "../_shared/types.ts";
+import type { BFFUserProfile, UpstreamDocument, UpstreamPhone } from "../_shared/types.ts";
 
 const ENV_URLS = {
   production: "https://api.s4bdigital.net",
@@ -78,7 +78,7 @@ serve(
         const { userId, environment, userName, login } = check;
         
         // Repassando os dados do usuário extraídos da maleta para gerar o Fat Token
-        const tokenData = await generateSessionToken(environment!, userId!, userName, login);
+        const tokenData = await generateSessionToken(environment!, userId!, userName ?? "", login ?? "");
 
         debugLog(`[sbx-auth-exchange][redeem] Sessão emitida para o usuário ${userId} em ${environment}.`);
 
@@ -146,7 +146,7 @@ serve(
       // =================================================================
       const isJuridica = account?.type === "J";
       const targetDocTypeName = isJuridica ? "cnpj" : "cpf";
-      const rawDocument = account?.documents?.find((doc: any) => doc.typeName === targetDocTypeName)?.number || "";
+      const rawDocument = account?.documents?.find((doc: UpstreamDocument) => doc.typeName === targetDocTypeName)?.number || "";
       const cleanDocument = rawDocument.replace(/\D/g, "");
       const rawBirthDate = isJuridica ? account?.companyRepresentative?.dateOfBirth : account?.birthDate;
       const formattedBirthDate = rawBirthDate ? String(rawBirthDate).split("T")[0] : "";
@@ -156,9 +156,9 @@ serve(
         entity_type: account?.type || "F",
         name: account?.basicInfo?.fullName || "N/A",
         document: cleanDocument,
-        document_rg: account?.documents?.find((doc: any) => doc.typeName === "rg")?.number || "",
+        document_rg: account?.documents?.find((doc: UpstreamDocument) => doc.typeName === "rg")?.number || "",
         email: account?.basicInfo?.email?.address || "",
-        phone: account?.phones?.find((p: any) => p.type === 3)?.fullPhoneNumber || "",
+        phone: account?.phones?.find((p: UpstreamPhone) => p.type === 3)?.fullPhoneNumber || "",
         birth_date: formattedBirthDate,
         gender: isJuridica ? account?.companyRepresentative?.gender || "M" : account?.gender === "M" ? "M" : "F",
         login: account?.credentials?.login || "",
@@ -208,7 +208,8 @@ serve(
           user_profile: userProfile,
         },
       };
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as Error;
       debugLog(`[sbx-auth-exchange] Falha: ${err.message}`);
       return {
         status: 400,

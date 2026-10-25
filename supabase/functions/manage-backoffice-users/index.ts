@@ -183,7 +183,7 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
       if (payload.is_active === false) {
         try {
           const { data: usersData } = await adminClient.auth.admin.listUsers();
-          const targetUser = usersData.users.find(u => u.email === userRecord.email);
+          const targetUser = usersData.users.find((u: { id: string; email?: string }) => u.email === userRecord.email);
           
           if (targetUser) {
             await adminClient.auth.admin.signOut(targetUser.id);
@@ -202,7 +202,7 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
       }
       
       // ATUALIZADO: Prepara o objeto de atualização com a Role
-      const updateData: any = { role: payload.role, updated_by: adminCheck.email };
+      const updateData: Record<string, unknown> = { role: payload.role, updated_by: adminCheck.email };
       
       // Se houver instruções de limpar JSONB (Admin/Manager), acopla no update
       if (payload.allowed_partners) updateData.allowed_partners = payload.allowed_partners;
