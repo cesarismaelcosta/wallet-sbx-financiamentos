@@ -28,10 +28,10 @@
  * Pendente com a FlowCredi: divida_veiculo tem mínimo 0,01 (veículo quitado envia 0).
  */
 
-import { SimulationResponse } from "../_shared/types.ts";
+import { SimulationResponse, SimulationPayload, SimulationFinancials } from "../_shared/types.ts";
 import { debugLog } from "../_shared/logger.ts";
 import {
-  FlowAction, FlowSimRequest, FLOWCREDI_SEND_LEAD,
+  FlowAction, FlowSimRequest, FlowRules, FLOWCREDI_SEND_LEAD,
   businessError, num, toBRDate, resolveFlowAction, birthDateOf, assertPF, assertRequiredConsents, leadContact,
   sendLead, leadConsult, maskLead,
 } from "./flowcredi-service.ts";
@@ -46,7 +46,7 @@ const PURPOSES = ["Pagamento de dívidas", "Refinanciamento de dívidas", "Refor
 const PROFESSIONAL_STATUS = ["Assalariado/Registrado", "Autônomo", "Profissional Liberal", "Empresário", "Funcionário Público", "Aposentado/Pensionista"];
 const PLATE_RE = /^[A-Z]{3}-?\d[A-Z0-9]\d{2}$/;
 
-export function isFlowcrediAutoEquity(rules: any): boolean {
+export function isFlowcrediAutoEquity(rules: FlowRules | null | undefined): boolean {
   return rules?.flowcredi_product === "auto_equity";
 }
 
@@ -59,8 +59,8 @@ const year = (v: unknown) => {
 };
 
 /** Valida as entradas do cliente e monta o body de POST /auto/lead. */
-export function buildAutoEquityLead(payload: any) {
-  const sim = payload.simulation_details || {};
+export function buildAutoEquityLead(payload: SimulationPayload) {
+  const sim: SimulationFinancials = payload.simulation_details || ({} as SimulationFinancials);
   assertPF(payload, PRODUCT_LABEL);
   const birth = birthDateOf(payload);
 
@@ -142,8 +142,8 @@ export function buildAutoEquityLead(payload: any) {
 
 /** Executa a ação da jornada (só LEAD: não há simulador de auto na FlowCredi). */
 export async function processFlowcrediAutoEquity(
-  payload: any,
-  _rules: any,
+  payload: SimulationPayload,
+  _rules: FlowRules,
   step: string = "SUBMIT_LEAD",
 ): Promise<{ action: FlowAction; result: SimulationResponse; persist: boolean }> {
   const action = resolveFlowAction(payload, step);

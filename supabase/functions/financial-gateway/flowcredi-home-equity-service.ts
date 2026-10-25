@@ -28,10 +28,10 @@
  * quitado), tipo_imovel, refId (= simulation_id).
  */
 
-import { SimulationResponse, Entity } from "../_shared/types.ts";
+import { SimulationResponse, SimulationPayload, SimulationFinancials, Entity } from "../_shared/types.ts";
 import { debugLog } from "../_shared/logger.ts";
 import {
-  FlowAction, FlowSimRequest, FLOWCREDI_SEND_LEAD,
+  FlowAction, FlowSimRequest, FlowRules, FlowNotification, FLOWCREDI_SEND_LEAD,
   businessError, num, toBRDate, resolveFlowAction, birthDateOf, assertPF, assertRequiredConsents, leadContact,
   simulateConditions, detailCondition, sendLead, leadConsult, maskLead,
 } from "./flowcredi-service.ts";
@@ -50,7 +50,7 @@ export const PROPERTY_TYPES = ["Apartamento", "Casa", "Casa em condomínio", "Sa
 
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
-export function isFlowcrediHomeEquity(rules: any): boolean {
+export function isFlowcrediHomeEquity(rules: FlowRules | null | undefined): boolean {
   return rules?.flowcredi_product === "home_equity";
 }
 
@@ -64,9 +64,9 @@ type HomeEquityInputs = {
 };
 
 /** Valida as entradas do cliente e monta a requisição do simulador (tipoCredito "CGI"). */
-export function buildHomeEquityInputs(payload: any, rules: any): HomeEquityInputs {
-  const sim = payload.simulation_details || {};
-  const r = { ...DEFAULTS, ...(rules || {}) };
+export function buildHomeEquityInputs(payload: SimulationPayload, rules: FlowRules): HomeEquityInputs {
+  const sim: SimulationFinancials = payload.simulation_details || ({} as SimulationFinancials);
+  const r: FlowRules = { ...DEFAULTS, ...(rules || {}) };
 
   assertPF(payload, PRODUCT_LABEL);
   const birth = birthDateOf(payload);
@@ -110,7 +110,7 @@ export function buildHomeEquityInputs(payload: any, rules: any): HomeEquityInput
 }
 
 /** Monta o body de POST /cgi/lead (OpenAPI CGILeadRequest). */
-export function buildHomeEquityLead(payload: any, inp: HomeEquityInputs) {
+export function buildHomeEquityLead(payload: SimulationPayload, inp: HomeEquityInputs) {
   return {
     ...leadContact(payload, PRODUCT_LABEL),
     data_nascimento: toBRDate(inp.req.dataNascimento),
@@ -129,8 +129,8 @@ export function buildHomeEquityLead(payload: any, inp: HomeEquityInputs) {
  * Executa a ação da jornada. Retorna `{ result, persist }`: `persist=false` no DETAIL (somente leitura).
  */
 export async function processFlowcrediHomeEquity(
-  payload: any,
-  rules: any,
+  payload: SimulationPayload,
+  rules: FlowRules,
   step: string = "EXECUTE_SIMULATION",
 ): Promise<{ action: FlowAction; result: SimulationResponse; persist: boolean }> {
   const action = resolveFlowAction(payload, step);
@@ -151,7 +151,7 @@ export async function processFlowcrediHomeEquity(
       };
     }
 
-    const notifications: any[] = [];
+    const notifications: FlowNotification[] = [];
     const recipient = (payload.entity as Entity)?.email;
     if (recipient) {
       const email = generateUserEmailNotificationHtml("home_equity", consults.filter((c) => c.is_selected), payload, {

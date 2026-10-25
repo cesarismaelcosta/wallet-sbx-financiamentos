@@ -10,6 +10,7 @@
 
 import { Consultation, SimulationPayload, EmailTemplateResult } from "../_shared/types.ts";
 import { OFFER_BUTTON_CSS, renderOfferButton } from "./email-offer-button.ts";
+import type { FlowConsultation, FlowConditionDetails } from "./flowcredi-service.ts";
 
 const BRL = (v: number) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const PCT = (v: number) => `${Number(v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
@@ -64,18 +65,18 @@ export function generateUserEmailNotificationHtml(
 
   // Cards: mesma ordem do site (menor 1ª parcela primeiro)
   // Pós-fixado (taxa + IPCA): produtos CGI da FlowCredi
-  const isPos = (d: any) => /p[oó]s|ipca/i.test(`${d.produto ?? ""} ${d.idProduto ?? ""}`);
+  const isPos = (d: FlowConditionDetails) => /p[oó]s|ipca/i.test(`${d.produto ?? ""} ${d.idProduto ?? ""}`);
   // Imóveis: menor 1ª parcela primeiro. Home equity: Price em cima, SAC embaixo; pré à esquerda, pós à direita.
   const items = consults
-    .map((c: any) => ({ c, d: c.details }))
-    .filter((x) => x.d)
+    .map((c: FlowConsultation) => ({ c, d: c.details }))
+    .filter((x): x is { c: FlowConsultation; d: FlowConditionDetails } => !!x.d)
     .sort((a, b) =>
       isMortgage
         ? a.d.primeiraParcela - b.d.primeiraParcela
         : (a.d.tabela === "PRICE" ? 0 : 1) - (b.d.tabela === "PRICE" ? 0 : 1) || Number(isPos(a.d)) - Number(isPos(b.d)),
     );
 
-  const card = ({ c, d }: { c: any; d: any }, i: number) => {
+  const card = ({ c, d }: { c: Consultation; d: FlowConditionDetails }, i: number) => {
     const path = storagePathOf(d.logoUrl);
     let logo = "";
     if (path) {

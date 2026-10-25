@@ -26,10 +26,10 @@
  * O lead NÃO carrega prazo, banco escolhido nem aceites.
  */
 
-import { SimulationResponse, Entity, Offer } from "../_shared/types.ts";
+import { SimulationResponse, SimulationPayload, SimulationFinancials, Entity, Offer } from "../_shared/types.ts";
 import { debugLog } from "../_shared/logger.ts";
 import {
-  FlowAction, FlowSimRequest, FLOWCREDI_SEND_LEAD,
+  FlowAction, FlowSimRequest, FlowRules, FlowNotification, FLOWCREDI_SEND_LEAD,
   businessError, num, toBRDate, resolveFlowAction, birthDateOf, assertPF, assertRequiredConsents, leadContact,
   simulateConditions, detailCondition, sendLead, leadConsult, maskLead,
 } from "./flowcredi-service.ts";
@@ -46,7 +46,7 @@ const DEFAULTS = {
   min_monthly_income: 1000,
 };
 
-export function isFlowcrediMortgage(rules: any): boolean {
+export function isFlowcrediMortgage(rules: FlowRules | null | undefined): boolean {
   return rules?.flowcredi_product === "mortgage";
 }
 
@@ -56,7 +56,7 @@ export function isFlowcrediMortgage(rules: any): boolean {
  *    ofertas daquele vendedor dentro desta jornada (ex.: imóveis Santander);
  *  - rules.flowcredi_bank: "Santander" → para todas as ofertas da configuração.
  */
-export function resolveFixedBank(payload: any, rules: any): string | null {
+export function resolveFixedBank(payload: SimulationPayload, rules: FlowRules): string | null {
   const sellerId = String(payload?.seller?.seller_id ?? "").trim();
   const bySeller = rules?.flowcredi_bank_by_seller;
   if (sellerId && bySeller && typeof bySeller === "object") {
@@ -67,14 +67,14 @@ export function resolveFixedBank(payload: any, rules: any): string | null {
 }
 
 /** Monta a requisição do simulador com dados confiáveis + inputs validados. */
-export function buildSimRequest(payload: any, rules: any): FlowSimRequest {
+export function buildSimRequest(payload: SimulationPayload, rules: FlowRules): FlowSimRequest {
   const offer = (payload.offer as Offer) || ({} as Offer);
-  const sim = payload.simulation_details || {};
-  const r = { ...DEFAULTS, ...(rules || {}) };
+  const sim: SimulationFinancials = payload.simulation_details || ({} as SimulationFinancials);
+  const r: FlowRules = { ...DEFAULTS, ...(rules || {}) };
 
   assertPF(payload, PRODUCT_LABEL);
 
-  const valorImovel = num((offer as any).offer_value);
+  const valorImovel = num(offer.offer_value);
   if (!(valorImovel > 0)) throw businessError("Valor do imóvel indisponível para esta oferta.");
 
   const birth = birthDateOf(payload);
@@ -93,7 +93,7 @@ export function buildSimRequest(payload: any, rules: any): FlowSimRequest {
   const renda = num(sim.monthly_income);
   if (!(renda >= num(r.min_monthly_income))) throw businessError("Informe sua renda mensal.");
 
-  const ufRaw = String((offer as any)?.location?.state ?? "").trim().toUpperCase();
+  const ufRaw = String(offer.location?.state ?? "").trim().toUpperCase();
   const req: FlowSimRequest = { valorImovel, prazo, valorFinanciado, dataNascimento: birth, tipoCredito: "Financiamento", renda };
   if (/^[A-Z]{2}$/.test(ufRaw)) req.uf = ufRaw;
   // Banco fixo por configuração — nunca vem do front.
@@ -103,7 +103,7 @@ export function buildSimRequest(payload: any, rules: any): FlowSimRequest {
 }
 
 /** Monta o body de POST /mortgage/lead (OpenAPI MortgageLeadRequest). */
-export function buildMortgageLead(payload: any, req: FlowSimRequest) {
+export function buildMortgageLead(payload: SimulationPayload, req: FlowSimRequest) {
   return {
     ...leadContact(payload, PRODUCT_LABEL),
     data_nascimento: toBRDate(req.dataNascimento),
@@ -118,8 +118,8 @@ export function buildMortgageLead(payload: any, req: FlowSimRequest) {
  * Executa a ação da jornada. Retorna `{ result, persist }`: `persist=false` no DETAIL (somente leitura).
  */
 export async function processFlowcrediMortgage(
-  payload: any,
-  rules: any,
+  payload: SimulationPayload,
+  rules: FlowRules,
   step: string = "EXECUTE_SIMULATION",
 ): Promise<{ action: FlowAction; result: SimulationResponse; persist: boolean }> {
   const action = resolveFlowAction(payload, step);
@@ -137,7 +137,7 @@ export async function processFlowcrediMortgage(
     }
 
     // E-mail ao cliente a cada simulação com condições (mesmo padrão de veículos e cartão)
-    const notifications: any[] = [];
+    const notifications: FlowNotification[] = [];
     const recipient = (payload.entity as Entity)?.email;
     if (recipient) {
       const email = generateUserEmailNotificationHtml("mortgage", consults.filter((c) => c.is_selected), payload, {
