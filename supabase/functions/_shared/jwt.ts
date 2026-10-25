@@ -175,7 +175,8 @@ export async function verifySessionToken(token: string): Promise<SessionValidati
       },
       environment: safeEnv,
     };
-  } catch (err: any) {
+  } catch (caught: unknown) {
+    const err = caught as Error;
     const errMessage = (err.message || "").toLowerCase();
 
     let errorCode: SessionValidationResult["errorCode"] = "JWT_UNKNOWN_ERROR";
@@ -287,12 +288,13 @@ export async function verifyExchangeToken(
   token: string,
   { expectedAud, userAgent }: { expectedAud: string; userAgent: string },
 ): Promise<ExchangeValidationResult> {
-  let payload: any;
+  let payload: Record<string, unknown>;
   try {
     // 🛡️ [SBXW-08 FIX]: algoritmo aceito fixado explicitamente.
     const verified = await jwtVerify(token, getJwtSecret(), { algorithms: ["HS256"] });
     payload = verified.payload;
-  } catch (err: any) {
+  } catch (caught: unknown) {
+    const err = caught as Error;
     const errMessage = (err.message || "").toLowerCase();
     
     // Distingue se o erro foi por token expirado ou falha de assinatura/malformado

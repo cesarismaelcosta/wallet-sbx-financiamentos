@@ -23,6 +23,17 @@
  */
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+/** visits com vínculos (select visit_entities(entity_id), visit_offers(offer_id)). */
+type VisitLinks = {
+  visit_entities?: { entity_id: string | number }[] | null;
+  visit_offers?: { offer_id: string | number }[] | null;
+};
+/** simulations com vínculo de ofertas (select id, visit_id, entity_id, simulation_offers(offer_id)). */
+type SimulationLinks = {
+  entity_id: string | number | null;
+  simulation_offers?: { offer_id: string | number }[] | null;
+};
 import { debugLog } from "./logger.ts";
 import type { TrustedEntity, TrustedOffer } from "./hydrate-data.ts";
 
@@ -98,14 +109,15 @@ export async function validateSimulationIntegrity(
 
     if (visitError || !visit) throw new Error("VISIT_NOT_FOUND");
 
-    const dbEntityId = (visit as any).visit_entities?.[0]?.entity_id;
+    const visitLinks = visit as unknown as VisitLinks;
+    const dbEntityId = visitLinks.visit_entities?.[0]?.entity_id;
     if (entity_id && String(dbEntityId) !== String(entity_id)) {
       debugLog(`🚨 [Security] Entidade Trusted (${entity_id}) diverge do DB Base da Visita (${dbEntityId})`);
       throw new Error("INVALID_RELATIONSHIP: Inconsistência severa de identidade.");
     }
 
     if (offer_id) {
-      const isOfferLinked = (visit as any).visit_offers?.some((o: any) => String(o.offer_id) === String(offer_id));
+      const isOfferLinked = visitLinks.visit_offers?.some((o) => String(o.offer_id) === String(offer_id));
 
       if (!isOfferLinked) {
         if (mode === "link") {
@@ -133,13 +145,14 @@ export async function validateSimulationIntegrity(
     throw new Error("INVALID_RELATIONSHIP: Você não tem permissão para acessar esta simulação.");
   }
 
-  if (entity_id && String((sim as any).entity_id) !== String(entity_id)) {
-    debugLog(`🚨 [Security] CROSS-TAMPERING: Simulação é da Entidade ${(sim as any).entity_id}, Payload injetou ${entity_id}`);
+  const simLinks = sim as unknown as SimulationLinks;
+  if (entity_id && String(simLinks.entity_id) !== String(entity_id)) {
+    debugLog(`🚨 [Security] CROSS-TAMPERING: Simulação é da Entidade ${simLinks.entity_id}, Payload injetou ${entity_id}`);
     throw new Error("INVALID_RELATIONSHIP: Inconsistência de identidade entre Proponente e Simulação original.");
   }
 
   if (offer_id) {
-    const isOfferLinked = (sim as any).simulation_offers?.some((so: any) => String(so.offer_id) === String(offer_id));
+    const isOfferLinked = simLinks.simulation_offers?.some((so) => String(so.offer_id) === String(offer_id));
     if (!isOfferLinked) {
       if (mode === "link") {
         debugLog(`⏳ [Gatekeeper][link] Oferta ${offer_id} sendo anexada à simulação ${simulation_id}. Vínculo pendente aceito.`);

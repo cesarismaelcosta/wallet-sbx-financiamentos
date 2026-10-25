@@ -78,7 +78,7 @@ import { verifySignedClientIp } from "./client-ip.ts";
 
 export interface StandardResponse {
   status: number;
-  data?: any;
+  data?: unknown;
   error?: string;
   headers?: Record<string, string>;
 }
@@ -371,7 +371,7 @@ export const withSecurity = (
         status: std.status,
         headers: { ...corsHeaders, "Content-Type": "application/json", ...(std.headers || {}) },
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 🛡️ [SBXW-19 FIX]: Este catch só é alcançado por exceção NÃO
       // controlada (bug real) — erro de negócio esperado já retorna via
       // StandardResponse.error acima, sem passar por aqui. Antes, `err.message`

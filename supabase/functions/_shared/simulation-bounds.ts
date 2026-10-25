@@ -23,6 +23,19 @@
 
 const EPS = 0.01; // Tolerância de centavos/arredondamento de ponto flutuante
 
+/** Regras usadas nos limites (orchestrator_configs.rules). */
+type BoundsRules = {
+  allow_custom_value?: boolean;
+  max_offer_cap_percent?: number | null;
+  min_down_payment_percentage?: number | null;
+  max_down_payment_percentage?: number | null;
+  max_financed_amount?: number | null;
+} | null | undefined;
+/** Oferta confiável (payload.offer). */
+type BoundsOffer = { offer_value?: unknown; vehicle_details?: { fipe_value?: unknown } } | null | undefined;
+/** Valores informados pelo cliente (simulation_details). */
+type BoundsSimulation = { requested_value?: unknown; down_payment_amount?: unknown } | null | undefined;
+
 /**
  * Compra financiada com margem sobre o valor do lote (Fandi / Partner genérico).
  *
@@ -36,7 +49,7 @@ const EPS = 0.01; // Tolerância de centavos/arredondamento de ponto flutuante
  *
  * `down_payment_percentage` validado contra [min, max]_down_payment_percentage.
  */
-export function validateOfferMarginBounds(rules: Record<string, any>, offer: any, simulation: any) {
+export function validateOfferMarginBounds(rules: BoundsRules, offer: BoundsOffer, simulation: BoundsSimulation) {
   const offerValue = Number(offer?.offer_value) || 0;
   const requestedValue = Number(simulation?.requested_value) || 0;
   const downPaymentAmount = Number(simulation?.down_payment_amount) || 0;
@@ -67,7 +80,7 @@ export function validateOfferMarginBounds(rules: Record<string, any>, offer: any
  * `requested_value` deve ser IGUAL a `offer_value`, `down_payment_amount` deve
  * ser 0, e (se configurado) `requested_value <= rules.max_financed_amount`.
  */
-export function validateCardBounds(rules: Record<string, any>, offer: any, simulation: any) {
+export function validateCardBounds(rules: BoundsRules, offer: BoundsOffer, simulation: BoundsSimulation) {
   const offerValue = Number(offer?.offer_value) || 0;
   const requestedValue = Number(simulation?.requested_value) || 0;
   const downPaymentAmount = Number(simulation?.down_payment_amount) || 0;

@@ -43,6 +43,24 @@
  */
 
 import { debugLog } from "./logger.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { IntegrationDetails, JourneyRules, PageConfigs } from "./types.ts";
+
+/** Linha de orchestrator_configs devolvida pela consulta combinada. */
+type OrchestratorConfigRow = {
+  id: number | null;
+  config_type: string;
+  lookup_id: number | string;
+  page_url: string | null;
+  partner_id: number | null;
+  is_integrated: boolean | null;
+  integration_method: string | null;
+  integration_details: IntegrationDetails | null;
+  rules: JourneyRules | null;
+  consent_configs: Record<string, unknown> | unknown[] | null;
+  page_configs: PageConfigs | null;
+  page_faqs: Record<string, unknown> | unknown[] | null;
+};
 
 /** Espelha as colunas reais de `public.orchestrator_configs`. */
 export interface ResolvedConfig {
@@ -51,11 +69,11 @@ export interface ResolvedConfig {
   partner_id: number | null;
   is_integrated: boolean;
   integration_method: string | null;
-  integration_details: Record<string, any>;
-  rules: Record<string, any>;
-  consent_configs: Record<string, any> | any[];
-  page_configs: Record<string, any>;
-  page_faqs: Record<string, any> | any[];
+  integration_details: IntegrationDetails;
+  rules: JourneyRules;
+  consent_configs: Record<string, unknown> | unknown[];
+  page_configs: PageConfigs;
+  page_faqs: Record<string, unknown> | unknown[];
   /** Qual eixo casou. Útil para auditoria e debug de roteamento. */
   matched_by: "EVENT" | "SELLER" | "PRODUCT" | "SUBCATEGORY" | "CATEGORY" | null;
 }
@@ -78,7 +96,7 @@ const SELECT_COLS =
   "id, page_url, partner_id, is_integrated, integration_method, integration_details, entity_type, rules, consent_configs, page_configs, page_faqs";
   
 export async function resolveOrchestratorConfigs(args: {
-  supabase: any;
+  supabase: SupabaseClient;
   eventId?: string | number | null;
   sellerId?: string | number | null;
   productId?: string | number | null;
@@ -151,8 +169,8 @@ export async function resolveOrchestratorConfigs(args: {
   // Percorre EVENT -> SELLER -> PRODUCT -> SUBCATEGORY -> CATEGORY e usa a primeira que encontrar,
   // exatamente a mesma regra de prioridade de antes.
   for (const priority of validPriorities) {
-    const match = rows.find(
-      (r: any) => r.config_type === priority.type && Number(r.lookup_id) === priority.id
+    const match = (rows as unknown as OrchestratorConfigRow[]).find(
+      (r) => r.config_type === priority.type && Number(r.lookup_id) === priority.id
     );
     if (match) {
       debugLog(`✅ [Configs] Match via ${priority.type}(${priority.id}) | Perfil: ${currentProfile}`);

@@ -13,7 +13,7 @@ export interface OriginDetails {
   metadata: {
     timestamp: string;
     tls_version?: string | null;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -30,7 +30,8 @@ export interface Entity {
   email: string;
   birth_date: string; // ISO String ou YYYY-MM-DD
   gender: string;
-  [key: string]: any; // Permite campos extras genéricos (ex: renda, profissão)
+  entity_type?: string; // F (pessoa física) | J (pessoa jurídica)
+  [key: string]: unknown; // Permite campos extras genéricos (ex: renda, profissão)
 }
 
 /**
@@ -40,7 +41,7 @@ export interface Entity {
  */
 export interface Manager {
   manager_name: string;
-  [key: string]: any; // Captura metadados específicos para a coluna JSONB manager_details
+  [key: string]: unknown; // Captura metadados específicos para a coluna JSONB manager_details
 }
 
 /**
@@ -53,7 +54,7 @@ export interface Seller {
   legal_name: string;
   trade_name: string;
   economic_group: string;
-  [key: string]: any; // Captura metadados específicos para a coluna JSONB seller_details/seller_details
+  [key: string]: unknown; // Captura metadados específicos para a coluna JSONB seller_details/seller_details
 }
 
 /**
@@ -66,7 +67,7 @@ export interface Event {
   event_description: string;
   event_start_date: string;
   event_end_date: string;
-  [key: string]: any; // Captura campos como 'numero_leilao' ou 'tipo_evento' (event_details)
+  [key: string]: unknown; // Captura campos como 'numero_leilao' ou 'tipo_evento' (event_details)
 }
 
 /**
@@ -78,7 +79,7 @@ export interface Vehicle {
   model_year: number;
   fipe_code: string;
   fipe_value?: number;
-  [key: string]: any; // Captura cor, placa, chassi ou quilometragem
+  [key: string]: unknown; // Captura cor, placa, chassi ou quilometragem
 }
 
 /**
@@ -95,7 +96,9 @@ export interface Offer {
   category: string; // Texto vindo do site
   subcategory_id?: number | string;
   subcategory?: string;
-  [key: string]: any; // Aqui entrará 'vehicle', 'equity' ou qualquer outro detalhe enviado
+  vehicle_details?: Partial<Vehicle>; // atributos do veículo (lotes de veículos)
+  location?: { state?: string; city?: string; [key: string]: unknown }; // localização do bem
+  [key: string]: unknown; // Aqui entrará 'vehicle', 'equity' ou qualquer outro detalhe enviado
 }
 
 /**
@@ -135,21 +138,21 @@ export interface OrchestratorPayload {
   consents?: Array<{
     consent_id: string;
     accepted: boolean;
-    legal_text_snapshot?: any;
+    legal_text_snapshot?: unknown;
     accepted_at?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   }>;
 
   // Campos de contexto injetados pelo Orquestrador
-  rules?: any;
-  page_configs?: any;
-  consent_configs?: any;
-  page_faqs?: any;
+  rules?: JourneyRules;
+  page_configs?: PageConfigs;
+  consent_configs?: unknown;
+  page_faqs?: unknown;
 
   // ROTEAMENTO
   is_integrated?: boolean; // Indica se a visita veio de um parceiro integrado (ex: Fandi, Cartão)
   integration_method?: string | null; // integration_method = 'API', 'EMAIL', 'FILE', 'MANUAL'
-  integration_details?: Record<string, any>; // Permite enviar detalhes específicos do parceiro (ex: nome do parceiro, CNPJ, ponto de venda, webhook URL, etc.)
+  integration_details?: Record<string, unknown>; // Permite enviar detalhes específicos do parceiro (ex: nome do parceiro, CNPJ, ponto de venda, webhook URL, etc.)
   product_id?: number;
   partner_id?: number;
   action?: "VISIT" | "CONSULT" | "REDIRECT" | "SIMULATE" | "CONTACT";
@@ -193,7 +196,7 @@ export interface OrchestratorResponse {
    */
   payload?: {
     visit_id: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -207,7 +210,7 @@ export interface SimulationResponse {
   message?: string;
   consults: Consultation[];
   // Audit Trail individual para esta linha
-  raw: any;
+  raw: Record<string, unknown>;
 }
 
 /**
@@ -295,7 +298,9 @@ export interface SimulationFinancials {
   financed_amount: number | null; // Valor que será efetivamente financiado
   cet_rate?: number | null; // Taxa CET (opcional na entrada, obrigatória no retorno)
   simulated_at?: string | null; // Timestamp da simulação
-  [key: string]: any | null; // Flexibilidade para taxas extras (IOF, TAC, etc)
+  installment_value?: number | null; // valor da parcela escolhida
+  selected?: { banco?: string; idProduto?: string; idSeguradora?: string }; // condição escolhida na gaveta (FlowCredi)
+  [key: string]: unknown | null; // Flexibilidade para taxas extras (IOF, TAC, etc)
 }
 
 /**
@@ -331,6 +336,25 @@ export interface HomeCollateral {
   postal_code: string; // CEP
   country: string; // País
   owners: string[]; // Lista de proprietários
+}
+
+/**
+ * @interface PageConfigs
+ * @description Configuração visual da página da jornada (orchestrator_configs.page_configs).
+ */
+export interface PageConfigs {
+  footer?: { template_text?: string; links?: { text: string; url: string }[] };
+  offer_panel?: { partner?: { name?: string; label?: string } };
+  partner?: { name?: string; label?: string };
+  integration_details?: IntegrationDetails;
+  [key: string]: unknown;
+}
+
+/** Dados do parceiro integrado (contato, webhook etc.). */
+export interface IntegrationDetails {
+  urlWhatsApp?: string;
+  whatsapp_number?: string;
+  [key: string]: unknown;
 }
 
 /**
@@ -377,27 +401,28 @@ export interface SimulationPayload {
   consents?: Array<{
     consent_id: string;
     accepted: boolean;
-    legal_text_snapshot?: any;
+    legal_text_snapshot?: unknown;
     accepted_at?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   }>;
   // Campos de contexto injetados pelo Orquestrador
-  rules?: any;
-  page_configs?: any;
-  consent_configs?: any;
-  page_faqs?: any;
+  rules?: JourneyRules;
+  page_configs?: PageConfigs;
+  consent_configs?: unknown;
+  page_faqs?: unknown;
   step?: "EXECUTE_SIMULATION" | "SUBMIT_LEAD";
   // Auditoria/roteamento: anexados pelo Orquestrador e pelo Gateway
   raw_client_payload?: Record<string, unknown>; // thin payload original do cliente
   hydration_source?: string | null; // origem da oferta na hidratação (payload_offer_id | db_last_offer)
   config_matched_by?: string | null; // eixo que casou em orchestrator_configs
   orchestrator_config_id?: number | null;
-  integration_details?: Record<string, unknown>;
+  integration_details?: IntegrationDetails;
+  origin_url?: string;
   visit_update_id?: string;
   simulation_update_id?: string;
   target_url?: string;
   __integrity_validated?: boolean; // marca do Gateway: integridade já validada nesta requisição
-  [key: string]: any; // Permite novos nós na raiz do payload
+  [key: string]: unknown; // Permite novos nós na raiz do payload
 }
 
 /**
@@ -419,7 +444,7 @@ export interface SimulationConsent {
   email: string | null;
   birth_date: string | null;
   gender: string | null;
-  entity_details: any;
+  entity_details: unknown;
   ip_address: string;
   country: string;
   state: string;
@@ -427,20 +452,20 @@ export interface SimulationConsent {
   user_agent: string;
   device_type: string;
   operating_system: string;
-  origin_details: any;
-  manager_details: any;
-  seller_details: any;
-  event_details: any;
-  offer_details: any;
+  origin_details: unknown;
+  manager_details: unknown;
+  seller_details: unknown;
+  event_details: unknown;
+  offer_details: unknown;
   page_snapshot: {
-    branding: any;
-    rules: any;
-    faq: any;
-    consents_rendered: any;
-    legal_text: any;
-    [key: string]: any;
+    branding: unknown;
+    rules: unknown;
+    faq: unknown;
+    consents_rendered: unknown;
+    legal_text: unknown;
+    [key: string]: unknown;
   };
-  raw_payload: any;
+  raw_payload: unknown;
 }
 
 /**
@@ -460,8 +485,8 @@ export interface SimulationUpdate {
   user_agent: string;
   device_type: string;
   operating_system: string;
-  origin_details: any;
-  raw_payload: any;
+  origin_details: unknown;
+  raw_payload: unknown;
 }
 
 /**
@@ -638,10 +663,10 @@ export interface ThinPayload {
   step?: string;
   origin_url?: string;
   target_url?: string;
-  interaction_context?: Record<string, any>;
-  consents?: Array<Record<string, any>>;
+  interaction_context?: Record<string, unknown>;
+  consents?: Array<Record<string, unknown>>;
   /** Apenas inputs do usuário: prazo, entrada, opções. NUNCA preço da oferta. */
-  simulation_details?: Record<string, any>;
+  simulation_details?: Record<string, unknown>;
 }
 
 /**
@@ -663,9 +688,9 @@ export interface EnrichedPayload extends ThinPayload {
     product_id: number;
     is_integrated: boolean;
     integration_method: string;
-    integration_details: Record<string, any>;
-    rules: Record<string, any>;
-    page_configs: Record<string, any>;
+    integration_details: Record<string, unknown>;
+    rules: Record<string, unknown>;
+    page_configs: Record<string, unknown>;
   };
   /** Procedência da oferta usada, para auditoria forense. */
   hydration_source?: "payload_offer_id" | "db_last_offer" | "no_offer";

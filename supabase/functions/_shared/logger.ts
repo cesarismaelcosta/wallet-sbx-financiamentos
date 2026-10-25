@@ -102,7 +102,7 @@ const SENSITIVE_REGISTRY: Record<string, RedactConfig> = {
  * @param {any} value - O valor associado à chave.
  * @returns {any} O valor original ou "[MASKED]" caso corresponda a uma regra sensível.
  */
-const redact = (key: string, value: any): any => {
+const redact = (key: string, value: unknown): unknown => {
   if (!key) return value;
   
   // Normaliza a chave para minúsculo para evitar falhas por variação de case (ex: PascalCase de APIs externas)
@@ -125,7 +125,7 @@ const redact = (key: string, value: any): any => {
  * @param {any} obj - O objeto ou array a ser inspecionado.
  * @returns {any} Uma nova estrutura de dados sanitizada.
  */
-const deepRedact = (obj: any): any => {
+const deepRedact = (obj: unknown): unknown => {
   if (obj === null || typeof obj !== 'object') {
     // 🛡️ [SBXW-30 FIX]: uma string solta passava direto, sem checagem alguma
     // (foi assim que um secret em texto claro, passado como segundo argumento
@@ -139,7 +139,7 @@ const deepRedact = (obj: any): any => {
   if (Array.isArray(obj)) return obj.map(deepRedact);
 
   // Lida com Objetos construindo um clone limpo
-  const cleanObj: any = {};
+  const cleanObj: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     const redactedValue = redact(key, value);
     cleanObj[key] = (typeof redactedValue === 'object' && redactedValue !== null) 
@@ -156,7 +156,7 @@ const deepRedact = (obj: any): any => {
  * @param {string} message - A mensagem descritiva do log.
  * @param {any} [data] - Objeto ou dado opcional para depuração (será sanado automaticamente pelo deepRedact).
  */
-export const debugLog = (message: string, data?: any) => {
+export const debugLog = (message: string, data?: unknown) => {
   if (!IS_DEBUG) return;
 
   // Extração do nome da função chamadora através do Stack Trace do Deno/V8

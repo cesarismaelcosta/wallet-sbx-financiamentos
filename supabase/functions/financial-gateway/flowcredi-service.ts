@@ -24,7 +24,7 @@
  * URLs nas constantes abaixo · Secret: FLOWCREDI_API_KEY
  */
 
-import { Consultation, Entity, SimulationPayload } from "../_shared/types.ts";
+import { Consultation, Entity, SimulationPayload, JourneyRules } from "../_shared/types.ts";
 import { STATUS } from "../_shared/types.ts";
 import { debugLog } from "../_shared/logger.ts";
 import { sql } from "../_shared/db.ts";
@@ -113,7 +113,7 @@ export interface FlowSimItem {
 }
 
 /** Regras da jornada (orchestrator_configs.rules) lidas pelos serviços da FlowCredi. */
-export interface FlowRules {
+export interface FlowRules extends JourneyRules {
   flowcredi_product?: "mortgage" | "home_equity" | "auto_equity";
   flowcredi_bank?: string;
   flowcredi_bank_by_seller?: Record<string, string>;

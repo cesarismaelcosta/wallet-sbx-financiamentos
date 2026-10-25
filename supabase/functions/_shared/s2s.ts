@@ -105,6 +105,9 @@ export interface S2SEntity {
   document?: string;
   email?: string;
   phone?: string;
+  birth_date?: string | null;
+  gender?: string | null;
+  metadata?: unknown;
   [key: string]: unknown;
 }
 

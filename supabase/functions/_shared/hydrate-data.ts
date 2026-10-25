@@ -32,7 +32,21 @@
  */
 
 import { debugLog } from "./logger.ts";
-import { Vehicle } from "./types.ts";
+import { Vehicle, type ThinPayload } from "./types.ts";
+import type { S2SEntity } from "./s2s.ts";
+
+/** Grupos/propriedades do template do produto na API de ofertas da Superbid. */
+type UpstreamProperty = { id: string; value?: string };
+type UpstreamGroup = { id: string; properties: UpstreamProperty[] };
+/** Foto da galeria (product.galleryJson) na API de ofertas. */
+type UpstreamPhoto = {
+  highlight?: boolean;
+  link?: string;
+  thumbnailUrl?: string;
+  originalFileName?: string;
+  type?: string;
+  contentType?: string;
+};
 
 // =========================================================================
 // [1] CONTRATOS DE DADOS CONFIÁVEIS (TRUSTED TYPES)
@@ -57,7 +71,7 @@ export interface TrustedOffer {
   offer_detailed_description: string;
   offer_value: number;
   price_formatted: string;
-  system_metric: any;
+  system_metric: unknown;
   category_id: number;
   category: string;
   subcategory_id: string | number | null;
@@ -139,10 +153,10 @@ const offerCache = new Map<string, { dataPromise: Promise<TrustedOfferBundle>; e
  * Sanitiza datas vindas do banco ou payloads externos, forçando o padrão ISO YYYY-MM-DD
  * Protege contra instâncias Date convertidas para String (ex: "Tue Jul 02 1974...")
  */
-function sanitizeDateISO(dateInput: any): string | null {
+function sanitizeDateISO(dateInput: unknown): string | null {
   if (!dateInput) return null;
   try {
-    const d = new Date(dateInput);
+    const d = new Date(dateInput as string | number | Date);
     if (isNaN(d.getTime())) return String(dateInput); // Retorna original se for inconvertível
     return d.toISOString().split("T")[0]; // Pega apenas a parte YYYY-MM-DD
   } catch {
@@ -162,7 +176,7 @@ export async function hydrateVisitContext(args: {
   userId?: string | null;
   environment: "staging" | "production";
   mode?: HydrationMode;
-  trustedS2SEntity?: any | null; // ✨ INJEÇÃO S2S (Zero-Trust Bypass)
+  trustedS2SEntity?: S2SEntity | null; // ✨ INJEÇÃO S2S (Zero-Trust Bypass)
 }): Promise<HydratedContext> {
   const { sql, visitId, visitUpdateId, offerId, userId, environment, mode = "full", trustedS2SEntity } = args;
 
@@ -414,8 +428,8 @@ export async function fetchOfferUpstream(
           Referer: "https://www.superbid.net/",
         },
       });
-    } catch (err: any) {
-      const reason = err?.name === "AbortError" ? "TIMEOUT" : "NETWORK";
+    } catch (err: unknown) {
+      const reason = (err as Error | null)?.name === "AbortError" ? "TIMEOUT" : "NETWORK";
       debugLog(`🚨 [Hydrate][UPSTREAM_${reason}] Env: ${environment} | Offer: ${offerId}`);
       throw new Error("UPSTREAM_CONNECTION_ERROR");
     } finally {
@@ -450,7 +464,7 @@ export async function fetchOfferUpstream(
     if (isVehicleCategory) {
       const groups = offer.product?.template?.groups || [];
       const getGroupProp = (groupId: string, propId: string) =>
-        groups.find((g: any) => g.id === groupId)?.properties.find((p: any) => p.id === propId)?.value;
+        groups.find((g: UpstreamGroup) => g.id === groupId)?.properties.find((p: UpstreamProperty) => p.id === propId)?.value;
 
       vehicleData = {
         manufacture_year: Number(getGroupProp("identificacao", "anofabricacao")) || 0,
@@ -489,7 +503,7 @@ export async function fetchOfferUpstream(
         ...(vehicleData && { vehicle_details: vehicleData }),
         winner_id: offer.winner?.id ? String(offer.winner.id) : null,
         buyer_id: offer.buyer?.id ? String(offer.buyer.id) : null,
-        photos: (Array.isArray(offer.product?.galleryJson) ? offer.product.galleryJson : []).map((p: any) => ({
+        photos: (Array.isArray(offer.product?.galleryJson) ? offer.product.galleryJson : []).map((p: UpstreamPhoto) => ({
           highlight: p.highlight || false,
           link: p.link,
           thumbnail: p.thumbnailUrl,
@@ -553,7 +567,7 @@ export async function fetchOfferUpstream(
  *   do cliente. É sempre derivado de ctx.trusted* em hydrateVisitContext().
  * Qualquer chave fora desta allowlist é descartada silenciosamente.
  */
-export function pickThin(raw: any): Record<string, any> {
+export function pickThin(raw: unknown): ThinPayload {
   const allowed = [
     "visit_id",
     "visit_update_id",
@@ -573,9 +587,11 @@ export function pickThin(raw: any): Record<string, any> {
     "simulation_details", // APENAS inputs do usuário (Prazo e Entrada)
   ];
 
-  const thin: Record<string, any> = {};
+  const source = (raw ?? {}) as Record<string, unknown>;
+  const thin: Record<string, unknown> = {};
   for (const key of allowed) {
-    if (raw?.[key] !== undefined) thin[key] = raw[key];
+    if (source?.[key] !== undefined) thin[key] = source[key];
   }
-  return thin;
+  // Só as chaves permitidas; visit_id/visit_update_id são conferidos por quem chama.
+  return thin as unknown as ThinPayload;
 }

@@ -71,7 +71,7 @@ export function generateUserEmailNotificationHtml(
    * e aplicando os links fornecidos em payload.footer.
    */
   const renderFooter = () => {
-    const config = payload.page_configs.footer;
+    const config = payload.page_configs!.footer;
     if (!config?.template_text) return "";
 
     const links = config.links || [];

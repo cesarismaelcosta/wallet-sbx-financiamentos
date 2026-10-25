@@ -74,8 +74,8 @@ export async function resolveSessionPerimeter(
   try {
     const auth = await validateRequest(req);
     return { ok: true, auth };
-  } catch (err: any) {
-    const message = String(err?.message || "");
+  } catch (err: unknown) {
+    const message = String((err as Error | null | undefined)?.message || "");
 
     if (!message.includes("SESSION_EXPIRED")) {
       // Único outro caso possível: UNAUTHORIZED (token ausente/assinatura inválida).

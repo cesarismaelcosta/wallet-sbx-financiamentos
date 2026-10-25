@@ -175,8 +175,8 @@ export async function resolveGeoFallback(
     }
     return null;
   } catch (e) {
-    const reason = (e as any)?.name === "AbortError" ? "TIMEOUT" : "NETWORK";
-    console.warn(`[sbX Infrastructure] Falha no fallback de Geo (${reason}):`, (e as any)?.message);
+    const reason = (e as Error | null)?.name === "AbortError" ? "TIMEOUT" : "NETWORK";
+    console.warn(`[sbX Infrastructure] Falha no fallback de Geo (${reason}):`, (e as Error | null)?.message);
     return null;
   } finally {
     clearTimeout(timer);

@@ -23,6 +23,7 @@
  */
 
 import { debugLog } from "./logger.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // -----------------------------------------------------------------------
 // [CONTRATO]: Formato aceito por `dispatchSystemAlert` (chamada HTTP ou interna)
@@ -30,8 +31,8 @@ import { debugLog } from "./logger.ts";
 export interface SystemAlertPayload {
   context: string;
   subject?: string;
-  message: any;
-  raw_payload?: any;
+  message: unknown;
+  raw_payload?: unknown;
   visit_id?: string | null;
   visit_update_id?: string | null;
   simulation_id?: string | null;
@@ -49,7 +50,7 @@ export interface AlertPayload {
   visitUpdateId?: string | null;
   simulationId?: string | null;
   simulationUpdateId?: string | null;
-  rawPayload?: any;
+  rawPayload?: unknown;
 }
 
 export interface EmailTemplateResult {
@@ -215,8 +216,8 @@ function generateSystemErrorEmailHtml(data: SystemAlertPayload): EmailTemplateRe
  * @param rawPayload - Corpo cru (ainda não escapado) do alerta.
  */
 export async function dispatchSystemAlert(
-  supabase: any,
-  rawPayload: Record<string, any>,
+  supabase: SupabaseClient,
+  rawPayload: Record<string, unknown>,
 ): Promise<{ status: "queued" | "ignored"; reason?: string }> {
   if (!rawPayload?.context || !rawPayload?.message) {
     throw new Error("Parâmetros contratuais obrigatórios ('context' e 'message') ausentes.");
@@ -296,7 +297,7 @@ export async function dispatchSystemAlert(
  * antes (objeto camelCase) e NUNCA propaga erro — uma falha no disparo de
  * alerta não pode derrubar a simulação do cliente.
  */
-export async function sendSystemAlert(supabase: any, params: AlertPayload): Promise<void> {
+export async function sendSystemAlert(supabase: SupabaseClient, params: AlertPayload): Promise<void> {
   try {
     await dispatchSystemAlert(supabase, {
       context: params.context,
@@ -310,7 +311,8 @@ export async function sendSystemAlert(supabase: any, params: AlertPayload): Prom
         timestamp: new Date().toISOString(),
       },
     });
-  } catch (err: any) {
+  } catch (caught: unknown) {
+    const err = caught as Error;
     debugLog("[CRITICAL] Falha ao despachar alerta de sistema:", err.message);
   }
 }
