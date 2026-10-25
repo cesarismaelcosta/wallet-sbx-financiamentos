@@ -182,7 +182,7 @@ export function FlowLeadStep() {
           size="lg"
           onClick={handleSend}
           disabled={!consentsValid || loading}
-          className="h-12 w-full sm:w-auto flex-1 rounded-none cta-gradient text-white font-bold shadow-xs transition-all active:scale-[0.98] disabled:opacity-50"
+          className="h-12 w-full sm:w-auto sm:flex-1 rounded-none cta-gradient text-white font-bold shadow-xs transition-all active:scale-[0.98] disabled:opacity-50"
         >
           {loading ? (
             <>

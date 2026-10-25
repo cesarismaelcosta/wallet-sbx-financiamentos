@@ -431,7 +431,7 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError:
               </a>
             </div>
 
-            <h3 className="font-normal text-[13px] md:text-sm text-neutral-900 dark:text-neutral-100 leading-snug line-clamp-2 uppercase min-h-10">
+            <h3 className="font-normal text-[13px] md:text-sm text-neutral-900 dark:text-neutral-100 leading-snug line-clamp-2 uppercase min-h-[2.75em]">
               {offerDesc}
             </h3>
 

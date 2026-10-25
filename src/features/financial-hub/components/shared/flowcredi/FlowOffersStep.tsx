@@ -204,7 +204,7 @@ export function FlowOffersStep() {
           type="button"
           size="lg"
           onClick={handleContinue}
-          className="h-12 w-full sm:w-auto flex-1 rounded-none cta-gradient text-white font-bold shadow-xs transition-all active:scale-[0.98]"
+          className="h-12 w-full sm:w-auto sm:flex-1 rounded-none cta-gradient text-white font-bold shadow-xs transition-all active:scale-[0.98]"
         >
           Continuar
         </Button>
