@@ -8,7 +8,7 @@
  * Três ações, definidas pelo `step` da requisição:
  *
  *  1. SIMULATE  (step EXECUTE_SIMULATION; tela 1, sem aceites): simulador multibanco
- *               (tipoCredito "Financiamento"); a melhor condição de cada banco vem com as
+ *               (tipoCredito "Financiamento"); a Taxa Balcão de cada banco (sem Balcão → menor taxa) vem com as
  *               parcelas e `is_selected`. Persiste a simulação e envia o e-mail ao cliente.
  *  2. DETAIL    (step EXECUTE_SIMULATION com `simulation_details.selected`): parcelas de outra
  *               condição do mesmo banco, escolhida na gaveta de detalhe. Somente leitura (NÃO grava).

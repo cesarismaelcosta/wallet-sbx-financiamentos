@@ -3,7 +3,7 @@
  * @path src/features/financial-hub/components/products/flowcredi/FlowOffersStep.tsx
  *
  * Mostra as condições devolvidas pela simulação (`consults`) no padrão de
- * blocos do Cartão: um bloco por banco (produto de menor taxa), com logo,
+ * blocos do Cartão: um bloco por banco (Taxa Balcão; sem Balcão, a menor taxa), com logo,
  * tabela · juros e 1ª/última parcela. Clicar no bloco abre a gaveta "Detalhar"
  * (tabela de parcelas, só consulta). "Continuar" leva ao próximo step: o lead da
  * FlowCredi não leva banco, então o cliente não escolhe oferta.
@@ -33,7 +33,7 @@ export function FlowOffersStep() {
   const inputs: FlowInputs | undefined = data.flowSimulatedWith;
   const results: FlowConsult[] = data.flowResults ?? [];
   // Um bloco por banco: a condição que o gateway marcou como exibida (is_selected:
-  // menor taxa do banco; empate → menor 1ª parcela), já com as parcelas mês a mês.
+  // Taxa Balcão do banco; sem Balcão → menor taxa), já com as parcelas mês a mês.
   const best = results.filter((r) => r.status_id === STATUS.COM_CONDICOES && r.is_selected && r.details);
   // Imóveis: menor 1ª parcela primeiro. Home equity (4 condições da FlowCredi): Price em cima,
   // SAC embaixo; pré-fixado à esquerda, pós-fixado à direita.

@@ -296,15 +296,23 @@ function toConsult(it: FlowSimItem, valorImovel: number, statusId: number, isSel
   } as unknown as Consultation;
 }
 
-/** Melhor condição de cada banco: menor taxa; empate → menor 1ª parcela. */
+/** "Taxa Balcão": condição sem exigência de relacionamento com o banco. */
+const isBalcao = (it: FlowSimItem) => /balc[aã]o/i.test(it.produto ?? "");
+
+/**
+ * Condição exibida de cada banco: a "Taxa Balcão" (vale para quem não é cliente do banco).
+ * Banco sem Balcão → menor taxa. Em qualquer caso, empate → menor taxa e depois menor 1ª parcela.
+ */
 function bestByBank(items: FlowSimItem[]): FlowSimItem[] {
   const best = new Map<string, FlowSimItem>();
   for (const it of items) {
     const cur = best.get(it.banco);
     if (
       !cur ||
-      it.taxaJurosAnual < cur.taxaJurosAnual ||
-      (it.taxaJurosAnual === cur.taxaJurosAnual && it.primeiraParcela < cur.primeiraParcela)
+      (isBalcao(it) && !isBalcao(cur)) ||
+      (isBalcao(it) === isBalcao(cur) &&
+        (it.taxaJurosAnual < cur.taxaJurosAnual ||
+          (it.taxaJurosAnual === cur.taxaJurosAnual && it.primeiraParcela < cur.primeiraParcela)))
     ) {
       best.set(it.banco, it);
     }
@@ -349,7 +357,7 @@ async function loadSchedules(req: FlowSimRequest, picks: FlowSimItem[]): Promise
 /**
  * SIMULATE: todas as condições (uma linha por banco × produto × seguradora). As exibidas
  * ao cliente vêm com `is_selected` e as parcelas mês a mês (`installment_schedule`):
- *  - padrão (imóveis): a melhor de cada banco;
+ *  - padrão (imóveis): uma por banco, a Taxa Balcão (sem Balcão → menor taxa);
  *  - `showAll` (home equity: só produtos da própria FlowCredi): todas.
  * Sem condição: devolve `consults` com uma linha "Sem condições" e `count = 0`.
  */
@@ -377,7 +385,7 @@ export async function simulateConditions(
   const schedules = await loadSchedules(req, picks);
   const pickSet = new Set(picks);
   const consults = items.map((it) => {
-    // is_selected = condição exibida ao cliente (a melhor de cada banco)
+    // is_selected = condição exibida ao cliente (a Taxa Balcão de cada banco; sem Balcão → menor taxa)
     const consult: any = toConsult(it, req.valorImovel, STATUS_OK, pickSet.has(it), null, institutions.get(normBank(it.banco)));
     const schedule = pickSet.has(it) ? schedules.get(it) : undefined;
     if (schedule) consult.installment_schedule = schedule;
