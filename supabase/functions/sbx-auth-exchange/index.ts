@@ -6,13 +6,13 @@
  * [CONTRATO ÚNICO DE AUTENTICAÇÃO — STATELESS, ZERO BANCO]
  * ============================================================================
  * MODO "issue"  — recebe x-access-token (OAuth Superbid), valida no /me, hidrata
- *                 o perfil e devolve: Exchange JWT (60s, SEM PII) + user_profile
- *                 no corpo da resposta (consumo em mesma origem).
+ *                 o perfil e devolve: Exchange JWT (60s, com nome e login para a sessão)
+ *                 + user_profile no corpo da resposta (consumo em mesma origem, nunca na URL).
  * MODO "redeem" — recebe x-exchange-token, valida typ/aud/uah/exp e devolve
  *                 EXCLUSIVAMENTE o Session JWT (6h) e o environment.
  *
  * [REGRAS FECHADAS]:
- * - O Exchange JWT nunca carrega dados pessoais nem vínculo com visits.
+ * - O Exchange JWT leva só nome e login (para a sessão); nunca documento, contato ou vínculo com visits.
  * - TTL do Exchange JWT é fixo em 60s (EXCHANGE_TTL_SECONDS).
  * - Upstream (/me) é consultado apenas no modo "issue".
  * ============================================================================
@@ -192,6 +192,9 @@ serve(
       const exchange = await generateExchangeToken({
         userId,
         environment,
+        // Mesmos valores do token definitivo (sessão) emitido pelo gate
+        userName: account?.basicInfo?.fullName || "",
+        login: account?.credentials?.login || "",
         aud: String(finalAudience), // Ajustado para fechar com o plano
         uah: hashUserAgent(ua),     // Ajustado para fechar com o plano e com o Gate!
       });

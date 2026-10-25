@@ -216,9 +216,8 @@ export interface ExchangeClaims {
   environment: "staging" | "production";  
   /** Identificador sistêmico do usuário */
   userId: string;
-  /** Opcional: o sbx-auth-exchange não inclui (dados pessoais ficam fora do token de transição) */
-  userName?: string;
-  login?: string;
+  userName: string;
+  login: string;
   /** Audience: Domínio rigoroso de quem pode consumir o token */
   aud: string;
   /** User Agent Hash: Blindagem contra roubo/interceptação do token */
@@ -238,8 +237,8 @@ export async function generateExchangeToken({
 }: {
   environment: "staging" | "production";
   userId: string;
-  userName?: string;
-  login?: string;
+  userName: string;
+  login: string;
   aud: string;
   uah: string;
 }): Promise<string> {
