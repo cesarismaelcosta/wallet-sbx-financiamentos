@@ -148,7 +148,7 @@ export interface OrchestratorPayload {
 
   // ROTEAMENTO
   is_integrated?: boolean; // Indica se a visita veio de um parceiro integrado (ex: Fandi, Cartão)
-  integration_method?: string; // integration_method = 'API', 'EMAIL', 'FILE', 'MANUAL'
+  integration_method?: string | null; // integration_method = 'API', 'EMAIL', 'FILE', 'MANUAL'
   integration_details?: Record<string, any>; // Permite enviar detalhes específicos do parceiro (ex: nome do parceiro, CNPJ, ponto de venda, webhook URL, etc.)
   product_id?: number;
   partner_id?: number;
@@ -160,6 +160,11 @@ export interface OrchestratorPayload {
   simulation_id?: string;
   origin_url?: string;
   target_url?: string;
+  // Auditoria/roteamento: anexados pelo Orquestrador e pelo Gateway
+  raw_client_payload?: Record<string, unknown>; // thin payload original do cliente
+  hydration_source?: string | null; // origem da oferta na hidratação (payload_offer_id | db_last_offer)
+  config_matched_by?: string | null; // eixo que casou em orchestrator_configs
+  orchestrator_config_id?: number | null;
 }
 
 /**
@@ -329,6 +334,21 @@ export interface HomeCollateral {
 }
 
 /**
+ * @interface JourneyRules
+ * @description Regras da jornada (orchestrator_configs.rules) lidas pelos motores de simulação.
+ */
+export interface JourneyRules {
+  id?: string | number;
+  payment_factors?: Record<string, number>; // prazo (meses) -> fator da parcela
+  allow_custom_value?: boolean;
+  max_offer_cap_percent?: number;
+  min_down_payment_percentage?: number;
+  max_down_payment_percentage?: number;
+  max_financed_amount?: number;
+  [key: string]: unknown;
+}
+
+/**
  * @interface SimulationPayload
  * @description Contrato mestre para o ecossistema sbX.
  * O uso de [key: string]: any permite que campos extras enviados pelo
@@ -367,6 +387,16 @@ export interface SimulationPayload {
   consent_configs?: any;
   page_faqs?: any;
   step?: "EXECUTE_SIMULATION" | "SUBMIT_LEAD";
+  // Auditoria/roteamento: anexados pelo Orquestrador e pelo Gateway
+  raw_client_payload?: Record<string, unknown>; // thin payload original do cliente
+  hydration_source?: string | null; // origem da oferta na hidratação (payload_offer_id | db_last_offer)
+  config_matched_by?: string | null; // eixo que casou em orchestrator_configs
+  orchestrator_config_id?: number | null;
+  integration_details?: Record<string, unknown>;
+  visit_update_id?: string;
+  simulation_update_id?: string;
+  target_url?: string;
+  __integrity_validated?: boolean; // marca do Gateway: integridade já validada nesta requisição
   [key: string]: any; // Permite novos nós na raiz do payload
 }
 

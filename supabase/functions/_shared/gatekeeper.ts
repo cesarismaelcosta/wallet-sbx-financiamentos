@@ -33,7 +33,7 @@ import type { TrustedEntity, TrustedOffer } from "./hydrate-data.ts";
 export function validateOfferAccess(args: {
   trustedEntity: TrustedEntity;
   trustedOffer: TrustedOffer | null;
-  sessionUserId: string;
+  sessionUserId: string | null | undefined;
 }): void {
   const { trustedEntity, trustedOffer, sessionUserId } = args;
 

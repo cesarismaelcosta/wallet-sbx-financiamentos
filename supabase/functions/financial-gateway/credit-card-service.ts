@@ -25,7 +25,7 @@ import {
   SimulationFinancials
 } from "../_shared/types.ts";
 
-import { Entity, Offer } from "../_shared/types.ts";
+import { Entity, Offer, JourneyRules } from "../_shared/types.ts";
 import { STATUS } from "../_shared/types.ts";
 import { generateUserEmailNotificationHtml } from "./credit-card-notifications.ts";
 import { debugLog } from "../_shared/logger.ts";
@@ -95,7 +95,7 @@ function calculateRate(pv: number, pmt: number, n: number): number {
  */
 export async function processSimulationCreditCard(
   payload: SimulationPayload,
-  trustedRules: Record<string, any>,
+  trustedRules: JourneyRules,
 ): Promise<SimulationResponse> {
 
   // 1. EXTRAÇÃO PADRONIZADA

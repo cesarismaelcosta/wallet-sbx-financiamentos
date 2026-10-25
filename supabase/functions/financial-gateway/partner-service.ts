@@ -21,7 +21,7 @@ import {
 import { 
   Offer
 } from "../_shared/types.ts";
-import { STATUS } from "../_shared/types.ts";
+import { STATUS, type JourneyRules } from "../_shared/types.ts";
 
 import {
   generateUserEmailNotificationHtml,
@@ -93,8 +93,8 @@ function calculateRate(pv: number, pmt: number, n: number): number {
  * @returns {Promise<SimulationResponse>} Retorno envelopado estritamente aderente ao contrato técnico do core.
  */
 export async function processSimulationPartner(
-  payload: any,
-  trustedRules: Record<string, any>,
+  payload: SimulationPayload,
+  trustedRules: JourneyRules,
 ): Promise<SimulationResponse> {
   // 🛡️ ZERO-TRUST GUARD: valida requested_value/down_payment ANTES de qualquer
   // cálculo, contra `trustedRules` (resolvido server-side em simulation-handler.ts,

@@ -127,7 +127,7 @@ export function generateUserEmailNotificationHtml(
   }
 
   // 4. Lógica do Botão WhatsApp (condicional)
-  const integrationConfig = payload.page_configs?.integration_details || (payload as any).integration_details || {};
+  const integrationConfig = payload.page_configs?.integration_details || payload.integration_details || {};
   const contact = integrationConfig?.urlWhatsApp || integrationConfig?.whatsapp_number;
   let htmlWhatsApp = "";
 

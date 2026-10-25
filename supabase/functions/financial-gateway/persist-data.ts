@@ -73,8 +73,8 @@ import { debugLog } from "../_shared/logger.ts";
  *   - `consent_configs` -> aba de Consentimentos renderizados
  *   - `page_faqs`       -> aba de FAQ
  */
-function buildAuditPayload(payload: SimulationPayload): Record<string, any> {
-  const thin = (payload as any).raw_client_payload ?? {
+function buildAuditPayload(payload: SimulationPayload): Record<string, unknown> {
+  const thin = payload.raw_client_payload ?? {
     // Fallback defensivo: se o Gateway não anexou o thin (invocação por job,
     // reprocessamento ou teste), reconstruímos a superfície mínima de IDs.
     visit_id: payload.visit_id ?? null,
@@ -83,9 +83,9 @@ function buildAuditPayload(payload: SimulationPayload): Record<string, any> {
     simulation_id: payload.simulation_id ?? null,
     product_id: payload.product_id ?? null,
     partner_id: payload.partner_id ?? null,
-    action: (payload as any).action ?? null,
-    action_description: (payload as any).action_description ?? null,
-    step: (payload as any).step ?? null,
+    action: payload.action ?? null,
+    action_description: payload.action_description ?? null,
+    step: payload.step ?? null,
     target_url: payload.target_url ?? null,
     interaction_context: payload.interaction_context ?? null,
     simulation_details: payload.simulation_details ?? null,
@@ -106,9 +106,9 @@ function buildAuditPayload(payload: SimulationPayload): Record<string, any> {
     integration_method: payload.integration_method ?? null,
 
     // Proveniência forense: de onde veio a oferta e qual config casou.
-    hydration_source: (payload as any).hydration_source ?? null,
-    config_matched_by: (payload as any).config_matched_by ?? null,
-    orchestrator_config_id: (payload as any).orchestrator_config_id ?? null,
+    hydration_source: payload.hydration_source ?? null,
+    config_matched_by: payload.config_matched_by ?? null,
+    orchestrator_config_id: payload.orchestrator_config_id ?? null,
   };
 }
 
@@ -121,7 +121,7 @@ function buildAuditPayload(payload: SimulationPayload): Record<string, any> {
  * Financiamento imobiliário não tem garantia informada (o imóvel é a oferta).
  */
 async function persistCollateral(t: any, simulationId: string | number, payload: SimulationPayload): Promise<void> {
-  const sim = (payload.simulation_details ?? {}) as Record<string, any>;
+  const sim = (payload.simulation_details ?? {}) as Record<string, unknown>;
   const n = (v: unknown) => (v === undefined || v === null || v === "" || isNaN(Number(v)) ? null : Number(v));
   const int = (v: unknown) => { const x = n(v); return x === null ? null : Math.trunc(x); };
   const str = (v: unknown) => (v === undefined || v === null || String(v).trim() === "" ? null : String(v).trim());
@@ -267,7 +267,17 @@ function stageFor(statusId: number | null | undefined, step: string, partnerId: 
  * Usado no INSERT e no UPDATE: nas jornadas em que a simulação vem antes (FlowCredi
  * imóveis/home equity), os aceites só chegam no envio do lead, que é um UPDATE.
  */
-function buildConsentRows(t: any, simulationId: string | number, payload: SimulationPayload, infra: any): any[] {
+/** Aceite como chega do front (accepted ou acceptedConsents). */
+type ConsentInput = {
+  consent_id?: string;
+  accepted?: boolean;
+  acceptedConsents?: boolean;
+  accepted_at?: string;
+  acceptedConsents_at?: string;
+  legal_text_snapshot?: unknown;
+};
+
+function buildConsentRows(t: any, simulationId: string | number, payload: SimulationPayload, infra: OriginDetails): any[] {
   const consents = payload.consents ?? [];
   if (!Array.isArray(consents) || consents.length === 0) return [];
   const entity = (payload.entity as Entity) ?? {};
@@ -275,7 +285,7 @@ function buildConsentRows(t: any, simulationId: string | number, payload: Simula
   const seller = (payload.seller as Seller) ?? {};
   const event = (payload.event as Event) ?? {};
   const offer = (payload.offer as Offer) ?? {};
-  return consents.map((c: any) => {
+  return consents.map((c: ConsentInput) => {
     const isAccepted = c.accepted === true || c.acceptedConsents === true;
     const acceptedAt = c.accepted_at || c.acceptedConsents_at || new Date().toISOString();
     return {
@@ -467,7 +477,7 @@ export async function insertSimulationData(
       }
 
       // 📦 PERSISTE NOTIFICAÇÕES (BULK INSERT)
-      const notifications = (gatewayResult as any).raw?.notifications;
+      const notifications = gatewayResult.raw?.notifications;
       if (Array.isArray(notifications) && notifications.length > 0) {
         const notifRows = notifications.map(n => ({
           context_type: 'SIMULATION', visit_id: payload.visit_id || null, visit_update_id: payload.visit_update_id || null,
@@ -679,7 +689,7 @@ export async function updateSimulationData(
         parallelTasks.push(t`INSERT INTO simulation_consults ${t(consultsRows)}`);
       }
 
-      const notifications = (gatewayResult as any).raw?.notifications;
+      const notifications = gatewayResult.raw?.notifications;
       if (Array.isArray(notifications) && notifications.length > 0) {
         const notifRows = notifications.map(n => ({
           context_type: 'SIMULATION', visit_id: payload.visit_id || null, visit_update_id: payload.visit_update_id || null,

@@ -10,8 +10,11 @@
  * `renderOfferButton(payload.offer)` onde o botão deve aparecer.
  */
 
+/** Campos da oferta usados no link (payload.offer). */
+type OfferLink = { offer_id?: string | number | null; offer_description?: string | null } | null | undefined;
+
 /** Mesmo formato de URL usado pelo front (getSuperbidUrl). */
-export function superbidOfferUrl(offer: any): string | null {
+export function superbidOfferUrl(offer: OfferLink): string | null {
   if (!offer?.offer_id) return null;
   const slug = String(offer.offer_description || "")
     .toLowerCase()
@@ -26,7 +29,7 @@ export const OFFER_BUTTON_CSS =
   "td.sbx-offer-btn:hover{background:#171717 !important;} td.sbx-offer-btn:hover a{color:#ffffff !important;}";
 
 /** Célula do botão (para usar dentro de uma <tr>, sozinha ou ao lado de outro botão). */
-export function renderOfferButtonCell(offer: any, fontStack = "'Inter', Arial, sans-serif"): string {
+export function renderOfferButtonCell(offer: OfferLink, fontStack = "'Inter', Arial, sans-serif"): string {
   const url = superbidOfferUrl(offer);
   if (!url) return "";
   return `
@@ -38,7 +41,7 @@ export function renderOfferButtonCell(offer: any, fontStack = "'Inter', Arial, s
 }
 
 /** Botão centralizado, em bloco próprio. */
-export function renderOfferButton(offer: any, marginTop = 24, fontStack?: string): string {
+export function renderOfferButton(offer: OfferLink, marginTop = 24, fontStack?: string): string {
   const cell = renderOfferButtonCell(offer, fontStack);
   if (!cell) return "";
   return `

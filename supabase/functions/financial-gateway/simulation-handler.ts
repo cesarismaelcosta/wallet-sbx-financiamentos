@@ -92,7 +92,7 @@ export async function processSimulation(
   // Mantemos a validação para quando o motor é invocado por OUTRO caminho
   // (job, reprocessamento, teste), onde a marca não existe.
   // =========================================================================
-  if (!(payload as any).__integrity_validated) {
+  if (!payload.__integrity_validated) {
   try {
     // IMPORTANTE: Aqui usamos o `entity_id` já garantido (Server-Side) pelo Gateway Hydration
     await validateSimulationIntegrity(
@@ -105,7 +105,8 @@ export async function processSimulation(
       },
       "link", // Consistência eventual do vínculo visit_offers (waitUntil em voo)
     );
-  } catch (err: any) {
+  } catch (caught: unknown) {
+    const err = caught as Error;
     debugLog("🚨 [Motor Simulação] Falha na validação de integridade:", err.message);
 
     let userMessage = "Ocorreu um erro ao processar sua simulação.";
@@ -124,9 +125,9 @@ export async function processSimulation(
         errorCode = "FORBIDDEN";
     }
 
-    const errorForUI = new Error(userMessage);
-    (errorForUI as any).errorCode = errorCode;
-    (errorForUI as any).fallback_url = targetFallback;
+    const errorForUI: Error & { errorCode?: string; fallback_url?: string } = new Error(userMessage);
+    errorForUI.errorCode = errorCode;
+    errorForUI.fallback_url = targetFallback;
 
     throw errorForUI;
   }
@@ -196,13 +197,13 @@ export async function processSimulation(
   const action = 'SIMULATE'; // Ação master de funil para o Painel
 
   // ✨ FUNÇÃO DE AUTO-CURA: Gera um retorno padronizado quando qualquer parceiro cai.
-  const buildFallbackResult = (err: any): SimulationResponse => ({
+  const buildFallbackResult = (err: unknown): SimulationResponse => ({
     success: false,
     message: "Serviço indisponível no parceiro no momento.",
     consults: [{
       status_id: STATUS.FALHA, // Falha (status_types 8): parceiro fora do ar / timeout
       is_selected: true,
-      message: err?.message || "Timeout/Falha na API do Parceiro",
+      message: (err as Error | null | undefined)?.message || "Timeout/Falha na API do Parceiro",
       // Campos do contrato Consultation: gravados no UPDATE/INSERT (postgres.js recusa undefined)
       external_operation_id: null,
       financial_institution_id: null,
@@ -215,7 +216,7 @@ export async function processSimulation(
       cet_rate: null,
       installment_value: null,
     }],
-    raw: { error: err?.message, stack: err?.stack }
+    raw: { error: (err as Error | null | undefined)?.message, stack: (err as Error | null | undefined)?.stack }
   });
 
   switch (payload.partner_id) {
@@ -232,7 +233,7 @@ export async function processSimulation(
         // 🛡️ Passa `resolvedConfig.rules` explicitamente (nunca `payload.rules`, que pode
         // ter sido ecoado do cliente) — o motor especializado valida contra isso.
         gatewayResult = await processSimulationCreditCard(payload, resolvedConfig.rules ?? {});
-      } catch (err: any) {
+      } catch (err: unknown) {
         gatewayResult = buildFallbackResult(err);
         await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, 'EXECUTE_SIMULATION', true);
         throw err; // Propaga o erro para a UI após garantir a persistência
@@ -255,7 +256,7 @@ export async function processSimulation(
         // ter sido ecoado do cliente) — o motor especializado valida ANTES de acionar
         // a API real da Fandi.
         gatewayResult = await processSimulationFandi(payload, resolvedConfig.rules ?? {}, supabase);
-      } catch (err: any) {
+      } catch (err: unknown) {
         gatewayResult = buildFallbackResult(err);
         await insertSimulationData(sql, payload, infra, gatewayResult, action, payload.action_description, 'EXECUTE_SIMULATION', true);
         throw err;
@@ -287,8 +288,8 @@ export async function processSimulation(
         let flow: Awaited<ReturnType<typeof processFlowcrediMortgage>>;
         try {
           flow = await processFlow(payload, resolvedConfig.rules ?? {}, step);
-        } catch (err: any) {
-          if (isNewSimulation) (payload as any).simulation_id = undefined;
+        } catch (err: unknown) {
+          if (isNewSimulation) payload.simulation_id = undefined as unknown as string;
           // Erro de validação (mensagem amigável) não vira registro; falha do parceiro sim.
           if (!isFlowBusinessError(err) && payload.simulation_id) {
             gatewayResult = buildFallbackResult(err);
@@ -299,7 +300,7 @@ export async function processSimulation(
 
         gatewayResult = flow.result;
         if (!flow.persist) {
-          if (isNewSimulation) (payload as any).simulation_id = undefined;
+          if (isNewSimulation) payload.simulation_id = undefined as unknown as string;
           break;
         }
 
@@ -326,7 +327,7 @@ export async function processSimulation(
     default:
       throw new Error(
         `BUSINESS_ERROR: Parceiro (ID: ${payload.partner_id}) não configurado no Motor. ` +
-        `Config resolvida via ${(payload as any).config_matched_by ?? "nenhum eixo"}.`
+        `Config resolvida via ${payload.config_matched_by ?? "nenhum eixo"}.`
       );
   }
 

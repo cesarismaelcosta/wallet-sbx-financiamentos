@@ -99,14 +99,17 @@ function validateThinPayload(payload: ThinPayload, isS2S: boolean = false): { ac
   return { action };
 }
 
-function toUiError(err: any, fallbacks: { origin: string; auth: string }, method: string) {
+/** Erro com código e rota de retorno para a UI. */
+type UiError = Error & { errorCode?: string; fallback_url?: string };
+
+function toUiError(err: unknown, fallbacks: { origin: string; auth: string }, method: string): UiError {
   let message = "Ocorreu um erro ao processar sua requisicao.";
   let code = "UNKNOWN_ERROR";
   
   // O padrão é ejetar pro "/" no GET (evita loop) e manter na origem no POST
   let fallback_url = method === "GET" ? "/" : fallbacks.origin;
 
-  const raw = String(err?.message || "");
+  const raw = String((err as Error | null | undefined)?.message || "");
 
   if (raw.includes("OFFER_NOT_FOUND")) {
     message = "Esta oferta nao esta mais disponivel ou nao foi encontrada.";
@@ -144,14 +147,17 @@ function toUiError(err: any, fallbacks: { origin: string; auth: string }, method
     message = raw;
   }
 
-  const uiError = new Error(message);
-  (uiError as any).errorCode = code;
-  (uiError as any).fallback_url = fallback_url;
+  const uiError: UiError = new Error(message);
+  uiError.errorCode = code;
+  uiError.fallback_url = fallback_url;
   return uiError;
 }
 
 // ✨ FIX: Prevenção de Injeção em Logs - Chaves criptográficas NUNCA podem ser 
 // persistidas no banco na coluna raw_payload.
+/** Runtime do Supabase Edge (waitUntil para tarefas em segundo plano). */
+type EdgeRuntimeLike = { waitUntil?: (p: Promise<unknown>) => void };
+
 const SECRET_KEYS = new Set([
   "auth_token",
   "session_token",
@@ -162,18 +168,19 @@ const SECRET_KEYS = new Set([
   "handoff_token",
 ]);
 
-const sanitizePayload = (obj: any): any => {
-  if (obj === null || obj === undefined) return null;
+const sanitizePayload = <T,>(obj: T): T => {
+  if (obj === null || obj === undefined) return null as T;
   if (typeof obj !== "object") return obj;
-  if (Array.isArray(obj)) return obj.map(sanitizePayload);
+  if (Array.isArray(obj)) return obj.map(sanitizePayload) as T;
 
-  const sanitized: Record<string, any> = {};
-  for (const key of Object.keys(obj)) {
+  const source = obj as Record<string, unknown>;
+  const sanitized: Record<string, unknown> = {};
+  for (const key of Object.keys(source)) {
     if (SECRET_KEYS.has(key.toLowerCase())) continue;
-    const val = obj[key];
+    const val = source[key];
     sanitized[key] = val === undefined ? null : sanitizePayload(val);
   }
-  return sanitized;
+  return sanitized as T;
 };
 
 /**
@@ -210,7 +217,9 @@ serve(
       // hidratado da visita (`hydrateVisitContext`, mais abaixo).
       const auth = secCtx?.auth;
 
-      const sessionUserId = auth?.user_id || (auth as any)?.userId || (auth as any)?.sub || (auth as any)?.payload?.sub || null;
+      // Formatos antigos do contexto de auth (userId / sub / payload.sub)
+      const legacyAuth = auth as (typeof auth & { userId?: string; sub?: string; payload?: { sub?: string } }) | undefined;
+      const sessionUserId = auth?.user_id || legacyAuth?.userId || legacyAuth?.sub || legacyAuth?.payload?.sub || null;
 
       // =====================================================================
       // PIPELINE DE LEITURA (GET): Hidratação do Front-End
@@ -234,7 +243,7 @@ serve(
             visitId,
             visitUpdateId,
             userId: sessionUserId,
-            environment: auth.environment as "staging" | "production",
+            environment: auth!.environment as "staging" | "production",
             mode: isHomeRoute ? "light" : "full",
           });
 
@@ -253,7 +262,7 @@ serve(
               ctx.trustedSeller
             );
             
-            const rt = (globalThis as any).EdgeRuntime;
+            const rt = (globalThis as typeof globalThis & { EdgeRuntime?: EdgeRuntimeLike }).EdgeRuntime;
             if (rt && typeof rt.waitUntil === "function") {
               rt.waitUntil(syncPromise);
             } else {
@@ -295,7 +304,7 @@ serve(
             visit_id: visitId,
             visit_update_id: visitUpdateId,
             simulation_id: simulationId || null,
-            product_id: config.product_id ?? ctx.productId ?? null,
+            product_id: ctx.productId ?? null,
             partner_id: config.partner_id ?? null,
             origin_url: ctx.originUrl || "",
             target_url: ctx.targetUrl || "",
@@ -344,17 +353,18 @@ serve(
 
           debugLog("Payload construído: ", hydratedPayload);
           return { status: 200, data: hydratedPayload };
-        } catch (error: any) {
+        } catch (caught: unknown) {
+          const error = caught as UiError;
           const uiError = toUiError(error, fallbacks, req.method);
-          debugLog(`[Orquestrador GET Error]: ${error?.message} -> ${(uiError as any).errorCode}`);
+          debugLog(`[Orquestrador GET Error]: ${error?.message} -> ${uiError.errorCode}`);
 
           return {
             status: 400,
             data: {
               success: false,
-              code: (error as any).errorCode || (uiError as any).errorCode,
+              code: error.errorCode || uiError.errorCode,
               message: uiError.message,
-              fallback_url: (error as any).fallback_url || (uiError as any).fallback_url || "/",
+              fallback_url: error.fallback_url || uiError.fallback_url || "/",
             },
           };
         }
@@ -374,7 +384,7 @@ serve(
           
           // 🔒 ZERO-TRUST: 1º allowlist (descarta chaves fora do contrato),
           // 2º normalização (undefined -> null) e remoção de segredos.
-          const thin: ThinPayload = sanitizePayload(pickThin(rawPayload));
+          const thin = sanitizePayload(pickThin(rawPayload)) as ThinPayload;
 
           thin.interaction_context = thin.interaction_context || {};
 
@@ -412,7 +422,7 @@ serve(
             offerId: targetOfferId,
             userId: userIdForHydrate, // Aqui estava o erro! Restaurado o seu ID.
             trustedS2SEntity: validatedS2SEntity,
-            environment: auth.environment as "staging" | "production",
+            environment: auth!.environment as "staging" | "production",
             mode: NAVIGATION_ACTIONS.includes(action) && !targetOfferId ? "light" : "full",
           });
           debugLog("[POST STEP 2] Hydration concluída com sucesso.");
@@ -426,9 +436,9 @@ serve(
                 sessionUserId: sessionUserId,
               });
               debugLog("[POST STEP 3] Ownership validado.");
-            } catch (err: any) {
-              debugLog("[Gatekeeper POST] Falha na validacao:", err?.message);
-              throw toUiError(err, fallbacks);
+            } catch (err: unknown) {
+              debugLog("[Gatekeeper POST] Falha na validacao:", (err as Error | null | undefined)?.message);
+              throw toUiError(err, fallbacks, req.method);
             }
           }
 
@@ -456,7 +466,7 @@ serve(
             product_id: thin.product_id ?? null,
             raw_client_payload: thin,
             hydration_source: ctx.source ?? null,
-          } as OrchestratorPayload;
+          } as unknown as OrchestratorPayload; // thin do cliente + snapshots hidratados (interaction_context vem do thin)
 
           const categoryId = ctx.trustedOffer?.category_id ?? null;
           const subcategoryId = ctx.trustedOffer?.subcategory_id ?? null;
@@ -599,11 +609,11 @@ serve(
           };
 
           const isNavigationAction = NAVIGATION_ACTIONS.includes(targetAction) && !isNewVisit;
-          const rt = (globalThis as any).EdgeRuntime;
+          const rt = (globalThis as typeof globalThis & { EdgeRuntime?: EdgeRuntimeLike }).EdgeRuntime;
 
           if (isNavigationAction && rt && typeof rt.waitUntil === "function") {
             rt.waitUntil(
-              buildPersistPromise().catch((err: any) => console.error("[Background Persist Error]:", err?.message || err))
+              buildPersistPromise().catch((err: unknown) => console.error("[Background Persist Error]:", (err as Error | null | undefined)?.message || err))
             );
           } else {
             await buildPersistPromise();
@@ -623,7 +633,8 @@ serve(
             },
           };
 
-        } catch (error: any) {
+        } catch (caught: unknown) {
+          const error = caught as UiError;
           debugLog(`[Orquestrador POST Error REAL]: ${error?.message}`, error);
 
           // ✨ Aplica o formatador de erros visuais (toUiError) 
@@ -634,17 +645,18 @@ serve(
             status: 400,
             data: {
               success: false,
-              code: (uiError as any).errorCode,
+              code: uiError.errorCode,
               message: uiError.message,
               // Mantém o fallback que o erro possa ter injetado, ou usa o do toUiError
-              fallback_url: (error as any).fallback_url || (uiError as any).fallback_url || originPath,
+              fallback_url: error.fallback_url || uiError.fallback_url || originPath,
             },
           };
         }
       }
 
       return { status: 405, data: { error: "Metodo HTTP nao permitido." } };
-    } catch (fatalError: any) {
+    } catch (caught: unknown) {
+      const fatalError = caught as Error | null | undefined;
       debugLog(`[CRASH FATAL INTERCEPTADO]: ${fatalError?.message}`);
 
       return {

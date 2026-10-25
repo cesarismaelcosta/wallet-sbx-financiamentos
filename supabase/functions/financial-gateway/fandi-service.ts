@@ -28,7 +28,8 @@ import {
   Seller
 } from "../_shared/types.ts";
 
-import { Entity, Offer } from "../_shared/types.ts";
+import { Entity, Offer, JourneyRules } from "../_shared/types.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { STATUS } from "../_shared/types.ts";
 import { generateSignature } from '../_shared/crypto.ts';
 import { generateUserEmailNotificationHtml } from "./fandi-notifications.ts";
@@ -67,9 +68,9 @@ function generateCpfFromSellerId(sellerId: string | number): string {
  * ============================================================================
  */
 export async function processSimulationFandi(
-  payload: any,
-  trustedRules: Record<string, any>,
-  supabase: any,
+  payload: SimulationPayload,
+  trustedRules: JourneyRules,
+  supabase: SupabaseClient,
 ): Promise<SimulationResponse> {
 
   // --------------------------------------------------------------------------
@@ -110,7 +111,7 @@ export async function processSimulationFandi(
   
   // Lacramos a identidade da simulação e o momento do envio para evitar ataques de replay
   const payloadToSign = `${payload.simulation_id}.${simulationUpdateId}.${timestamp}`;
-  const signature = await generateSignature(payloadToSign, MASTER_SECRET);
+  const signature = await generateSignature(payloadToSign, MASTER_SECRET ?? "");
 
   // [FIX]: antes cravava a URL de um projeto específico -- quebrava em
   // qualquer outro ambiente (o Fandi recebia a URL errada de callback e
@@ -121,7 +122,7 @@ export async function processSimulationFandi(
 
   const GUID_URL = 'https://core.fandi.com.br/v2/checkout/obter-guid';
 
-  const codigoParceiro = `${payload.event.event_id}/${payload.offer.offer_id}`;
+  const codigoParceiro = `${payload.event!.event_id}/${payload.offer!.offer_id}`;
   const sellerId = payload.seller?.seller_id;
   const SEND_CPF_VENDEDOR = false;
   const cpfVendedor = (SEND_CPF_VENDEDOR && sellerId) ? generateCpfFromSellerId(sellerId) : null;
@@ -214,7 +215,7 @@ export async function processSimulationFandi(
     debugLog(`[Fandi GUID] HTTP ${guidResponse.status}`, { url: GUID_URL, bodyGuid });
     guidResult = await guidResponse.json();
     debugLog("[Fandi GUID] Resposta bruta recebida.", guidResult);
-  } catch (error: any) {
+  } catch (error: unknown) {
     debugLog("Erro de comunicação com Fandi (GUID).", bodyGuid);
     return buildErrorResponse(8, "Erro de comunicação com Fandi (GUID).", simulation, error);
   }
@@ -244,7 +245,7 @@ export async function processSimulationFandi(
     const responseText = await contextResponse.text();
     if (!contextResponse.ok) throw new Error(`FANDI_HTTP_${contextResponse.status}: ${responseText}`);
     contextData = JSON.parse(responseText);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return buildErrorResponse(8, "Erro de conexão ao recuperar contexto Fandi.", simulation, error);
   }
   
@@ -304,7 +305,7 @@ export async function processSimulationFandi(
           body: JSON.stringify(bodySimulacao)
       });
       simResult = await simResponse.json();
-  } catch (error: any) {
+  } catch (error: unknown) {
       return buildErrorResponse(8, "Erro de rede na simulação", simulation, error);
   }
 
@@ -432,7 +433,7 @@ export async function processSimulationFandi(
               dadosSimulacao.mensagem = incResult.message || "Erro no registro da proposta (Inclusão).";
           }
       }
-  } catch (error: any) {
+  } catch (error: unknown) {
       if (dadosSimulacao.status_id === STATUS.PRE_APROVADO) {
           dadosSimulacao.status_id = STATUS.FALHA;
           dadosSimulacao.mensagem = "Falha na inclusão na Fandi.";
@@ -496,7 +497,7 @@ export async function processSimulationFandi(
  * Centraliza o envelopamento de falhas de rede, parse JSON ou recusas não mapeadas,
  * garantindo compatibilidade estrita com a interface `SimulationResponse`.
  */
-function buildErrorResponse(statusId: number, message: string, simulation: any, rawData: any): SimulationResponse {
+function buildErrorResponse(statusId: number, message: string, simulation: SimulationFinancials, rawData: unknown): SimulationResponse {
   return { 
     success: false, 
     message: message,

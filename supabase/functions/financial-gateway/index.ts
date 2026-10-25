@@ -48,6 +48,7 @@ import { debugLog } from "../_shared/logger.ts";
 import { hydrateVisitContext, pickThin } from "../_shared/hydrate-data.ts";
 import { resolveOrchestratorConfigs } from "../_shared/orchestrator-configs.ts";
 import { sql } from "../_shared/db.ts";
+import type { SimulationPayload } from "../_shared/types.ts";
 
 import { getSafeRedirectUrl } from "../_shared/security.ts";
 
@@ -57,7 +58,7 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
   const authPath = getSafeRedirectUrl(req.headers.get("x-auth-fallback-url") || SIGNIN_ROUTE);
 
   // Escopo amplo para acesso nos Catchs e tratamento de sessão
-  let payload: any = null;
+  let payload: SimulationPayload | null = null;
 
   try {
     // =========================================================================
@@ -99,7 +100,7 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
       // 🔥 [THIN PAYLOAD ENFORCEMENT]:
       // Joga fora sumariamente qualquer CPF, Valor ou Oferta que o Front-end mandou.
       // Fica apenas com IDs (visit, offer, etc) e inputs selecionados (Prazo, Entrada).
-      let rawClientPayload: any;
+      let rawClientPayload: unknown;
       try {
         rawClientPayload = JSON.parse(rawBody);
       } catch {
@@ -177,7 +178,7 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
         // Snapshot sanitizado (THIN) do que o cliente realmente pediu.
         // ⚠️ SECURITY REVIEW: nunca persistir `rawBody` cru — carrega PII/valores injetados.
         raw_client_payload: thin,
-      };
+      } as unknown as SimulationPayload; // snapshots confiáveis (null quando ausentes) + thin do cliente
 
       // ---------------------------------------------------------------------
       // 3. GATEKEEPERS AUTÔNOMOS (Sem necessidade de I/O de rede)
@@ -225,7 +226,8 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
         data: result
       };
 
-    } catch (err: any) {
+    } catch (caught: unknown) {
+      const err = caught as Error;
       debugLog("[GATEWAY ERROR]:", err.message);
 
       let errorCode = "BUSINESS_ERROR";
@@ -234,7 +236,7 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
       // REGRA DE OURO DE FALLBACK:
       // Se a jornada for abortada, enviamos o cliente de volta para o item de origem
       // 🛡️ Previne Open Redirect: origin_url vem do payload do cliente e precisa ser saneado.
-      let finalFallback = getSafeRedirectUrl(payload?.origin_url || originPath);
+      let finalFallback = getSafeRedirectUrl((payload as SimulationPayload | null)?.origin_url || originPath);
 
       if (err.message.includes("OFFER_NOT_AVAILABLE") || err.message.includes("OFFER_NOT_FOUND")) {
           userMessage = "Esta oferta não está mais disponível ou não foi encontrada para simulação.";
@@ -266,7 +268,8 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
         }
       };
     }
-  } catch (fatalError: any) {
+  } catch (caught: unknown) {
+    const fatalError = caught as Error;
     // =========================================================================
     // O FAILSAFE ABSOLUTO (Crash da Function / Banco)
     // =========================================================================
@@ -278,7 +281,7 @@ serve(withSecurity('financial-gateway', async (req: Request, secCtx?: RequestCon
             success: false,
             code: "INTERNAL_SERVER_ERROR",
             message: "Ocorreu um erro interno inesperado no Gateway. Tente novamente.",
-            fallback_url: getSafeRedirectUrl(payload?.origin_url || originPath)
+            fallback_url: getSafeRedirectUrl((payload as SimulationPayload | null)?.origin_url || originPath)
         }
     };
   }

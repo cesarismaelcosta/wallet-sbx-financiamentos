@@ -99,8 +99,8 @@ export interface TrustedOfferBundle {
 export type HydrationMode = "light" | "full";
 
 export interface HydratedContext {
-  visitExists: true;
-  visitUpdateId: string;
+  visitExists: boolean;
+  visitUpdateId?: string;
   productId: number | null;
   utmSource: string | null;
   utmMedium: string | null;
@@ -156,9 +156,9 @@ function sanitizeDateISO(dateInput: any): string | null {
  */
 export async function hydrateVisitContext(args: {
   sql: any;
-  visitId: string;
-  visitUpdateId: string;
-  offerId?: string | null;
+  visitId?: string;
+  visitUpdateId?: string;
+  offerId?: string | number | null;
   userId?: string | null;
   environment: "staging" | "production";
   mode?: HydrationMode;

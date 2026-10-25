@@ -25,6 +25,7 @@
 
 import { debugLog } from "../_shared/logger.ts";
 import type { OrchestratorPayload, OriginDetails } from "../_shared/types.ts";
+import type { HydratedContext } from "../_shared/hydrate-data.ts";
 
 export async function persistVisitData(
   sql: any,
@@ -179,7 +180,7 @@ export async function persistVisitData(
       }
 
       // 3.4. Determinismo Temporal LGPD (Consentimentos)
-      if (payload.consents?.length > 0) {
+      if (payload.consents && payload.consents.length > 0) {
         for (const c of payload.consents) {
           const acceptedValue = c.accepted === true || c.acceptedConsents === true;
           const acceptedAt = c.accepted_at || c.acceptedConsents_at || new Date().toISOString();
@@ -231,7 +232,9 @@ export async function persistVisitData(
  * ocorridas no Upstream (Superbid) após a criação da visita, sem onerar o TTI do front.
  */
 export async function syncHydratedOffer(
-  sql: any, visitId: string, visitUpdateId: string, offer: any, event: any, manager: any, seller: any
+  sql: any, visitId: string, visitUpdateId: string,
+  offer: HydratedContext["trustedOffer"], event: HydratedContext["trustedEvent"],
+  manager: HydratedContext["trustedManager"], seller: HydratedContext["trustedSeller"],
 ): Promise<void> {
   if (!offer?.offer_id) return;
   try {
