@@ -306,8 +306,9 @@ async function loadInstitutions(items: FlowSimItem[]): Promise<Map<string, Insti
   const ids = [...new Set(items.map((it) => BANK_CODES[normBank(it.banco)]).filter((v): v is number => !!v))];
   if (ids.length === 0) return byBank;
   try {
-    const rows = await sql`select id, logo_url from financial_institutions where id in ${sql(ids)} and is_active = true`;
-    const byId = new Map<number, Institution>(rows.map((r: { id: number | string; logo_url: string | null }) => [Number(r.id), { id: Number(r.id), logo_url: r.logo_url ?? null }]));
+    // Linhas do postgres.js chegam como Row genérico: tipadas pelas colunas do select
+    const rows = (await sql`select id, logo_url from financial_institutions where id in ${sql(ids)} and is_active = true`) as unknown as { id: number | string; logo_url: string | null }[];
+    const byId = new Map<number, Institution>(rows.map((r) => [Number(r.id), { id: Number(r.id), logo_url: r.logo_url ?? null }]));
     for (const it of items) {
       const inst = byId.get(BANK_CODES[normBank(it.banco)]);
       if (inst) byBank.set(normBank(it.banco), inst);
