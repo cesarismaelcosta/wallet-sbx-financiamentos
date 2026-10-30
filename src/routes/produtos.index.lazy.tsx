@@ -576,7 +576,7 @@ export function ProdutosHome() {
 
                       <div className="space-y-2 flex-1 text-left">
                         <div className="inline-flex items-center space-x-2 fill-gradient px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
-                          <span>Conta SBX Pay</span>
+                          <span>CONTA SBXPAY</span>
                         </div>
                         <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100 leading-[1.15]">
                           Segurança para <span className="serif font-normal text-neutral-900 dark:text-neutral-100">comprar e vender.</span>
