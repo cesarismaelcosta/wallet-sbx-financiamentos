@@ -576,7 +576,7 @@ export function ProdutosHome() {
 
                       <div className="space-y-2 flex-1 text-left">
                         <div className="inline-flex items-center space-x-2 fill-gradient px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
-                          <span>Conta sbXPAY</span>
+                          <span>Conta SBX Pay</span>
                         </div>
                         <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100 leading-[1.15]">
                           Segurança para <span className="serif font-normal text-neutral-900 dark:text-neutral-100">comprar e vender.</span>
@@ -585,39 +585,33 @@ export function ProdutosHome() {
                     </div>
 
                     <p className="text-sm md:text-base text-neutral-600 dark:text-neutral-400 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                      A plataforma líder da América Latina tem uma infraestrutura segura e inovadora, com a proteção que
-                      seu patrimônio exige.
+                      Seu dinheiro e seus dados protegidos da oferta ao pagamento, com a infraestrutura que organiza o
+                      mercado de ativos reais.
                     </p>
 
-                    <div className="border-t border-neutral-200 dark:border-neutral-800 pt-5 space-y-4 text-left max-w-xl mx-auto lg:mx-0">
-                      <div className="flex items-start space-x-3">
-                        <div className="shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
+                    <div className="flex flex-col gap-4 text-left max-w-xl mx-auto lg:mx-0">
+                      <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-4 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50">
+                        <div className="flex items-center gap-2">
                           <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#2246A7]" strokeWidth={2} />
-                        </div>
-                        <div>
-                          <h4 className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-1.5 md:mt-1">
+                          <h4 className="font-mono text-[11px] md:text-[13px] uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
                             Seu dinheiro sempre protegido
                           </h4>
-                          <p className="text-neutral-600 dark:text-neutral-400 text-xs mt-2 leading-relaxed">
-                            Fique tranquilo na hora de comprar. Os valores das suas negociações ficam guardados em
-                            contas pagamento de nossa Instituição de Pagamento regulada pelo Banco Central.
-                          </p>
                         </div>
+                        <p className="text-neutral-600 dark:text-neutral-400 text-[13px] leading-relaxed mt-1">
+                          Compre com tranquilidade. Até o negócio ser concluído, o valor fica guardado em uma conta
+                          regulada pelo Banco Central.
+                        </p>
                       </div>
-
-                      <div className="flex items-start space-x-3">
-                        <div className="shrink-0 w-8 h-8 flex items-center justify-center mt-0.5">
+                      <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-4 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50">
+                        <div className="flex items-center gap-2">
                           <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#2246A7]" strokeWidth={2} />
-                        </div>
-                        <div>
-                          <h4 className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-1.5 md:mt-1">
-                            Padrão máximo de segurança
+                          <h4 className="font-mono text-[11px] md:text-[13px] uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
+                            Segurança de ponta a ponta
                           </h4>
-                          <p className="text-neutral-600 dark:text-neutral-400 text-xs mt-2 leading-relaxed">
-                            As liquidações das suas compras acontecem em um ambiente com auditoria rigorosa e proteção
-                            total dos seus dados.
-                          </p>
                         </div>
+                        <p className="text-neutral-600 dark:text-neutral-400 text-[13px] leading-relaxed mt-1">
+                          Cada pagamento é feito com total segurança, em um ambiente auditado, e seus dados ficam protegidos o tempo todo.
+                        </p>
                       </div>
                     </div>
 
@@ -732,41 +726,40 @@ export function ProdutosHome() {
                           <span>Até R$ 120 mil</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight leading-snug">
-                          Parcele em <span className="serif font-normal text-neutral-900 dark:text-neutral-100">até 18x com seu cartão.</span>
+                          Parcele em <span className="serif font-normal text-neutral-900 dark:text-neutral-100">até 18x no cartão.</span>
                         </h2>
                       </div>
                     </div>
                     <p className="text-sm md:text-base text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                      Não deixe um bom negócio escapar. Amplie seu poder de compra usando o limite do seu cartão de
-                      crédito com total tranquilidade na hora de pagar.
+                      Encontrou um bom negócio? Use o limite do seu cartão de crédito e pague em parcelas, com toda a
+                      segurança.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                       <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-4 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50">
                         <div className="flex items-center gap-2">
                           <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#2246A7]" strokeWidth={2} />
-                          <span className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
-                            Para PF e PJ
+                          <span className="font-mono text-[11px] md:text-[13px] uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
+                            Para você e sua empresa
                           </span>
                         </div>
-                        <p className="text-neutral-600 dark:text-neutral-400 text-xs leading-relaxed mt-1">
-                          Condições válidas para pessoas físicas e jurídicas aproveitarem o parcelamento com cartão.
+                        <p className="text-neutral-600 dark:text-neutral-400 text-[13px] leading-relaxed mt-1">
+                          Parcelamento disponível para o seu cartão ou para o cartão da sua empresa.
                         </p>
                       </div>
                       <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-4 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50">
                         <div className="flex items-center gap-2">
                           <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#2246A7]" strokeWidth={2} />
-                          <span className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
-                            Segurança com 3DS
+                          <span className="font-mono text-[11px] md:text-[13px] uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
+                            Compra protegida
                           </span>
                         </div>
-                        <p className="text-neutral-600 dark:text-neutral-400 text-xs leading-relaxed mt-1">
-                          Protocolo avançado de autenticação (3D Secure) ativado para garantir transações protegidas e
-                          sem fraudes.
+                        <p className="text-neutral-600 dark:text-neutral-400 text-[13px] leading-relaxed mt-1">
+                          Seu banco faz uma verificação extra para confirmar que a compra é sua.
                         </p>
                       </div>
                     </div>
                     <div className="pt-2">
-                      {renderButton("Ofertas parceladas", "cartao")}
+                      {renderButton("Ver ofertas parceladas", "cartao")}
                     </div>
                   </div>
                   {isDesktop && (
@@ -852,38 +845,36 @@ export function ProdutosHome() {
                       </div>
                     </div>
                     <p className="text-sm md:text-base text-neutral-600 dark:text-neutral-400 leading-relaxed max-w-2xl">
-                      Compre seu carro ou caminhão com as melhores taxas do mercado. Nós fazemos o trabalho pesado de
-                      assessoria, buscando as melhores opções nos maiores bancos do país.
+                      Escolha o veículo e deixe o financiamento com a gente. Comparamos as condições dos principais
+                      bancos do país e apresentamos a melhor opção para você.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 w-full max-w-2xl">
                       <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-4 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50">
                         <div className="flex items-center gap-2">
                           <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#2246A7]" strokeWidth={2} />
-                          <span className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
-                            Para PF e PJ
+                          <span className="font-mono text-[11px] md:text-[13px] uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
+                            Para você e sua empresa
                           </span>
                         </div>
-                        <p className="text-neutral-600 dark:text-neutral-400 text-xs leading-relaxed mt-1">
-                          Nossos especialistas conseguem buscar financiamentos para pessoas físicas e jurídicas e guiar
-                          você por toda a jornada.
+                        <p className="text-neutral-600 dark:text-neutral-400 text-[13px] leading-relaxed mt-1">
+                          Um especialista acompanha você do pedido até a assinatura.
                         </p>
                       </div>
                       <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-none p-4 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50">
                         <div className="flex items-center gap-2">
                           <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#2246A7]" strokeWidth={2} />
-                          <span className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
+                          <span className="font-mono text-[11px] md:text-[13px] uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
                             Facilidade
                           </span>
                         </div>
-                        <p className="text-neutral-600 dark:text-neutral-400 text-xs leading-relaxed mt-1">
-                          Escolha o valor da entrada e parcelas, negocie pelo Whatsapp, e assine seu contrato
-                          digitalmente.
+                        <p className="text-neutral-600 dark:text-neutral-400 text-[13px] leading-relaxed mt-1">
+                          Escolha a entrada e as parcelas, converse pelo WhatsApp e assine o contrato on-line.
                         </p>
                       </div>
                     </div>
                     <div className="flex flex-col md:flex-row gap-4 w-full max-w-2xl mt-6">
-                      {renderButton("Carros financiados", "carros")}
-                      {renderButton("Caminhões financiados", "caminhoes")}
+                      {renderButton("Ver carros financiados", "carros")}
+                      {renderButton("Ver caminhões financiados", "caminhoes")}
                     </div>
                   </div>
                   {isDesktop && (
@@ -961,7 +952,7 @@ export function ProdutosHome() {
                       )}
                       <div className="space-y-2 flex-1">
                         <div className="inline-flex items-center space-x-2 fill-gradient px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
-                          <span>EM ATÉ 240 MESES</span>
+                          <span>EM ATÉ 420 MESES</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight leading-snug">
                           Financie <span className="serif font-normal text-neutral-900 dark:text-neutral-100">seu imóvel.</span>
@@ -969,11 +960,10 @@ export function ProdutosHome() {
                       </div>
                     </div>
                     <p className="text-sm md:text-base text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                      Realize o sonho do imóvel próprio com negociações bem abaixo do valor de mercado, agora também com
-                      prazos e condições especiais. Buscamos das melhores taxas em parceria com os maiores bancos do
-                      país.
+                      Imóveis com valores abaixo do mercado, com 35 anos para pagar. Buscamos as melhores
+                      condições nos principais bancos do país.
                     </p>
-                    <div className="pt-2">{renderButton("Imóveis financiados", "imoveis")}</div>
+                    <div className="pt-2">{renderButton("Ver imóveis financiados", "imoveis")}</div>
                   </div>
                   {isDesktop && (
                     <div className="flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
@@ -1050,20 +1040,20 @@ export function ProdutosHome() {
                       )}
                       <div className="space-y-2 flex-1">
                         <div className="inline-flex items-center space-x-2 fill-gradient px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-wider">
-                          <span>TAXAS DIFERENCIADAS</span>
+                          <span>TAXAS ATRATIVAS</span>
                         </div>
                         <h2 className="text-lg md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight leading-snug">
-                          Transforme <span className="serif font-normal text-neutral-900 dark:text-neutral-100">ativos em investimentos.</span>
+                          Seu carro ou imóvel <span className="serif font-normal text-neutral-900 dark:text-neutral-100">vira crédito.</span>
                         </h2>
                       </div>
                     </div>
                     <p className="text-sm md:text-base text-neutral-600 dark:text-neutral-400 leading-relaxed max-w-2xl">
-                      Use seu próprio imóvel ou carro como garantia e consiga empréstimos com taxas reduzidas para
-                      comprar ativos únicos na sbX. Tenha prazos de até 240x para aproveitar nossas oportunidades.
+                      Use seu carro ou imóvel como garantia e consiga um empréstimo com taxas menores e prazo de até
+                      120x. É um jeito de aproveitar novas oportunidades sem se descapitalizar.
                     </p>
                     <div className="flex flex-col md:flex-row gap-4 w-full max-w-2xl">
-                      {renderButton("Crédito usando seu carro", "equityCarro")}
-                      {renderButton("Crédito usando seu imóvel", "equityImovel")}
+                      {renderButton("Crédito com seu carro", "equityCarro")}
+                      {renderButton("Crédito com seu imóvel", "equityImovel")}
                     </div>
                   </div>
                   {isDesktop && (
@@ -1152,7 +1142,7 @@ export function ProdutosHome() {
                       Você é lojista? Aproveite nossa linha de crédito exclusiva para a compra de veículos na nossa
                       plataforma com pagamento em até 90 dias.
                     </p>
-                    <div className="pt-2">{renderButton("Conheça as condições", "floorPlan")}</div>
+                    <div className="pt-2">{renderButton("Ver condições", "floorPlan")}</div>
                   </div>
                   {isDesktop && (
                     <div className="flex w-full lg:w-5/12 relative justify-center mt-8 lg:mt-0">
@@ -1237,24 +1227,23 @@ export function ProdutosHome() {
                       </div>
                     </div>
                     <p className="text-sm md:text-base text-neutral-600 dark:text-neutral-400">
-                      Use a Wallet sBX para desfrutar de condições diferenciadas e garantir seus bens contra
+                      Compare seguros de 9 seguradoras direto na SBX Wallet e proteja seu carro ou imóvel contra
                       imprevistos.
                     </p>
                     <div className="bg-neutral-50 dark:bg-neutral-900 p-5 rounded-none border border-neutral-200 dark:border-neutral-800 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50">
                       <div className="flex items-center gap-2">
                         <Plus className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#2246A7] shrink-0" strokeWidth={2} />
-                        <h3 className="font-mono text-[10px] md:text-xs uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
-                          Cotação Online, sem compromisso
+                        <h3 className="font-mono text-[11px] md:text-[13px] uppercase tracking-[0.18em] text-neutral-900 dark:text-neutral-100 mt-0.5">
+                          Cotação on-line
                         </h3>
                       </div>
-                      <p className="text-neutral-600 dark:text-neutral-400 text-xs leading-relaxed mt-1">
-                        Simulação nas seguradoras líderes de mercado. Se você comprou ou já tem um imóvel ou veículo,
-                        conheça nossas condições, sem burocracias, sem cobranças, tudo online.
+                      <p className="text-neutral-600 dark:text-neutral-400 text-[13px] leading-relaxed mt-1">
+                        Comprou ou já tem um carro ou imóvel? Simule em poucos minutos, sem burocracia e sem custo.
                       </p>
                     </div>
                     <div className="flex flex-col md:flex-row gap-4 w-full max-w-2xl">
-                      {renderButton("Seguros residenciais", "seguroResidencial")}
-                      {renderButton("Seguros de veículos", "seguroAuto")}
+                      {renderButton("Seguro residencial", "seguroResidencial")}
+                      {renderButton("Seguro de veículos", "seguroAuto")}
                     </div>
                   </div>
                   {isDesktop && (

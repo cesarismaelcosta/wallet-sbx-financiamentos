@@ -468,11 +468,11 @@ export function CustomLogin() {
             </>
           )}
 
-          {/* Botão de Submissão: Padrão Institucional Neutro Zero-Radius */}
+          {/* Botão de Submissão: CTA do design system (cta-gradient: gradiente accent + hover em camada), cantos retos */}
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full h-11 sm:h-12 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 font-semibold text-sm rounded-none transition-all duration-200 flex items-center justify-center gap-2 hover:bg-neutral-800 dark:hover:bg-neutral-300 disabled:opacity-50 ${
+            className={`w-full h-10 cta-gradient font-semibold text-sm rounded-none flex items-center justify-center gap-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 ${
               isLoading ? "cursor-wait" : "cursor-pointer"
             }`}
           >

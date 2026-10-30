@@ -474,7 +474,7 @@ function SandboxPage() {
     },
     {
       key: "Imóveis",
-      label: "Financiar em até 240x",
+      label: "Financiar em até 420x",
       title: "Financiamento de Imóveis",
       product_id: 1,
       flowKey: "Imóveis",
@@ -1442,7 +1442,7 @@ function SandboxPage() {
                 <button
                   type="submit"
                   disabled={isLoggingIn}
-                  className={`w-full h-12 bg-neutral-900 text-white font-semibold rounded-none transition-all duration-300 flex items-center justify-center gap-2 ${isLoggingIn ? "opacity-70 cursor-wait" : "hover:bg-neutral-800"}`}
+                  className={`w-full h-10 cta-gradient font-semibold text-sm rounded-none flex items-center justify-center gap-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isLoggingIn ? "opacity-70 cursor-wait" : ""}`}
                 >
                   {isLoggingIn ? (
                     <>

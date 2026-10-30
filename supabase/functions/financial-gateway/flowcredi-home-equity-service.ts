@@ -17,8 +17,8 @@
  * outstanding_balance (se não quitado), requested_value (crédito), installments, monthly_income.
  * Nome, CPF, e-mail, telefone e nascimento vêm do cadastro (entity).
  *
- * --- LIMITES (site da FlowCredi: até 60% do valor do imóvel, até 240 meses) ---
- * rules.max_loan_percentage (60) e rules.max_term_months (240). Imóvel não quitado: o crédito
+ * --- LIMITES (site da FlowCredi: até 60% do valor do imóvel, até 240 meses; na Wallet, até 120 meses) ---
+ * rules.max_loan_percentage (60) e rules.max_term_months (120). Imóvel não quitado: o crédito
  * fica limitado a 60% do imóvel menos o saldo devedor (regra nossa, a confirmar com a FlowCredi).
  * Sem valor mínimo, prazo mínimo ou renda mínima publicados.
  *
@@ -42,7 +42,7 @@ const PRODUCT_LABEL = "O crédito com garantia de imóvel";
 /** Limites publicados pela FlowCredi, quando `rules` não informa. */
 const DEFAULTS = {
   max_loan_percentage: 60,
-  max_term_months: 240,
+  max_term_months: 120,
 };
 
 /** Tipos aceitos no lead (enum tipo_imovel da Flow Preamble API). */
