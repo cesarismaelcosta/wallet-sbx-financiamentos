@@ -1227,8 +1227,8 @@ export function ProdutosHome() {
                       </div>
                     </div>
                     <p className="text-sm md:text-base text-neutral-600 dark:text-neutral-400">
-                      Compare seguros de 9 seguradoras direto na SBX Wallet e proteja seu carro ou imóvel contra
-                      imprevistos.
+                      Compare valores e coberturas de 9 seguradoras direto na SBX Wallet e proteja seu carro ou imóvel
+                      contra imprevistos.
                     </p>
                     <div className="bg-neutral-50 dark:bg-neutral-900 p-5 rounded-none border border-neutral-200 dark:border-neutral-800 flex flex-col gap-2 transition-colors hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50">
                       <div className="flex items-center gap-2">
@@ -1238,7 +1238,7 @@ export function ProdutosHome() {
                         </h3>
                       </div>
                       <p className="text-neutral-600 dark:text-neutral-400 text-[13px] leading-relaxed mt-1">
-                        Comprou ou já tem um carro ou imóvel? Simule em poucos minutos, sem burocracia e sem custo.
+                        Comprou ou já tem um carro ou imóvel? Faça uma cotação em poucos minutos, sem burocracia e sem custo.
                       </p>
                     </div>
                     <div className="flex flex-col md:flex-row gap-4 w-full max-w-2xl">
