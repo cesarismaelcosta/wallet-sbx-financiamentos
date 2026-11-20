@@ -21,7 +21,6 @@ import { Route as SegurosRouteImport } from './routes/seguros'
 import { Route as AccountsSigninRouteImport } from './routes/accounts.signin'
 
 const BackofficeLazyRouteImport = createFileRoute('/backoffice')()
-const SandboxLazyRouteImport = createFileRoute('/sandbox')()
 const BackofficeIndexLazyRouteImport = createFileRoute('/backoffice/')()
 const BackofficeAlertsLazyRouteImport = createFileRoute('/backoffice/alerts')()
 const BackofficeAuditLazyRouteImport = createFileRoute('/backoffice/audit')()
@@ -66,7 +65,6 @@ const FinanciamentosVeiculosLazyRouteImport = createFileRoute(
 )()
 const ProdutosIndexLazyRouteImport = createFileRoute('/produtos/')()
 const ProdutosOfferLazyRouteImport = createFileRoute('/produtos/offer')()
-const SandboxHelpLazyRouteImport = createFileRoute('/sandbox_/help')()
 const SegurosAutoLazyRouteImport = createFileRoute('/seguros/auto')()
 const BackofficeSandboxHelpLazyRouteImport = createFileRoute(
   '/backoffice/sandbox_/help',
@@ -109,11 +107,6 @@ const ProdutosRoute = ProdutosRouteImport.update({
   path: '/produtos',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/produtos.lazy').then((d) => d.Route))
-const SandboxLazyRoute = SandboxLazyRouteImport.update({
-  id: '/sandbox',
-  path: '/sandbox',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/sandbox.lazy').then((d) => d.Route))
 const SegurosRoute = SegurosRouteImport.update({
   id: '/seguros',
   path: '/seguros',
@@ -273,11 +266,6 @@ const ProdutosOfferLazyRoute = ProdutosOfferLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/produtos.offer.lazy').then((d) => d.Route),
 )
-const SandboxHelpLazyRoute = SandboxHelpLazyRouteImport.update({
-  id: '/sandbox_/help',
-  path: '/sandbox/help',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/sandbox_.help.lazy').then((d) => d.Route))
 const SegurosAutoLazyRoute = SegurosAutoLazyRouteImport.update({
   id: '/auto',
   path: '/auto',
@@ -301,7 +289,6 @@ export interface FileRoutesByFullPath {
   '/produtos': typeof ProdutosRouteWithChildren
   '/seguros': typeof SegurosRouteWithChildren
   '/backoffice': typeof BackofficeLazyRouteWithChildren
-  '/sandbox': typeof SandboxLazyRoute
   '/accounts/signin': typeof AccountsSigninRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/audit': typeof BackofficeAuditLazyRoute
@@ -321,7 +308,6 @@ export interface FileRoutesByFullPath {
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/produtos/offer': typeof ProdutosOfferLazyRoute
-  '/sandbox/help': typeof SandboxHelpLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
   '/produtos/': typeof ProdutosIndexLazyRoute
@@ -334,7 +320,6 @@ export interface FileRoutesByTo {
   '/financiamentos': typeof FinanciamentosRouteWithChildren
   '/gate': typeof GateRoute
   '/seguros': typeof SegurosRouteWithChildren
-  '/sandbox': typeof SandboxLazyRoute
   '/accounts/signin': typeof AccountsSigninRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/audit': typeof BackofficeAuditLazyRoute
@@ -354,7 +339,6 @@ export interface FileRoutesByTo {
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/produtos/offer': typeof ProdutosOfferLazyRoute
-  '/sandbox/help': typeof SandboxHelpLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice': typeof BackofficeIndexLazyRoute
   '/produtos': typeof ProdutosIndexLazyRoute
@@ -370,7 +354,6 @@ export interface FileRoutesById {
   '/produtos': typeof ProdutosRouteWithChildren
   '/seguros': typeof SegurosRouteWithChildren
   '/backoffice': typeof BackofficeLazyRouteWithChildren
-  '/sandbox': typeof SandboxLazyRoute
   '/accounts/signin': typeof AccountsSigninRoute
   '/backoffice/alerts': typeof BackofficeAlertsLazyRoute
   '/backoffice/audit': typeof BackofficeAuditLazyRoute
@@ -390,7 +373,6 @@ export interface FileRoutesById {
   '/financiamentos/simulacao': typeof FinanciamentosSimulacaoLazyRoute
   '/financiamentos/veiculos': typeof FinanciamentosVeiculosLazyRoute
   '/produtos/offer': typeof ProdutosOfferLazyRoute
-  '/sandbox_/help': typeof SandboxHelpLazyRoute
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
   '/produtos/': typeof ProdutosIndexLazyRoute
@@ -407,7 +389,6 @@ export interface FileRouteTypes {
     | '/produtos'
     | '/seguros'
     | '/backoffice'
-    | '/sandbox'
     | '/accounts/signin'
     | '/backoffice/alerts'
     | '/backoffice/audit'
@@ -427,7 +408,6 @@ export interface FileRouteTypes {
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/produtos/offer'
-    | '/sandbox/help'
     | '/seguros/auto'
     | '/backoffice/'
     | '/produtos/'
@@ -440,7 +420,6 @@ export interface FileRouteTypes {
     | '/financiamentos'
     | '/gate'
     | '/seguros'
-    | '/sandbox'
     | '/accounts/signin'
     | '/backoffice/alerts'
     | '/backoffice/audit'
@@ -460,7 +439,6 @@ export interface FileRouteTypes {
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/produtos/offer'
-    | '/sandbox/help'
     | '/seguros/auto'
     | '/backoffice'
     | '/produtos'
@@ -475,7 +453,6 @@ export interface FileRouteTypes {
     | '/produtos'
     | '/seguros'
     | '/backoffice'
-    | '/sandbox'
     | '/accounts/signin'
     | '/backoffice/alerts'
     | '/backoffice/audit'
@@ -495,7 +472,6 @@ export interface FileRouteTypes {
     | '/financiamentos/simulacao'
     | '/financiamentos/veiculos'
     | '/produtos/offer'
-    | '/sandbox_/help'
     | '/seguros/auto'
     | '/backoffice/'
     | '/produtos/'
@@ -511,9 +487,7 @@ export interface RootRouteChildren {
   ProdutosRoute: typeof ProdutosRouteWithChildren
   SegurosRoute: typeof SegurosRouteWithChildren
   BackofficeLazyRoute: typeof BackofficeLazyRouteWithChildren
-  SandboxLazyRoute: typeof SandboxLazyRoute
   AccountsSigninRoute: typeof AccountsSigninRoute
-  SandboxHelpLazyRoute: typeof SandboxHelpLazyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -565,13 +539,6 @@ declare module '@tanstack/react-router' {
       path: '/produtos'
       fullPath: '/produtos'
       preLoaderRoute: typeof ProdutosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sandbox': {
-      id: '/sandbox'
-      path: '/sandbox'
-      fullPath: '/sandbox'
-      preLoaderRoute: typeof SandboxLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/seguros': {
@@ -728,13 +695,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProdutosOfferLazyRouteImport
       parentRoute: typeof ProdutosRoute
     }
-    '/sandbox_/help': {
-      id: '/sandbox_/help'
-      path: '/sandbox/help'
-      fullPath: '/sandbox/help'
-      preLoaderRoute: typeof SandboxHelpLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/seguros/auto': {
       id: '/seguros/auto'
       path: '/auto'
@@ -854,9 +814,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProdutosRoute: ProdutosRouteWithChildren,
   SegurosRoute: SegurosRouteWithChildren,
   BackofficeLazyRoute: BackofficeLazyRouteWithChildren,
-  SandboxLazyRoute: SandboxLazyRoute,
   AccountsSigninRoute: AccountsSigninRoute,
-  SandboxHelpLazyRoute: SandboxHelpLazyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

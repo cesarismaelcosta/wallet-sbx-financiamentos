@@ -95,6 +95,9 @@ function SandboxHelpPage() {
             Documentação estruturada com base na auditoria dos arquivos-fonte do projeto. 
             Abrange o roteamento lazy do TanStack, o ecossistema de serviços, a segurança de borda em Deno (_shared), o modelo de autenticação Stateless em memória e o tratamento automatizado de sessões expiradas.
           </p>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-4xl leading-relaxed">
+            Regras oficiais do repositório (padrões, segurança, migrations, telas): <code className={codeBadge}>AGENTS.md</code>, na raiz. Esta página é a visão geral da arquitetura e foi revisada em 20/11/2026.
+          </p>
         </div>
 
         {/* NAVEGAÇÃO POR ABAS (TABS) */}
@@ -146,18 +149,18 @@ function SandboxHelpPage() {
                         q: "Como o TanStack Router gerencia as telas e o carregamento da aplicação?",
                         a: "Mapeado através do diretório 'routes/', o sistema emprega roteamento baseado em arquivos com carregamento assíncrono (.lazy.tsx):",
                         bullets: [
-                          <><b>Sandbox & Ajuda:</b> Os arquivos <code className={codeBadge}>backoffice.sandbox.lazy.tsx</code> e <code className={codeBadge}>backoffice.sandbox_.help.lazy.tsx</code> gerenciam o painel de debug e o manual técnico com redirecionamento automático de sessões expiradas.</>,
-                          <><b>Portal do Cliente (SBX Pay):</b> Gerenciado por <code className={codeBadge}>sbxpay.lazy.tsx</code> e suas extensões para a página inicial, visualização de ofertas e histórico de consultas.</>,
+                          <><b>Sandbox & Ajuda:</b> rotas <code className={codeBadge}>/backoffice/sandbox</code> e <code className={codeBadge}>/backoffice/sandbox/help</code> (arquivos <code className={codeBadge}>backoffice.sandbox.lazy.tsx</code> e <code className={codeBadge}>backoffice.sandbox_.help.lazy.tsx</code>), dentro do backoffice e só para admin: passam pelo login do backoffice e pela checagem de perfil em <code className={codeBadge}>backoffice.lazy.tsx</code>. Abrem em nova aba pelo menu Configuração. Não existe mais <code className={codeBadge}>/sandbox</code>.</>,
+                          <><b>Portal do Cliente:</b> <code className={codeBadge}>produtos.*.lazy.tsx</code> — vitrine (<code className={codeBadge}>/produtos</code>) e detalhe da oferta (<code className={codeBadge}>/produtos/offer</code>).</>,
                           <><b>Backoffice Administrativo:</b> Módulos isolados em <code className={codeBadge}>backoffice.*.lazy.tsx</code> cobrindo alertas, auditorias, configurações, domínios, relatórios, rotas, simulações e controle de usuários.</>,
-                          <><b>Jornadas Verticais:</b> Telas específicas para produtos como Auto Equity, Cartão, Financiamento de Veículos e Seguros localizadas em <code className={codeBadge}>financiamentos.*</code> e <code className={codeBadge}>seguros.*</code>.</>
+                          <><b>Jornadas Verticais:</b> <code className={codeBadge}>emprestimos.*</code> (Home Equity, Car Equity), <code className={codeBadge}>financiamentos.*</code> (Imóveis, Veículos, Cartão, Simulação) e <code className={codeBadge}>seguros.*</code> (Seguro Auto).</>
                         ]
                       },
                       {
                         q: "Como a pasta 'features/' modulariza a interface e os produtos de crédito?",
                         a: "O design system e as regras de negócio visuais estão desacoplados em subpastas dedicadas:",
                         bullets: [
-                          <><b>Componentes de Layout:</b> Elementos reutilizáveis como <code className={codeBadge}>ButtonWhatsApp.tsx</code>, <code className={codeBadge}>DynamicConsents.tsx</code>, <code className={codeBadge}>FAQSection.tsx</code> e <code className={codeBadge}>Footer.tsx</code>.</>,
-                          <><b>Módulos Sequenciais (Wizards):</b> Produtos como o Auto Equity possuem passos estruturados de <code className={codeBadge}>Step1Vehicle.tsx</code> até <code className={codeBadge}>Step5Confirm.tsx</code>, controlados pelo motor central em <code className={codeBadge}>WizardEngine.tsx</code>.</>,
+                          <><b>Componentes de Layout:</b> <code className={codeBadge}>PanelHeader.tsx</code> (cabeçalho e menu do avatar: Início, Backoffice só com a marca <code className={codeBadge}>backofficeAccess</code>, Sair), <code className={codeBadge}>PanelFAQ.tsx</code>, <code className={codeBadge}>PanelFooter.tsx</code>, <code className={codeBadge}>DynamicConsents.tsx</code> e <code className={codeBadge}>ButtonWhatsApp.tsx</code>.</>,
+                          <><b>Módulos Sequenciais (Wizards):</b> cada produto tem seus passos (ex.: Car Equity, <code className={codeBadge}>Step1Vehicle.tsx</code> a <code className={codeBadge}>Step5Confirm.tsx</code>), montados pelo <code className={codeBadge}>WizardEngine.tsx</code>, que na troca de passo rola até o topo e foca o primeiro campo.</>,
                           <><b>Core State:</b> O gerenciamento de estado e navegação utiliza hooks dedicados como <code className={codeBadge}>useOrchestrator.ts</code>, <code className={codeBadge}>useNavigation.ts</code> e o contexto global do hub.</>
                         ]
                       }
@@ -182,7 +185,7 @@ function SandboxHelpPage() {
                         a: <>O sistema não guarda sessão em nenhuma tabela — hoje, TODA a prova de que um usuário está logado mora dentro do próprio token, assinado criptograficamente. Segue o caminho completo, do login até a última requisição antes de expirar:</>,
                         bullets: [
                           <><b>1. Autenticação externa (upstream):</b> a função <code className={codeBadge}>autenticarAccountsSBX</code> faz um POST direto no endpoint OAuth2 da Superbid (<code className={codeBadge}>/account/oauth/token</code>) com as credenciais do usuário, e recebe de volta um token bruto (<code className={codeBadge}>access_token_sbx</code>) — esse token é da Superbid, não é o nosso; ele só prova que o login/senha bateram lá.</>,
-                          <><b>2. Exchange (troca) — emissão do nosso próprio JWT:</b> o token bruto é enviado para a Edge Function <code className={codeBadge}>sbx-auth-exchange</code>, que valida o usuário no upstream e chama <code className={codeBadge}>generateSessionToken()</code> (<code className={codeBadge}>_shared/jwt.ts</code>). Essa função monta um payload interno — <code className={codeBadge}>{"{ typ: 'session', environment, userId, userName, login }"}</code> — e assina tudo com o algoritmo <code className={codeBadge}>HS256</code> usando o segredo <code className={codeBadge}>JWT_SECRET</code>, com expiração padrão de <code className={codeBadge}>7200s</code> (2 horas). O resultado é o <code className={codeBadge}>session_token</code> — um JWT que carrega, dentro de si mesmo, tudo que qualquer Edge Function vai precisar saber sobre quem é o usuário.</>,
+                          <><b>2. Exchange (troca) — emissão do nosso próprio JWT:</b> o token bruto é enviado para a Edge Function <code className={codeBadge}>sbx-auth-exchange</code>, que valida o usuário no upstream e chama <code className={codeBadge}>generateSessionToken()</code> (<code className={codeBadge}>_shared/jwt.ts</code>). Essa função monta um payload interno — <code className={codeBadge}>{"{ typ: 'session', environment, userId, userName, login, backofficeAccess? }"}</code> — e assina tudo com o algoritmo <code className={codeBadge}>HS256</code> usando o segredo <code className={codeBadge}>JWT_SECRET</code>, com expiração padrão de <code className={codeBadge}>7200s</code> (2 horas). O resultado é o <code className={codeBadge}>session_token</code> — um JWT que carrega, dentro de si mesmo, tudo que qualquer Edge Function vai precisar saber sobre quem é o usuário.</>,
                           <><b>3. Selo de ambiente contra forjamento:</b> o campo <code className={codeBadge}>environment</code> ("staging" ou "production") vai LACRADO dentro da assinatura do próprio token — não é um parâmetro solto que o cliente manda em toda requisição. Isso significa que ninguém consegue, alterando algo na URL ou no corpo da requisição, fazer um token de staging ser aceito como se fosse de produção (ou vice-versa): qualquer tentativa de trocar o ambiente por fora invalida a assinatura inteira.</>,
                           <><b>4. Transporte híbrido do token (produção vs. desenvolvimento):</b> em produção, quando front-end e API compartilham o mesmo domínio raiz (checado por <code className={codeBadge}>isSameSite()</code> em <code className={codeBadge}>src/services/session.ts</code>), o backend devolve o token via <code className={codeBadge}>Set-Cookie</code> <b>HttpOnly</b> — o JavaScript do navegador NUNCA chega a ler o valor do token, o que fecha a porta pra roubo via XSS. Fora desse cenário (dev local, ou domínios diferentes), o sistema cai num fallback: guarda o token em <code className={codeBadge}>sessionStorage</code> (nunca em <code className={codeBadge}>localStorage</code> — evaporaria ao fechar a aba de qualquer forma) e passa a enviá-lo manualmente no header customizado <code className={codeBadge}>x-session-token</code> em toda chamada.</>,
                           <><b>5. Validação em CADA requisição seguinte — sem tocar o banco:</b> toda Edge Function protegida chama <code className={codeBadge}>verifySessionToken(token)</code>, que roda <code className={codeBadge}>jwtVerify()</code> (biblioteca <code className={codeBadge}>jose</code>) inteiramente em memória, dentro da própria instância da function. Duas checagens automáticas acontecem ali: (a) a assinatura HS256 bate com o que <code className={codeBadge}>JWT_SECRET</code> geraria — se um único bit do token foi alterado, a verificação falha na hora (<code className={codeBadge}>JWT_INVALID_SIGNATURE</code>); (b) o claim <code className={codeBadge}>exp</code> (timestamp de expiração, embutido no próprio token) ainda não passou — se passou, falha com <code className={codeBadge}>JWT_EXPIRED_SESSION</code>. Não existe passo intermediário de "consultar uma tabela pra ver se esse token ainda é válido" — a matemática da assinatura E o carimbo de tempo JÁ SÃO a validação.</>,
@@ -193,8 +196,8 @@ function SandboxHelpPage() {
                         q: "Como o Sandbox lida com o erro SESSION_EXPIRED em chamadas AJAX (Fetch)?",
                         a: "O painel de testes implementa resiliência automatizada por meio da rotina 'checkAndHandleSessionError':",
                         bullets: [
-                          <><b>Interceptação Inteligente:</b> Caso uma chamada assíncrona retorne código <code className={codeBadge}>SESSION_EXPIRED</code> ou status 401, a aplicação não exibe apenas um aviso estático, mas limpa o storage e executa o <code className={codeBadge}>handleExpiredSession()</code>.</>,
-                          <><b>Redirecionamento com Retorno Preservado:</b> O usuário é redirecionado instantaneamente para <code className={codeBadge}>/accounts/signin?redirect_uri=...</code>, garantindo que ele retorne ao ponto exato após reautenticar.</>,
+                          <><b>Interceptação Inteligente:</b> se uma chamada retorna <code className={codeBadge}>SESSION_EXPIRED</code> ou 401, <code className={codeBadge}>handleExpiredSession()</code> limpa a sessão da aba e mostra de novo o formulário de login do próprio Sandbox — sem ir para o login do site e sem sair do backoffice.</>,
+                          <><b>Sessão só da aba:</b> o login da Superbid de teste fica no <code className={codeBadge}>sessionStorage</code> da aba do Sandbox; o login do backoffice continua valendo nas outras abas.</>,
                           <><b>Guarda de Visibilidade e Inatividade:</b> Eventos de <code className={codeBadge}>visibilitychange</code> e <code className={codeBadge}>pageshow</code> inspecionam o tempo de expiração do JWT (claim <code className={codeBadge}>exp</code>) preventivamente ao focar na aba.</>
                         ]
                       },
@@ -237,7 +240,8 @@ function SandboxHelpPage() {
                         a: <>Porque <code className={codeBadge}>AuthProvider</code> é montado <b>uma única vez</b> no layout pai (<code className={codeBadge}>backoffice.lazy.tsx</code>) — navegar entre <code className={codeBadge}>/backoffice/simulations</code>, <code className={codeBadge}>/backoffice/users</code> etc. troca só o <code className={codeBadge}>{"<Outlet />"}</code> interno, sem remontar o Provider. Ainda assim, dois guardas evitam refetch redundante caso o componente remonte (ex: Lazy Loading/HMR):</>,
                         bullets: [
                           <><code className={codeBadge}>sessionStorage['auth_validated_once']</code> — sentinela que diz "esta aba já validou nesta sessão de navegador".</>,
-                          <><code className={codeBadge}>backofficeUser?.email === email</code> — se o e-mail em memória já bate com o da sessão atual, nem chama a RPC de novo.</>,
+                          <><code className={codeBadge}>backofficeUserRef</code> — o listener do Supabase (criado uma vez) lê o usuário atual por um ref: se o e-mail já bate e a aba já validou, só atualiza o token renovado, sem ir ao banco.</>,
+                          <>No layout (<code className={codeBadge}>backoffice.lazy.tsx</code>), a rodinha de carregamento só aparece na primeira validação; nas revalidações (volta à aba) a tela continua montada — o Sandbox não recarrega as ofertas.</>,
                           <>Os dois juntos é que permitem diferenciar, no registro de auditoria, um <code className={codeBadge}>login</code> real (primeira validação) de um <code className={codeBadge}>refresh</code> (revalidação da mesma sessão).</>
                         ]
                       },
@@ -247,7 +251,7 @@ function SandboxHelpPage() {
                         bullets: [
                           <><b>Login/Refresh (sucesso ou falha):</b> disparado dentro de <code className={codeBadge}>validateUserAccess()</code>, guardado por um <code className={codeBadge}>useRef(hasLoggedThisSession)</code> pra nunca logar duas vezes a mesma sessão de validação.</>,
                           <><b>Logout:</b> disparado em <code className={codeBadge}>signOut()</code>, antes de encerrar a sessão no Supabase Auth.</>,
-                          <><b>Navegação (`refresh`):</b> ver próximo item — é um mecanismo deliberado e separado, vivendo em <code className={codeBadge}>backoffice.lazy.tsx</code>, não em <code className={codeBadge}>AuthContext</code>.</>,
+                          <><b>Navegação (<code className={codeBadge}>page_view</code>):</b> ver próximo item — é um mecanismo deliberado e separado, vivendo em <code className={codeBadge}>backoffice.lazy.tsx</code>, não em <code className={codeBadge}>AuthContext</code>.</>,
                           <>A RPC identifica o autor via <code className={codeBadge}>auth.email()</code> (contexto do próprio Postgres/PostgREST) — o payload enviado pelo front-end NUNCA leva e-mail, só <code className={codeBadge}>p_event</code>/<code className={codeBadge}>p_success</code>/<code className={codeBadge}>p_origin_page</code>/<code className={codeBadge}>p_origin_function</code>/<code className={codeBadge}>p_failure_reason</code>.</>,
                           <>Detalhes técnicos completos (allowlist de eventos, rate limit, parsing de device/OS) estão na aba <b>PostgreSQL & RLS</b>, card "RPC & CRON Jobs".</>
                         ]
@@ -257,7 +261,7 @@ function SandboxHelpPage() {
                         a: <>Vive num <code className={codeBadge}>useEffect</code> dedicado em <code className={codeBadge}>backoffice.lazy.tsx</code>, com dependência EXCLUSIVAMENTE em <code className={codeBadge}>pathname</code> (via <code className={codeBadge}>useLocation()</code> do TanStack Router) — de propósito separado do efeito de auth guard, pra não acoplar os dois:</>,
                         bullets: [
                           <>Ignora a rota <code className={codeBadge}>/backoffice/login</code> e qualquer estado ainda não autenticado.</>,
-                          <>Um segundo <code className={codeBadge}>useRef(hasLoggedInitialPage)</code> pula o PRIMEIRO disparo do efeito (a página inicial pós-login) — ela já foi contabilizada como <code className={codeBadge}>login</code> pelo <code className={codeBadge}>AuthContext</code>; só as trocas SEGUINTES de rota geram um evento <code className={codeBadge}>refresh</code> novo.</>,
+                          <>Um <code className={codeBadge}>useRef(lastLoggedPageViewRef)</code> evita registrar a mesma página duas vezes; cada troca de rota gera um evento <code className={codeBadge}>page_view</code>.</>,
                           <>Chama <code className={codeBadge}>logLoginHistoryEvent()</code> de <code className={codeBadge}>src/lib/login-history.ts</code>, que faz <code className={codeBadge}>fetch</code> direto (sem o client completo do Supabase) pro endpoint REST <code className={codeBadge}>/rest/v1/rpc/log_access_event</code>, com headers <code className={codeBadge}>apikey</code> + <code className={codeBadge}>Authorization: Bearer</code>. Essa função retorna uma Promise de verdade, então <code className={codeBadge}>.catch()</code> funciona nela — diferente de <code className={codeBadge}>supabase.rpc()</code> (ver próximo item).</>,
                           <>Zero PII local: o e-mail só é usado em memória para virar um hash SHA-256 (throttle de 5 min por usuário no <code className={codeBadge}>sessionStorage</code>), nunca é persistido em texto.</>
                         ]
@@ -275,6 +279,38 @@ function SandboxHelpPage() {
                   />
                 </CardContent>
               </Card>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Acesso interno: Login Superbid, marca backofficeAccess e Sandbox</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">Como um funcionário vê o link "Backoffice" no hub e quem pode abrir o Sandbox.</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
+                  <HelpAccordion
+                    items={[
+                      {
+                        q: "Como o link Backoffice aparece no menu do avatar do hub?",
+                        a: <>O admin cadastra o login da Superbid do funcionário em Backoffice › Usuários (<code className={codeBadge}>backoffice_users.sbx_login</code>). No login do hub, a sessão ganha a marca:</>,
+                        bullets: [
+                          <>As 3 funções que emitem o token de sessão (<code className={codeBadge}>sbx-auth</code>, <code className={codeBadge}>sbx-auth-exchange</code>, <code className={codeBadge}>financial-gateway-gate</code>) chamam <code className={codeBadge}>hasBackofficeAccess(login)</code> (<code className={codeBadge}>_shared/backoffice-access.ts</code>).</>,
+                          <>Ela usa a função do banco <code className={codeBadge}>has_backoffice_access(login)</code> (security definer, só <code className={codeBadge}>db_edge_worker</code> executa), que devolve só sim/não para usuário <b>ativo</b>.</>,
+                          <>Com sim, o token assinado leva <code className={codeBadge}>backofficeAccess: true</code>; o <code className={codeBadge}>FinancialAuthContext</code> lê a marca no login e no F5, e o <code className={codeBadge}>PanelHeader</code> mostra o link.</>,
+                          <>A marca <b>não autoriza nada</b>: o backoffice continua exigindo o login próprio. Mudanças no cadastro valem a partir do próximo login da pessoa.</>
+                        ]
+                      },
+                      {
+                        q: "Quem pode abrir o Sandbox?",
+                        a: <>Só admin do backoffice:</>,
+                        bullets: [
+                          <>Sem login do backoffice → <code className={codeBadge}>/backoffice/login</code>. Usuário de backoffice que não é admin → volta para <code className={codeBadge}>/backoffice</code>.</>,
+                          <>A tela (e o formulário de login da Superbid de teste) só é montada depois das duas checagens.</>,
+                          <>O Sandbox não tem função exclusiva no servidor: ele monta, para testes, as mesmas chamadas que um cliente logado faz pelo site.</>
+                        ]
+                      }
+                    ]}
+                  />
+                </CardContent>
+              </Card>
+
             </TabsContent>
 
             {/* ABA: EDGE FUNCTIONS & _SHARED */}
@@ -303,6 +339,15 @@ function SandboxHelpPage() {
                           <><b>server.ts:</b> Define os cabeçalhos de CORS e o wrapper de segurança <code className={codeBadge}>withSecurity</code>.</>,
                           <><b>jwt.ts e auth.ts:</b> Concentram a lógica de emissão (<code className={codeBadge}>generateSessionToken</code>) e validação em memória (<code className={codeBadge}>verifySessionToken</code>).</>,
                           <><b>gateKeeper.ts, logger.ts e db.ts:</b> Asseguram regras de IDOR, logs estruturados e conexões seguras com o Supabase.</>
+                        ]
+                      },
+                      {
+                        q: "Como o IP do cliente é obtido (e por que não confiar em qualquer cabeçalho)?",
+                        a: <>Regra SBXW-17, a mesma nas Edge Functions e nas funções do banco:</>,
+                        bullets: [
+                          <>Primeiro <code className={codeBadge}>cf-connecting-ip</code>: definido pela Cloudflare (que fica na frente do Supabase), não pode ser forjado pelo navegador.</>,
+                          <>Entre funções internas, o IP real vai assinado (<code className={codeBadge}>_shared/client-ip.ts</code>: <code className={codeBadge}>x-client-ip</code> + <code className={codeBadge}>x-client-ip-sig</code>). Sem assinatura válida, <code className={codeBadge}>x-client-ip</code> é ignorado.</>,
+                          <>O 1º item do <code className={codeBadge}>x-forwarded-for</code> e o <code className={codeBadge}>x-real-ip</code> só valem como reserva — o cliente pode enviá-los.</>
                         ]
                       },
                       {
@@ -400,7 +445,7 @@ function SandboxHelpPage() {
                       },
                       {
                         q: "Por que esse role precisa de BYPASSRLS — isso não é uma brecha de segurança?",
-                        a: <>Não é uma brecha — é uma exceção deliberada e estritamente escopada. Confirmado por inspeção ao vivo do banco: as tabelas que este role toca têm RLS habilitado com o mesmo padrão de 4 políticas descrito na aba "PostgreSQL & RLS" (<code className={codeBadge}>Leitura_Staff</code>, <code className={codeBadge}>Escrita_Admin_Mgr_Ins/Upd</code>, <code className={codeBadge}>Delete_Admin</code>), todas escopadas pra role <code className={codeBadge}>authenticated</code> via contexto de JWT.</>,
+                        a: <>Não é uma brecha — é uma exceção deliberada e estritamente escopada. Confirmado por inspeção ao vivo do banco: as tabelas que este role toca têm RLS habilitado com o mesmo padrão de políticas descrito na aba "PostgreSQL & RLS" (hoje <code className={codeBadge}>Leitura_Staff</code>, só leitura), todas escopadas pra role <code className={codeBadge}>authenticated</code> via contexto de JWT.</>,
                         bullets: [
                           <>Uma conexão Postgres crua via <code className={codeBadge}>postgres.js</code> NUNCA carrega esse contexto de JWT — sem <code className={codeBadge}>BYPASSRLS</code>, toda query deste role seria bloqueada pelo RLS antes mesmo de chegar em qualquer <code className={codeBadge}>GRANT</code>.</>,
                           <>Quem efetivamente entra pela "porta dos fundos" com um JWT de usuário real (Backoffice, via PostgREST) continua sujeito às 4 políticas normalmente — o <code className={codeBadge}>db_edge_worker</code> é a única exceção, e só porque os privilégios de tabela dele já são explicitamente limitados por <code className={codeBadge}>GRANT</code> escopado.</>
@@ -509,7 +554,8 @@ function SandboxHelpPage() {
                         bullets: [
                           <>Conecta como um role DEDICADO — <code className={codeBadge}>db_edge_worker</code> — em vez do usuário <code className={codeBadge}>postgres</code>. Um bug de cache de credencial do Supavisor (Transaction Pooler) causou incidente com o usuário <code className={codeBadge}>postgres</code>; um role novo, nunca visto pelo Supavisor, contorna isso.</>,
                           <><code className={codeBadge}>BYPASSRLS</code> é necessário (confirmado, não just-in-case): as tabelas que esse role usa têm RLS escopado pra role <code className={codeBadge}>authenticated</code> via JWT, contexto que uma conexão Postgres crua nunca tem.</>,
-                          <>Grants escopados só nas ~13 tabelas realmente usadas (<code className={codeBadge}>SELECT, INSERT, UPDATE</code> — nunca <code className={codeBadge}>ALL PRIVILEGES</code>/<code className={codeBadge}>ALL TABLES</code>).</>,
+                          <>Grants escopados só nas tabelas das jornadas (visitas, simulações, consentimentos, notificações e domínio — <code className={codeBadge}>SELECT, INSERT, UPDATE</code>, nunca <code className={codeBadge}>ALL PRIVILEGES</code>).</>,
+                          <>Não lê tabelas do backoffice nem <code className={codeBadge}>orchestrator_configs</code>: quando precisa de algo de lá, uma função <code className={codeBadge}>security definer</code> devolve só o necessário, com execução só para <code className={codeBadge}>db_edge_worker</code> (ex.: <code className={codeBadge}>has_backoffice_access</code>). Padrão no <code className={codeBadge}>AGENTS.md</code>.</>,
                           <>Setup completo (CREATE ROLE, GRANTs, secrets set) documentado no topo de <code className={codeBadge}>_shared/db.ts</code>.</>
                         ]
                       },
@@ -521,12 +567,14 @@ function SandboxHelpPage() {
                         ]
                       },
                       {
-                        q: "O que são NOTIFICATION_GATEWAY_SECRET, WEBHOOK_MASTER_SECRET e FANDI_API_KEY?",
-                        a: "Três segredos de propósito bem específico:",
+                        q: "O que são NOTIFICATION_GATEWAY_SECRET, WEBHOOK_MASTER_SECRET, FANDI_API_KEY, FLOWCREDI_API_KEY e FLOWCREDI_WEBHOOK_SECRET?",
+                        a: "Segredos de propósito bem específico:",
                         bullets: [
                           <><code className={codeBadge}>NOTIFICATION_GATEWAY_SECRET</code> — segredo estático (sem HMAC) comparado em tempo constante (<code className={codeBadge}>safeCompare</code>); <code className={codeBadge}>notification-dispatcher</code> chama <code className={codeBadge}>notification-gateway</code> com esse mesmo valor.</>,
                           <><code className={codeBadge}>WEBHOOK_MASTER_SECRET</code> — mesmo valor nos DOIS lados do fluxo Fandi: <code className={codeBadge}>financial-gateway/fandi-service.ts</code> assina a URL de callback enviada à Fandi, e <code className={codeBadge}>financial-gateway-webhook</code> verifica a assinatura na volta. Assinatura vem no PATH da URL (não em headers), por isso <code className={codeBadge}>location: 'path'</code> + <code className={codeBadge}>enforcement: 'manual'</code> no registry.</>,
-                          <><code className={codeBadge}>FANDI_API_KEY</code> — credencial fornecida pelo parceiro Fandi (não é gerável localmente).</>
+                          <><code className={codeBadge}>FANDI_API_KEY</code> — credencial fornecida pelo parceiro Fandi (não é gerável localmente).</>,
+                          <><code className={codeBadge}>FLOWCREDI_API_KEY</code> — token do Portal Parceiro da FlowCredi (Documentação › Tokens): de Staging em dev/homol e de Produção em produção. Tem validade: renovar antes de vencer e trocar se for exposto.</>,
+                          <><code className={codeBadge}>FLOWCREDI_WEBHOOK_SECRET</code> — valida a assinatura (<code className={codeBadge}>X-Flowcredi-Signature</code>) dos avisos da FlowCredi; o mesmo valor vai no <code className={codeBadge}>secret</code> da assinatura no Partner Webhook Dispatcher. Diferente por ambiente; gerado no computador de quem configura, nunca enviado por mensagem.</>
                         ]
                       },
                       {
@@ -564,7 +612,7 @@ function SandboxHelpPage() {
                       },
                       {
                         q: "Como o ecossistema processa webhooks de parceiros externos, e o que garante que ninguém forje um callback? (pipeline completo de segurança)",
-                        a: <>A Edge Function <code className={codeBadge}>financial-gateway-webhook</code> é um roteador puro (<code className={codeBadge}>index.ts</code>) que só lê o nome do parceiro na URL (<code className={codeBadge}>/financial-gateway-webhook/fandi/...</code>) e delega todo o trabalho pesado pra um módulo especialista — hoje só existe <code className={codeBadge}>fandi-service.ts</code> (parceiro MeResolve/Fandi). Um parceiro não mapeado recebe <code className={codeBadge}>404</code> na hora. Dentro do especialista, a requisição passa por 4 fases sequenciais — se qualquer uma falhar, as seguintes nem rodam:</>,
+                        a: <>A Edge Function <code className={codeBadge}>financial-gateway-webhook</code> é um roteador puro (<code className={codeBadge}>index.ts</code>) que só lê o nome do parceiro na URL (<code className={codeBadge}>/financial-gateway-webhook/fandi/...</code>) e delega todo o trabalho pesado pra um módulo especialista — hoje existem <code className={codeBadge}>fandi-service.ts</code> (parceiro MeResolve/Fandi) e <code className={codeBadge}>flowcredi-service.ts</code> (FlowCredi, card abaixo). Um parceiro não mapeado recebe <code className={codeBadge}>404</code> na hora. Dentro do especialista, a requisição passa por 4 fases sequenciais — se qualquer uma falhar, as seguintes nem rodam:</>,
                         bullets: [
                           <><b>Fase 1 — Assinatura HMAC no PATH da URL (não em header):</b> a Fandi chama uma URL no formato <code className={codeBadge}>.../fandi/{"{simulationId}"}/{"{simulationUpdateId}"}/{"{timestamp}"}/{"{signature}"}</code>. A function remonta a string <code className={codeBadge}>{"`${simulationId}.${simulationUpdateId}.${timestamp}`"}</code> e recalcula a assinatura esperada com <code className={codeBadge}>WEBHOOK_MASTER_SECRET</code> (mesmo segredo usado do outro lado, em <code className={codeBadge}>financial-gateway/fandi-service.ts</code>, quando a URL de callback foi originalmente montada e assinada). Essa é a razão de o <code className={codeBadge}>registry.ts</code> marcar essa rota como <code className={codeBadge}>location: 'path'</code> + <code className={codeBadge}>enforcement: 'manual'</code> — não dá pra validar isso centralmente no wrapper porque o "segredo" está espalhado em pedaços da própria URL, não num header padronizado.</>,
                           <><b>Fase 1b — Comparação em tempo constante (`safeCompare`):</b> em vez de <code className={codeBadge}>a === b</code> (que vaza tempo de execução byte a byte e permitiria um ataque de timing pra descobrir a assinatura certa aos poucos), a comparação usa XOR bit a bit acumulado (<code className={codeBadge}>result |= a[i] ^ b[i]</code>) percorrendo TODOS os bytes sempre, sem sair mais cedo mesmo se já achou uma diferença.</>,
@@ -578,6 +626,72 @@ function SandboxHelpPage() {
                   />
                 </CardContent>
               </Card>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Configuração das rotas (orchestrator_configs)</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">Onde moram regras, textos e aceites de cada produto — e onde se edita.</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
+                  <HelpAccordion
+                    items={[
+                      {
+                        q: "O que fica em cada coluna de orchestrator_configs?",
+                        a: <>Uma linha por rota (parceiro + produto ou recorte mais específico):</>,
+                        bullets: [
+                          <><code className={codeBadge}>rules</code> — limites e elegibilidade (valores mínimos/máximos, percentuais, prazos, UFs, tipos bloqueados, limites por subcategoria, banco fixo, parcelamento). Telas e servidor leem daqui; nada fixo no código.</>,
+                          <><code className={codeBadge}>integration_details</code> — canais e ambiente: <code className={codeBadge}>partner_environment</code> (<code className={codeBadge}>staging</code> | <code className={codeBadge}>production</code>; ausente = produção), CNPJ, WhatsApp, URL de redirecionamento, e-mail.</>,
+                          <><code className={codeBadge}>page_configs</code>, <code className={codeBadge}>page_faqs</code> e <code className={codeBadge}>consent_configs</code> — textos da página, FAQs e aceites (links do tipo "Termo oficial (API)" com <code className={codeBadge}>terms_url</code> e <code className={codeBadge}>terms_type</code>).</>,
+                          <>Cascata: EVENT &gt; SELLER &gt; PRODUCT &gt; SUBCATEGORY &gt; CATEGORY. Caso específico (ex.: banco fixo de um vendedor) é uma linha nova, não uma chave nova.</>
+                        ]
+                      },
+                      {
+                        q: "Onde essas regras são editadas?",
+                        a: <>Backoffice › Rotas › editar › aba "Regras & Integração":</>,
+                        bullets: [
+                          <>1. Credenciais & Canais (inclui "Ambiente do parceiro").</>,
+                          <>2. Regras — Parcelamento (cartão/FANDI).</>,
+                          <>3. Regras — Valores, prazos e elegibilidade (campo vazio = sem regra).</>,
+                          <>Proibido nome de parceiro em chave de regra (<code className={codeBadge}>fixed_bank</code>, não <code className={codeBadge}>flowcredi_bank</code>). Chave nova entra no editor, em <code className={codeBadge}>ProductRules</code>/<code className={codeBadge}>IntegrationDetails</code> e no cabeçalho de <code className={codeBadge}>backoffice.routes.lazy.tsx</code>.</>
+                        ]
+                      }
+                    ]}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Integração FlowCredi (Imóveis, Home Equity, Car Equity)</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">Parceiro 3, roteado pelo produto: 1 Imóveis (FINANCIAMENTO), 6 Home Equity (CGI), 7 Car Equity (CGA).</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
+                  <HelpAccordion
+                    items={[
+                      {
+                        q: "Como o lead é enviado?",
+                        a: <>Pela API de Processos (<code className={codeBadge}>POST /processos</code>), em <code className={codeBadge}>financial-gateway/flowcredi-*-service.ts</code>:</>,
+                        bullets: [
+                          <>Primeiro os aceites na API de Termos (<code className={codeBadge}>/acceptances/batch</code>, com IP, user-agent e a versão do texto exibido). Só com 201 o processo é criado.</>,
+                          <>Recusa dos termos (207, erro ou sem resposta): nenhum processo, a tela mostra o erro e o registro fica como Falha (8) com o detalhe.</>,
+                          <>Processo criado (201, ou 200 com processo existente): <code className={codeBadge}>processoId</code> em <code className={codeBadge}>external_operation_id</code> e o retorno completo em <code className={codeBadge}>simulations.raw_payload.gateway_response</code>. Status Enviado (11).</>,
+                          <>Ambiente pela config (<code className={codeBadge}>integration_details.partner_environment</code>); token em <code className={codeBadge}>FLOWCREDI_API_KEY</code>.</>
+                        ]
+                      },
+                      {
+                        q: "Como funciona o webhook de status?",
+                        a: <>Rota <code className={codeBadge}>financial-gateway-webhook/flowcredi</code>, evento <code className={codeBadge}>bank.status_changed</code> do Partner Webhook Dispatcher:</>,
+                        bullets: [
+                          <>Valida a assinatura: HMAC-SHA256 de <code className={codeBadge}>{"{timestamp}.{corpo}"}</code> com <code className={codeBadge}>FLOWCREDI_WEBHOOK_SECRET</code>, janela de 5 minutos, comparação em tempo constante. Inválida = 401; secret ausente = 503.</>,
+                          <>Só aceita <code className={codeBadge}>processId</code> que existe no nosso banco (parceiro 3); ignora evento repetido; no máximo 30 consultas por processo por hora.</>,
+                          <>Nunca grava o status do aviso: confirma na Process Bank API com o nosso token e grava uma linha em <code className={codeBadge}>simulation_updates</code> (e o status da simulação, se mudou).</>,
+                          <>Pendente: a assinatura no Dispatcher depende de a FlowCredi liberar o acesso do token (hoje 403).</>
+                        ]
+                      }
+                    ]}
+                  />
+                </CardContent>
+              </Card>
+
             </TabsContent>
 
             {/* ABA: POSTGRESQL & RLS */}
@@ -592,13 +706,23 @@ function SandboxHelpPage() {
                     items={[
                       {
                         q: "Como o Row Level Security (RLS) protege as tabelas nas migrações?",
-                        a: <>Todas as tabelas de negócio do projeto rodam com <code className={codeBadge}>ENABLE ROW LEVEL SECURITY</code> ativo — ou seja, por padrão NENHUMA linha é visível/gravável, e cada tabela precisa de políticas explícitas liberando acesso. O padrão que se repete nas ~13 tabelas mais sensíveis (confirmado via consulta ao vivo ao <code className={codeBadge}>pg_policies</code>) é sempre o mesmo conjunto de 4 políticas:</>,
+                        a: <>Todas as tabelas de <code className={codeBadge}>public</code> rodam com <code className={codeBadge}>ENABLE ROW LEVEL SECURITY</code> ativo — por padrão nenhuma linha é visível ou gravável, e cada tabela precisa de política explícita. Hoje as políticas são só de leitura; toda escrita passa por Edge Functions (<code className={codeBadge}>db_edge_worker</code>) ou RPCs <code className={codeBadge}>security definer</code>:</>,
                         bullets: [
                           <><code className={codeBadge}>Leitura_Staff</code> — permite <code className={codeBadge}>SELECT</code> pra role <code className={codeBadge}>authenticated</code>, mas só se <code className={codeBadge}>check_user_role(ARRAY[...])</code> confirmar que o JWT da sessão pertence a um cargo autorizado (o <code className={codeBadge}>role</code> vindo de <code className={codeBadge}>backoffice_users</code>, o mesmo que <code className={codeBadge}>get_backoffice_session()</code> devolve).</>,
-                          <><code className={codeBadge}>Escrita_Admin_Mgr_Ins</code> e <code className={codeBadge}>Escrita_Admin_Mgr_Upd</code> — liberam <code className={codeBadge}>INSERT</code>/<code className={codeBadge}>UPDATE</code> só pra quem tem cargo <code className={codeBadge}>admin</code> ou <code className={codeBadge}>manager</code>, nunca <code className={codeBadge}>viewer</code>.</>,
-                          <><code className={codeBadge}>Delete_Admin</code> — <code className={codeBadge}>DELETE</code> restrito estritamente ao cargo <code className={codeBadge}>admin</code>.</>,
+                          <><code className={codeBadge}>Acesso_Admin_Total</code> — só admin: domínios permitidos, auditoria de usuários do backoffice e histórico de login.</>,
+                          <>Tabela sem política (ex.: <code className={codeBadge}>edge_rate_limits</code>) = acesso só pelo servidor. Tabela nova: sem permissão para <code className={codeBadge}>anon</code>/<code className={codeBadge}>authenticated</code>; leitura do backoffice por RPC.</>,
                           <>Essas políticas são todas escopadas pra role <code className={codeBadge}>authenticated</code> — ou seja, dependem de haver um JWT de sessão no contexto da requisição. É exatamente por isso que o role <code className={codeBadge}>db_edge_worker</code> (usado por <code className={codeBadge}>_shared/db.ts</code> pra escrever direto via Transaction Pooler) PRECISA do atributo <code className={codeBadge}>BYPASSRLS</code>: uma conexão Postgres crua via <code className={codeBadge}>postgres.js</code> nunca tem esse contexto de JWT, então sem <code className={codeBadge}>BYPASSRLS</code> toda query dele seria bloqueada antes de chegar em qualquer <code className={codeBadge}>GRANT</code> (detalhes completos na aba "Segredos & Blindagem").</>,
                           <><i>Nota histórica:</i> a tabela <code className={codeBadge}>session_tokens</code>, que existia antes da migração pra sessão stateless via JWT, foi removida do banco — o fluxo completo de como a autenticação funciona hoje (sem nenhuma tabela de sessão) está detalhado na aba "Serviços & Auth Stateless".</>
+                        ]
+                      },
+                      {
+                        q: "Como escrever uma migration sem perder segurança?",
+                        a: <>Regras completas no <code className={codeBadge}>AGENTS.md</code> (seção Migrations):</>,
+                        bullets: [
+                          <>Tabela nova ou recriada declara RLS, políticas, permissões (<code className={codeBadge}>revoke all … from anon, authenticated</code> e depois só o necessário), triggers, chaves estrangeiras e índices.</>,
+                          <>Recriar tabela (ex.: posicionar coluna, como <code className={codeBadge}>backoffice_users.sbx_login</code> em <code className={codeBadge}>20261120210000</code>): copiar os dados antes dos triggers, mesmos nomes, tudo em <code className={codeBadge}>begin</code>/<code className={codeBadge}>commit</code>.</>,
+                          <>Funções <code className={codeBadge}>security definer</code> sempre com <code className={codeBadge}>search_path</code> fixo; o SQL completo vai no comentário do arquivo que usa a função.</>,
+                          <>O SQL fica em <code className={codeBadge}>Claude outputs/</code> com nome datado e é rodado em cada ambiente; depois, conferir dados, colunas, políticas, triggers, índices e permissões.</>
                         ]
                       },
                       {
@@ -624,7 +748,7 @@ function SandboxHelpPage() {
                     items={[
                       {
                         q: "O que é uma RPC nesse projeto, e por que preferimos isso a uma Edge Function?",
-                        a: "RPC = uma função PL/pgSQL rodando dentro do próprio Postgres, chamada pelo front-end via `supabase.rpc('nome', {...})` (SDK) ou `POST /rest/v1/rpc/nome` (fetch cru via PostgREST). As duas RPCs do projeto são `SECURITY DEFINER`:",
+                        a: "RPC = uma função PL/pgSQL rodando dentro do próprio Postgres, chamada pelo front-end via `supabase.rpc('nome', {...})` (SDK) ou `POST /rest/v1/rpc/nome` (fetch cru via PostgREST). As RPCs do backoffice (`get_backoffice_*`, `save_*`, `create_*`, `toggle_*`) são `SECURITY DEFINER` com `search_path` fixo e checam usuário, perfil e escopo:",
                         bullets: [
                           <>Elimina um hop de rede inteiro (Front-end → Edge Function → Postgres vira Front-end → Postgres) — mais rápido e com uma peça a menos pra quebrar.</>,
                           <>Herda automaticamente o contexto de autenticação da requisição (<code className={codeBadge}>auth.jwt()</code>/<code className={codeBadge}>auth.email()</code>) — não precisa repassar token manualmente como faria uma Edge Function chamando o banco.</>,
@@ -645,9 +769,19 @@ function SandboxHelpPage() {
                         a: <>Grava uma linha em <code className={codeBadge}>login_history</code>. Migração <code className={codeBadge}>20260917120000_create_log_access_event_rpc.sql</code> — reproduz 100% da lógica que antes vivia na Edge Function <code className={codeBadge}>log-access</code> (hoje reaproveitada para outro papel, ver aba "Segredos & Blindagem"):</>,
                         bullets: [
                           <>Assinatura: <code className={codeBadge}>log_access_event(p_event, p_success, p_origin_page, p_origin_function, p_failure_reason)</code> — identidade sempre via <code className={codeBadge}>auth.email()</code>, nunca um parâmetro de e-mail.</>,
-                          <>Allowlist de eventos (<code className={codeBadge}>login</code>/<code className={codeBadge}>refresh</code>/<code className={codeBadge}>logout</code>/<code className={codeBadge}>failed_attempt</code>/<code className={codeBadge}>blocked</code>) e de páginas de origem — valor fora da lista é rejeitado, não gravado "do jeito que veio".</>,
+                          <>Allowlist de eventos (<code className={codeBadge}>login</code>/<code className={codeBadge}>refresh</code>/<code className={codeBadge}>logout</code>/<code className={codeBadge}>failed_attempt</code>/<code className={codeBadge}>blocked</code>/<code className={codeBadge}>page_view</code>/<code className={codeBadge}>ui_error</code>) e de páginas de origem (inclui <code className={codeBadge}>/backoffice/sandbox</code>) — valor fora da lista não é gravado do jeito que veio.</>,
                           <>Rate limit e checagem de staff embutidos na própria função, mais truncamento de campos de texto e parsing de device/OS (via <code className={codeBadge}>ilike</code> no user-agent) antes de montar o <code className={codeBadge}>origin_details</code> final.</>,
-                          <><code className={codeBadge}>GRANT EXECUTE</code> concedido só a <code className={codeBadge}>authenticated</code> — <code className={codeBadge}>anon</code> não pode chamar, e não precisou de nenhum <code className={codeBadge}>REVOKE</code> adicional porque essa role nunca teve grant direto nas tabelas.</>
+                          <>IP pela regra SBXW-17 (<code className={codeBadge}>cf-connecting-ip</code> primeiro; <code className={codeBadge}>x-client-ip</code> não é lido) e user-agent limitado a 500 caracteres — migração <code className={codeBadge}>20261120220000</code>.</>,
+                          <>Execução só para <code className={codeBadge}>authenticated</code> (<code className={codeBadge}>public</code>/<code className={codeBadge}>anon</code> revogados); páginas do Sandbox na lista desde <code className={codeBadge}>20261120230000</code>.</>
+                        ]
+                      },
+                      {
+                        q: "O que a função has_backoffice_access(login) faz?",
+                        a: <>Usada pelo login do hub para a marca <code className={codeBadge}>backofficeAccess</code> (migração <code className={codeBadge}>20261120240000</code>):</>,
+                        bullets: [
+                          <>Devolve só <code className={codeBadge}>true</code>/<code className={codeBadge}>false</code>: existe usuário <b>ativo</b> em <code className={codeBadge}>backoffice_users</code> com esse <code className={codeBadge}>sbx_login</code> (sem diferenciar maiúsculas).</>,
+                          <><code className={codeBadge}>security definer</code>, <code className={codeBadge}>search_path</code> fixo; execução só para <code className={codeBadge}>db_edge_worker</code> (<code className={codeBadge}>public</code>, <code className={codeBadge}>anon</code> e <code className={codeBadge}>authenticated</code> revogados).</>,
+                          <>Exemplo do padrão: o papel das Edge Functions não lê <code className={codeBadge}>backoffice_users</code>; a função expõe só o necessário.</>
                         ]
                       },
                       {

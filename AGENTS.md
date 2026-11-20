@@ -126,6 +126,17 @@ Regras:
   Tabela sem política (ex.: `edge_rate_limits`) = só servidor.
 - Tabela nova de dados: **sem** permissão para `anon`/`authenticated`; leitura do backoffice por
   RPC com checagem de usuário e escopo, nunca por `select` direto.
+- **Padrão de acesso ao banco pelas Edge Functions** (`_shared/db.ts`, papel `db_edge_worker`):
+  1. Antes de consultar uma tabela, confirmar que o `db_edge_worker` tem permissão nela
+     (`has_table_privilege('db_edge_worker', 'public.<tabela>', 'select')`). Não ampliar as
+     permissões desse papel para "fazer funcionar".
+  2. Dado fora das tabelas das jornadas (ex.: `backoffice_users`): criar função `security definer`
+     com `search_path` fixo que devolve **só o necessário** (ex.: `true/false`), com
+     `revoke execute … from public, anon, authenticated` e `grant execute … to db_edge_worker`.
+     Exemplo: `has_backoffice_access(login)`.
+  3. A Edge Function chama a função (`select public.<função>(${valor}) as ok`), nunca a tabela.
+  4. Falha na consulta não derruba o fluxo do cliente quando o dado é só de exibição (devolve o
+     padrão seguro, ex.: `false`) e fica registrada no log, sem dados pessoais.
 - Perfis do backoffice: `admin`, `manager`, `viewer`. Telas e RPCs administrativas exigem `admin`.
 - Dados pessoais: mascarar com `mask_document` / `mask_email` / `mask_phone` nas RPCs de listagem;
   visualização de dado completo registrada (`log_pii_view`).
