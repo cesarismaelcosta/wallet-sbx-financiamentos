@@ -117,7 +117,7 @@ Três tipos de acesso, sempre com RLS ligado em **todas** as tabelas de `public`
 | Quem | Como acessa | O que pode |
 |---|---|---|
 | Cliente do hub (Superbid) | Nunca usa Supabase Auth. O navegador só chama Edge Functions (chave `anon`) com o token de sessão sbX. | `anon`: só leitura das tabelas de domínio (`category_types`, `financial_institutions`, `partners`, `product_types`, `result_partner_types`, `result_types`, `stage_types`, `status_types`). Nada de dados de clientes. |
-| Edge Functions | Validam sessão/assinatura (`withSecurity`, rate limit em `edge_rate_limits`) e acessam o banco no servidor (service role / conexão direta). | Leitura e gravação das jornadas, simulações, visitas e notificações. É o **único** caminho de escrita dos dados do hub. |
+| Edge Functions | Validam sessão/assinatura (`withSecurity`, rate limit em `edge_rate_limits`) e acessam o banco no servidor: conexão direta (`_shared/db.ts`) com o papel **`db_edge_worker`** (privilégio mínimo) ou cliente com service role onde já é assim (ex.: `manage-backoffice-users`). | `db_edge_worker`: só as tabelas das jornadas (visitas, simulações, consentimentos, notificações, domínio). **Não** lê tabelas do backoffice: quando precisar de algo de lá, uma função `security definer` que devolve só o necessário, com `execute` só para `db_edge_worker` (ex.: `has_backoffice_access`). É o **único** caminho de escrita dos dados do hub. |
 | Usuário do backoffice | Supabase Auth (`authenticated`) + cadastro ativo em `backoffice_users`. | Acesso direto só de leitura a `backoffice_users` e às tabelas de domínio. Todo o resto por RPCs `get_backoffice_*` / `save_*` / `create_*` / `toggle_*` (`security definer`, `search_path` fixo) que checam o usuário (`is_current_user_backoffice`, `is_current_user_backoffice_admin`, `check_user_role`) e o escopo (`allowed_partners` / `allowed_products`). Gestão de usuários pela Edge Function `manage-backoffice-users` (só admin). |
 
 Regras:
@@ -131,14 +131,38 @@ Regras:
   visualização de dado completo registrada (`log_pii_view`).
 - Auditoria: mudanças em `backoffice_users` registradas por trigger em `backoffice_user_details`.
 - Nenhum dado de cliente é lido pelo navegador direto das tabelas.
+- **Sandbox**: só em `/backoffice/sandbox` (e `/backoffice/sandbox/help`), para **admin** do backoffice
+  (login do backoffice + perfil admin, checados em `backoffice.lazy.tsx`). Não existe `/sandbox` fora
+  do backoffice. O link "Backoffice" no avatar do hub aparece só com a marca `backofficeAccess` do
+  token de sessão (login da Superbid em `backoffice_users.sbx_login` de usuário ativo) e não autoriza
+  nada.
 - **IP do cliente**: sempre de `cf-connecting-ip` (definido pela Cloudflare) ou do IP assinado entre
   funções (`_shared/client-ip.ts`); nunca de `x-client-ip` sem assinatura nem do 1º item do
   `x-forwarded-for` como fonte principal (o cliente pode enviá-los). Vale para Edge Functions e
   funções do banco (regra SBXW-17).
-- **Funções do banco documentadas no código**: várias RPCs/triggers têm o SQL ou o contrato descrito
-  em comentários (ex.: `backoffice.users.lazy.tsx`, `backoffice.consults.lazy.tsx`, `AuthContext.tsx`,
-  `_shared/registry.ts`). Toda migration que muda uma função atualiza também esses comentários,
-  com o nome do arquivo de migration.
+- **Funções do banco documentadas no código** (obrigatório): toda função, trigger ou tabela do banco
+  usada pelo código tem o SQL no comentário de cabeçalho do arquivo que a usa (ex.:
+  `backoffice.users.lazy.tsx`, `backoffice.consults.lazy.tsx`, `AuthContext.tsx`,
+  `_shared/backoffice-access.ts`). Formato:
+
+  ```ts
+  /**
+   * -------------------------------------------------------------------------
+   * [BANCO] <nome da função> — migração <AAAAMMDDHHMMSS>
+   * -------------------------------------------------------------------------
+   * CREATE OR REPLACE FUNCTION public.<nome>(<parâmetros>) RETURNS <tipo>
+   *   SECURITY DEFINER SET search_path TO 'public', 'pg_temp'
+   * AS $$ <corpo completo> $$;
+   * REVOKE EXECUTE ON FUNCTION ... FROM public, anon, ...;
+   * GRANT EXECUTE ON FUNCTION ... TO <papel>;
+   */
+  ```
+
+  - Função nova: o bloco entra no arquivo que a chama, na mesma entrega da migration.
+  - Função alterada: o bloco é atualizado (SQL e número da migration) em **todos** os arquivos que a
+    descrevem.
+  - Tabela/coluna nova ou alterada: descrever colunas, índices, RLS/políticas e permissões no mesmo
+    formato, com a migration.
 
 ## 8. Telas (padrão visual e de texto)
 
