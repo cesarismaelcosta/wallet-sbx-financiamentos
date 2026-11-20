@@ -5,7 +5,12 @@
  * A FlowCredi (Partner Webhook Dispatcher, evento `bank.status_changed`) faz um POST para
  * `/financial-gateway-webhook/flowcredi` quando o status de uma proposta muda num banco.
  *
- * Segurança (sem secret nova): o aviso é só uma "campainha". Do corpo usamos apenas o
+ * Assinatura: cada aviso traz X-Flowcredi-Timestamp e X-Flowcredi-Signature
+ * (`sha256=` + HMAC-SHA256 de `{timestamp}.{corpo cru}` com o segredo da assinatura, guardado
+ * na secret FLOWCREDI_WEBHOOK_SECRET). Fora da janela de MAX_AGE_MS ou assinatura inválida → 401
+ * (4xx encerra a entrega na FlowCredi). Secret ausente → 503 (5xx: a FlowCredi tenta de novo).
+ *
+ * Além da assinatura, o aviso é só uma "campainha". Do corpo usamos apenas o
  * `data.processId`; o status gravado vem SEMPRE de uma consulta nossa à Process Bank API
  * (GET /processes/{processId}/banks) com o token do parceiro (FLOWCREDI_API_KEY), que só
  * devolve processos da Superbid. Um aviso falso não altera nada.
@@ -24,11 +29,13 @@ import { sql } from "../_shared/db.ts";
 import { debugLog } from "../_shared/logger.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 import { STATUS, STAGE } from "../_shared/types.ts";
+import { generateSignature } from "../_shared/crypto.ts";
 
 const FLOWCREDI_PARTNER_ID = 3;
 const MAX_CHECKS_PER_HOUR = 30; // teto de consultas por processo (proteção contra avisos em massa)
 const MAX_BODY_BYTES = 64 * 1024;
 const SOURCE = "flowcredi_webhook";
+const MAX_AGE_MS = 5 * 60 * 1000; // janela de validade do aviso (contra reenvio de aviso antigo)
 
 const HOSTS = { staging: "https://api.staging.flowcredi.com.br", production: "https://api.flowcredi.com.br" } as const;
 
@@ -86,12 +93,50 @@ const snapshot = (banks: BankInProcess[]) =>
     }))
     .sort((a, b) => String(a.bankCode).localeCompare(String(b.bankCode)));
 
+/** Compara em tempo constante (o tempo não varia conforme o ponto da diferença). */
+function safeCompare(a: string, b: string): boolean {
+  const x = new TextEncoder().encode(a);
+  const y = new TextEncoder().encode(b);
+  if (x.length !== y.length) return false;
+  let result = 0;
+  for (let i = 0; i < x.length; i++) result |= x[i] ^ y[i];
+  return result === 0;
+}
+
+const hexToBase64 = (hex: string) =>
+  btoa(String.fromCharCode(...(hex.match(/../g) ?? []).map((h) => parseInt(h, 16))));
+
+/** Valida X-Flowcredi-Timestamp + X-Flowcredi-Signature sobre o corpo cru. */
+async function signatureCheck(req: Request, raw: string, secret: string): Promise<"ok" | "missing" | "expired" | "invalid"> {
+  const timestamp = (req.headers.get("x-flowcredi-timestamp") ?? "").trim();
+  const signature = (req.headers.get("x-flowcredi-signature") ?? "").trim().replace(/^sha256=/i, "");
+  if (!/^\d{9,11}$/.test(timestamp) || !signature) return "missing";
+  if (Math.abs(Date.now() - Number(timestamp) * 1000) > MAX_AGE_MS) return "expired";
+  const hex = await generateSignature(`${timestamp}.${raw}`, secret);
+  // A documentação não diz o formato: aceita hexadecimal ou base64
+  const valid = safeCompare(hex, signature.toLowerCase()) || safeCompare(hexToBase64(hex), signature);
+  return valid ? "ok" : "invalid";
+}
+
 export async function tratarWebhookFlowcredi(req: Request): Promise<Response> {
   if (req.method !== "POST") return new Response(JSON.stringify({ error: "Método não permitido" }), { status: 405 });
 
-  // 1) Corpo: só o processId interessa
+  // 1) Assinatura sobre o corpo cru (antes de interpretar o JSON)
   const raw = await req.text();
   if (raw.length > MAX_BODY_BYTES) return ok({ ignored: "body" });
+  const secret = Deno.env.get("FLOWCREDI_WEBHOOK_SECRET") ?? "";
+  if (!secret) {
+    console.error("[FlowCredi Webhook] FLOWCREDI_WEBHOOK_SECRET ausente; aviso recusado.");
+    return new Response(JSON.stringify({ error: "Indisponível" }), { status: 503 });
+  }
+  const check = await signatureCheck(req, raw, secret);
+  if (check !== "ok") {
+    debugLog(`⛔ [FlowCredi Webhook] Assinatura recusada: ${check}`);
+    return new Response(JSON.stringify({ error: "Assinatura inválida" }), { status: 401 });
+  }
+  debugLog("✅ [FlowCredi Webhook] Assinatura válida.");
+
+  // 2) Corpo: só o processId interessa
   let event: Record<string, unknown> = {};
   try {
     event = JSON.parse(raw);
@@ -102,7 +147,7 @@ export async function tratarWebhookFlowcredi(req: Request): Promise<Response> {
   const processId = String(data.processId ?? "").trim();
   if (!/^[\w-]{8,100}$/.test(processId)) return ok({ ignored: "processId" });
 
-  // 2) Só processos nossos (criados pela Wallet com a FlowCredi)
+  // 3) Só processos nossos (criados pela Wallet com a FlowCredi)
   const [sim] = await sql`
     select id, status_id from simulations
     where external_operation_id = ${processId} and partner_id = ${FLOWCREDI_PARTNER_ID}
@@ -112,7 +157,7 @@ export async function tratarWebhookFlowcredi(req: Request): Promise<Response> {
     return ok({ ignored: "unknown" });
   }
 
-  // 3) Retentativa do mesmo evento ou excesso de avisos → ignora
+  // 4) Retentativa do mesmo evento ou excesso de avisos → ignora
   const eventId = String(event.id ?? "").slice(0, 100);
   const [seen] = await sql`
     select
@@ -126,7 +171,7 @@ export async function tratarWebhookFlowcredi(req: Request): Promise<Response> {
     return ok({ ignored: "throttled" });
   }
 
-  // 4) Fonte da verdade: Process Bank API, no ambiente configurado para a FlowCredi
+  // 5) Fonte da verdade: Process Bank API, no ambiente configurado para a FlowCredi
   const [cfg] = await sql`
     select integration_details->>'partner_environment' as env from orchestrator_configs
     where partner_id = ${FLOWCREDI_PARTNER_ID} and integration_details ? 'partner_environment' limit 1`;
@@ -147,7 +192,7 @@ export async function tratarWebhookFlowcredi(req: Request): Promise<Response> {
   const banks = snapshot(Array.isArray(body?.banks) ? body.banks : []);
   const statusId = overallStatus(banks);
 
-  // 5) Grava só se o quadro mudou desde o último aviso
+  // 6) Grava só se o quadro mudou desde o último aviso
   const [last] = await sql`
     select simulation_details->'banks' as banks from simulation_updates
     where simulation_id = ${sim.id} and raw_payload->>'source' = ${SOURCE}
