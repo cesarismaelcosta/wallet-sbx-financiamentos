@@ -16,12 +16,19 @@
  *   - `parcelas` só volta com retornarParcelas=true E uma simulação no retorno
  * Response: array (404 = nenhuma simulação). Sempre a API real (simular não cria lead).
  *
- * --- LEADS (Flow Preamble API) ---
- * POST {FLOWCREDI_LEADS_URL}/mortgage/lead | /cgi/lead | /auto/lead · Bearer FLOWCREDI_API_KEY
- * 201 → { message, lead }. Envio controlado por FLOWCREDI_SEND_LEAD.
+ * --- PROCESSOS (Process API, substitui a Preamble API descontinuada) ---
+ * POST {process-api}/processos · Bearer FLOWCREDI_API_KEY (token do Portal Parceiro).
+ * produto FINANCIAMENTO | CGI | CGA; titular em participantes[] (um PRINCIPAL).
+ * 201 → processo criado · 200 + existingProcessReturned → processo já existente (mesmo CPF e
+ * produto em até 7 dias). Os dois são sucesso; o processoId vai em external_operation_id.
+ *
+ * --- TERMOS (Terms Acceptance API) ---
+ * POST {terms-service}/acceptances/batch com CPF, versões aceitas, IP e user-agent do cliente.
+ * Falha aqui não impede o envio do processo (fica registrada no raw).
  *
  * --- AMBIENTE ---
- * URLs nas constantes abaixo · Secret: FLOWCREDI_API_KEY
+ * orchestrator_configs.integration_details.partner_environment: "staging" | "production"
+ * (ausente = production). O token da secret FLOWCREDI_API_KEY precisa ser do mesmo ambiente.
  */
 
 import { Consultation, Entity, SimulationPayload, JourneyRules } from "../_shared/types.ts";
@@ -33,23 +40,56 @@ import { sql } from "../_shared/db.ts";
 // CONFIGURAÇÃO
 // =========================================================================
 
-/** Simulador da FlowCredi (produção). Staging: https://api.staging.flowcredi.com.br/simulador/v1 */
-const FLOWCREDI_SIMULATOR_URL = "https://api.flowcredi.com.br/simulador/v1";
+export type FlowEnv = "staging" | "production";
 
-/** API de leads (Flow Preamble API). A documentação só traz o servidor dev; produção a confirmar com a FlowCredi. */
-const FLOWCREDI_LEADS_URL = "https://age3aiv1gd.execute-api.us-east-1.amazonaws.com/dev";
+/** Hosts da FlowCredi por ambiente. */
+const FLOWCREDI_HOSTS: Record<FlowEnv, string> = {
+  staging: "https://api.staging.flowcredi.com.br",
+  production: "https://api.flowcredi.com.br",
+};
+
+/** URLs das APIs da FlowCredi no ambiente informado. */
+export function flowUrls(env: FlowEnv) {
+  const host = FLOWCREDI_HOSTS[env];
+  return {
+    simulator: `${host}/simulador/v1`,
+    process: `${host}/process-api/v1`,
+    terms: `${host}/terms-service/v1`,
+  };
+}
+
+/** Ambiente do parceiro (integration_details.partner_environment, vindo do servidor). Padrão: production. */
+export function flowEnv(payload: SimulationPayload): FlowEnv {
+  const env = String(payload?.integration_details?.partner_environment ?? "").trim().toLowerCase();
+  return env === "staging" ? "staging" : "production";
+}
 
 /**
- * Envio do lead à FlowCredi. false: o lead é montado e a simulação é gravada como
- * "Em análise", mas nada é enviado (a tela mostra sucesso). true: envia para
- * FLOWCREDI_LEADS_URL. Trocar para true junto com a URL de produção.
+ * fetch com nova tentativa em 429 (limite de 120 chamadas/min por parceiro), com espera
+ * progressiva (0,5s, 1s, 2s). Respeita Retry-After quando vier.
  */
-export const FLOWCREDI_SEND_LEAD = false;
+async function flowFetch(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const waits = [500, 1000, 2000];
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    if (res.status !== 429 || attempt >= waits.length) return res;
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 5000) : waits[attempt];
+    debugLog(`⏳ [FlowCredi] 429 em ${new URL(url).pathname}; nova tentativa em ${wait}ms.`);
+    await res.body?.cancel();
+    await new Promise((r) => setTimeout(r, wait));
+  }
+}
+
+function flowToken(): string {
+  const token = Deno.env.get("FLOWCREDI_API_KEY") ?? "";
+  if (!token) throw new Error("FLOWCREDI_NOT_CONFIGURED: FLOWCREDI_API_KEY ausente.");
+  return token;
+}
 
 export const STATUS_OK = STATUS.COM_CONDICOES; // Simulação · Com condições
 export const STATUS_NONE = STATUS.SEM_CONDICOES; // Simulação · Sem condições
-// Lead · Enviado só quando o lead sai de fato; com o envio desligado, Lead · Pendente envio
-export const STATUS_LEAD_SENT = FLOWCREDI_SEND_LEAD ? STATUS.ENVIADO : STATUS.PENDENTE_ENVIO;
+export const STATUS_LEAD_SENT = STATUS.ENVIADO; // Lead · Enviado
 
 // =========================================================================
 // TIPOS
@@ -71,6 +111,8 @@ export interface FlowSimRequest {
   retornarParcelas?: boolean;
   renda?: number;
   uf?: string;
+  /** Ambiente da FlowCredi (não vai no corpo do simulador). */
+  env?: FlowEnv;
 }
 
 export interface FlowParcela {
@@ -114,15 +156,28 @@ export interface FlowSimItem {
 
 /** Regras da jornada (orchestrator_configs.rules) lidas pelos serviços da FlowCredi. */
 export interface FlowRules extends JourneyRules {
-  flowcredi_product?: "mortgage" | "home_equity" | "auto_equity";
-  flowcredi_bank?: string;
-  flowcredi_bank_by_seller?: Record<string, string>;
+  /** Banco fixo na simulação (regra genérica; use numa linha SELLER/EVENT para casos como imóveis de um banco). */
+  fixed_bank?: string;
   max_financing_percentage?: number;
   min_financed_amount?: number;
   min_term_months?: number;
   max_term_months?: number;
   min_monthly_income?: number;
   max_loan_percentage?: number;
+  min_property_value?: number;
+  max_property_value?: number;
+  min_loan_amount?: number;
+  min_loan_term_months?: number;
+  /** Imóveis: limites por subcategoria da oferta ("*" = não listada). */
+  subcategory_limits?: Record<string, Partial<Pick<FlowRules, "max_financing_percentage" | "max_term_months" | "min_term_months">>>;
+  /** Home equity: % máximo do imóvel por tipo (sem chave: max_loan_percentage). */
+  loan_percentage_by_type?: Record<string, number>;
+  /** Home equity: tipos de imóvel não aceitos. */
+  blocked_property_types?: string[];
+  /** Car equity: elegibilidade do parceiro. */
+  max_vehicle_age_years?: number;
+  allowed_licensing_states?: string[];
+  min_vehicle_value?: number;
 }
 
 /** Condições do banco gravadas em simulation_consults.simulation_details. */
@@ -143,6 +198,7 @@ export interface FlowConditionDetails {
   dfi: number;
   tac: number;
   rendaMinima: number;
+  rendaSuficiente?: boolean | null;
   valorSubsidio: number;
   uf: string;
   regiao: string;
@@ -154,12 +210,29 @@ export type FlowConsultation = Consultation & {
   installment_schedule?: FlowParcela[];
 };
 
-/** Retorno de sendLead: resposta da API (201 → { message, lead }) ou o aviso de envio desligado. */
-export interface FlowLeadResponse {
-  message?: string;
-  lead?: unknown;
-  sent?: boolean;
-  [key: string]: unknown;
+/** Cliente final (IP e user-agent capturados pelo servidor), exigido pela API de Termos. */
+export interface FlowClient {
+  ip?: string | null;
+  userAgent?: string | null;
+}
+
+/** Resultado do envio: processo criado (ou já existente) e o registro dos aceites. */
+export interface FlowLeadResult {
+  processoId: string | null;
+  existing: boolean;
+  status: number;
+  terms: { ok: boolean; status?: number; error?: string; detail?: unknown };
+}
+
+/** Remove dados pessoais (CPF, IP, user-agent, quem aceitou) do retorno da API de Termos. */
+function stripPersonal(v: unknown, depth = 0): unknown {
+  if (depth > 6 || v === null || typeof v !== "object") return v;
+  if (Array.isArray(v)) return v.slice(0, 20).map((x) => stripPersonal(x, depth + 1));
+  return Object.fromEntries(
+    Object.entries(v as Record<string, unknown>)
+      .filter(([k]) => !/^(cpf|ip|useragent|user_agent|acceptedby|accepted_by|documento)$/i.test(k))
+      .map(([k, x]) => [k, stripPersonal(x, depth + 1)]),
+  );
 }
 
 /** E-mail ao cliente devolvido em raw.notifications. */
@@ -236,21 +309,101 @@ export function assertRequiredConsents(payload: SimulationPayload) {
   if (missing.length > 0) throw businessError("Aceite os termos obrigatórios para enviar a proposta.");
 }
 
-/** Dados de contato do cadastro, no formato dos leads (comuns a /mortgage, /cgi e /auto). */
-export function leadContact(payload: SimulationPayload, productLabel: string) {
+const onlyDigits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
+
+/** CPF no formato da API: 123.456.789-00. */
+export const fmtCpf = (cpf: string) => cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+
+/** CEP no formato da API: 01310-100 (vazio se inválido). */
+export const fmtCep = (v: unknown) => {
+  const d = onlyDigits(v);
+  return d.length === 8 ? `${d.slice(0, 5)}-${d.slice(5)}` : "";
+};
+
+/** Telefone no formato da API: (11) 99999-9999 / (11) 3333-4444. */
+export const fmtPhone = (digits: string) =>
+  digits.length === 11
+    ? `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
+    : `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+
+/** Endereço e nome da mãe do cadastro Superbid (entity_details), quando existirem. */
+export function entityAddress(payload: SimulationPayload) {
+  const details = ((payload.entity as Entity)?.entity_details ?? {}) as Record<string, unknown>;
+  const a = (details.address ?? {}) as Record<string, unknown>;
+  const str = (v: unknown, max: number) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, max);
+  const uf = str(a.state, 2).toUpperCase();
+  return {
+    cep: fmtCep(a.zip_code),
+    logradouro: str(a.street, 200),
+    numero: str(a.number, 20),
+    complemento: str(a.complement, 100),
+    bairro: str(a.neighborhood, 100),
+    cidade: str(a.city, 100),
+    estado: /^[A-Z]{2}$/.test(uf) ? uf : "",
+    nome_mae: str(details.mothers_name, 150),
+  };
+}
+
+/** Remove chaves vazias (""/null/undefined) de um objeto. */
+export const compact = <T extends Record<string, unknown>>(o: T) =>
+  Object.fromEntries(Object.entries(o).filter(([, v]) => v !== "" && v !== null && v !== undefined)) as Partial<T>;
+
+/**
+ * Titular (participante PRINCIPAL) com os dados do cadastro. `extra` traz os campos do
+ * produto (residência, profissão etc.). Sem dado obrigatório → erro amigável.
+ */
+export function flowPrincipal(payload: SimulationPayload, productLabel: string, renda: number, extra: Record<string, unknown> = {}) {
   const entity = (payload.entity as Entity) || ({} as Entity);
-  const cpf = String(entity.document ?? "").replace(/\D/g, "");
-  const telefone = String(entity.phone ?? "").replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+  const cpf = onlyDigits(entity.document);
+  const telefone = onlyDigits(entity.phone).replace(/^55(?=\d{10,11}$)/, "");
   if (cpf.length !== 11) throw businessError(`${productLabel} está disponível apenas para pessoa física.`);
   if (!entity.name || !entity.email || telefone.length < 10) {
     throw businessError("Complete nome, e-mail e celular no seu cadastro para enviar a proposta.");
   }
   return {
-    refId: payload.simulation_id ? String(payload.simulation_id) : undefined,
+    tipo_participante: "PRINCIPAL",
+    tipo_pessoa: "PF",
+    documento: fmtCpf(cpf),
     nome: String(entity.name).trim(),
     email: String(entity.email).trim(),
-    cpf,
-    telefone,
+    telefone: fmtPhone(telefone),
+    data_nascimento: toBRDate(birthDateOf(payload)),
+    renda_mensal: renda,
+    ...compact(extra),
+  };
+}
+
+/** refId do processo: o id da simulação (até 100 caracteres). */
+export const flowRefId = (payload: SimulationPayload) =>
+  payload.simulation_id ? String(payload.simulation_id).slice(0, 100) : undefined;
+
+type TermsConsentInput = ConsentInput & { terms_version?: unknown };
+
+/**
+ * Aceites de termos do parceiro marcados pelo cliente. O tipo vem da configuração do servidor
+ * (consent_configs[].terms_type) e a versão é a exibida na tela (terms_version, do texto
+ * oficial carregado da API de termos). Sem versão exibida → vai sem versão (vale a ativa).
+ */
+function acceptedTerms(payload: SimulationPayload): { type: string; version?: number }[] {
+  const configs: { id?: string | number; terms_type?: string }[] = Array.isArray(payload.consent_configs) ? payload.consent_configs : [];
+  // Só aceites configurados no servidor (o cliente não inventa tipos)
+  const typeById = new Map(configs.filter((c) => c?.id && c?.terms_type).map((c) => [String(c.id), String(c.terms_type)]));
+  return (Array.isArray(payload.consents) ? payload.consents : [])
+    .filter((c: TermsConsentInput | null): c is TermsConsentInput => !!c?.consent_id && c?.acceptedConsents !== false)
+    .map((c: TermsConsentInput) => {
+      const type = typeById.get(String(c.consent_id));
+      const v = Number(c.terms_version);
+      return type ? { type, ...(Number.isInteger(v) && v > 0 && v < 1000 ? { version: v } : {}) } : null;
+    })
+    .filter((t): t is { type: string; version?: number } => !!t);
+}
+
+/** aceita_uso_dados (Política + Termo de Uso) e aceita_consulta_credito (SCR). */
+export function consentFlags(payload: SimulationPayload) {
+  const types = new Set(acceptedTerms(payload).map((t) => t.type));
+  return {
+    aceita_uso_dados: types.has("politica_privacidade") && types.has("termos_gerais"),
+    aceita_consulta_credito: types.has("autorizacao_scr"),
   };
 }
 
@@ -259,15 +412,14 @@ export function leadContact(payload: SimulationPayload, productLabel: string) {
 // =========================================================================
 
 async function callFlowSimulator(req: FlowSimRequest): Promise<FlowSimItem[]> {
-  const token = Deno.env.get("FLOWCREDI_API_KEY") ?? "";
-  if (!token) throw new Error("FLOWCREDI_NOT_CONFIGURED: FLOWCREDI_API_KEY ausente.");
+  const token = flowToken();
+  const { env, ...simBody } = req;
 
-  const res = await fetch(`${FLOWCREDI_SIMULATOR_URL}/simulador`, {
+  const res = await flowFetch(`${flowUrls(env ?? "production").simulator}/simulador`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(req),
-    signal: AbortSignal.timeout(20000),
-  });
+    body: JSON.stringify(simBody),
+  }, 20000);
 
   if (res.status === 404) return [];
   const body = await res.json().catch(() => null);
@@ -277,7 +429,7 @@ async function callFlowSimulator(req: FlowSimRequest): Promise<FlowSimItem[]> {
 
 /** Retorna as simulações da FlowCredi ([] quando nenhuma condição é encontrada). */
 export async function flowSimulate(req: FlowSimRequest): Promise<FlowSimItem[]> {
-  debugLog("🏠 [FlowCredi Simulador] request:", { ...req, dataNascimento: "***" });
+  debugLog(`🏠 [FlowCredi Simulador] request (${req.env ?? "production"}):`, { ...req, dataNascimento: "***" });
   const items = await callFlowSimulator(req);
   debugLog(`🏠 [FlowCredi Simulador] ${items.length} simulação(ões).`);
   return items;
@@ -320,7 +472,25 @@ async function loadInstitutions(items: FlowSimItem[]): Promise<Map<string, Insti
 }
 
 /** Converte uma simulação da FlowCredi em uma linha de consulta (simulation_consults). */
-function toConsult(it: FlowSimItem, valorImovel: number, statusId: number, isSelected: boolean, message: string | null, inst?: Institution): Consultation {
+/**
+ * Parcela exibida = parcela cheia da tabela (com MIP, DFI e tarifa), não a da lista: a lista
+ * pode vir com outra seguradora (orientação da FlowCredi, item 3.2).
+ */
+function applySchedule(consult: FlowConsultation, schedule: FlowParcela[]) {
+  consult.installment_schedule = schedule;
+  const first = schedule[0]?.parcelaTotal;
+  const last = schedule[schedule.length - 1]?.parcelaTotal;
+  if (Number.isFinite(first) && first > 0) {
+    consult.installment_value = first;
+    if (consult.details) consult.details.primeiraParcela = first;
+  }
+  if (Number.isFinite(last) && last > 0) {
+    consult.last_installment_value = last;
+    if (consult.details) consult.details.ultimaParcela = last;
+  }
+}
+
+function toConsult(it: FlowSimItem, valorImovel: number, statusId: number, isSelected: boolean, message: string | null, inst?: Institution, renda?: number): Consultation {
   const consult: FlowConsultation = {
     status_id: statusId,
     is_selected: isSelected,
@@ -355,6 +525,8 @@ function toConsult(it: FlowSimItem, valorImovel: number, statusId: number, isSel
       dfi: it.dfi,
       tac: it.tac,
       rendaMinima: it.rendaMinima,
+      // Renda informada atende a renda mínima desta condição (30% de comprometimento)?
+      rendaSuficiente: renda && it.rendaMinima ? renda >= it.rendaMinima : null,
       valorSubsidio: it.valorSubsidio,
       uf: it.uf,
       regiao: it.regiao,
@@ -364,7 +536,8 @@ function toConsult(it: FlowSimItem, valorImovel: number, statusId: number, isSel
 }
 
 /** "Taxa Balcão": condição sem exigência de relacionamento com o banco. */
-const isBalcao = (it: FlowSimItem) => /balc[aã]o/i.test(it.produto ?? "");
+// Condição padrão do card: idProduto "Balcao" (taxa base do banco), confirmado pela FlowCredi
+const isBalcao = (it: FlowSimItem) => /balc[aã]o/i.test(`${it.idProduto ?? ""} ${it.produto ?? ""}`);
 
 /**
  * Condição exibida de cada banco: a "Taxa Balcão" (vale para quem não é cliente do banco).
@@ -396,7 +569,8 @@ async function loadSchedules(req: FlowSimRequest, picks: FlowSimItem[]): Promise
   const out = new Map<FlowSimItem, FlowParcela[]>();
   const results = await Promise.allSettled(
     picks.map((it) =>
-      flowSimulate({ ...req, banco: it.banco, idProduto: it.idProduto, idSeguradora: it.seguradora?.id, retornarParcelas: true }),
+      // Sem idSeguradora: cada produto já tem a sua seguradora vinculada (orientação da FlowCredi)
+      flowSimulate({ ...req, banco: it.banco, idProduto: it.idProduto, retornarParcelas: true }),
     ),
   );
   results.forEach((r, i) => {
@@ -410,10 +584,10 @@ async function loadSchedules(req: FlowSimRequest, picks: FlowSimItem[]): Promise
       debugLog("⚠️ [FlowCredi] Parcelas não vieram:", { banco: it.banco, idProduto: it.idProduto, itens: r.value.length });
       return;
     }
-    if (one.banco !== it.banco || one.idProduto !== it.idProduto || one.seguradora?.id !== it.seguradora?.id) {
+    if (one.banco !== it.banco || one.idProduto !== it.idProduto) {
       debugLog("⚠️ [FlowCredi] Parcelas: retorno não bate com a condição pedida:", {
-        pedido: { banco: it.banco, idProduto: it.idProduto, seguradora: it.seguradora?.id },
-        retorno: { banco: one.banco, idProduto: one.idProduto, seguradora: one.seguradora?.id },
+        pedido: { banco: it.banco, idProduto: it.idProduto },
+        retorno: { banco: one.banco, idProduto: one.idProduto },
       });
     }
     out.set(it, one.parcelas);
@@ -453,20 +627,20 @@ export async function simulateConditions(
   const pickSet = new Set(picks);
   const consults = items.map((it) => {
     // is_selected = condição exibida ao cliente (a Taxa Balcão de cada banco; sem Balcão → menor taxa)
-    const consult: FlowConsultation = toConsult(it, req.valorImovel, STATUS_OK, pickSet.has(it), null, institutions.get(normBank(it.banco)));
+    const consult: FlowConsultation = toConsult(it, req.valorImovel, STATUS_OK, pickSet.has(it), null, institutions.get(normBank(it.banco)), req.renda);
     const schedule = pickSet.has(it) ? schedules.get(it) : undefined;
-    if (schedule) consult.installment_schedule = schedule;
+    if (schedule) applySchedule(consult, schedule);
     return consult;
   });
   return { consults, count: items.length };
 }
 
 /** Condição pedida pela gaveta de detalhe (banco + produto + seguradora). */
-function readSelection(payload: SimulationPayload): { banco: string; idProduto: string; idSeguradora: string } {
+function readSelection(payload: SimulationPayload): { banco: string; idProduto: string } {
   const s = payload?.simulation_details?.selected ?? {};
   const pick = (v: unknown) => (typeof v === "string" && v.trim().length > 0 && v.length <= 120 ? v.trim() : "");
-  const sel = { banco: pick(s.banco), idProduto: pick(s.idProduto), idSeguradora: pick(s.idSeguradora) };
-  if (!sel.banco || !sel.idProduto || !sel.idSeguradora) throw businessError("Condição inválida.");
+  const sel = { banco: pick(s.banco), idProduto: pick(s.idProduto) };
+  if (!sel.banco || !sel.idProduto) throw businessError("Condição inválida.");
   return sel;
 }
 
@@ -474,18 +648,18 @@ function readSelection(payload: SimulationPayload): { banco: string; idProduto: 
 export async function detailCondition(payload: SimulationPayload, req: FlowSimRequest): Promise<Consultation> {
   const sel = readSelection(payload);
   if (req.banco && sel.banco !== req.banco) throw businessError("Condição indisponível.");
-  const items = await flowSimulate({ ...req, banco: sel.banco, idProduto: sel.idProduto, idSeguradora: sel.idSeguradora, retornarParcelas: true });
+  const items = await flowSimulate({ ...req, banco: sel.banco, idProduto: sel.idProduto, retornarParcelas: true });
   const one: FlowSimItem | undefined = items.length === 1 ? items[0] : items.find((x) => x.banco === sel.banco && x.idProduto === sel.idProduto);
   if (!one || !Array.isArray(one.parcelas) || one.parcelas.length === 0) {
     throw businessError("Não foi possível carregar as parcelas desta condição.");
   }
-  if (one.banco !== sel.banco || one.idProduto !== sel.idProduto || one.seguradora?.id !== sel.idSeguradora) {
+  if (one.banco !== sel.banco || one.idProduto !== sel.idProduto) {
     debugLog("⚠️ [FlowCredi] DETAIL: retorno não bate com a condição pedida:", {
-      pedido: sel, retorno: { banco: one.banco, idProduto: one.idProduto, seguradora: one.seguradora?.id },
+      pedido: sel, retorno: { banco: one.banco, idProduto: one.idProduto },
     });
   }
-  const consult: FlowConsultation = toConsult(one, req.valorImovel, STATUS_OK, true, null);
-  consult.installment_schedule = one.parcelas;
+  const consult: FlowConsultation = toConsult(one, req.valorImovel, STATUS_OK, true, null, undefined, req.renda);
+  applySchedule(consult, one.parcelas);
   return consult;
 }
 
@@ -493,34 +667,100 @@ export async function detailCondition(payload: SimulationPayload, req: FlowSimRe
 // LEADS
 // =========================================================================
 
-/** Envia o lead para a rota do produto ("/mortgage/lead", "/cgi/lead"...). Respeita FLOWCREDI_SEND_LEAD. */
-export async function sendLead(route: string, lead: Record<string, unknown>): Promise<FlowLeadResponse> {
-  if (!FLOWCREDI_SEND_LEAD) {
-    return { message: "Lead não enviado (FLOWCREDI_SEND_LEAD = false).", lead: null, sent: false };
+/** Registra os aceites na API de Termos. Não lança: quem chama decide (sendLead exige 201). */
+async function registerTerms(env: FlowEnv, token: string, payload: SimulationPayload, client: FlowClient): Promise<FlowLeadResult["terms"]> {
+  const items = acceptedTerms(payload);
+  const cpf = onlyDigits((payload.entity as Entity)?.document);
+  if (items.length === 0 || cpf.length !== 11) return { ok: false, error: "sem aceites ou CPF" };
+  if (!client.ip || !client.userAgent) return { ok: false, error: "sem IP ou user-agent do cliente" };
+  try {
+    const res = await fetch(`${flowUrls(env).terms}/acceptances/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        cpf,
+        acceptedBy: `superbid:${String((payload.entity as Entity)?.entity_id ?? cpf)}`,
+        items,
+        ip: client.ip,
+        userAgent: client.userAgent,
+        channel: "wallet-sbx",
+        metadata: { refId: flowRefId(payload) ?? null },
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const body = await res.json().catch(() => ({}));
+    // 201: todos gravados · 207: gravação parcial (o retorno diz item a item o que falhou)
+    const detail = stripPersonal(body);
+    if (res.status === 201) return { ok: true, status: res.status, detail };
+    if (res.status === 207) {
+      debugLog("⚠️ [FlowCredi Termos] Aceites gravados parcialmente:", { enviados: items, retorno: detail });
+      return { ok: false, status: res.status, detail };
+    }
+    debugLog("⚠️ [FlowCredi Termos] Aceites não registrados:", { status: res.status, retorno: detail });
+    return { ok: false, status: res.status, error: String(body?.message ?? ""), detail };
+  } catch (err: unknown) {
+    debugLog("⚠️ [FlowCredi Termos] Falha ao registrar aceites:", (err as Error)?.message);
+    return { ok: false, error: (err as Error)?.message };
   }
-  const token = Deno.env.get("FLOWCREDI_API_KEY") ?? "";
-  if (!token) throw new Error("FLOWCREDI_NOT_CONFIGURED: FLOWCREDI_API_KEY ausente.");
-
-  const res = await fetch(`${FLOWCREDI_LEADS_URL}${route}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(lead),
-    signal: AbortSignal.timeout(20000),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (res.status === 400 && body && !body.message) {
-    // Erro de validação: { campo: ["mensagem", ...] }
-    const detail = Object.entries(body).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("; ");
-    throw new Error(`FLOWCREDI_LEAD_VALIDATION: ${detail}`);
-  }
-  if (!res.ok) throw new Error(`FLOWCREDI_LEAD_ERROR: HTTP ${res.status} ${body?.message ?? ""}`.trim());
-  return body;
 }
 
-/** Linha de consulta do lead enviado (Lead · Enviado, sem banco). */
+/** Tipos de termo recusados no retorno da API de Termos (207: item a item). */
+function refusedTerms(detail: unknown): { type: unknown; status: unknown }[] {
+  const results = (detail as { results?: { type?: unknown; status?: unknown }[] } | null)?.results;
+  if (!Array.isArray(results)) return [];
+  return results
+    .filter((r) => !["ok", "alreadyAccepted"].includes(String(r?.status)))
+    .map((r) => ({ type: r?.type ?? null, status: r?.status ?? null }));
+}
+
+/**
+ * Registra os aceites na API de Termos e, só com 201, cria o processo (POST /processos).
+ * Aceites não registrados (207, erro ou sem resposta) → lança sem criar o processo (vira
+ * "Falha" com o retorno dos termos em `detail`). Processo: 201 e 200 (existingProcessReturned)
+ * são sucesso; erro da API → lança (vira "Falha"); 400 traz os campos faltantes no log.
+ */
+export async function sendLead(
+  payload: SimulationPayload,
+  body: Record<string, unknown>,
+  client: FlowClient = {},
+): Promise<FlowLeadResult> {
+  const env = flowEnv(payload);
+  const token = flowToken();
+
+  // Aceites antes do processo: sem a autorização registrada na FlowCredi, o processo não é criado
+  const terms = await registerTerms(env, token, payload, client);
+  debugLog(`📝 [FlowCredi Termos] ${terms.status ?? "sem resposta"}`, terms.ok ? "" : { recusados: refusedTerms(terms.detail), erro: terms.error ?? null });
+  if (!terms.ok) {
+    const err = new Error("Não foi possível registrar seus aceites na FlowCredi. Tente novamente em instantes.") as Error & { detail?: unknown };
+    err.detail = { terms: { status: terms.status ?? null, refused: refusedTerms(terms.detail), error: terms.error ?? null } };
+    throw err;
+  }
+
+  debugLog(`📨 [FlowCredi Processos] Criando processo ${String(body.produto)} (${env}) refId:`, body.refId);
+
+  const res = await flowFetch(`${flowUrls(env).process}/processos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  }, 20000);
+  const resp = await res.json().catch(() => ({}));
+  if (res.status === 400) {
+    debugLog("⚠️ [FlowCredi Processos] Validação:", { message: resp?.message, missingFields: resp?.missingFields });
+    const missing = Array.isArray(resp?.missingFields) ? ` (${resp.missingFields.join(", ")})` : "";
+    throw new Error(`FLOWCREDI_PROCESS_VALIDATION: ${resp?.message ?? resp?.error ?? "dados inválidos"}${missing}`);
+  }
+  if (res.status !== 201 && res.status !== 200) {
+    throw new Error(`FLOWCREDI_PROCESS_ERROR: HTTP ${res.status} ${resp?.message ?? ""}`.trim());
+  }
+
+  const processoId = resp?.processoId ?? resp?.processo?.processoId ?? resp?.id ?? null;
+  return { processoId: processoId ? String(processoId) : null, existing: resp?.existingProcessReturned === true, status: res.status, terms };
+}
+
+/** Linha de consulta do lead enviado (Lead · Enviado, sem banco). `processoId` → external_operation_id. */
 export function leadConsult(
   req: FlowSimRequest,
-  refId: string | null | undefined,
+  processoId: string | null | undefined,
   opts: { withDownPayment?: boolean } = { withDownPayment: true },
 ): Consultation {
   // Entrada só existe no financiamento imobiliário; no crédito com garantia (home/car equity) não há entrada
@@ -528,7 +768,7 @@ export function leadConsult(
   return {
     status_id: STATUS_LEAD_SENT,
     is_selected: true,
-    external_operation_id: refId ?? null,
+    external_operation_id: processoId ?? null,
     message: null, // sem texto próprio: o nome/descrição do status vêm de status_types
     financial_institution_id: null,
     financial_institution_name: "FlowCredi",
@@ -542,7 +782,12 @@ export function leadConsult(
   };
 }
 
-/** Lead para auditoria (raw), sem dados pessoais. */
-export const maskLead = (lead: Record<string, unknown>) => ({
-  ...lead, cpf: "***", nome: "***", email: "***", telefone: "***", data_nascimento: "***",
+/** Lead (corpo do processo) para auditoria (raw), sem dados pessoais do titular. */
+export const maskLead = (body: Record<string, unknown>) => ({
+  ...body,
+  participantes: (Array.isArray(body.participantes) ? body.participantes : []).map((p: Record<string, unknown>) => ({
+    ...p,
+    documento: "***", nome: "***", email: "***", telefone: "***", data_nascimento: "***", nome_mae: p.nome_mae ? "***" : undefined,
+    logradouro: p.logradouro ? "***" : undefined, numero: p.numero ? "***" : undefined, complemento: p.complemento ? "***" : undefined,
+  })),
 });

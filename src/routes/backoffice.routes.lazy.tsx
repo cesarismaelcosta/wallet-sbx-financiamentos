@@ -182,8 +182,8 @@ type OrchestratorRow = {
 };
 
 // Rascunhos do editor: o JSON é digitado/montado aos poucos, então tudo é opcional.
-type DraftLink = { text?: string; type?: string; url?: string; tooltip_text?: string };
-type DraftConsent = { id?: string; template_text?: string; links?: DraftLink[]; position?: number; is_required?: boolean };
+type DraftLink = { text?: string; type?: string; url?: string; tooltip_text?: string; terms_url?: string };
+type DraftConsent = { id?: string; template_text?: string; links?: DraftLink[]; position?: number; is_required?: boolean; terms_type?: string };
 type DraftTextPart = { text?: string; type?: string };
 type DraftBenefit = { icon?: string; title?: string; description?: string };
 type DraftFooter = { template_text?: string; links?: DraftLink[] };
@@ -307,6 +307,10 @@ function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: DraftCon
             <label className="text-[10px] font-medium text-muted-foreground uppercase">ID do Termo</label>
             <Input value={consent.id} onChange={(e) => onUpdate({ ...consent, id: e.target.value })} className="h-8 text-xs font-mono bg-muted rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" />
           </div>
+          <div className="w-[190px] space-y-1.5">
+            <label className="text-[10px] font-medium text-muted-foreground uppercase">Tipo do termo (API)</label>
+            <Input value={consent.terms_type || ""} placeholder="ex.: termos_gerais" onChange={(e) => onUpdate({ ...consent, terms_type: e.target.value.trim() || undefined })} className="h-8 text-xs font-mono bg-muted rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" />
+          </div>
           <div className="flex items-center gap-2 mb-1.5">
             <Switch checked={consent.is_required} onCheckedChange={(v) => onUpdate({ ...consent, is_required: v })} />
             <span className="text-[10px] font-medium text-muted-foreground uppercase">Obrigatório?</span>
@@ -331,12 +335,13 @@ function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: DraftCon
                     <span className="text-[9px] font-medium text-muted-foreground block uppercase mb-0.5">Texto Destacado</span>
                     <span className="text-xs font-medium text-foreground leading-snug block">{link.text}</span>
                   </div>
-                  <div className="w-[120px]">
+                  <div className="w-[160px]">
                     <Select value={link.type} onValueChange={(v) => updateLinkConfig(idx, { type: v })}>
                       <SelectTrigger className="h-8 text-[11px] bg-muted rounded-none border-border"><SelectValue /></SelectTrigger>
                       <SelectContent className="rounded-none border-border">
                         <SelectItem value="web" className="rounded-none cursor-pointer">Link Web</SelectItem>
                         <SelectItem value="tooltip" className="rounded-none cursor-pointer">Tooltip</SelectItem>
+                        <SelectItem value="terms" className="rounded-none cursor-pointer">Termo oficial (API)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -344,6 +349,11 @@ function ConsentItemBuilder({ consent, onUpdate, onRemove }: { consent: DraftCon
                 <div className="w-full">
                   {link.type === "web" ? (
                     <Input type="url" placeholder="https://..." value={link.url || ""} onChange={(e) => updateLinkConfig(idx, { url: e.target.value })} className="h-8 text-xs w-full bg-muted rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" />
+                  ) : link.type === "terms" ? (
+                    <div className="space-y-1">
+                      <Input type="url" placeholder="https://.../terms (API pública de termos do parceiro)" value={link.terms_url || ""} onChange={(e) => updateLinkConfig(idx, { terms_url: e.target.value })} className="h-8 text-xs w-full bg-muted rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" />
+                      <p className="text-[10px] text-muted-foreground">Abre o texto oficial num modal; o termo exibido é o do "Tipo do termo (API)" acima.</p>
+                    </div>
                   ) : (
                     <textarea placeholder="Balão de ajuda..." value={link.tooltip_text || ""} onChange={(e) => updateLinkConfig(idx, { tooltip_text: e.target.value })} className="w-full min-h-[70px] border border-border rounded-none p-2.5 text-xs outline-none focus:border-foreground focus:ring-1 focus:ring-foreground resize-y bg-muted" />
                   )}

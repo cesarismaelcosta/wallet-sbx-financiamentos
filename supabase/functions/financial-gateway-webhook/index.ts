@@ -6,6 +6,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { tratarWebhookFandi } from './fandi-service.ts';
+import { tratarWebhookFlowcredi } from './flowcredi-service.ts';
 
 /**
  * FUNÇÃO DE LOG PADRONIZADA
@@ -31,6 +32,10 @@ serve(withSecurity('financial-gateway-webhook', async (req: Request) => {
       // A função especializada fará o trabalho pesado de HMAC e banco de dados
       const result = await tratarWebhookFandi(req, params);
       return new Response(JSON.stringify(result), { status: 200 });
+
+    case "flowcredi":
+      // Aviso de mudança de status nos bancos; o status vem da Process Bank API (ver o serviço)
+      return await tratarWebhookFlowcredi(req);
 
     default:
       console.warn(`[GATEWAY] Tentativa de acesso em rota não mapeada: ${partner}`);

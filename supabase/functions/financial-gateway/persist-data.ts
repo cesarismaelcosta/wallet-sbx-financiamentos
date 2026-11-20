@@ -140,7 +140,12 @@ async function persistCollateral(t: any, simulationId: string | number, payload:
       is_debt_free: paid,
       debt_amount: paid ? 0 : n(sim.outstanding_balance) ?? 0,
       kinship_degree: sim.vehicle_owner === true ? "SELF" : "OTHERS",
-      collateral_details: t.json(sim.vehicle_fuel ? { fuel_type: sim.vehicle_fuel } : {}),
+      // Dados da garantia sem coluna própria (CGA FlowCredi): banco do saldo devedor e restrição SPC/Serasa
+      collateral_details: t.json(Object.fromEntries(Object.entries({
+        fuel_type: str(sim.vehicle_fuel),
+        outstanding_bank: paid ? null : str(sim.outstanding_bank),
+        credit_restriction: typeof sim.credit_restriction === "boolean" ? sim.credit_restriction : null,
+      }).filter(([, v]) => v !== null))),
     };
     const [existing] = await t`SELECT id FROM simulation_collateral_vehicle WHERE simulation_id = ${simulationId} LIMIT 1`;
     if (existing) {
@@ -385,7 +390,7 @@ export async function insertSimulationData(
           ${bestConsult.financial_institution_id}, ${bestConsult.amortization_type ?? null}, ${bestConsult.installment_value}, ${bestConsult.last_installment_value ?? null},
           ${bestConsult.requested_value}, ${bestConsult.down_payment_amount}, ${bestConsult.down_payment_percentage},
           ${bestConsult.financed_amount}, ${bestConsult.installments}, ${bestConsult.cet_rate}, ${bestConsult}::jsonb,
-          ${stageId}, ${bestConsult.status_id}, ${mainResultPartnerId}, ${bestConsult.external_operation_id}, ${auditPayload}::jsonb
+          ${stageId}, ${bestConsult.status_id}, ${mainResultPartnerId}, ${bestConsult.external_operation_id}, ${ { ...auditPayload, gateway_response: gatewayResult } }::jsonb
         )
         RETURNING id
       `;

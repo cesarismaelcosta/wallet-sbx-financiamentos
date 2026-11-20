@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { BRL } from "@/features/financial-hub/components/shared/formatters";
 import { useWizard } from "@/features/financial-hub/components/shared/WizardProvider";
 import { DynamicConsents } from "@/features/financial-hub/components/layout/DynamicConsents";
+import { shownTermsVersion } from "@/features/financial-hub/components/shared/partner-terms";
 import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
@@ -100,6 +101,8 @@ export function FlowLeadStep() {
           acceptedConsents: true,
           acceptedConsents_at: new Date().toISOString(),
           legal_text_snapshot: { template_text: c.template_text, links: c.links },
+          // versão do termo oficial exibida ao cliente (FlowCredi registra exatamente essa)
+          terms_version: shownTermsVersion(c.id),
         }));
 
       const urlParams = new URLSearchParams(window.location.search);

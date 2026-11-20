@@ -38,7 +38,7 @@ import { OrchestratorWrapper } from "@/features/financial-hub/components/shared/
 import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext"; 
 import { USE_COOKIE, getTokenForPayload } from "@/services/session";
 import { useHandoffRedeem } from "@/features/financial-hub/core/hooks/useHandoffRedeem";
-import { PanelHeader } from "./PanelHeader";
+import { PanelHeader, type HeaderLink } from "./PanelHeader";
 import { useTheme } from "@/design-system/sbx-design-system-9f1c03/components/ThemeProvider";
 import { PanelFAQ } from "./PanelFAQ";
 import { PanelFooter } from "./PanelFooter";
@@ -49,6 +49,13 @@ import { PanelFooterSkeleton } from "./PanelFooterSkeleton";
 import { FinancialHubContext } from "@/features/financial-hub/core/contexts/FinancialHubContext";
 import { HubData } from "@/features/financial-hub/components/shared/types";
 import { useOrchestratorHistorySync } from "@/features/financial-hub/core/hooks/useOrchestratorHistorySync";
+
+/** Menu do cabeçalho, igual em todas as jornadas (financiamentos, seguros, empréstimos). */
+const HUB_NAV_LINKS: HeaderLink[] = [
+  { href: "simulacao", label: "Simulação" },
+  { href: "como-funciona", label: "Como funciona" },
+  { href: "duvidas", label: "Dúvidas" },
+];
 
 // =========================================================================
 // [CONTRATOS E INTERFACES TIPADAS]
@@ -131,24 +138,42 @@ function ErrorCountdown({ fallbackUrl, message, title, onRetry }: ErrorCountdown
 }
 
 // =========================================================================
+// [SKELETON DO CORPO]: mesmo container e grade das jornadas
+// (section px-4 -mt-8 > main max-w-6xl > grade pt-12 com colunas p-8 lg:p-10,
+// ver financiamentos.veiculos.lazy.tsx e BaseWizardLayout), para o conteúdo
+// não "pular" de lugar quando a jornada carrega.
+// =========================================================================
+function JourneySkeletonBody() {
+  return (
+    <section className="relative -mt-8 pb-12 px-4 w-full flex justify-center">
+      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] pt-12 items-start">
+        <div className="p-8 lg:p-10">
+          <PanelProductOfferSkeleton />
+        </div>
+        <div className="p-8 lg:p-10">
+          <PanelStepSkeleton />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================================
 // [ANTI-RACE CONDITION]: Skeleton exibido enquanto a guarda de sessão
 // (zero-trust + resgate de handoff #xt=) ainda resolve, antes do
 // FinancialHubOrchestrator sequer montar. Único lugar no código pra essa
 // peça — antes vivia duplicada em cada rota-mãe (financiamentos.lazy,
 // seguros.lazy, etc.).
 // =========================================================================
-function AuthGateSkeleton() {
+export function AuthGateSkeleton() {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const nightMode = resolvedTheme === "dark";
   return (
     <div className="min-h-screen bg-white dark:bg-neutral-950 text-foreground flex flex-col transition-colors duration-300 relative">
-      <PanelHeader showNav={true} showAuth={true} links={[]} nightMode={nightMode} onToggleNightMode={() => setTheme(nightMode ? "light" : "dark")} />
+      <PanelHeader authPlaceholder showNav={true} showAuth={true} links={HUB_NAV_LINKS} nightMode={nightMode} onToggleNightMode={() => setTheme(nightMode ? "light" : "dark")} />
 
       <main className="flex-1 w-full flex flex-col pt-16">
-        <div className="max-w-7xl mx-auto px-6 py-12 w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-          <PanelProductOfferSkeleton />
-          <PanelStepSkeleton />
-        </div>
+        <JourneySkeletonBody />
       </main>
 
       <PanelFAQSkeleton />
@@ -266,17 +291,18 @@ function FinancialHubOrchestrator({ children }: FinancialHubLayoutProps) {
       setIsOrchestratorHydrating,
     };
 
+    // Skeleton enquanto a cortina estiver fechada OU a visita ainda estiver carregando:
+    // uma jornada pode pedir para abrir a cortina antes dos dados chegarem, e o corpo
+    // ficaria vazio (a barra de rolagem some e o cabeçalho "anda").
+    const showSkeleton = isOrchestratorHydrating || simData?.success === "loading";
+
     return (
       <FinancialHubContext.Provider value={contextPayload}>
         <div className="min-h-screen bg-surface-alt text-neutral-900 relative flex flex-col">
           {/* Header Institucional Padronizado (64px) */}
           <PanelHeader 
             showNav={true}
-            links={[
-              { href: "simulacao", label: "Simulação" },
-              { href: "como-funciona", label: "Como funciona" },
-              { href: "duvidas", label: "Dúvidas" }
-            ]}
+            links={HUB_NAV_LINKS}
             showAuth={true} 
             sessionToken={sessionToken}
             userData={userProfile} 
@@ -287,13 +313,10 @@ function FinancialHubOrchestrator({ children }: FinancialHubLayoutProps) {
           />
 
           {/* Skeletons Estruturais durante Hidratação */}
-          {isOrchestratorHydrating && (
+          {showSkeleton && (
             <>
               <main className="flex-1 w-full flex flex-col pt-16 bg-white dark:bg-neutral-950">
-                <div className="max-w-7xl mx-auto px-6 py-12 w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-                  <PanelProductOfferSkeleton />
-                  <PanelStepSkeleton />
-                </div>
+                <JourneySkeletonBody />
               </main>
               <PanelFAQSkeleton />
               <PanelFooterSkeleton />
@@ -303,14 +326,14 @@ function FinancialHubOrchestrator({ children }: FinancialHubLayoutProps) {
           {/* Conteúdo Renderizado da Jornada */}
           <main
             className={`flex-1 w-full flex flex-col transition-opacity duration-300 pt-16 bg-white dark:bg-neutral-950 ${
-              isOrchestratorHydrating ? "opacity-0 pointer-events-none h-0 overflow-hidden" : "opacity-100"
+              showSkeleton ? "opacity-0 pointer-events-none h-0 overflow-hidden" : "opacity-100"
             }`}
           >
             {children}
           </main>
 
           {/* Rodapé e FAQ liberados pós-hidratação */}
-          {!isOrchestratorHydrating && (
+          {!showSkeleton && (
             <>
               <PanelFAQ items={simData?.page_faqs} />
               <PanelFooter config={simData?.page_configs?.footer} />

@@ -1,0 +1,33 @@
+(() => {
+  // Escolha o cenário de erro (troque o texto entre aspas):
+  //   "oferta_inexistente"  -> oferta 9999, que não existe
+  //   "oferta_encerrada"    -> oferta 5081622 (Chevrolet Tracker), já encerrada
+  //   "sem_configuracao"    -> oferta 5089240 (robô industrial), categoria sem financiamento
+  //   "login_invalido"      -> token da Superbid inválido (simula sessão vencida)
+  const CENARIO = "oferta_inexistente";
+
+  const APP = "https://preview--wallet-sbx-financiamento.lovable.app";
+  const OFERTAS = { oferta_inexistente: "9999", oferta_encerrada: "5081622", sem_configuracao: "5089240" };
+  const o = window.open;
+  window.open = function (url, ...a) {
+    const s = String(url || "");
+    if (!/superbidpay|nagro/.test(s)) return o.call(this, url, ...a);
+    const u = new URL(s.replace(/\s+/g, ""));
+    const f = document.createElement("form");
+    f.method = "POST"; f.action = APP + "/gate"; f.target = "_blank";
+    const d = {
+      environment: "production",
+      auth_token: CENARIO === "login_invalido" ? "token-invalido-de-teste" : u.searchParams.get("access_token"),
+      offer_id: OFERTAS[CENARIO] || u.searchParams.get("offerId"),
+      return_uri: location.href,
+      utm_source: "superbid", utm_medium: "referral", utm_campaign: "teste_console_erro_" + CENARIO,
+    };
+    for (const [k, v] of Object.entries(d)) {
+      const i = document.createElement("input");
+      i.type = "hidden"; i.name = k; i.value = v ?? ""; f.appendChild(i);
+    }
+    document.body.appendChild(f); f.submit(); f.remove();
+    return null;
+  };
+  console.log("Cenário de erro ativo: " + CENARIO + ". Clique em Simular financiamento.");
+})();

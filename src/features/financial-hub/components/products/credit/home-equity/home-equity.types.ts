@@ -16,6 +16,10 @@ export const inputClass =
 export const labelClass = "text-[11px] font-medium text-neutral-900 dark:text-neutral-100 uppercase tracking-wider font-sans";
 export const digitsToMoney = (v: string) => Number(v.replace(/\D/g, "") || "0") / 100;
 
-/** Crédito máximo: % do imóvel (rules.max_loan_percentage, 60) menos o saldo devedor. */
+/** % máximo do imóvel para o tipo (rules.loan_percentage_by_type; sem o tipo, rules.max_loan_percentage). */
+export const loanPctOf = (propertyType: string | undefined, rules: { max_loan_percentage?: number; loan_percentage_by_type?: Record<string, number> }) =>
+  Number(rules.loan_percentage_by_type?.[propertyType ?? ""] ?? rules.max_loan_percentage ?? 60);
+
+/** Crédito máximo: % do imóvel (por tipo) menos o saldo devedor. */
 export const maxCreditOf = (propertyValue: number, balance: number, maxPct: number) =>
   Math.max(0, Math.floor(((propertyValue * maxPct) / 100 - balance) / 1000) * 1000);

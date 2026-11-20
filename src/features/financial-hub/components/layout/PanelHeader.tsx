@@ -83,6 +83,11 @@ interface PanelHeaderProps {
   nightMode?: boolean;
   /** Callback do toggle noturno. Só renderiza o botão Sol/Lua quando fornecido. */
   onToggleNightMode?: () => void;
+  /** Skeleton de carregamento (sem sessão ainda): mostra o toggle e um círculo no
+   * lugar do avatar, e deixa a logo sem clique, para o usuário não sair da tela
+   * de carregamento. O menu aparece como texto, sem clique. Usado pelo
+   * AuthGateSkeleton (jornadas e /gate). */
+  authPlaceholder?: boolean;
 }
 
 // =========================================================================
@@ -99,6 +104,7 @@ export function PanelHeader({
   showEnvironmentLinks = true,
   nightMode = false,
   onToggleNightMode,
+  authPlaceholder = false,
 }: PanelHeaderProps) {
   
   const navigate = useNavigate();
@@ -132,7 +138,7 @@ export function PanelHeader({
   // ⚡ [DETERMINISTIC ROUTING]: Disparo Transacional e Handshake OLAP
   // =========================================================================
   const handleLogoClick = async () => {
-    if (isNavigating) return;
+    if (isNavigating || authPlaceholder) return;
     setIsNavigating(true);
 
     try {
@@ -218,11 +224,12 @@ export function PanelHeader({
           <div className="flex items-center shrink-0 h-full">
             <button 
               onClick={handleLogoClick}
-              disabled={isNavigating}
-              className={`flex items-center outline-none border-none focus:outline-none focus:ring-0 bg-transparent cursor-pointer p-0 transition-opacity ${
-                isNavigating ? "opacity-50" : "hover:opacity-80"
+              disabled={isNavigating || authPlaceholder}
+              className={`flex items-center outline-none border-none focus:outline-none focus:ring-0 bg-transparent p-0 transition-opacity ${
+                authPlaceholder ? "cursor-default opacity-50" : isNavigating ? "cursor-pointer opacity-50" : "cursor-pointer hover:opacity-80"
               }`}
-              title="Voltar ao Início"
+              title={authPlaceholder ? undefined : "Voltar ao Início"}
+              aria-disabled={authPlaceholder || undefined}
             >
               <div className="hidden sm:flex items-center [&_img]:h-6 [&_img]:w-auto">
                 <WalletLogo size="md" withTagline forceDark={nightMode} />
@@ -237,7 +244,16 @@ export function PanelHeader({
           <div className="flex items-center gap-6">
             {showNav && links.length > 0 && (
               <nav className="hidden md:flex items-center gap-6">
-                {links.map((link) => (
+                {links.map((link) => authPlaceholder ? (
+                  /* Skeleton: mesmo texto e posição, sem link nem clique */
+                  <span
+                    key={link.href}
+                    aria-disabled="true"
+                    className="text-[13px] font-medium text-neutral-600 dark:text-neutral-400 cursor-default select-none opacity-50"
+                  >
+                    {link.label}
+                  </span>
+                ) : (
                   <a
                     key={link.href}
                     href={`#${link.href}`}
@@ -436,12 +452,39 @@ export function PanelHeader({
                     </div>
 
                   </div>
+                ) : authPlaceholder ? (
+                  /* Skeleton do canto direito: toggle real + círculo no lugar do avatar */
+                  <div className="flex items-center gap-3">
+                    {onToggleNightMode && (
+                      <button
+                        type="button"
+                        onClick={onToggleNightMode}
+                        aria-label={nightMode ? "Desativar modo noturno" : "Ativar modo noturno"}
+                        title={nightMode ? "Desativar modo noturno" : "Ativar modo noturno"}
+                        className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                      >
+                        {nightMode ? <Moon size={17} /> : <Sun size={17} />}
+                      </button>
+                    )}
+                    <div aria-hidden="true" className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/40 animate-pulse" />
+                  </div>
                 ) : null}
               </div>
             )}
           </div>
 
         </div>
+
+        {/* Skeleton: linha de carregamento andando para a direita, logo abaixo do header */}
+        {authPlaceholder && (
+          <div aria-hidden="true" className="absolute inset-x-0 top-full h-0.5 overflow-hidden">
+            <style>{`@keyframes panel-header-progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }`}</style>
+            <div
+              className="h-full w-1/3 bg-neutral-900 dark:bg-white"
+              style={{ animation: "panel-header-progress 1.2s ease-in-out infinite" }}
+            />
+          </div>
+        )}
       </header>
     </>
   );

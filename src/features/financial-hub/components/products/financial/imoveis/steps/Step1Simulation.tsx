@@ -51,12 +51,16 @@ export function Step1Simulation() {
   const rules = data.rules ?? {};
   const propertyValue = Number(offer?.offer_value ?? 0);
 
-  // Limites (mesmos padrões do gateway quando `rules` não informa)
-  const maxPct = Number(rules.max_financing_percentage ?? 80);
-  const minLoan = Number(rules.min_financed_amount ?? 50000);
+  // Limites (mesmos padrões do gateway quando `rules` não informa). Salas e terrenos têm
+  // limites próprios por subcategoria da oferta (rules.subcategory_limits; "*" = não listada).
+  const subLimits = rules.subcategory_limits
+    ? rules.subcategory_limits[String(offer?.subcategory_id ?? "").trim()] ?? rules.subcategory_limits["*"]
+    : undefined;
+  const maxPct = Number(subLimits?.max_financing_percentage ?? rules.max_financing_percentage ?? 90);
+  const minLoan = Number(rules.min_financed_amount ?? 10000);
   const maxLoan = Math.max(minLoan, Math.floor((propertyValue * maxPct) / 100 / 1000) * 1000);
-  const minTerm = Number(rules.min_term_months ?? 60);
-  const ruleMaxTerm = Number(rules.max_term_months ?? 420);
+  const minTerm = Number(subLimits?.min_term_months ?? rules.min_term_months ?? 36);
+  const ruleMaxTerm = Number(subLimits?.max_term_months ?? rules.max_term_months ?? 420);
   const termStep = Number(rules.term_step_months ?? 12);
   // Prazo máximo pela idade: o contrato precisa terminar até 80 anos e 6 meses (966 meses).
   const birth = data.birth_date ? new Date(`${String(data.birth_date).slice(0, 10)}T00:00:00Z`) : null;
@@ -69,7 +73,8 @@ export function Step1Simulation() {
       : 0;
   const ageMaxTerm = Math.floor((966 - ageMonths) / termStep) * termStep;
   const maxTerm = Math.max(minTerm, Math.min(ruleMaxTerm, ageMaxTerm));
-  const minIncome = Number(rules.min_monthly_income ?? 1000);
+  // Sem renda mínima fixa: cada condição traz a renda mínima dela (FlowCredi)
+  const minIncome = Math.max(0.01, Number(rules.min_monthly_income ?? 0));
 
   const saved = data.flowInputs as FlowInputs | undefined; // imóveis grava os inputs completos
   const [loan, setLoan] = useState<number>(saved?.requested_value ?? maxLoan);
@@ -219,14 +224,7 @@ export function Step1Simulation() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-6 gap-y-3">
             {/* Valor a financiar */}
             <div className="space-y-1">
-              <Label className={labelClass}>Valor a financiar</Label>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                Entrada{" "}
-                <strong className="text-neutral-900 dark:text-neutral-100">
-                  {BRL(Math.max(0, propertyValue - loan))}
-                </strong>{" "}
-                · {propertyValue > 0 ? Math.round(((propertyValue - loan) / propertyValue) * 100) : 0}% do imóvel
-              </p>
+              <Label className={labelClass}>Valor a financiar *</Label>
               <Input
                 disabled={loading}
                 inputMode="numeric"
@@ -250,10 +248,7 @@ export function Step1Simulation() {
 
             {/* Prazo */}
             <div className="space-y-1">
-              <Label className={labelClass}>Prazo</Label>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                {maxTerm < ruleMaxTerm ? `Máximo para sua idade: ${maxTerm} meses` : `Máximo: ${maxTerm} meses`}
-              </p>
+              <Label className={labelClass}>Prazo *</Label>
               <div
                 className={`h-10 flex items-center px-3 border border-neutral-200 dark:border-neutral-700 font-semibold text-sm ${
                   loading
@@ -296,6 +291,14 @@ export function Step1Simulation() {
               className={inputClass}
             />
           </div>
+
+          {/* * Entrada e prazo máximo (rodapé do box) */}
+          <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+            * Entrada{" "}
+            <strong className="text-neutral-900 dark:text-neutral-100">{BRL(Math.max(0, propertyValue - loan))}</strong>{" "}
+            · {propertyValue > 0 ? Math.round(((propertyValue - loan) / propertyValue) * 100) : 0}% do imóvel ·{" "}
+            {maxTerm < ruleMaxTerm ? `Prazo máximo para sua idade: ${maxTerm} meses` : `Prazo máximo de ${maxTerm} meses`}
+          </p>
         </div>
 
         <Button

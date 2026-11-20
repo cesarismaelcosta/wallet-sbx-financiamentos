@@ -75,22 +75,24 @@ export interface FlowInputs {
   property_value?: number;
   property_paid?: boolean;
   outstanding_balance?: number;
-  // Car equity: veículo e perfil informados pelo cliente (POST /auto/lead)
+  // Car equity: veículo e perfil informados pelo cliente (POST /processos, produto CGA)
   vehicle_plate?: string;
   vehicle_brand?: string;
   vehicle_model?: string;
   vehicle_year?: string;
   vehicle_model_year?: string;
-  vehicle_doors?: string;
+  vehicle_doors?: string; // não é mais pedido (não existe na API de Processos)
   vehicle_fuel?: string;
   vehicle_value?: number;
   vehicle_state?: string;
   vehicle_owner?: boolean;
   vehicle_paid?: boolean;
+  outstanding_bank?: string; // banco do financiamento (veículo não quitado)
+  credit_restriction?: boolean; // restrição no SPC/Serasa
   loan_purpose?: string;
   professional_status?: string;
   profession?: string;
-  employment_years?: number;
+  employment_years?: number; // não é mais pedido (não existe na API de Processos)
   customer_zip?: string;
   customer_address?: string;
 }

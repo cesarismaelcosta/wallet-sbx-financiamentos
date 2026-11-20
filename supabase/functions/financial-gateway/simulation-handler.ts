@@ -44,9 +44,9 @@ import { STATUS } from "../_shared/types.ts";
 import { resolveOrchestratorConfigs } from "../_shared/orchestrator-configs.ts";
 import { processSimulationFandi } from "./fandi-service.ts";
 import { processSimulationCreditCard } from "./credit-card-service.ts";
-import { isFlowcrediMortgage, processFlowcrediMortgage } from "./flowcredi-mortgage-service.ts";
-import { isFlowcrediHomeEquity, processFlowcrediHomeEquity } from "./flowcredi-home-equity-service.ts";
-import { isFlowcrediAutoEquity, processFlowcrediAutoEquity } from "./flowcredi-auto-equity-service.ts";
+import { processFlowcrediMortgage } from "./flowcredi-mortgage-service.ts";
+import { processFlowcrediHomeEquity } from "./flowcredi-home-equity-service.ts";
+import { processFlowcrediAutoEquity } from "./flowcredi-auto-equity-service.ts";
 import { isFlowBusinessError } from "./flowcredi-service.ts";
 import { captureInfrastructure } from "../_shared/infrastructure.ts";
 
@@ -274,27 +274,37 @@ export async function processSimulation(
     case 3: 
       debugLog(`🏦 INICIO FLUXO PARCEIRO 3 - PRODUTO: ${payload.product_id} | FASE: ${step}`, payload.simulation_id);
 
-      // 🏠🚗 FLOWCREDI — Financiamento Imobiliário ("mortgage"), Home Equity ("home_equity") e
-      // Car Equity ("auto_equity"), ativados por configuração (`rules.flowcredi_product` no
-      // orchestrator_configs, nunca pelo front).
+      // 🏠🚗 FLOWCREDI — por produto: 1 Financiamento Imobiliário, 6 Home Equity, 7 Car Equity.
       // step EXECUTE_SIMULATION: simular (com as parcelas da melhor condição de cada banco) · SUBMIT_LEAD: enviar o lead.
       // Car Equity não tem simulação: o lead é a primeira chamada, então o simulation_id nasce aqui (vai no refId).
-      if (isFlowcrediMortgage(resolvedConfig.rules) || isFlowcrediHomeEquity(resolvedConfig.rules) || isFlowcrediAutoEquity(resolvedConfig.rules)) {
-        const processFlow = isFlowcrediMortgage(resolvedConfig.rules)
-          ? processFlowcrediMortgage
-          : isFlowcrediHomeEquity(resolvedConfig.rules) ? processFlowcrediHomeEquity : processFlowcrediAutoEquity;
+      {
+        const FLOW_BY_PRODUCT: Record<number, typeof processFlowcrediMortgage> = {
+          1: processFlowcrediMortgage,
+          6: processFlowcrediHomeEquity,
+          7: processFlowcrediAutoEquity,
+        };
+        const processFlow = FLOW_BY_PRODUCT[Number(payload.product_id)];
+        if (!processFlow) throw new Error("Produto temporariamente indisponível.");
         const isNewSimulation = !payload.simulation_id;
         if (isNewSimulation) payload.simulation_id = crypto.randomUUID();
         let flow: Awaited<ReturnType<typeof processFlowcrediMortgage>>;
         try {
-          flow = await processFlow(payload, resolvedConfig.rules ?? {}, step);
+          // IP e user-agent do cliente: exigidos pela API de Termos da FlowCredi
+          flow = await processFlow(payload, resolvedConfig.rules ?? {}, step, { ip: infra?.ip_address, userAgent: infra?.user_agent });
         } catch (err: unknown) {
-          if (isNewSimulation) payload.simulation_id = undefined as unknown as string;
           // Erro de validação (mensagem amigável) não vira registro; falha do parceiro sim.
-          if (!isFlowBusinessError(err) && payload.simulation_id) {
+          // Envio sem simulação anterior (Car Equity): a falha cria o registro (como o cartão).
+          if (!isFlowBusinessError(err) && (!isNewSimulation || step === 'SUBMIT_LEAD')) {
             gatewayResult = buildFallbackResult(err);
-            await updateSimulationData(sql, payload.simulation_id, payload, infra, gatewayResult, action, 'FLOWCREDI_ERROR', step);
+            const detail = (err as { detail?: unknown } | null)?.detail;
+            if (detail) gatewayResult.raw = { ...gatewayResult.raw, detail };
+            if (isNewSimulation) {
+              await insertSimulationData(sql, payload, infra, gatewayResult, action, 'FLOWCREDI_ERROR', step, true);
+            } else {
+              await updateSimulationData(sql, payload.simulation_id, payload, infra, gatewayResult, action, 'FLOWCREDI_ERROR', step);
+            }
           }
+          if (isNewSimulation) payload.simulation_id = undefined as unknown as string;
           throw err;
         }
 
@@ -315,11 +325,6 @@ export async function processSimulation(
         }
         break;
       }
-
-      if (Number(payload.product_id) === 7) { // CAR EQUITY sem `rules.flowcredi_product = "auto_equity"`
-        throw new Error("Produto temporariamente indisponível.");
-      }
-      break;
 
     // -----------------------------------------------------------------------
     // FALLBACK DE ROTEAMENTO

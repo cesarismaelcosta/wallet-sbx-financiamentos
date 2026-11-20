@@ -205,9 +205,10 @@ export interface OrchestratorPayload {
 /** Link de um aceite: página externa ("web") ou explicação em tooltip ("tooltip"). */
 export interface ConsentLink {
   text: string;
-  type: "web" | "tooltip";
+  type: "web" | "tooltip" | "terms";
   url?: string;
   tooltip_text?: string;
+  terms_url?: string; // type "terms": API pública dos termos do parceiro (GET /terms)
 }
 
 /** Um aceite exibido na jornada (orchestrator_configs.consent_configs[]). */
@@ -219,8 +220,7 @@ export interface ConsentConfig {
   is_required?: boolean;
   default_state?: boolean;
   effective_date?: string;
-  flowcredi_type?: string; // aceites enviados à FlowCredi
-  flowcredi_version?: number;
+  terms_type?: string; // termo oficial do parceiro (tipo na API de termos), para o link "terms"
 }
 
 /** Trecho de texto com destaque (headline/description do painel da oferta). */
@@ -285,9 +285,21 @@ export interface ProductRules {
   payment_factors?: Record<string, number>;
   // Renda
   min_monthly_income?: number;
-  // FlowCredi
-  flowcredi_product?: "mortgage" | "home_equity" | "auto_equity" | string;
-  flowcredi_bank_by_seller?: Record<string, unknown>;
+  // Limites por produto
+  /** Imóveis: limites por subcategoria da oferta ("*" = não listada). */
+  subcategory_limits?: Record<string, { max_financing_percentage?: number; max_term_months?: number; min_term_months?: number }>;
+  /** Home equity: % máximo do imóvel por tipo e tipos não aceitos. */
+  loan_percentage_by_type?: Record<string, number>;
+  blocked_property_types?: string[];
+  /** Faixa de valor do bem financiável (ex.: imóveis). */
+  min_property_value?: number;
+  max_property_value?: number;
+  min_loan_amount?: number;
+  min_loan_term_months?: number;
+  /** Car equity: elegibilidade do parceiro */
+  max_vehicle_age_years?: number; // ano de fabricação mínimo = ano atual - N
+  allowed_licensing_states?: string[]; // UFs de licenciamento aceitas
+  min_vehicle_value?: number; // valor mínimo do veículo (R$)
 }
 
 // =========================================================================

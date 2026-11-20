@@ -10,8 +10,30 @@ export const UF_LIST = [
   "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 ];
 
-export const DOORS = ["2", "3", "4", "5"];
-export const TERMS = [12, 24, 30, 36, 42, 48, 54, 60];
+export const TERMS = [12, 24, 30, 36, 42, 48, 54, 60, 66, 70]; // CGA: até 70 meses (FlowCredi)
+
+/** Banco do financiamento quando o veículo não está quitado (texto livre na API; lista para facilitar). */
+export const OUTSTANDING_BANKS = ["Banco do Brasil", "Bradesco", "BV", "C6", "Caixa", "Creditas", "Itaú", "Pan", "Safra", "Santander", "Outros"];
+
+/**
+ * Elegibilidade do veículo, só pelo `rules` (sem a chave, a regra não se aplica):
+ * ano de fabricação a partir de (ano atual − max_vehicle_age_years), UFs aceitas e valor mínimo.
+ */
+export function vehicleEligibility(rules: { max_vehicle_age_years?: number; allowed_licensing_states?: string[]; min_vehicle_value?: number } | null | undefined) {
+  const year = new Date().getFullYear();
+  const states = Array.isArray(rules?.allowed_licensing_states) && rules!.allowed_licensing_states!.length
+    ? rules!.allowed_licensing_states!.map((s) => String(s).toUpperCase()).sort()
+    : null;
+  return {
+    minYear: rules?.max_vehicle_age_years ? year - Number(rules.max_vehicle_age_years) : null,
+    maxYear: year + 1,
+    states,
+    minValue: rules?.min_vehicle_value ? Number(rules.min_vehicle_value) : null,
+  };
+}
+
+/** "Outros" na lista: o cliente digita o nome do banco. */
+export const OTHER_BANK = "Outros";
 export const PURPOSES = [
   "Pagamento de dívidas",
   "Refinanciamento de dívidas",

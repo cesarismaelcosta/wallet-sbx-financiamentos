@@ -23,14 +23,19 @@
  * 4. {Tipografia Institucional & Legal Clarity}: Escala reduzida (`text-xs`) com
  *    entrelinhamento `leading-snug`, contraste em `text-neutral-900` (#1D1D1B) e
  *    sublinhados técnicos offset para hyperlinks de conformidade legal.
+ * 5. {Termos oficiais do parceiro}: link `type: "terms"` abre o texto oficial (API de termos
+ *    em `terms_url`, termo `terms_type`) num modal. O texto é carregado ao montar e a versão
+ *    exibida fica registrada (partner-terms.shownTermsVersion) para seguir junto com o aceite.
  * 
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro (Architectural Mechanics)
  * @version 9.2.0 (Neutral Purity & LGPD Compliance Enforcement)
  */
 
-import React from "react";
+import React, { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PartnerTerm, loadPartnerTerms, rememberShownVersion } from "@/features/financial-hub/components/shared/partner-terms";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 
@@ -39,9 +44,10 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 // =========================================================================
 interface ConsentLink {
   text: string;
-  type: "web" | "tooltip";
+  type: "web" | "tooltip" | "terms";
   url?: string;
   tooltip_text?: string;
+  terms_url?: string; // type "terms": API pública dos termos do parceiro (GET /terms)
 }
 
 interface ConsentConfig {
@@ -55,6 +61,7 @@ interface ConsentConfig {
   suffix?: string;
   link_text?: string;
   url?: string;
+  terms_type?: string; // termo oficial do parceiro (tipo na API de termos)
 }
 
 interface DynamicConsentsProps {
@@ -66,8 +73,39 @@ interface DynamicConsentsProps {
 // =========================================================================
 // [COMPONENTE PRINCIPAL: DYNAMIC CONSENTS]
 // =========================================================================
+/** Endereço dos termos oficiais do aceite (primeiro link `terms`). */
+const termsUrlOf = (opt: ConsentConfig) => opt.links?.find((l) => l.type === "terms" && l.terms_url)?.terms_url;
+
 export function DynamicConsents({ configs, value, onChange }: DynamicConsentsProps) {
+  // Termos oficiais por aceite (consent id → termo carregado)
+  const [terms, setTerms] = useState<Record<string, PartnerTerm | null>>({});
+  const [openTerm, setOpenTerm] = useState<{ title: string; consentId: string } | null>(null);
+  const [termsError, setTermsError] = useState(false);
+
+  const termsKey = (configs ?? []).map((c) => `${c.id}:${c.terms_type ?? ""}:${termsUrlOf(c) ?? ""}`).join("|");
+  useEffect(() => {
+    let alive = true;
+    for (const opt of configs ?? []) {
+      const url = termsUrlOf(opt);
+      if (!url || !opt.terms_type) continue;
+      loadPartnerTerms(url)
+        .then((list) => {
+          const term = list.find((t) => t.type === opt.terms_type) ?? null;
+          if (term) rememberShownVersion(opt.id, term.version);
+          if (alive) setTerms((prev) => ({ ...prev, [opt.id]: term }));
+        })
+        .catch(() => {
+          if (alive) setTermsError(true);
+        });
+    }
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [termsKey]);
+
   if (!configs || configs.length === 0) return null;
+  const shownTerm = openTerm ? terms[openTerm.consentId] : undefined;
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -129,6 +167,24 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
                         );
                       }
 
+                      // Ação Termos: texto oficial do parceiro num modal (não marca o aceite)
+                      if (linkConfig.type === "terms") {
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            className="font-semibold text-brand-accent underline underline-offset-2 inline mx-0.5 hover:opacity-70 bg-transparent p-0 text-left outline-none transition-colors"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setOpenTerm({ title: cleanText, consentId: opt.id });
+                            }}
+                          >
+                            {cleanText}
+                          </button>
+                        );
+                      }
+
                       // Ação Tooltip: Explicação contextual em Portal
                       if (linkConfig.type === "tooltip") {
                         return (
@@ -187,6 +243,70 @@ export function DynamicConsents({ configs, value, onChange }: DynamicConsentsPro
             );
           })}
       </div>
+
+      {/* Texto oficial do termo (versão registrada junto com o aceite) */}
+      <Dialog open={!!openTerm} onOpenChange={(o) => !o && setOpenTerm(null)}>
+        <DialogContent className="rounded-none max-w-2xl max-h-[85vh] flex flex-col gap-3">
+          <DialogHeader>
+            <DialogTitle className="text-base">{openTerm?.title}</DialogTitle>
+            <DialogDescription className="text-xs">
+              {shownTerm ? `Texto oficial · versão ${shownTerm.version}` : "Texto oficial"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto pr-2 -mr-2">
+            {shownTerm ? (
+              <TermsMarkdown text={shownTerm.text} />
+            ) : (
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                {termsError || shownTerm === null ? "Não foi possível carregar o texto agora. Tente novamente em instantes." : "Carregando..."}
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
+  );
+}
+
+// =========================================================================
+// [TEXTO DO TERMO]: Markdown simples (títulos #, listas -, **negrito**), sem HTML cru
+// =========================================================================
+function inline(text: string): ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? <strong key={i}>{part.slice(2, -2)}</strong> : <Fragment key={i}>{part}</Fragment>,
+  );
+}
+
+function TermsMarkdown({ text }: { text: string }) {
+  const blocks = text.replace(/\r\n/g, "\n").split(/\n{2,}/);
+  return (
+    <div className="space-y-3 text-[13px] leading-relaxed text-neutral-700 dark:text-neutral-300">
+      {blocks.map((block, i) => {
+        const lines = block.split("\n").filter((l) => l.trim());
+        if (lines.length === 0) return null;
+        const h = /^(#{1,6})\s+(.*)$/.exec(lines[0]);
+        if (h && lines.length === 1) {
+          const cls = h[1].length <= 1 ? "text-base" : h[1].length === 2 ? "text-[15px]" : "text-sm";
+          return <p key={i} className={`${cls} font-semibold text-neutral-900 dark:text-neutral-100`}>{inline(h[2])}</p>;
+        }
+        if (lines.every((l) => /^\s*[-*]\s+/.test(l))) {
+          return (
+            <ul key={i} className="list-disc pl-5 space-y-1">
+              {lines.map((l, j) => <li key={j}>{inline(l.replace(/^\s*[-*]\s+/, ""))}</li>)}
+            </ul>
+          );
+        }
+        return (
+          <p key={i}>
+            {lines.map((l, j) => (
+              <Fragment key={j}>
+                {j > 0 && <br />}
+                {inline(l.replace(/^#{1,6}\s+/, ""))}
+              </Fragment>
+            ))}
+          </p>
+        );
+      })}
+    </div>
   );
 }

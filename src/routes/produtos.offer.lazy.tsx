@@ -44,7 +44,7 @@ import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchOffersQuery } from "@/services/offer";
 import { logSystemError } from "@/services/systemNotification";
 import { clearSession } from "@/services/session";
-import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
+import { callOrchestrator, callOrchestratorConfigs } from "@/features/financial-hub/core/services/gateway";
 import { setFastPathState } from "@/features/financial-hub/core/services/fastPathCache";
 import { CardOfferV } from "@/features/financial-hub/components/shared/renderes/CardOfferV";
 import { CardOfferVSkeleton } from "@/features/financial-hub/components/shared/renderes/CardOfferVSkeleton";
@@ -114,10 +114,10 @@ const UF_OPTIONS = [
 // =========================================================================
 // [CONFIGURAÇÃO DE FLUXOS E PRODUTOS]
 // =========================================================================
-const FLOW_MAP: Record<string, { product_id: number }> = {
+const FLOW_MAP: Record<string, { product_id: number; category_id?: number }> = {
   Carros: { product_id: 2 },
   Caminhões: { product_id: 5 },
-  Imóveis: { product_id: 1 },
+  Imóveis: { product_id: 1, category_id: 13 },
   Cartão: { product_id: 8 },
   MaquinasAgricolas: { product_id: 3 },
   MaquinasAmarelas: { product_id: 4 },
@@ -238,6 +238,26 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
   const currentFlow = FLOW_MAP[flowKey || "Carros"] || FLOW_MAP["Carros"];
   const isCartao = currentFlow.product_id === 8;
   const isImoveis = currentFlow.product_id === 1;
+  // Faixa de valor financiável do produto (rules.min_property_value / max_property_value da config):
+  // fora dela, o card mostra "Fora da faixa" e não tem botão de simular.
+  const [valueRange, setValueRange] = useState<{ min?: number; max?: number } | undefined>(undefined);
+  useEffect(() => {
+    if (!isImoveis) return;
+    let cancelled = false;
+    callOrchestratorConfigs({ product_id: currentFlow.product_id, category_id: currentFlow.category_id })
+      .then((res) => {
+        const rules = (res?.rules ?? {}) as { min_property_value?: number; max_property_value?: number };
+        if (!cancelled && (rules.min_property_value || rules.max_property_value)) {
+          setValueRange({ min: rules.min_property_value, max: rules.max_property_value });
+        }
+      })
+      .catch(() => {
+        // Sem a config, os cards seguem sem a tag (o servidor continua validando a faixa)
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isImoveis, currentFlow.product_id, currentFlow.category_id]);
 
   const isMobile = useIsMobile();
   const isMobileRef = useRef(isMobile);
@@ -785,6 +805,7 @@ export function OfferDetailsProdutos({ flowKey }: { flowKey?: string }) {
                 hasError={errorIndex === idx}
                 onErrorTimeout={() => setErrorIndex(null)}
                 onSimulate={handleSimulacao}
+                valueRange={valueRange}
               />
             ))}
           </div>

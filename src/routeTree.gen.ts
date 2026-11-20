@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as EmprestimosRouteImport } from './routes/emprestimos'
 import { Route as FinancialGatewayGateRouteImport } from './routes/financialGatewayGate'
 import { Route as FinanciamentosRouteImport } from './routes/financiamentos'
+import { Route as GateRouteImport } from './routes/gate'
 import { Route as ProdutosRouteImport } from './routes/produtos'
 import { Route as SegurosRouteImport } from './routes/seguros'
 import { Route as AccountsSigninRouteImport } from './routes/accounts.signin'
@@ -92,6 +93,11 @@ const FinanciamentosRoute = FinanciamentosRouteImport.update({
 } as any).lazy(() =>
   import('./routes/financiamentos.lazy').then((d) => d.Route),
 )
+const GateRoute = GateRouteImport.update({
+  id: '/gate',
+  path: '/gate',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProdutosRoute = ProdutosRouteImport.update({
   id: '/produtos',
   path: '/produtos',
@@ -270,6 +276,7 @@ export interface FileRoutesByFullPath {
   '/emprestimos': typeof EmprestimosRouteWithChildren
   '/financialGatewayGate': typeof FinancialGatewayGateRoute
   '/financiamentos': typeof FinanciamentosRouteWithChildren
+  '/gate': typeof GateRoute
   '/produtos': typeof ProdutosRouteWithChildren
   '/seguros': typeof SegurosRouteWithChildren
   '/backoffice': typeof BackofficeLazyRouteWithChildren
@@ -302,6 +309,7 @@ export interface FileRoutesByTo {
   '/emprestimos': typeof EmprestimosRouteWithChildren
   '/financialGatewayGate': typeof FinancialGatewayGateRoute
   '/financiamentos': typeof FinanciamentosRouteWithChildren
+  '/gate': typeof GateRoute
   '/seguros': typeof SegurosRouteWithChildren
   '/sandbox': typeof SandboxLazyRoute
   '/accounts/signin': typeof AccountsSigninRoute
@@ -333,6 +341,7 @@ export interface FileRoutesById {
   '/emprestimos': typeof EmprestimosRouteWithChildren
   '/financialGatewayGate': typeof FinancialGatewayGateRoute
   '/financiamentos': typeof FinanciamentosRouteWithChildren
+  '/gate': typeof GateRoute
   '/produtos': typeof ProdutosRouteWithChildren
   '/seguros': typeof SegurosRouteWithChildren
   '/backoffice': typeof BackofficeLazyRouteWithChildren
@@ -367,6 +376,7 @@ export interface FileRouteTypes {
     | '/emprestimos'
     | '/financialGatewayGate'
     | '/financiamentos'
+    | '/gate'
     | '/produtos'
     | '/seguros'
     | '/backoffice'
@@ -399,6 +409,7 @@ export interface FileRouteTypes {
     | '/emprestimos'
     | '/financialGatewayGate'
     | '/financiamentos'
+    | '/gate'
     | '/seguros'
     | '/sandbox'
     | '/accounts/signin'
@@ -429,6 +440,7 @@ export interface FileRouteTypes {
     | '/emprestimos'
     | '/financialGatewayGate'
     | '/financiamentos'
+    | '/gate'
     | '/produtos'
     | '/seguros'
     | '/backoffice'
@@ -462,6 +474,7 @@ export interface RootRouteChildren {
   EmprestimosRoute: typeof EmprestimosRouteWithChildren
   FinancialGatewayGateRoute: typeof FinancialGatewayGateRoute
   FinanciamentosRoute: typeof FinanciamentosRouteWithChildren
+  GateRoute: typeof GateRoute
   ProdutosRoute: typeof ProdutosRouteWithChildren
   SegurosRoute: typeof SegurosRouteWithChildren
   BackofficeLazyRoute: typeof BackofficeLazyRouteWithChildren
@@ -505,6 +518,13 @@ declare module '@tanstack/react-router' {
       path: '/financiamentos'
       fullPath: '/financiamentos'
       preLoaderRoute: typeof FinanciamentosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gate': {
+      id: '/gate'
+      path: '/gate'
+      fullPath: '/gate'
+      preLoaderRoute: typeof GateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/produtos': {
@@ -779,6 +799,7 @@ const rootRouteChildren: RootRouteChildren = {
   EmprestimosRoute: EmprestimosRouteWithChildren,
   FinancialGatewayGateRoute: FinancialGatewayGateRoute,
   FinanciamentosRoute: FinanciamentosRouteWithChildren,
+  GateRoute: GateRoute,
   ProdutosRoute: ProdutosRouteWithChildren,
   SegurosRoute: SegurosRouteWithChildren,
   BackofficeLazyRoute: BackofficeLazyRouteWithChildren,

@@ -20,9 +20,9 @@ import { setFastPathState } from "@/features/financial-hub/core/services/fastPat
 import { callSimulation } from "@/features/financial-hub/core/services/gateway";
 import { useSafeCall } from "@/features/financial-hub/core/hooks/useSafeCall";
 import { termLabel, FlowInputs, FlowWizardData, FlowConsult } from "@/features/financial-hub/components/shared/flowcredi/flowcredi.types";
-import { inputClass, labelClass, digitsToMoney, maxCreditOf } from "../home-equity.types";
+import { inputClass, labelClass, digitsToMoney, maxCreditOf, loanPctOf } from "../home-equity.types";
 
-const MIN_CREDIT = 1000; // passo do slider (não é regra da FlowCredi)
+const MIN_CREDIT_DEFAULT = 1000; // passo do slider quando rules.min_loan_amount não informa
 
 export function Step2Simulation() {
   const { state, update, back } = useWizard<FlowWizardData>();
@@ -34,7 +34,8 @@ export function Step2Simulation() {
   const propertyValue = Number(saved.property_value ?? 0);
   const balance = saved.property_paid ? 0 : Number(saved.outstanding_balance ?? 0);
 
-  const maxPct = Number(rules.max_loan_percentage ?? 60);
+  const MIN_CREDIT = Number(rules.min_loan_amount ?? MIN_CREDIT_DEFAULT);
+  const maxPct = loanPctOf(saved.property_type, rules);
   const maxCredit = Math.max(MIN_CREDIT, maxCreditOf(propertyValue, balance, maxPct));
   const termStep = Number(rules.term_step_months ?? 12);
   const ruleMaxTerm = Number(rules.max_term_months ?? 240);
@@ -70,7 +71,7 @@ export function Step2Simulation() {
 
   useEffect(() => {
     setCredit((v) => Math.min(Math.max(v, MIN_CREDIT), maxCredit));
-  }, [maxCredit]);
+  }, [MIN_CREDIT, maxCredit]);
   useEffect(() => {
     setTerm((t) => Math.min(Math.max(t, termStep), maxTerm));
   }, [termStep, maxTerm]);
@@ -136,11 +137,7 @@ export function Step2Simulation() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-6 gap-y-3">
             {/* Valor do crédito */}
             <div className="space-y-1">
-              <Label className={labelClass}>Valor do crédito</Label>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                Até <strong className="text-neutral-900 dark:text-neutral-100">{BRL(maxCredit)}</strong> · {maxPct}% do imóvel
-                {balance > 0 ? " menos o saldo devedor" : ""}
-              </p>
+              <Label className={labelClass}>Valor do crédito *</Label>
               <Input
                 disabled={loading}
                 inputMode="numeric"
@@ -164,10 +161,7 @@ export function Step2Simulation() {
 
             {/* Prazo */}
             <div className="space-y-1">
-              <Label className={labelClass}>Prazo</Label>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                {maxTerm < ruleMaxTerm ? `Máximo para sua idade: ${maxTerm} meses` : `Máximo: ${maxTerm} meses`}
-              </p>
+              <Label className={labelClass}>Prazo *</Label>
               <div
                 className={`h-10 flex items-center px-3 border border-neutral-200 dark:border-neutral-700 font-semibold text-sm ${
                   loading ? "bg-neutral-100 dark:bg-neutral-900 text-neutral-500" : "bg-white dark:bg-neutral-800 text-brand-accent"
@@ -206,6 +200,13 @@ export function Step2Simulation() {
               className={inputClass}
             />
           </div>
+
+          {/* * Limites do crédito e do prazo (rodapé do box) */}
+          <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+            * Até <strong className="text-neutral-900 dark:text-neutral-100">{BRL(maxCredit)}</strong> · {maxPct}% do imóvel
+            {balance > 0 ? " menos o saldo devedor" : ""} ·{" "}
+            {maxTerm < ruleMaxTerm ? `Prazo máximo para sua idade: ${maxTerm} meses` : `Prazo máximo de ${maxTerm} meses`}
+          </p>
         </div>
 
         <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4">

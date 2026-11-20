@@ -2,8 +2,8 @@
  * @fileoverview Step 3 — Sua renda (Car Equity · FlowCredi)
  * @path src/features/financial-hub/components/products/credit/auto-equity/steps/Step3Income.tsx
  *
- * Renda, situação profissional, profissão e tempo na ocupação (anos), pedidos pelo
- * /auto/lead. CEP e endereço vêm do cadastro (data.address); só são pedidos se faltarem.
+ * Renda, situação profissional, profissão e restrição no SPC/Serasa (POST /processos,
+ * produto CGA). CEP e endereço vêm do cadastro (data.address); só são pedidos se faltarem.
  * Ficam em `data.flowInputs`.
  */
 
@@ -37,16 +37,15 @@ export function Step3Income() {
   const [income, setIncome] = useState<number>(saved.monthly_income ?? 0);
   const [status, setStatus] = useState<string>(saved.professional_status ?? "");
   const [profession, setProfession] = useState<string>(saved.profession ?? "");
-  const [years, setYears] = useState<string>(saved.employment_years ? String(saved.employment_years) : "");
+  const [restriction, setRestriction] = useState<boolean | null>(saved.credit_restriction ?? null);
   const [zip, setZip] = useState<string>(saved.customer_zip ?? "");
   const [address, setAddress] = useState<string>(saved.customer_address ?? "");
 
-  const yearsNum = Number(years.replace(",", "."));
   const valid =
     income > 0 &&
     !!status &&
     profession.trim().length >= 2 &&
-    yearsNum > 0 &&
+    restriction !== null &&
     (hasRegistryAddress || (zip.replace(/\D/g, "").length === 8 && address.trim().length >= 5));
 
   const handleContinue = () => {
@@ -60,7 +59,7 @@ export function Step3Income() {
           monthly_income: income,
           professional_status: status,
           profession: profession.trim().replace(/\s+/g, " "),
-          employment_years: yearsNum,
+          credit_restriction: restriction === true,
           customer_zip: hasRegistryAddress ? registryZip : zip.replace(/\D/g, ""),
           customer_address: hasRegistryAddress ? registryAddress : address.trim().replace(/\s+/g, " "),
         },
@@ -120,18 +119,26 @@ export function Step3Income() {
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="ae-years" className={labelClass}>
-                Tempo na ocupação atual (anos)
-              </Label>
-              <Input
-                id="ae-years"
-                autoComplete="off"
-                inputMode="decimal"
-                placeholder="Ex.: 3"
-                value={years}
-                onChange={(e) => setYears(e.target.value.replace(/[^\d,.]/g, "").slice(0, 4))}
-                className={inputClass}
-              />
+              <Label className={labelClass}>Tem restrição no SPC/Serasa?</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { v: true, l: "Sim" },
+                  { v: false, l: "Não" },
+                ].map((o) => (
+                  <button
+                    key={o.l}
+                    type="button"
+                    onClick={() => setRestriction(o.v)}
+                    className={`h-10 border rounded-none text-sm font-semibold transition-colors ${
+                      restriction === o.v
+                        ? "border-[#2246A7] bg-[#EEF3FC] text-[#2246A7] dark:bg-neutral-800 dark:text-blue-400"
+                        : "border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700"
+                    }`}
+                  >
+                    {o.l}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {!hasRegistryAddress && (

@@ -213,7 +213,7 @@ export function FlowOffersStep() {
       <p className="text-[12px] text-neutral-400 dark:text-neutral-500 font-medium leading-relaxed">
         {isHomeEquity
           ? "* Valores de referência, sujeitos à análise de crédito e do imóvel. As parcelas já incluem seguros (MIP e DFI) e tarifa. No Price, juros e amortização ficam iguais e só o seguro varia; no SAC, as parcelas diminuem mês a mês. No pós-fixado, as parcelas são corrigidas pelo IPCA, que não está incluído na simulação. Registro e avaliação do imóvel não estão incluídos."
-          : "* Valores de referência, sujeitos à análise de crédito e do imóvel pelo banco. A 1ª parcela é a maior do contrato e já inclui seguros (MIP e DFI) e tarifa; no SAC, as parcelas diminuem mês a mês. Mostramos a menor taxa de cada banco, que pode depender do seu relacionamento com ele. ITBI, registro e avaliação do imóvel não estão incluídos."}
+          : "* Valores de referência, sujeitos à análise de crédito e do imóvel pelo banco. A 1ª parcela é a maior do contrato e já inclui seguros (MIP e DFI) e tarifa; no SAC, as parcelas diminuem mês a mês. Mostramos a taxa Balcão de cada banco, a taxa base para quem não é cliente; condições especiais dependem do seu relacionamento com o banco. ITBI, registro e avaliação do imóvel não estão incluídos."}
       </p>
 
       <DetailSheet

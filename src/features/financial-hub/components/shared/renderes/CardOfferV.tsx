@@ -103,6 +103,8 @@ interface CardOfferVProps {
   hasError?: boolean;
   onErrorTimeout?: () => void;
   onSimulate: (item: CardOfferItem, idx: number) => void;
+  /** Faixa de valor financiável do produto (vem do `rules` da config). Fora dela: selo "Fora da faixa" e sem botão. */
+  valueRange?: { min?: number; max?: number };
 }
 
 const getSuperbidUrl = (offerData: CardOfferData | undefined) => {
@@ -210,7 +212,7 @@ function ModalityTag({ category, formattedDate }: { category: OfferCategory; for
 // =========================================================================
 // [COMPONENTE PRINCIPAL]: CardOfferV
 // =========================================================================
-function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError: hasSimulationError, onErrorTimeout, onSimulate }: CardOfferVProps) {
+function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError: hasSimulationError, onErrorTimeout, onSimulate, valueRange }: CardOfferVProps) {
   const offerData: CardOfferData = item.offer || {};
   const eventData: CardEventData = item.event || {};
   const sellerData = item.seller || {};
@@ -339,6 +341,11 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError:
   // Oferta vendida (a busca da Superbid lista algumas mesmo com searchType=opened, ex.: Mercado Balcão):
   // selo "Vendido", foto em cinza, preço riscado e sem botão de simular (espaço mantido para alinhar o grid).
   const isSold = Boolean(offerData.offer_status?.sold ?? offerData.offer_status_sold);
+  // Valor fora da faixa financiável do produto: selo "Fora da faixa" e sem botão (mesmo espaço do vendido)
+  const offerValue = Number(offerData.offer_value ?? 0);
+  const isOutOfRange =
+    !isSold && !!valueRange && offerValue > 0 &&
+    ((!!valueRange.min && offerValue < valueRange.min) || (!!valueRange.max && offerValue > valueRange.max));
 
   return (
     <div className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group">
@@ -377,6 +384,12 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError:
           {isSold && (
             <span className="absolute top-2 right-2 bg-[#2246A7] text-white font-mono text-[9px] font-light uppercase tracking-[0.18em] px-2 py-1 rounded-none z-10">
               Vendido
+            </span>
+          )}
+
+          {isOutOfRange && (
+            <span className="absolute top-2 right-2 bg-[#2246A7] text-white font-mono text-[9px] font-light uppercase tracking-[0.18em] px-2 py-1 rounded-none z-10">
+              Fora da faixa
             </span>
           )}
 
@@ -470,7 +483,7 @@ function CardOfferVComponent({ item, idx, isCartao, loading, disabled, hasError:
       {/* CALL TO ACTION (CTA)                                             */}
       {/* ================================================================ */}
       <div className="p-4 pt-0">
-        {isSold ? (
+        {isSold || isOutOfRange ? (
           <div className="h-11" aria-hidden="true" />
         ) : hasSimulationError ? (
           <div className="relative w-full h-11 overflow-hidden rounded-none border border-neutral-200 dark:border-neutral-700 shadow-xs bg-white dark:bg-neutral-900">

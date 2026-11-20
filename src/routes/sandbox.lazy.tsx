@@ -195,6 +195,30 @@ type SandboxRouteConfig = {
 };
 
 /**
+ * [PERFIL APÓS F5]: o FinancialAuthContext apaga o `user_profile` do storage a cada
+ * carga (zero PII no storage). Aqui o Sandbox busca o perfil de novo só com o salto
+ * "issue" do sbx-auth-exchange (mesma chamada do login), sem gravar no storage.
+ */
+const buscarPerfilSbx = async (
+  sbxAccessToken: string,
+  environment: "staging" | "production",
+): Promise<BFFUserProfile | null> => {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const res = await fetch(`${supabaseUrl}/functions/v1/sbx-auth-exchange`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${supabaseAnonKey}`,
+      "x-access-token": sbxAccessToken,
+    },
+    body: JSON.stringify({ environment }),
+  });
+  const data = await res.json().catch(() => ({}));
+  return res.ok && data?.success && data.user_profile ? (data.user_profile as BFFUserProfile) : null;
+};
+
+/**
  * =========================================================================
  * [LOGIN DO SANDBOX EM DOIS SALTOS — MESMO CONTRATO DO HANDOFF]
  * =========================================================================
@@ -430,6 +454,13 @@ function SandboxPage() {
         } catch (e) {
           console.error("Erro ao parsear perfil armazenado:", e);
         }
+      } else if (!storedProfile && !userData && storedToken) {
+        // Após F5 o perfil foi purgado pelo FinancialAuthContext: busca de novo
+        buscarPerfilSbx(storedToken, ambienteAtivo)
+          .then((perfil) => {
+            if (perfil) setUserData(perfil);
+          })
+          .catch((e) => console.error("Erro ao recarregar o perfil da sbX:", e));
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- carrega só quando a sessão muda
@@ -848,7 +879,8 @@ function SandboxPage() {
     offerId: string, 
     productId: string, 
     isDisabled?: boolean, 
-    openInNewTab: boolean = false
+    openInNewTab: boolean = false,
+    viaPonte: boolean = false
   ) => {
     if (isDisabled) return;
     if (!validateSessionBeforeAction()) return;
@@ -867,7 +899,9 @@ function SandboxPage() {
 
     const form = document.createElement("form");
     form.method = "POST";
-    form.action = gatewayUrl;
+    // [PONTE /gate]: simula o botão da Superbid -- posta na rota /gate do app,
+    // que repassa ao gate pelo navegador (IP real, sem expor o Supabase).
+    form.action = viaPonte ? `${window.location.origin}/gate` : gatewayUrl;
     
     if (openInNewTab) {
       form.target = "_blank";
@@ -877,11 +911,12 @@ function SandboxPage() {
       environment: ambienteAtivo,
       auth_token: tokenToUse,
       offer_id: String(offerId),
-      product_id: String(productId || ""),
+      // Pela ponte vai como a Superbid mandaria: sem product_id (o orchestrator resolve pela oferta)
+      product_id: viaPonte ? "" : String(productId || ""),
       return_uri: window.location.origin + window.location.pathname,
       utm_source: "sandbox",
       utm_medium: "referral",
-      utm_campaign: `flow_${flowKey.toLowerCase()}_form`,
+      utm_campaign: `flow_${flowKey.toLowerCase()}_${viaPonte ? "ponte" : "form"}`,
     };
 
     Object.entries(searchPayload).forEach(([key, value]) => {
@@ -1963,6 +1998,16 @@ function SandboxPage() {
                           className={`w-full rounded-none shadow-sm bg-neutral-900 text-white border-neutral-900 hover:bg-neutral-800 font-bold text-xs`}
                         >
                           <ExternalLink className="h-3 w-3 mr-2" /> (Nova Aba)
+                        </Button>
+
+                        {/* Botão 2b: PONTE /gate (simula o botão da Superbid, em nova aba) */}
+                        <Button
+                          onClick={() => handleSimulateOfferForm(item.flowKey, resolvedOfferId, String(item.product_id ?? ""), item.disabled, true, true)}
+                          disabled={item.disabled || !resolvedOfferId}
+                          variant="outline"
+                          className={`w-full rounded-none shadow-sm bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-100 font-bold text-xs`}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-2" /> Ponte /gate (Nova Aba)
                         </Button>
 
                         {/* Botão 3: Debug */}

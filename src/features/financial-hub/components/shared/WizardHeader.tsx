@@ -27,7 +27,8 @@ interface WizardHeaderProps {
 }
 
 export function WizardHeader({ currentStep, stepsInfo }: WizardHeaderProps) {
-  const stepKeys = Object.keys(stepsInfo).map(Number);
+  // Régua só com os passos que têm label: o passo final de conclusão (sem label) fica fora
+  const stepKeys = Object.keys(stepsInfo).map(Number).filter((k) => !!stepsInfo[k]?.label);
   const totalSteps = stepKeys.length;
 
   const visualStep = Math.min(currentStep, totalSteps);

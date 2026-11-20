@@ -28,3 +28,10 @@ export const SIGNIN_ROUTE = "/accounts/signin";
 export function buildSigninRedirect(currentPath: string): string {
   return `${SIGNIN_ROUTE}?redirect_uri=${encodeURIComponent(currentPath)}`;
 }
+
+/**
+ * Domínios de parceiros que podem postar na ponte `/gate` (inclui subdomínios,
+ * ex.: www.superbid.net). O próprio app não entra aqui: a ponte aceita o domínio
+ * em que está rodando (dev, homol, produção) automaticamente.
+ */
+export const PARTNER_ORIGIN_DOMAINS = ["superbid.net"];
