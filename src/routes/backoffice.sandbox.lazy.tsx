@@ -1,8 +1,16 @@
 /**
  * @fileoverview Sandbox de Simulação de Jornadas (Topo de Funil / sbX - Stateless)
- * @path src/routes/sandbox.tsx
+ * @path src/routes/backoffice.sandbox.lazy.tsx
+ * @route /backoffice/sandbox
  * @description Painel de controle, debug e testes integrado com a API de Ofertas, Sessão
  * corporativa e Gateways de Borda.
+ *
+ * [ACESSO]: dentro do backoffice, só admin (checagens em `backoffice.lazy.tsx`: login do
+ * backoffice + perfil admin; senão vai para /backoffice/login ou /backoffice). Aberto em
+ * nova aba pelo menu lateral (Configuração), exibido sem o menu lateral. Como a raiz não
+ * injeta a sessão do cliente nas rotas /backoffice, a tela é envolvida aqui pelo
+ * `FinancialAuthProvider`. A sessão da Superbid de teste fica só nesta aba
+ * (sessionStorage); expirada, limpa o Sandbox e mostra o formulário de login dele.
  *
  * [MUDANÇAS CRÍTICAS DA ARQUITETURA STATELESS]:
  * 1. Fim da rota `sbx-user`: O perfil cadastral completo do usuário é obtido
@@ -55,12 +63,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
+import { FinancialAuthProvider, useFinancialAuth } from "@/integrations/auth/FinancialAuthContext";
 import { fetchEventDetails } from "@/services/event";
 import { fetchOfferDetails, fetchOffersQuery } from "@/services/offer";
 import { getDefaultSbxEnvironment } from "@/services/session";
 import { HOME_ROUTE } from "@/config/routes";
 import { WalletLogo } from "@/components/brand/WalletLogo";
+import { ThemeToggle } from "@/design-system/sbx-design-system-9f1c03/components/ThemeToggle";
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -483,7 +492,7 @@ function SandboxPage() {
       product_id: 8,
       flowKey: "Cartão",
       disabled: false,
-      variant: "bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-100 font-medium text-xs rounded-none",
+      variant: "bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-medium text-xs rounded-none",
     },
     {
       key: "Carros",
@@ -492,7 +501,7 @@ function SandboxPage() {
       product_id: 2,
       flowKey: "Carros",
       disabled: false,
-      variant: "bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-100 font-medium text-xs rounded-none",
+      variant: "bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-medium text-xs rounded-none",
     },
     {
       key: "Caminhões",
@@ -501,7 +510,7 @@ function SandboxPage() {
       product_id: 5,
       flowKey: "Caminhões",
       disabled: false,
-      variant: "bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-100 font-medium text-xs rounded-none",
+      variant: "bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-medium text-xs rounded-none",
     },
     {
       key: "Imóveis",
@@ -510,7 +519,7 @@ function SandboxPage() {
       product_id: 1,
       flowKey: "Imóveis",
       disabled: true,
-      variant: "bg-neutral-50 text-neutral-400 border border-neutral-200 cursor-not-allowed opacity-60 font-medium text-xs rounded-none",
+      variant: "bg-neutral-50 dark:bg-neutral-900 text-neutral-400 border border-neutral-200 dark:border-neutral-800 cursor-not-allowed opacity-60 font-medium text-xs rounded-none",
     },
   ];
 
@@ -1275,33 +1284,34 @@ function SandboxPage() {
   }, [selectedOfferPayload]);
 
   const ghostBtn =
-    "border border-neutral-300 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 transition-all rounded-none px-4 py-2 text-xs font-bold";
+    "border border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100 transition-all rounded-none px-4 py-2 text-xs font-bold";
   const loginLabelText = tipoPessoa === "F" ? "E-mail, login ou CPF" : "CNPJ ou login";
 
   return (
-    <div className="bg-white text-slate-900 antialiased font-sans overflow-x-hidden relative min-h-screen pb-24 md:pb-10">
+    <div className="bg-white dark:bg-neutral-950 text-slate-900 dark:text-neutral-100 antialiased font-sans overflow-x-hidden relative min-h-screen pb-24 md:pb-10">
       <style>{`
         .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+        .dark .glass { background: rgba(10, 10, 10, 0.85); }
       `}</style>
 
       {/* HEADER INSTITUCIONAL */}
       <header
-        className={`fixed top-0 left-0 w-full z-50 glass border-b border-neutral-200 transition-all duration-300 ${isScrolled ? "shadow-sm py-2" : "py-3"}`}
+        className={`fixed top-0 left-0 w-full z-50 glass border-b border-neutral-200 dark:border-neutral-800 transition-all duration-300 ${isScrolled ? "shadow-sm py-2" : "py-3"}`}
       >
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <a href="#" className="flex items-center">
-            <WalletLogo size="md" withTagline />
+            <WalletLogo size="md" withTagline followTheme />
           </a>
 
           <div className="hidden md:flex flex-col items-start">
-            <div className="flex items-center space-x-3 text-[13px] font-semibold text-slate-600">
-              <span className="text-neutral-900 font-bold">Painel de Sandbox</span>
+            <div className="flex items-center space-x-3 text-[13px] font-semibold text-slate-600 dark:text-neutral-400">
+              <span className="text-neutral-900 dark:text-neutral-100 font-bold">Painel de Sandbox</span>
               <span className="text-neutral-300">|</span>
-              <span className="text-neutral-500 uppercase text-[11px] font-bold tracking-wide">
+              <span className="text-neutral-500 dark:text-neutral-400 uppercase text-[11px] font-bold tracking-wide">
                 Ambiente: {ambienteAtivo}
               </span>
             </div>
-            <div className="flex flex-col font-mono text-[10px] text-neutral-500 mt-1 space-y-0.5">
+            <div className="flex flex-col font-mono text-[10px] text-neutral-500 dark:text-neutral-400 mt-1 space-y-0.5">
               <span>
                 <b>access_token_sbx:</b> {formatTokenSnippet(accessTokenSBX)}
               </span>
@@ -1312,16 +1322,14 @@ function SandboxPage() {
           </div>
 
           <div className="hidden md:flex items-center space-x-3">
+            <ThemeToggle />
             <a
-              href="/sandbox/help"
+              href="/backoffice/sandbox/help"
               target="_blank"
               rel="noopener noreferrer"
               className={`flex items-center gap-1.5 ${ghostBtn}`}
             >
-              <HelpCircle className="w-4 h-4" /> Ajuda
-            </a>
-            <a href="/backoffice" target="_blank" rel="noopener noreferrer" className={ghostBtn}>
-              Backoffice
+              <HelpCircle className="w-4 h-4 text-[#2246A7]" /> Ajuda
             </a>
             {activeToken ? (
               <button
@@ -1335,7 +1343,7 @@ function SandboxPage() {
                   </>
                 ) : (
                   <>
-                    Sair <LogOut className="w-3 h-3" />
+                    Sair <LogOut className="w-3 h-3 text-[#2246A7]" />
                   </>
                 )}
               </button>
@@ -1352,7 +1360,7 @@ function SandboxPage() {
 
         {!activeToken ? (
           <div className="flex items-center justify-center py-10 mt-6">
-            <div className="w-full max-w-[440px] bg-white rounded-none shadow-sm border border-neutral-200 p-8 sm:p-10">
+            <div className="w-full max-w-[440px] bg-white dark:bg-neutral-950 rounded-none shadow-sm border border-neutral-200 dark:border-neutral-800 p-8 sm:p-10">
               
               {/* Mantivemos apenas a tag de STAGE alinhada à direita (se estiver em staging) */}
               {ambienteAtivo === "staging" && (
@@ -1364,17 +1372,17 @@ function SandboxPage() {
               )}
 
               <div className="mb-4">
-                <p className="text-[11px] uppercase font-bold text-neutral-500 mb-2 text-center tracking-wide">
+                <p className="text-[11px] uppercase font-bold text-neutral-500 dark:text-neutral-400 mb-2 text-center tracking-wide">
                   Selecione o ambiente de destino:
                 </p>
-                <div className="flex bg-neutral-100 p-1 rounded-none border border-neutral-200">
+                <div className="flex bg-neutral-100 dark:bg-neutral-800 p-1 rounded-none border border-neutral-200 dark:border-neutral-800">
                   <button
                     type="button"
                     onClick={() => setAmbienteAtivo("staging")}
                     className={`flex-1 py-1.5 text-xs font-bold rounded-none transition-all border ${
                       ambienteAtivo === "staging"
-                        ? "bg-white text-neutral-900 border-neutral-900 shadow-sm"
-                        : "text-neutral-500 border-transparent hover:text-neutral-700"
+                        ? "bg-white dark:bg-neutral-950 text-[#2246A7] border-[#2246A7] shadow-sm"
+                        : "text-neutral-500 dark:text-neutral-400 border-transparent hover:text-neutral-700 dark:hover:text-neutral-300"
                     }`}
                   >
                     STAGE
@@ -1384,8 +1392,8 @@ function SandboxPage() {
                     onClick={() => setAmbienteAtivo("production")}
                     className={`flex-1 py-1.5 text-xs font-bold rounded-none transition-all border ${
                       ambienteAtivo === "production"
-                        ? "bg-white text-neutral-900 border-neutral-900 shadow-sm"
-                        : "text-neutral-500 border-transparent hover:text-neutral-700"
+                        ? "bg-white dark:bg-neutral-950 text-[#2246A7] border-[#2246A7] shadow-sm"
+                        : "text-neutral-500 dark:text-neutral-400 border-transparent hover:text-neutral-700 dark:hover:text-neutral-300"
                     }`}
                   >
                     PRODUÇÃO
@@ -1394,7 +1402,7 @@ function SandboxPage() {
               </div>
 
               <form onSubmit={handleSandboxLogin} className="flex flex-col gap-5" noValidate>
-                <div className="flex w-full border-b border-neutral-200 mb-2">
+                <div className="flex w-full border-b border-neutral-200 dark:border-neutral-800 mb-2">
                   <button
                     type="button"
                     disabled={isLoggingIn}
@@ -1404,7 +1412,7 @@ function SandboxPage() {
                       setLoginError("");
                       setPasswordError("");
                     }}
-                    className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none ${tipoPessoa === "F" ? "text-neutral-900 border-neutral-900" : "text-neutral-400 border-transparent"}`}
+                    className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none ${tipoPessoa === "F" ? "text-[#2246A7] border-[#2246A7]" : "text-neutral-400 border-transparent"}`}
                   >
                     Pessoa Física
                   </button>
@@ -1417,7 +1425,7 @@ function SandboxPage() {
                       setLoginError("");
                       setPasswordError("");
                     }}
-                    className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none ${tipoPessoa === "J" ? "text-neutral-900 border-neutral-900" : "text-neutral-400 border-transparent"}`}
+                    className={`flex-1 text-sm font-semibold py-3 transition-all border-b-2 outline-none ${tipoPessoa === "J" ? "text-[#2246A7] border-[#2246A7]" : "text-neutral-400 border-transparent"}`}
                   >
                     Pessoa Jurídica
                   </button>
@@ -1442,7 +1450,7 @@ function SandboxPage() {
                       );
                       if (loginError) setLoginError("");
                     }}
-                    className={`w-full h-12 border rounded-none px-5 text-sm outline-none transition-all ${loginError ? "border-destructive" : "border-neutral-300 focus:border-neutral-900"}`}
+                    className={`w-full h-12 border rounded-none px-5 text-sm outline-none transition-all ${loginError ? "border-destructive" : "border-neutral-300 dark:border-neutral-700 focus:border-[#2246A7]"}`}
                     placeholder={loginLabelText}
                   />
                   {loginError && <span className="text-destructive text-[11px] pl-5 font-medium mt-1">{loginError}</span>}
@@ -1458,13 +1466,13 @@ function SandboxPage() {
                         setPasswordCred(e.target.value);
                         if (passwordError) setPasswordError("");
                       }}
-                      className={`w-full h-12 border rounded-none pl-5 pr-12 text-sm outline-none transition-all ${passwordError ? "border-destructive" : "border-neutral-300 focus:border-neutral-900"}`}
+                      className={`w-full h-12 border rounded-none pl-5 pr-12 text-sm outline-none transition-all ${passwordError ? "border-destructive" : "border-neutral-300 dark:border-neutral-700 focus:border-[#2246A7]"}`}
                       placeholder="Senha"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                      className="absolute right-5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
                     >
                       {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                     </button>
@@ -1494,12 +1502,12 @@ function SandboxPage() {
           <>
             {/* INSPEÇÃO DE OFERTA E PERFIL */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="rounded-none border-neutral-200 bg-white shadow-sm">
+              <Card className="rounded-none border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-sm">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-bold flex items-center gap-2 text-neutral-900">
-                    <Search className="h-4 w-4" /> Consulta de Oferta (/offer)
+                  <CardTitle className="text-sm font-bold flex items-center gap-2 text-neutral-900 dark:text-neutral-100">
+                    <Search className="h-4 w-4 text-[#2246A7]" /> Consulta de Oferta (/offer)
                   </CardTitle>
-                  <CardDescription className="text-xs text-neutral-500">
+                  <CardDescription className="text-xs text-neutral-500 dark:text-neutral-400">
                     Edge Function autenticada com token interno que chama /offer na sbX.
                   </CardDescription>
                 </CardHeader>
@@ -1511,13 +1519,13 @@ function SandboxPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleInspectOffer();
                       }}
-                      className="rounded-none font-mono text-xs border-neutral-300 placeholder:text-neutral-400 focus-visible:ring-neutral-900"
+                      className="rounded-none font-mono text-xs border-neutral-300 dark:border-neutral-700 placeholder:text-neutral-400 focus-visible:ring-neutral-900"
                     />
                     <Button
                       onClick={handleInspectOffer}
                       disabled={loading}
                       size="sm"
-                      className="rounded-none bg-neutral-900 text-white hover:bg-neutral-800"
+                      className="rounded-none bg-[#2246A7] text-white hover:bg-[#1b3a8c]"
                     >
                       {loading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : "Buscar"}
                     </Button>
@@ -1525,14 +1533,14 @@ function SandboxPage() {
                       onClick={() => handleOpenConsultarOferta(customOfferId)}
                       variant="outline"
                       size="sm"
-                      className="rounded-none bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100 focus-visible:ring-neutral-900"
+                      className="rounded-none bg-white dark:bg-neutral-950 text-neutral-700 dark:text-neutral-300 border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900"
                     >
-                      <Info className="h-3.5 w-3.5 mr-1" /> Detalhes
+                      <Info className="h-3.5 w-3.5 mr-1 text-[#2246A7]" /> Detalhes
                     </Button>
                   </div>
 
                   {loading ? (
-                    <div className="bg-neutral-50 rounded-none border border-neutral-200 flex items-center gap-6 overflow-hidden">
+                    <div className="bg-neutral-50 dark:bg-neutral-900 rounded-none border border-neutral-200 dark:border-neutral-800 flex items-center gap-6 overflow-hidden">
                       <div className="relative h-24 w-32 bg-neutral-900 shrink-0 overflow-hidden flex items-center justify-center">
                         <div className="w-8 h-8 rounded-none border border-neutral-700 bg-neutral-800 flex items-center justify-center">
                           <Loader2 className="animate-spin text-white" size={16} />
@@ -1540,8 +1548,8 @@ function SandboxPage() {
                       </div>
 
                       <div className="py-2 pr-4 flex flex-col justify-center space-y-1 overflow-hidden flex-1">
-                        <p className="font-bold text-sm text-neutral-900">Carregando lote #{tempOfferId}...</p>
-                        <p className="text-xs text-neutral-500">Buscando dados na API da Superbid...</p>
+                        <p className="font-bold text-sm text-neutral-900 dark:text-neutral-100">Carregando lote #{tempOfferId}...</p>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400">Buscando dados na API da Superbid...</p>
                       </div>
                     </div>
                   ) : apiOfferData ? (
@@ -1574,7 +1582,7 @@ function SandboxPage() {
                         apiOfferData?.event?.event_description || apiOfferData?.offer?.event_description || "";
 
                       return (
-                        <div className="bg-neutral-50 rounded-none border border-neutral-200 flex items-center gap-6 overflow-hidden">
+                        <div className="bg-neutral-50 dark:bg-neutral-900 rounded-none border border-neutral-200 dark:border-neutral-800 flex items-center gap-6 overflow-hidden">
                           <div className="relative h-24 w-32 bg-black shrink-0 overflow-hidden">
                             {hasPhotoError ? (
                               <div className="absolute inset-0 bg-neutral-900 flex items-center justify-center text-white text-[10px] font-bold">
@@ -1609,75 +1617,75 @@ function SandboxPage() {
 
                           <div className="py-2 pr-4 flex flex-col justify-center space-y-1 overflow-hidden flex-1">
                             <p
-                              className="font-bold text-sm text-neutral-900 truncate"
+                              className="font-bold text-sm text-neutral-900 dark:text-neutral-100 truncate"
                               title={apiOfferData.offer?.offer_description}
                             >
                               Lote #{customOfferId} - {apiOfferData.offer?.offer_description || "Oferta sem descrição"}
                             </p>
 
                             {eventId && (
-                              <p className="text-xs text-neutral-500 truncate font-normal">
+                              <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate font-normal">
                                 EVENTO #{eventId} {eventDesc ? `- ${eventDesc}` : ""}
                               </p>
                             )}
 
-                            <p className="text-xs text-neutral-500 truncate">
-                              {catName} • <strong className="text-neutral-900">{formattedValue}</strong>
+                            <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
+                              {catName} • <strong className="text-neutral-900 dark:text-neutral-100">{formattedValue}</strong>
                             </p>
                           </div>
                         </div>
                       );
                     })()
                   ) : (
-                    <div className="p-3 bg-neutral-50 border border-neutral-200 text-neutral-500 text-center italic rounded-none">
+                    <div className="p-3 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-500 dark:text-neutral-400 text-center italic rounded-none">
                       Nenhuma oferta carregada. Insira um ID válido e clique em Buscar.
                     </div>
                   )}
                 </CardContent>
               </Card>
 
-              <Card className="rounded-none border-neutral-200 bg-white shadow-sm">
+              <Card className="rounded-none border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-sm">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-bold flex items-center gap-2 text-neutral-900">
-                    <UserCheck className="h-4 w-4" /> Perfil Carregado da sbX (Unificado)
+                  <CardTitle className="text-sm font-bold flex items-center gap-2 text-neutral-900 dark:text-neutral-100">
+                    <UserCheck className="h-4 w-4 text-[#2246A7]" /> Perfil Carregado da sbX (Unificado)
                   </CardTitle>
-                  <CardDescription className="text-xs text-neutral-500">
+                  <CardDescription className="text-xs text-neutral-500 dark:text-neutral-400">
                     Perfil hidratado diretamente no login (Zero chamadas adicionais de rede).
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {userData ? (
-                    <div className="p-3 bg-neutral-50 border border-neutral-200 space-y-2 text-xs rounded-none">
-                      <div className="border-b border-neutral-200 pb-2">
-                        <p className="font-bold text-sm text-neutral-900">{userData.name || "Usuário Identificado"}</p>
-                        <p className="text-neutral-500 font-mono mt-0.5">{userData.email || "—"}</p>
+                    <div className="p-3 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 space-y-2 text-xs rounded-none">
+                      <div className="border-b border-neutral-200 dark:border-neutral-800 pb-2">
+                        <p className="font-bold text-sm text-neutral-900 dark:text-neutral-100">{userData.name || "Usuário Identificado"}</p>
+                        <p className="text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">{userData.email || "—"}</p>
                       </div>
 
                       <div className="grid grid-cols-2 gap-y-1.5 gap-x-4 pt-0.5 font-mono text-[11px]">
                         <div>
-                          <span className="text-neutral-500 uppercase text-[10px] block font-sans">
+                          <span className="text-neutral-500 dark:text-neutral-400 uppercase text-[10px] block font-sans">
                             Documento:
                           </span>
-                          <span className="font-semibold text-neutral-900">{userData.document || "—"}</span>
+                          <span className="font-semibold text-neutral-900 dark:text-neutral-100">{userData.document || "—"}</span>
                         </div>
 
                         <div>
-                          <span className="text-neutral-500 uppercase text-[10px] block font-sans">Telefone:</span>
-                          <span className="font-semibold text-neutral-900">{userData.phone || "—"}</span>
+                          <span className="text-neutral-500 dark:text-neutral-400 uppercase text-[10px] block font-sans">Telefone:</span>
+                          <span className="font-semibold text-neutral-900 dark:text-neutral-100">{userData.phone || "—"}</span>
                         </div>
 
                         <div>
-                          <span className="text-neutral-500 uppercase text-[10px] block font-sans">
+                          <span className="text-neutral-500 dark:text-neutral-400 uppercase text-[10px] block font-sans">
                             Entity ID:
                           </span>
-                          <span className="font-semibold text-neutral-900">{userData.entity_id || "—"}</span>
+                          <span className="font-semibold text-neutral-900 dark:text-neutral-100">{userData.entity_id || "—"}</span>
                         </div>
 
                         <div>
-                          <span className="text-neutral-500 uppercase text-[10px] block font-sans">
+                          <span className="text-neutral-500 dark:text-neutral-400 uppercase text-[10px] block font-sans">
                             Tipo (Entity):
                           </span>
-                          <span className="font-semibold text-neutral-900 uppercase">
+                          <span className="font-semibold text-neutral-900 dark:text-neutral-100 uppercase">
                             {userData.entity_type === "J"
                               ? "Pessoa Jurídica (PJ)"
                               : userData.entity_type === "F"
@@ -1688,7 +1696,7 @@ function SandboxPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="p-3 bg-neutral-50 border border-neutral-200 text-xs text-neutral-500 italic text-center rounded-none">
+                    <div className="p-3 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-xs text-neutral-500 dark:text-neutral-400 italic text-center rounded-none">
                       Carregando dados do perfil...
                     </div>
                   )}
@@ -1698,13 +1706,13 @@ function SandboxPage() {
 
             {/* GRID DE JORNADAS DE ACESSO VIA GATEWAY */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="rounded-none border-neutral-200 hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
+              <Card className="rounded-none border-neutral-200 dark:border-neutral-800 hover:shadow-md transition-shadow flex flex-col justify-start bg-white dark:bg-neutral-950">
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
-                    <img src="/assets/home/conta-240.webp" alt="Conta sbXPAY" className="h-full w-full object-contain relative saturate-[10%]" />
+                    <img src="/assets/home/conta-240.webp" alt="Conta sbXPAY" className="h-full w-full object-contain relative dark:hidden" /><img src="/assets/home/conta-dark-240.webp" alt="Conta sbXPAY" className="h-full w-full object-contain relative hidden dark:block" />
                   </div>
-                  <CardTitle className="text-lg text-neutral-900">Landing Wallet sbX</CardTitle>
-                  <CardDescription className="text-xs text-neutral-500">
+                  <CardTitle className="text-lg text-neutral-900 dark:text-neutral-100">Landing Wallet sbX</CardTitle>
+                  <CardDescription className="min-h-[2.5rem] text-xs text-neutral-500 dark:text-neutral-400">
                     Acesso ao hub de produtos e serviços financeiros (Via Gateway).
                   </CardDescription>
                 </CardHeader>
@@ -1713,15 +1721,15 @@ function SandboxPage() {
                     onClick={handleSbxPayGatewayForm}
                     disabled={loadingAction === "sbxpay_form"}
                     variant="outline"
-                    className="w-full rounded-none gap-2 bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-100 font-medium text-xs shadow-sm"
+                    className="w-full rounded-none gap-2 bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-medium text-xs shadow-sm"
                   >
                     {loadingAction === "sbxpay_form" ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin text-neutral-900" /> Processando...
+                        <Loader2 className="h-4 w-4 animate-spin text-neutral-900 dark:text-neutral-100" /> Processando...
                       </>
                     ) : (
                       <>
-                        <ExternalLink className="h-4 w-4" /> Ir para produtos (form)
+                        <ExternalLink className="h-4 w-4 text-[#2246A7]" /> Ir para produtos (form)
                       </>
                     )}
                   </Button>
@@ -1730,40 +1738,45 @@ function SandboxPage() {
                     onClick={handleSbxPayGatewayAjax}
                     disabled={loadingAction === "sbxpay_ajax"}
                     variant="outline"
-                    className="w-full rounded-none gap-2 bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-100 font-medium text-xs shadow-sm"
+                    className="w-full rounded-none gap-2 bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-medium text-xs shadow-sm"
                   >
-                    <ExternalLink className="h-4 w-4" />{" "}
+                    <ExternalLink className="h-4 w-4 text-[#2246A7]" />{" "}
                     {loadingAction === "sbxpay_ajax" ? "Processando..." : "Ir para produtos (fetch - debug)"}
                   </Button>
                 </CardContent>
               </Card>
 
-              <Card className="rounded-none border-neutral-200 hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
+              <Card className="rounded-none border-neutral-200 dark:border-neutral-800 hover:shadow-md transition-shadow flex flex-col justify-start bg-white dark:bg-neutral-950">
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
                     <img
                       src="/assets/home/seguros-240.webp"
                       alt="Seguros de Veículos"
-                      className="h-full w-full object-contain relative saturate-[10%]"
+                      className="h-full w-full object-contain relative dark:hidden"
+                    />
+                    <img
+                      src="/assets/home/seguros-dark-240.webp"
+                      alt="Seguros de Veículos"
+                      className="h-full w-full object-contain relative hidden dark:block"
                     />
                   </div>
-                  <CardTitle className="text-lg text-neutral-900">Seguros de Veículos</CardTitle>
-                  <CardDescription className="text-xs text-neutral-500">Disparo direto ao gateway (Product ID: 9)</CardDescription>
+                  <CardTitle className="text-lg text-neutral-900 dark:text-neutral-100">Seguros de Veículos</CardTitle>
+                  <CardDescription className="min-h-[2.5rem] text-xs text-neutral-500 dark:text-neutral-400">Disparo direto ao gateway (Product ID: 9)</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0 space-y-2">
                   <Button
                     onClick={() => handleDirectGatewayForm("SeguroAuto", "9")}
                     disabled={loadingAction === "SeguroAuto_form"}
                     variant="outline"
-                    className="w-full rounded-none gap-2 bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-100 font-medium text-xs shadow-sm"
+                    className="w-full rounded-none gap-2 bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-medium text-xs shadow-sm"
                   >
                     {loadingAction === "SeguroAuto_form" ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin text-neutral-900" /> Processando...
+                        <Loader2 className="h-4 w-4 animate-spin text-neutral-900 dark:text-neutral-100" /> Processando...
                       </>
                     ) : (
                       <>
-                        <ShieldCheck className="h-4 w-4" /> Acessar Seguros Auto (form)
+                        <ShieldCheck className="h-4 w-4 text-[#2246A7]" /> Acessar Seguros Auto (form)
                       </>
                     )}
                   </Button>
@@ -1772,13 +1785,13 @@ function SandboxPage() {
                     onClick={() => handleDirectGatewayAjax("SeguroAuto", "9")}
                     disabled={loadingAction === "SeguroAuto_ajax"}
                     variant="outline"
-                    className="w-full rounded-none gap-2 bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-100 font-medium text-xs shadow-sm"
+                    className="w-full rounded-none gap-2 bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-medium text-xs shadow-sm"
                   >
-                    <ShieldCheck className="h-4 w-4" />{" "}
+                    <ShieldCheck className="h-4 w-4 text-[#2246A7]" />{" "}
                     {loadingAction === "SeguroAuto_ajax" ? "Processando..." : "Acessar Seguros Auto (fetch - debug)"}
                   </Button>
 
-                  <div className="flex justify-center items-center gap-2 pt-1 text-[11px] font-bold text-neutral-700">
+                  <div className="flex justify-center items-center gap-2 pt-1 text-[11px] font-bold text-neutral-700 dark:text-neutral-300">
                     <button
                       type="button"
                       onClick={() => handleOpenConsultarRota({ product_id: "9", title: "Seguros de Veículos" })}
@@ -1790,7 +1803,7 @@ function SandboxPage() {
                     <button
                       type="button"
                       onClick={() => handleOpenSimularErro("direct", { product_id: "9", title: "Seguros de Veículos" })}
-                      className="hover:underline bg-transparent border-none cursor-pointer p-0 text-neutral-500"
+                      className="hover:underline bg-transparent border-none cursor-pointer p-0 text-neutral-500 dark:text-neutral-400"
                     >
                       simular erro
                     </button>
@@ -1798,32 +1811,37 @@ function SandboxPage() {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-none border-neutral-200 hover:shadow-md transition-shadow flex flex-col justify-between bg-white">
+              <Card className="rounded-none border-neutral-200 dark:border-neutral-800 hover:shadow-md transition-shadow flex flex-col justify-start bg-white dark:bg-neutral-950">
                 <CardHeader>
                   <div className="h-20 w-20 flex items-center justify-center mb-1 overflow-hidden">
                     <img
                       src="/assets/home/carhomeequity-240.webp"
                       alt="Car Equity"
-                      className="h-full w-full object-contain relative saturate-[10%]"
+                      className="h-full w-full object-contain relative dark:hidden"
+                    />
+                    <img
+                      src="/assets/home/carhomeequity-dark-240.webp"
+                      alt="Car Equity"
+                      className="h-full w-full object-contain relative hidden dark:block"
                     />
                   </div>
-                  <CardTitle className="text-lg text-neutral-900">Car Equity</CardTitle>
-                  <CardDescription className="text-xs text-neutral-500">Disparo direto ao gateway (Product ID: 7)</CardDescription>
+                  <CardTitle className="text-lg text-neutral-900 dark:text-neutral-100">Car Equity</CardTitle>
+                  <CardDescription className="min-h-[2.5rem] text-xs text-neutral-500 dark:text-neutral-400">Disparo direto ao gateway (Product ID: 7)</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0 space-y-2">
                   <Button
                     onClick={() => handleDirectGatewayForm("AutoEquity", "7")}
                     disabled={loadingAction === "AutoEquity_form"}
                     variant="outline"
-                    className="w-full rounded-none gap-2 bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-100 font-medium text-xs shadow-sm"
+                    className="w-full rounded-none gap-2 bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-medium text-xs shadow-sm"
                   >
                     {loadingAction === "AutoEquity_form" ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin text-neutral-900" /> Processando...
+                        <Loader2 className="h-4 w-4 animate-spin text-neutral-900 dark:text-neutral-100" /> Processando...
                       </>
                     ) : (
                       <>
-                        <Play className="h-4 w-4 fill-current" /> Simular Car Equity (form)
+                        <Play className="h-4 w-4 fill-current text-[#2246A7]" /> Simular Car Equity (form)
                       </>
                     )}
                   </Button>
@@ -1832,13 +1850,13 @@ function SandboxPage() {
                     onClick={() => handleDirectGatewayAjax("AutoEquity", "7")}
                     disabled={loadingAction === "AutoEquity_ajax"}
                     variant="outline"
-                    className="w-full rounded-none gap-2 bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-100 font-medium text-xs shadow-sm"
+                    className="w-full rounded-none gap-2 bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-medium text-xs shadow-sm"
                   >
-                    <Play className="h-4 w-4 fill-current" />{" "}
+                    <Play className="h-4 w-4 fill-current text-[#2246A7]" />{" "}
                     {loadingAction === "AutoEquity_ajax" ? "Processando..." : "Simular Car Equity (fetch - debug)"}
                   </Button>
 
-                  <div className="flex justify-center items-center gap-2 pt-1 text-[11px] font-bold text-neutral-700">
+                  <div className="flex justify-center items-center gap-2 pt-1 text-[11px] font-bold text-neutral-700 dark:text-neutral-300">
                     <button
                       type="button"
                       onClick={() => handleOpenConsultarRota({ product_id: "7", title: "Car Equity" })}
@@ -1850,7 +1868,7 @@ function SandboxPage() {
                     <button
                       type="button"
                       onClick={() => handleOpenSimularErro("direct", { product_id: "7", title: "Car Equity" })}
-                      className="hover:underline bg-transparent border-none cursor-pointer p-0 text-neutral-500"
+                      className="hover:underline bg-transparent border-none cursor-pointer p-0 text-neutral-500 dark:text-neutral-400"
                     >
                       simular erro
                     </button>
@@ -1860,10 +1878,10 @@ function SandboxPage() {
             </div>
 
             {/* SEÇÃO: VITRINE DE LOTES & OFERTAS */}
-            <div className="space-y-4 pt-4 border-t border-neutral-200">
+            <div className="space-y-4 pt-4 border-t border-neutral-200 dark:border-neutral-800">
               <div>
-                <h2 className="text-xl font-bold tracking-tight text-neutral-900">Parcelamentos e Financiamentos nas Ofertas</h2>
-                <p className="text-xs text-neutral-500">
+                <h2 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100">Parcelamentos e Financiamentos nas Ofertas</h2>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
                   Chamada da Edge Function de borda do gateway com access token da sbX por form.
                 </p>
               </div>
@@ -1902,7 +1920,7 @@ function SandboxPage() {
                   return (
                     <div
                       key={item.key}
-                      className="rounded-none border border-neutral-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between group"
+                      className="rounded-none border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between group"
                     >
                       <div>
                         <div className="relative h-44 w-full bg-black overflow-hidden">
@@ -1910,7 +1928,7 @@ function SandboxPage() {
                             <div className="absolute inset-0 bg-neutral-900 flex items-center justify-center">
                               <div className="w-20 h-20 border border-neutral-700 bg-neutral-800 flex items-center justify-center relative shadow-inner">
                                 <svg
-                                  className="w-9 h-9 text-neutral-500"
+                                  className="w-9 h-9 text-neutral-500 dark:text-neutral-400"
                                   fill="none"
                                   viewBox="0 0 24 24"
                                   stroke="currentColor"
@@ -1967,14 +1985,14 @@ function SandboxPage() {
                         </div>
 
                         <div className="p-4 space-y-2">
-                          <div className="text-xs text-neutral-500 font-medium">Início: {eventDate}</div>
-                          <h3 className="font-bold text-sm text-neutral-900 line-clamp-2">{offerDesc}</h3>
-                          <div className="text-xs text-neutral-500 truncate">{sellerName}</div>
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">Início: {eventDate}</div>
+                          <h3 className="font-bold text-sm text-neutral-900 dark:text-neutral-100 line-clamp-2">{offerDesc}</h3>
+                          <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate">{sellerName}</div>
                           <div className="pt-2">
-                            <div className="text-[10px] text-neutral-500 uppercase font-semibold">
+                            <div className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-semibold">
                               Valor da Oferta:
                             </div>
-                            <div className="text-lg font-extrabold text-neutral-900">{offerVal}</div>
+                            <div className="text-lg font-extrabold text-neutral-900 dark:text-neutral-100">{offerVal}</div>
                           </div>
                         </div>
                       </div>
@@ -1995,7 +2013,7 @@ function SandboxPage() {
                           onClick={() => handleSimulateOfferForm(item.flowKey, resolvedOfferId, String(item.product_id ?? ""), item.disabled, true)}
                           disabled={item.disabled || !resolvedOfferId}
                           variant="outline"
-                          className={`w-full rounded-none shadow-sm bg-neutral-900 text-white border-neutral-900 hover:bg-neutral-800 font-bold text-xs`}
+                          className={`w-full rounded-none shadow-sm bg-[#2246A7] text-white border-[#2246A7] hover:bg-[#1b3a8c] font-bold text-xs`}
                         >
                           <ExternalLink className="h-3 w-3 mr-2" /> (Nova Aba)
                         </Button>
@@ -2005,9 +2023,9 @@ function SandboxPage() {
                           onClick={() => handleSimulateOfferForm(item.flowKey, resolvedOfferId, String(item.product_id ?? ""), item.disabled, true, true)}
                           disabled={item.disabled || !resolvedOfferId}
                           variant="outline"
-                          className={`w-full rounded-none shadow-sm bg-white text-neutral-900 border-neutral-900 hover:bg-neutral-100 font-bold text-xs`}
+                          className={`w-full rounded-none shadow-sm bg-white dark:bg-neutral-950 text-[#2246A7] border-[#2246A7] hover:bg-neutral-100 dark:hover:bg-neutral-800 font-bold text-xs`}
                         >
-                          <ExternalLink className="h-3 w-3 mr-2" /> Ponte /gate (Nova Aba)
+                          <ExternalLink className="h-3 w-3 mr-2 text-[#2246A7]" /> Ponte /gate (Nova Aba)
                         </Button>
 
                         {/* Botão 3: Debug */}
@@ -2015,17 +2033,17 @@ function SandboxPage() {
                           onClick={() => handleSimulateOfferAjax(item.flowKey, resolvedOfferId, String(item.product_id ?? ""), item.disabled)}
                           disabled={item.disabled || !resolvedOfferId || loadingAction === `${item.flowKey}_ajax`}
                           variant="outline"
-                          className={`w-full rounded-none shadow-sm bg-neutral-50 text-neutral-600 border-neutral-200 hover:bg-neutral-100 font-medium text-xs`}
+                          className={`w-full rounded-none shadow-sm bg-neutral-50 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-medium text-xs`}
                         >
                           {loadingAction === `${item.flowKey}_ajax` ? "Processando..." : `Debug (Fetch)`}
                         </Button>
 
-                        <div className="flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 text-center pt-3 border-t border-neutral-200 mt-2">
+                        <div className="flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 text-center pt-3 border-t border-neutral-200 dark:border-neutral-800 mt-2">
                           <button
                             type="button"
                             onClick={() => handleOpenConsultarOferta(resolvedOfferId)}
                             disabled={!resolvedOfferId}
-                            className="text-[11px] font-bold text-neutral-700 hover:text-neutral-900 hover:underline bg-transparent border-none cursor-pointer p-0 disabled:opacity-50"
+                            className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 hover:underline bg-transparent border-none cursor-pointer p-0 disabled:opacity-50"
                           >
                             consultar oferta
                           </button>
@@ -2033,7 +2051,7 @@ function SandboxPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenConsultarRota(item)}
-                            className="text-[11px] font-bold text-neutral-700 hover:text-neutral-900 hover:underline bg-transparent border-none cursor-pointer p-0"
+                            className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 hover:underline bg-transparent border-none cursor-pointer p-0"
                           >
                             consultar rota
                           </button>
@@ -2041,7 +2059,7 @@ function SandboxPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenSimularErro("offer", item)}
-                            className="text-[11px] font-bold text-neutral-500 hover:text-neutral-700 hover:underline bg-transparent border-none cursor-pointer p-0"
+                            className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 hover:underline bg-transparent border-none cursor-pointer p-0"
                           >
                             simular erro
                           </button>
@@ -2059,15 +2077,15 @@ function SandboxPage() {
       {/* PAINEL LATERAL (DRAWER) DE CONSULTA DE OFERTA */}
       {isDrawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-all">
-          <div className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
-            <div className="flex items-center justify-between p-4 border-b border-neutral-200 bg-neutral-50 flex-shrink-0">
+          <div className="w-full max-w-lg bg-white dark:bg-neutral-950 h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
+            <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 flex-shrink-0">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-none bg-neutral-900" />
-                <h3 className="text-sm font-black uppercase text-neutral-900">Consulta de Oferta #{drawerOfferId}</h3>
+                <span className="w-2.5 h-2.5 rounded-none bg-[#2246A7]" />
+                <h3 className="text-sm font-black uppercase text-neutral-900 dark:text-neutral-100">Consulta de Oferta #{drawerOfferId}</h3>
               </div>
               <button
                 onClick={() => setIsDrawerOpen(false)}
-                className="p-1 rounded-none text-neutral-400 hover:text-neutral-700 hover:bg-neutral-200"
+                className="p-1 rounded-none text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
               >
                 <X size={18} />
               </button>
@@ -2076,14 +2094,14 @@ function SandboxPage() {
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {drawerLoading ? (
                 <div className="flex flex-col items-center justify-center py-24 space-y-3">
-                  <Loader2 className="animate-spin text-neutral-900" size={32} />
-                  <p className="text-xs text-neutral-500 font-medium">Carregando detalhes da oferta...</p>
+                  <Loader2 className="animate-spin text-neutral-900 dark:text-neutral-100" size={32} />
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">Carregando detalhes da oferta...</p>
                 </div>
               ) : selectedOfferPayload ? (
                 <div className="space-y-6">
-                  <div className="bg-white p-4 rounded-none shadow-sm border border-neutral-200">
-                    <h2 className="text-xs font-black uppercase text-neutral-900 mb-2">Oferta Relacionada</h2>
-                    <p className="font-bold text-sm mb-4 text-neutral-900">
+                  <div className="bg-white dark:bg-neutral-950 p-4 rounded-none shadow-sm border border-neutral-200 dark:border-neutral-800">
+                    <h2 className="text-xs font-black uppercase text-neutral-900 dark:text-neutral-100 mb-2">Oferta Relacionada</h2>
+                    <p className="font-bold text-sm mb-4 text-neutral-900 dark:text-neutral-100">
                       {selectedOfferPayload.offer?.offer_description}
                     </p>
 
@@ -2119,19 +2137,19 @@ function SandboxPage() {
                     )}
 
                     <div className="mt-4">
-                      <p className="text-[11px] font-bold text-neutral-500 uppercase mb-1">
+                      <p className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 uppercase mb-1">
                         Payload JSON (Oferta / Manager / Event / Seller):
                       </p>
-                      <pre className="font-mono text-[10px] bg-neutral-50 p-3 rounded-none border border-neutral-200 text-neutral-800 whitespace-pre-wrap break-all">
+                      <pre className="font-mono text-[10px] bg-neutral-50 dark:bg-neutral-900 p-3 rounded-none border border-neutral-200 dark:border-neutral-800 text-neutral-800 dark:text-neutral-200 whitespace-pre-wrap break-all">
                         {JSON.stringify(selectedOfferPayload, null, 2)}
                       </pre>
                     </div>
 
-                    <div className="mt-6 pt-4 border-t border-neutral-200">
-                      <h2 className="text-xs font-black uppercase text-neutral-900 mb-2">Evento / Leilão Consolidado</h2>
-                      <p className="text-[11px] font-bold text-neutral-500 uppercase mb-1">Payload JSON (sbx-event):</p>
+                    <div className="mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-800">
+                      <h2 className="text-xs font-black uppercase text-neutral-900 dark:text-neutral-100 mb-2">Evento / Leilão Consolidado</h2>
+                      <p className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 uppercase mb-1">Payload JSON (sbx-event):</p>
                       {selectedEventPayload ? (
-                        <pre className="font-mono text-[10px] bg-neutral-50 p-3 rounded-none border border-neutral-200 text-neutral-800 whitespace-pre-wrap break-all">
+                        <pre className="font-mono text-[10px] bg-neutral-50 dark:bg-neutral-900 p-3 rounded-none border border-neutral-200 dark:border-neutral-800 text-neutral-800 dark:text-neutral-200 whitespace-pre-wrap break-all">
                           {JSON.stringify(selectedEventPayload, null, 2)}
                         </pre>
                       ) : (
@@ -2149,10 +2167,10 @@ function SandboxPage() {
               )}
             </div>
 
-            <div className="p-4 border-t border-neutral-200 bg-neutral-50 flex justify-end flex-shrink-0">
+            <div className="p-4 border-t border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 flex justify-end flex-shrink-0">
               <Button
                 onClick={() => setIsDrawerOpen(false)}
-                className="bg-neutral-900 hover:bg-neutral-800 text-white text-xs rounded-none px-5"
+                className="bg-[#2246A7] hover:bg-[#1b3a8c] text-white text-xs rounded-none px-5"
               >
                 Fechar Painel
               </Button>
@@ -2164,15 +2182,15 @@ function SandboxPage() {
       {/* PAINEL LATERAL (DRAWER) DE CONSULTA DE ROTA */}
       {isRouteDrawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-all">
-          <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
-            <div className="flex items-center justify-between p-4 border-b border-neutral-200 bg-neutral-50 flex-shrink-0">
+          <div className="w-full max-w-2xl bg-white dark:bg-neutral-950 h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
+            <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 flex-shrink-0">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-none bg-neutral-900" />
-                <h3 className="text-sm font-black uppercase text-neutral-900">Consulta de Rota: {routeDrawerTitle}</h3>
+                <span className="w-2.5 h-2.5 rounded-none bg-[#2246A7]" />
+                <h3 className="text-sm font-black uppercase text-neutral-900 dark:text-neutral-100">Consulta de Rota: {routeDrawerTitle}</h3>
               </div>
               <button
                 onClick={() => setIsRouteDrawerOpen(false)}
-                className="p-1 rounded-none text-neutral-400 hover:text-neutral-700 hover:bg-neutral-200"
+                className="p-1 rounded-none text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
               >
                 <X size={18} />
               </button>
@@ -2181,12 +2199,12 @@ function SandboxPage() {
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {routeDrawerLoading ? (
                 <div className="flex flex-col items-center justify-center py-24 space-y-3">
-                  <Loader2 className="animate-spin text-neutral-900" size={32} />
-                  <p className="text-xs text-neutral-500 font-medium">Buscando configurações da rota no banco...</p>
+                  <Loader2 className="animate-spin text-neutral-900 dark:text-neutral-100" size={32} />
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">Buscando configurações da rota no banco...</p>
                 </div>
               ) : routeConfigData ? (
                 <div className="space-y-6">
-                  <div className="bg-neutral-50 p-4 rounded-none border border-neutral-200 text-xs space-y-1.5 font-mono text-neutral-800">
+                  <div className="bg-neutral-50 dark:bg-neutral-900 p-4 rounded-none border border-neutral-200 dark:border-neutral-800 text-xs space-y-1.5 font-mono text-neutral-800 dark:text-neutral-200">
                     <p>
                       <b>ID Config:</b> {routeConfigData.id} | <b>Lookup ID:</b> {routeConfigData.lookup_id}
                     </p>
@@ -2214,21 +2232,21 @@ function SandboxPage() {
                   <div className="flex flex-col gap-4 my-4">
                     {routeConfigData.integration_details &&
                       Object.keys(routeConfigData.integration_details).length > 0 && (
-                        <div className="bg-neutral-50 p-4 rounded-none border border-neutral-200 text-xs overflow-hidden">
-                          <h4 className="font-bold text-neutral-900 mb-2 uppercase text-[10px] tracking-wide">
+                        <div className="bg-neutral-50 dark:bg-neutral-900 p-4 rounded-none border border-neutral-200 dark:border-neutral-800 text-xs overflow-hidden">
+                          <h4 className="font-bold text-neutral-900 dark:text-neutral-100 mb-2 uppercase text-[10px] tracking-wide">
                             Integration Details
                           </h4>
-                          <pre className="font-mono text-[9px] text-neutral-600 whitespace-pre-wrap break-all overflow-x-auto">
+                          <pre className="font-mono text-[9px] text-neutral-600 dark:text-neutral-400 whitespace-pre-wrap break-all overflow-x-auto">
                             {JSON.stringify(routeConfigData.integration_details, null, 2)}
                           </pre>
                         </div>
                       )}
                     {routeConfigData.rules && Object.keys(routeConfigData.rules).length > 0 && (
-                      <div className="bg-neutral-50 p-4 rounded-none border border-neutral-200 text-xs overflow-hidden">
-                        <h4 className="font-bold text-neutral-900 mb-2 uppercase text-[10px] tracking-wide">
+                      <div className="bg-neutral-50 dark:bg-neutral-900 p-4 rounded-none border border-neutral-200 dark:border-neutral-800 text-xs overflow-hidden">
+                        <h4 className="font-bold text-neutral-900 dark:text-neutral-100 mb-2 uppercase text-[10px] tracking-wide">
                           Rules / Installments
                         </h4>
-                        <pre className="font-mono text-[9px] text-neutral-600 whitespace-pre-wrap break-all overflow-x-auto">
+                        <pre className="font-mono text-[9px] text-neutral-600 dark:text-neutral-400 whitespace-pre-wrap break-all overflow-x-auto">
                           {JSON.stringify(routeConfigData.rules, null, 2)}
                         </pre>
                       </div>
@@ -2256,10 +2274,10 @@ function SandboxPage() {
               )}
             </div>
 
-            <div className="p-4 border-t border-neutral-200 bg-neutral-50 flex justify-end flex-shrink-0">
+            <div className="p-4 border-t border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 flex justify-end flex-shrink-0">
               <Button
                 onClick={() => setIsRouteDrawerOpen(false)}
-                className="bg-neutral-900 hover:bg-neutral-800 text-white text-xs rounded-none px-5"
+                className="bg-[#2246A7] hover:bg-[#1b3a8c] text-white text-xs rounded-none px-5"
               >
                 Fechar Painel
               </Button>
@@ -2271,28 +2289,28 @@ function SandboxPage() {
       {/* PAINEL LATERAL (DRAWER) DE SIMULAÇÃO DE ERROS & CONSOLE AJAX */}
       {isErrorDrawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-all">
-          <div className="w-full max-w-xl bg-white h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
-            <div className="flex items-center justify-between p-4 border-b border-neutral-200 bg-neutral-100 flex-shrink-0">
+          <div className="w-full max-w-xl bg-white dark:bg-neutral-950 h-full shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
+            <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800 flex-shrink-0">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-none bg-neutral-900" />
-                <h3 className="text-sm font-black uppercase text-neutral-900">{errorDrawerConfig?.title || "Painel de Testes & Simulação de Erros"}</h3>
+                <span className="w-2.5 h-2.5 rounded-none bg-[#2246A7]" />
+                <h3 className="text-sm font-black uppercase text-neutral-900 dark:text-neutral-100">{errorDrawerConfig?.title || "Painel de Testes & Simulação de Erros"}</h3>
               </div>
               <button
                 onClick={() => setIsErrorDrawerOpen(false)}
-                className="p-1 rounded-none text-neutral-400 hover:text-neutral-700 hover:bg-neutral-200"
+                className="p-1 rounded-none text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs text-neutral-700">
-              <div className="bg-neutral-50 border border-neutral-200 p-4 rounded-none space-y-2">
-                <h4 className="font-bold text-neutral-900 uppercase text-[11px]">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs text-neutral-700 dark:text-neutral-300">
+              <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-4 rounded-none space-y-2">
+                <h4 className="font-bold text-neutral-900 dark:text-neutral-100 uppercase text-[11px]">
                   Guia de Testes e Resiliência (Developer Guide)
                 </h4>
-                <p className="text-neutral-600 leading-relaxed">
+                <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">
                   Este painel simula cenários de falha na borda (
-                  <code className="bg-neutral-200 px-1 py-0.5 rounded-none text-neutral-900">financial-gateway-gate</code>).
+                  <code className="bg-neutral-200 px-1 py-0.5 rounded-none text-neutral-900 dark:text-neutral-100">financial-gateway-gate</code>).
                   Você pode testar a resiliência disparando via <b>Fetch (AJAX)</b> para inspecionar o contrato de erro
                   JSON diretamente aqui na aba, ou via <b>Form POST (Nativo)</b> para validar o redirecionamento com
                   spinner de erro do front-end.
@@ -2301,13 +2319,13 @@ function SandboxPage() {
 
               {errorDrawerConfig?.type === "offer" ? (
                 <div className="space-y-4">
-                  <div className="border border-neutral-200 p-4 rounded-none space-y-3 bg-white shadow-sm">
-                    <h5 className="font-bold text-neutral-900 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-none bg-neutral-900" /> 1. Simular Oferta Inválida (ID: 9999)
+                  <div className="border border-neutral-200 dark:border-neutral-800 p-4 rounded-none space-y-3 bg-white dark:bg-neutral-950 shadow-sm">
+                    <h5 className="font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-none bg-[#2246A7]" /> 1. Simular Oferta Inválida (ID: 9999)
                     </h5>
-                    <p className="text-neutral-500">
+                    <p className="text-neutral-500 dark:text-neutral-400">
                       Envia um ID inexistente para a API upstream da Superbid. A borda deve interceptar o erro e
-                      disparar <code className="bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded-none">OFFER_NOT_FOUND</code>.
+                      disparar <code className="bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 px-1 py-0.5 rounded-none">OFFER_NOT_FOUND</code>.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-2 pt-1">
                       <Button
@@ -2315,7 +2333,7 @@ function SandboxPage() {
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none bg-white text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 focus-visible:ring-neutral-900 flex items-center justify-center"
+                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Fetch (JSON)
@@ -2324,7 +2342,7 @@ function SandboxPage() {
                         onClick={() => executeErrorSimulation("form", "offer")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-none text-xs bg-neutral-900 hover:bg-neutral-800 text-white flex items-center justify-center"
+                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Form (Redirecionar)
@@ -2332,13 +2350,13 @@ function SandboxPage() {
                     </div>
                   </div>
 
-                  <div className="border border-neutral-200 p-4 rounded-none space-y-3 bg-white shadow-sm">
-                    <h5 className="font-bold text-neutral-900 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-none bg-neutral-900" /> 2. Simular Token de Acesso Inválido / Expirado
+                  <div className="border border-neutral-200 dark:border-neutral-800 p-4 rounded-none space-y-3 bg-white dark:bg-neutral-950 shadow-sm">
+                    <h5 className="font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-none bg-[#2246A7]" /> 2. Simular Token de Acesso Inválido / Expirado
                     </h5>
-                    <p className="text-neutral-500">
+                    <p className="text-neutral-500 dark:text-neutral-400">
                       Substitui o token ativo por uma credencial corrompida. A borda disparará o erro de sessão expirada
-                      ou não autorizada (<code className="bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded-none">SESSION_EXPIRED</code>).
+                      ou não autorizada (<code className="bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 px-1 py-0.5 rounded-none">SESSION_EXPIRED</code>).
                     </p>
                     <div className="flex flex-col sm:flex-row gap-2 pt-1">
                       <Button
@@ -2346,7 +2364,7 @@ function SandboxPage() {
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none bg-white text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 focus-visible:ring-neutral-900 flex items-center justify-center"
+                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 flex items-center justify-center"
                       >
                         {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
                       </Button>
@@ -2354,7 +2372,7 @@ function SandboxPage() {
                         onClick={() => executeErrorSimulation("form", "token")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-none text-xs bg-neutral-900 hover:bg-neutral-800 text-white flex items-center justify-center"
+                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Form (Redirecionar)
@@ -2364,11 +2382,11 @@ function SandboxPage() {
                 </div>
               ) : errorDrawerConfig?.type === "direct" ? (
                 <div className="space-y-4">
-                  <div className="border border-neutral-200 p-4 rounded-none space-y-3 bg-white shadow-sm">
-                    <h5 className="font-bold text-neutral-900 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-none bg-neutral-900" /> 1. Simular Produto Estrutural Inválido (ID: 999)
+                  <div className="border border-neutral-200 dark:border-neutral-800 p-4 rounded-none space-y-3 bg-white dark:bg-neutral-950 shadow-sm">
+                    <h5 className="font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-none bg-[#2246A7]" /> 1. Simular Produto Estrutural Inválido (ID: 999)
                     </h5>
-                    <p className="text-neutral-500">
+                    <p className="text-neutral-500 dark:text-neutral-400">
                       Envia um ID de produto sem correspondência no orquestrador de rotas para testar a validação de
                       destino.
                     </p>
@@ -2378,7 +2396,7 @@ function SandboxPage() {
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none bg-white text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 focus-visible:ring-neutral-900 flex items-center justify-center"
+                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Fetch (JSON)
@@ -2387,7 +2405,7 @@ function SandboxPage() {
                         onClick={() => executeErrorSimulation("form", "product")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-none text-xs bg-neutral-900 hover:bg-neutral-800 text-white flex items-center justify-center"
+                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Form (Redirecionar)
@@ -2395,11 +2413,11 @@ function SandboxPage() {
                     </div>
                   </div>
 
-                  <div className="border border-neutral-200 p-4 rounded-none space-y-3 bg-white shadow-sm">
-                    <h5 className="font-bold text-neutral-900 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-none bg-neutral-900" /> 2. Simular Token Inválido na Chamada Direta
+                  <div className="border border-neutral-200 dark:border-neutral-800 p-4 rounded-none space-y-3 bg-white dark:bg-neutral-950 shadow-sm">
+                    <h5 className="font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-none bg-[#2246A7]" /> 2. Simular Token Inválido na Chamada Direta
                     </h5>
-                    <p className="text-neutral-500">
+                    <p className="text-neutral-500 dark:text-neutral-400">
                       Valida o comportamento de segurança da borda ao receber requisições estruturais sem autenticação
                       válida.
                     </p>
@@ -2409,7 +2427,7 @@ function SandboxPage() {
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none bg-white text-xs border-neutral-300 text-neutral-900 hover:bg-neutral-100 focus-visible:ring-neutral-900 flex items-center justify-center"
+                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 flex items-center justify-center"
                       >
                         {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
                       </Button>
@@ -2417,7 +2435,7 @@ function SandboxPage() {
                         onClick={() => executeErrorSimulation("form", "token")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-none text-xs bg-neutral-900 hover:bg-neutral-800 text-white flex items-center justify-center"
+                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
                         Testar via Form (Redirecionar)
@@ -2445,10 +2463,10 @@ function SandboxPage() {
               )}
             </div>
 
-            <div className="p-4 border-t border-neutral-200 bg-neutral-50 flex justify-end flex-shrink-0">
+            <div className="p-4 border-t border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 flex justify-end flex-shrink-0">
               <Button
                 onClick={() => setIsErrorDrawerOpen(false)}
-                className="bg-neutral-900 hover:bg-neutral-800 text-white text-xs rounded-none px-5"
+                className="bg-[#2246A7] hover:bg-[#1b3a8c] text-white text-xs rounded-none px-5"
               >
                 Fechar Painel
               </Button>
@@ -2458,14 +2476,14 @@ function SandboxPage() {
       )}
 
       {/* MOBILE NAVIGATION TAB BAR */}
-      <div className="fixed bottom-0 left-0 w-full bg-white border-t border-neutral-200 z-50 flex justify-around items-center pt-2 pb-4 md:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <a href={HOME_ROUTE} className="flex flex-col items-center justify-center text-neutral-900 min-w-[70px] gap-1">
-          <Home className="w-6 h-6" strokeWidth={1.5} />
+      <div className="fixed bottom-0 left-0 w-full bg-white dark:bg-neutral-950 border-t border-neutral-200 dark:border-neutral-800 z-50 flex justify-around items-center pt-2 pb-4 md:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <a href={HOME_ROUTE} className="flex flex-col items-center justify-center text-neutral-900 dark:text-neutral-100 min-w-[70px] gap-1">
+          <Home className="w-6 h-6 text-[#2246A7]" strokeWidth={1.5} />
           <span className="text-[10px] font-bold">Início</span>
         </a>
 
-        <a href="/sandbox" className="flex flex-col items-center justify-center text-neutral-900 min-w-[70px] gap-1">
-          <AppWindow className="w-6 h-6" strokeWidth={1.5} />
+        <a href="/backoffice/sandbox" className="flex flex-col items-center justify-center text-neutral-900 dark:text-neutral-100 min-w-[70px] gap-1">
+          <AppWindow className="w-6 h-6 text-[#2246A7]" strokeWidth={1.5} />
           <span className="text-[10px] font-bold">Sandbox</span>
         </a>
 
@@ -2473,12 +2491,12 @@ function SandboxPage() {
           <button
             onClick={handleSandboxLogout}
             disabled={loadingAction === "logout"}
-            className={`flex flex-col items-center justify-center min-w-[70px] gap-1 transition-all ${loadingAction === "logout" ? "text-neutral-400" : "text-neutral-900"}`}
+            className={`flex flex-col items-center justify-center min-w-[70px] gap-1 transition-all ${loadingAction === "logout" ? "text-neutral-400" : "text-neutral-900 dark:text-neutral-100"}`}
           >
             {loadingAction === "logout" ? (
               <Loader2 className="w-6 h-6 animate-spin" strokeWidth={1.5} />
             ) : (
-              <LogOut className="w-6 h-6" strokeWidth={1.5} />
+              <LogOut className="w-6 h-6 text-[#2246A7]" strokeWidth={1.5} />
             )}
             <span className="text-[10px] font-medium">{loadingAction === "logout" ? "Saindo..." : "Sair"}</span>
           </button>
@@ -2487,7 +2505,7 @@ function SandboxPage() {
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             className="flex flex-col items-center justify-center text-neutral-400 min-w-[70px] gap-1"
           >
-            <LogIn className="w-6 h-6" strokeWidth={1.5} />
+            <LogIn className="w-6 h-6 text-[#2246A7]" strokeWidth={1.5} />
             <span className="text-[10px] font-medium">Entrar</span>
           </button>
         )}
@@ -2496,6 +2514,15 @@ function SandboxPage() {
   );
 }
 
-export const Route = createLazyFileRoute("/sandbox")({
-  component: SandboxPage,
+/** Sandbox com a sessão do cliente (a raiz não injeta o FinancialAuthProvider em /backoffice). */
+function SandboxRoute() {
+  return (
+    <FinancialAuthProvider>
+      <SandboxPage />
+    </FinancialAuthProvider>
+  );
+}
+
+export const Route = createLazyFileRoute("/backoffice/sandbox")({
+  component: SandboxRoute,
 });

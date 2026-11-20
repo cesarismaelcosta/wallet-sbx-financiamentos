@@ -21,6 +21,9 @@
  *   de mudança para a Edge Function `manage-backoffice-users`. 
  * - É o servidor que assume a responsabilidade de auditar, validar o domínio e 
  *   limpar restrições residuais (ex: injetar `["*"]` ao promover um Viewer para Admin).
+ * - Login Superbid (`sbx_login`): no cadastro e pelo botão "Login Superbid" (ação
+ *   `set_sbx_login`; vazio remove). Faz aparecer o link "Backoffice" no menu do avatar
+ *   do hub para esse login, a partir do próximo login dele. Único por usuário.
  * 
  * [ENTERPRISE ZERO-TRUST - OBFUSCATION V3]:
  * - As 4 consultas originais de LEITURA (`backoffice_users`, `domains`, `partners`, 
@@ -79,7 +82,7 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { 
   Loader2, Plus, RefreshCw, ShieldCheck, UserCheck, 
-  UserX, Info, Filter, ChevronDown, Settings2, History 
+  UserX, Info, Filter, ChevronDown, Settings2, History, KeyRound 
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -120,6 +123,8 @@ type BackofficeUserRow = {
   is_active: boolean;
   allowed_partners?: string[];
   allowed_products?: string[];
+  /** Login da Superbid: mostra o link "Backoffice" no menu do avatar do hub. */
+  sbx_login?: string | null;
   created_at: string;
   updated_at?: string;
 };
@@ -135,9 +140,20 @@ const ROLE_BADGE: Record<Role, string> = {
   viewer: "bg-accent text-muted-foreground font-normal",
 };
 
+/** Erros de negócio da edge function `manage-backoffice-users` → mensagem para o admin. */
+const MANAGE_ERRORS: Record<string, string> = {
+  sbx_login_in_use: "Este login da Superbid já está cadastrado em outro usuário.",
+  invalid_sbx_login: "Login da Superbid inválido: sem espaços, de 2 a 100 caracteres.",
+};
+
 async function callManage(payload: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("manage-backoffice-users", { body: payload });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Erro HTTP da edge: o código vem no corpo ({ error: "..." })
+    const body = await (error as { context?: Response }).context?.json?.().catch(() => null);
+    const code = typeof body?.error === "string" ? body.error : "";
+    throw new Error(MANAGE_ERRORS[code] || error.message);
+  }
   return data;
 }
 
@@ -171,6 +187,7 @@ function UsuariosPage() {
     emailPrefix: "", 
     domain: "", 
     role: "viewer" as Role,
+    sbxLogin: "",
     partners: [] as string[],
     products: [] as string[]
   });
@@ -182,6 +199,10 @@ function UsuariosPage() {
   const [historyUser, setHistoryUser] = useState<BackofficeUserRow | null>(null);
   const [editPartners, setEditPartners] = useState<string[]>([]);
   const [editProducts, setEditProducts] = useState<string[]>([]);
+  // Login Superbid: usuário em edição e valor digitado
+  const [sbxUser, setSbxUser] = useState<BackofficeUserRow | null>(null);
+  const [sbxValue, setSbxValue] = useState("");
+  const [isSavingSbx, setIsSavingSbx] = useState(false);
 
   const isAdmin = backofficeUser?.role === "admin";
 
@@ -271,13 +292,14 @@ function UsuariosPage() {
         name: registerData.name,
         email: `${registerData.emailPrefix}@${registerData.domain}`,
         role: registerData.role,
+        sbx_login: registerData.sbxLogin.trim() || null,
         allowed_partners,
         allowed_products
       });
 
       toast.success("Usuário cadastrado com sucesso!");
       setregisterOpen(false);
-      setregisterData({ name: "", emailPrefix: "", domain: "", role: "viewer", partners: [], products: [] });
+      setregisterData({ name: "", emailPrefix: "", domain: "", role: "viewer", sbxLogin: "", partners: [], products: [] });
       load();
     } catch (caught: unknown) {
       const e = caught as Error; // erros do Supabase/edge trazem message
@@ -314,6 +336,28 @@ function UsuariosPage() {
       toast.error(e.message || "Erro ao atualizar permissões");
     } finally {
       setIsUpdating(false);
+    }
+  }
+
+  function openSbxLogin(user: BackofficeUserRow) {
+    setSbxUser(user);
+    setSbxValue(user.sbx_login || "");
+  }
+
+  /** Grava (ou remove, se vazio) o login da Superbid do usuário. Auditoria: SBX_LOGIN_CHANGE. */
+  async function handleSaveSbxLogin() {
+    if (!sbxUser) return;
+    setIsSavingSbx(true);
+    try {
+      await callManage({ action: "set_sbx_login", id: sbxUser.id, sbx_login: sbxValue.trim() || null });
+      toast.success("Login da Superbid atualizado.");
+      setSbxUser(null);
+      load();
+    } catch (caught: unknown) {
+      const e = caught as Error;
+      toast.error(e.message || "Erro ao atualizar o login da Superbid");
+    } finally {
+      setIsSavingSbx(false);
     }
   }
 
@@ -384,6 +428,15 @@ function UsuariosPage() {
               </SelectContent>
             </Select>
           </div>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-foreground text-xs">Login Superbid</Label>
+          <Input
+            value={registerData.sbxLogin}
+            maxLength={100}
+            onChange={(e) => setregisterData({ ...registerData, sbxLogin: e.target.value })}
+            className="rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground text-xs"
+          />
         </div>
         <div className="space-y-2">
           <Label className="text-foreground text-xs">Cargo</Label>
@@ -680,6 +733,27 @@ function UsuariosPage() {
     </>
   );
 
+  const renderSbxContent = () => (
+    <>
+      <div className="space-y-2 py-4">
+        <Label className="text-foreground text-xs">Login Superbid</Label>
+        <Input
+          value={sbxValue}
+          maxLength={100}
+          onChange={(e) => setSbxValue(e.target.value)}
+          className="rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground text-xs"
+        />
+      </div>
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-2">
+        <Button variant="outline" onClick={() => setSbxUser(null)} className="w-full sm:w-auto h-10 rounded-none border-border text-foreground text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
+        <Button onClick={handleSaveSbxLogin} disabled={isSavingSbx} className="cta-gradient border-0 w-full sm:w-auto text-white font-medium h-10 rounded-none text-xs">
+          {isSavingSbx && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Salvar
+        </Button>
+      </div>
+    </>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -748,12 +822,39 @@ function UsuariosPage() {
         </Dialog>
       )}
 
+      {isMobile ? (
+        <Sheet open={!!sbxUser} onOpenChange={(open) => !open && setSbxUser(null)}>
+          <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-card border-t border-border">
+            <SheetHeader className="text-left mb-4">
+              <SheetTitle className="text-foreground text-base">Login Superbid</SheetTitle>
+              <SheetDescription className="text-muted-foreground text-xs">
+                Login da Superbid de <strong className="font-medium text-foreground">{sbxUser?.name}</strong>. Deixe vazio para remover.
+              </SheetDescription>
+            </SheetHeader>
+            {renderSbxContent()}
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Dialog open={!!sbxUser} onOpenChange={(open) => !open && setSbxUser(null)}>
+          <DialogContent className="max-w-md rounded-none sm:rounded-none bg-card border-border">
+            <DialogHeader>
+              <DialogTitle className="text-foreground text-base">Login Superbid</DialogTitle>
+              <DialogDescription className="text-muted-foreground text-xs">
+                Login da Superbid de <strong className="font-medium text-foreground">{sbxUser?.name}</strong>. Deixe vazio para remover.
+              </DialogDescription>
+            </DialogHeader>
+            {renderSbxContent()}
+          </DialogContent>
+        </Dialog>
+      )}
+
       <div className="overflow-hidden rounded-none border border-border bg-card shadow-xs">
         <div className="overflow-x-auto w-full pb-2">
           <table className="w-full text-xs">
             <thead className="border-b border-border bg-accent text-left text-muted-foreground uppercase tracking-wider text-[10px]">
               <tr>
                 <th className="px-3 py-2.5 font-semibold">Usuário</th>
+                <th className="px-3 py-2.5 font-semibold">Login Superbid</th>
                 <th className="px-3 py-2.5 font-semibold">Cargo</th>
                 <th className="px-3 py-2.5 font-semibold">Status</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Ações</th>
@@ -768,6 +869,7 @@ function UsuariosPage() {
                       <div className="font-medium text-foreground">{u.name}</div>
                       <div className="text-[11px] text-muted-foreground">{u.email}</div>
                     </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap text-foreground">{u.sbx_login || "—"}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <Select value={u.role} onValueChange={(v: Role) => changeRole(u, v)} disabled={!isAdmin || isMe}>
                         <SelectTrigger className={`h-7 w-36 text-[10px] uppercase tracking-wider rounded-none border-none focus:ring-0 shadow-none ${ROLE_BADGE[u.role]}`}>
@@ -796,6 +898,9 @@ function UsuariosPage() {
                               <GradientIcon icon={Settings2} size={12} className="mr-1" /> Permissões
                             </Button>
                           )}
+                          <Button variant="ghost" size="sm" onClick={() => openSbxLogin(u)} className="rounded-none hover:bg-accent text-foreground font-medium text-xs h-8">
+                            <GradientIcon icon={KeyRound} size={12} className="mr-1" /> Login Superbid
+                          </Button>
                           {/* [AUDITORIA]: botão Histórico sempre visível, colado ao Ativar/Desativar (mesma posição em todas as linhas) */}
                           <Button
                             variant="ghost"
@@ -855,6 +960,7 @@ const ACTION_LABEL: Record<string, string> = {
   DEACTIVATE: "Usuário inativado",
   ROLE_CHANGE: "Cargo alterado",
   PERMISSIONS_CHANGE: "Permissões alteradas",
+  SBX_LOGIN_CHANGE: "Login Superbid alterado",
 };
 const ROLE_LABEL: Record<string, string> = { admin: "Administrador", manager: "Gerente", viewer: "Visualizador" };
 
@@ -963,6 +1069,11 @@ function UserHistoryPanel({
                         Cargo: {ROLE_LABEL[o.role as string] || o.role || "—"} → <strong>{ROLE_LABEL[n.role as string] || n.role}</strong>
                       </div>
                     )}
+                    {h.action === "SBX_LOGIN_CHANGE" && (
+                      <div className="text-foreground">
+                        Login Superbid: {(o.sbx_login as string) || "—"} → <strong>{(n.sbx_login as string) || "—"}</strong>
+                      </div>
+                    )}
                     {h.action === "PERMISSIONS_CHANGE" && (
                       <div className="space-y-1 text-foreground">
                         {(pd.added.length > 0 || pd.removed.length > 0) && (
@@ -986,6 +1097,7 @@ function UserHistoryPanel({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-border">
                       <HistoryField label="Cargo" value={ROLE_LABEL[n.role as string] || n.role} />
                       <HistoryField label="Status" value={n.is_active ? "Ativo" : "Inativo"} />
+                      <HistoryField label="Login Superbid" value={(n.sbx_login as string) || "—"} />
                       <HistoryField label="Parceiros" value={pd.after.join(", ") || "—"} />
                       <HistoryField label="Produtos" value={prd.after.join(", ") || "—"} />
                     </div>

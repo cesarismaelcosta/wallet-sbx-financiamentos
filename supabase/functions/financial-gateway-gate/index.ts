@@ -28,6 +28,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { generateSessionToken, generateExchangeToken, hashUserAgent } from "../_shared/jwt.ts";
+import { hasBackofficeAccess } from "../_shared/backoffice-access.ts";
 import { getEdgeClientIp, signedClientIpHeaders } from "../_shared/client-ip.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
@@ -216,8 +217,10 @@ serve(
         throw new Error("USER_NOT_FOUND: Não foi possível identificar o ID do usuário através do login Superbid.");
       }
 
-      // Assinatura com environment, userId, userName, login
-      const newTokenData = await generateSessionToken(activeEnvironment, userId, userName, login);
+      // Assinatura com environment, userId, userName, login (+ backofficeAccess: só mostra o link no avatar)
+      const newTokenData = await generateSessionToken(activeEnvironment, userId, userName, login, undefined, {
+        backofficeAccess: await hasBackofficeAccess(login),
+      });
       
       finalJwt = newTokenData.session_token;
       debugLog("[GATEWAY-AUTH] JWT interno emitido com sucesso para o orquestrador.");

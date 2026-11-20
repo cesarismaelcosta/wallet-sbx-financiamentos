@@ -11,6 +11,9 @@
  * - Removido o write/read de `user_profile` no sessionStorage.
  * - O perfil vive apenas no estado React; após um F5 ele é reidratado pelo
  *   backend (hidratação /me via JWT no perímetro das Edge Functions).
+ * - `backofficeAccess` (claim do token de sessão, assinado no servidor): login cadastrado
+ *   em usuário ativo do backoffice. Lido no login e no F5; só mostra o link "Backoffice"
+ *   no menu do avatar.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
@@ -29,6 +32,21 @@ interface FinancialAuthContextType {
 }
 
 const FinancialAuthContext = createContext<FinancialAuthContextType | undefined>(undefined);
+
+/** Claims do token de sessão (Fat JWT), sem validar assinatura: só para exibição. */
+function readSessionClaims(token: string): Record<string, unknown> | null {
+  try {
+    const base64Url = token.split(".")[1];
+    if (!base64Url) return null;
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const json = decodeURIComponent(
+      window.atob(base64).split("").map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join(""),
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
 
 export function FinancialAuthProvider({ children }: { children: React.ReactNode }) {
   const [sessionToken, setSessionTokenState] = useState<string | null>(null);
@@ -56,7 +74,8 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
 
       // 🔒 ZERO PII: o perfil NÃO é persistido em storage. Vive apenas em memória.
       if (profile) {
-        setUserProfile(profile);
+        const backofficeAccess = readSessionClaims(token)?.backofficeAccess === true;
+        setUserProfile({ ...profile, backofficeAccess });
       }
 
     }
@@ -124,27 +143,16 @@ export function FinancialAuthProvider({ children }: { children: React.ReactNode 
       setSessionTokenState(storedToken);
 
       // ✨ EXTRAÇÃO FAT JWT: Abre o token em memória (0ms) e resgata as PIIs visuais
-      try {
-        const base64Url = storedToken.split('.')[1];
-        if (base64Url) {
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const jsonPayload = decodeURIComponent(
-            window.atob(base64).split('').map(function(c) {
-              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join('')
-          );
-          const decodedToken = JSON.parse(jsonPayload);
-          
-          // Restaura o perfil na memória do React para o Header consumir
-          if (decodedToken.userName || decodedToken.login) {
-            setUserProfile({
-              name: decodedToken.userName || "",
-              login: decodedToken.login || ""
-            });
-          }
-        }
-      } catch (e) {
-        console.error("💧 [AuthContext] Falha ao decodificar Fat JWT no F5", e);
+      const decodedToken = readSessionClaims(storedToken);
+      if (!decodedToken) {
+        console.error("💧 [AuthContext] Falha ao decodificar Fat JWT no F5");
+      } else if (decodedToken.userName || decodedToken.login) {
+        // Restaura o perfil na memória do React para o Header consumir
+        setUserProfile({
+          name: String(decodedToken.userName || ""),
+          login: String(decodedToken.login || ""),
+          backofficeAccess: decodedToken.backofficeAccess === true,
+        });
       }
     }
 

@@ -27,6 +27,7 @@ import {
   hashUserAgent,
   verifyExchangeToken,
 } from "../_shared/jwt.ts";
+import { hasBackofficeAccess } from "../_shared/backoffice-access.ts";
 
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
@@ -78,7 +79,10 @@ serve(
         const { userId, environment, userName, login } = check;
         
         // Repassando os dados do usuário extraídos da maleta para gerar o Fat Token
-        const tokenData = await generateSessionToken(environment!, userId!, userName ?? "", login ?? "");
+        // backofficeAccess: login cadastrado em usuário ativo do backoffice (só mostra o link no avatar).
+        const tokenData = await generateSessionToken(environment!, userId!, userName ?? "", login ?? "", undefined, {
+          backofficeAccess: await hasBackofficeAccess(login),
+        });
 
         debugLog(`[sbx-auth-exchange][redeem] Sessão emitida para o usuário ${userId} em ${environment}.`);
 

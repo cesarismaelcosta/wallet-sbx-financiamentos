@@ -12,6 +12,9 @@
  *    ativa seja a página de autenticação (`/backoffice/login`).
  * 3. Scope Isolation: O `AuthProvider` agora está injetado DIRETAMENTE no topo 
  *    desta rota, não poluindo mais o `__root.tsx`.
+ * 4. Sandbox (/backoffice/sandbox e /backoffice/sandbox/help): só admin. Passa pelas
+ *    mesmas checagens de login do backoffice; quem não é admin volta para /backoffice.
+ *    Abre em nova aba pelo menu (Configuração) e é exibido sem o menu lateral.
  * ============================================================================
  * 
  * @author César Ismael Pereira da Costa
@@ -32,6 +35,7 @@ import {
   Layers,
   TriangleAlert,
   Menu,
+  FlaskConical,
   type LucideIcon,
 } from "lucide-react";
 import { WalletLogo } from "@/components/brand/WalletLogo";
@@ -138,6 +142,15 @@ function BackofficeLayout() {
     }
   }, [backofficeUser, isBackofficeAllowed]);
 
+  // Sandbox: só admin. Usuário de backoffice que não é admin volta para o início.
+  const isSandboxPath = pathname.startsWith("/backoffice/sandbox");
+  useEffect(() => {
+    if (!isSandboxPath || authLoading || authorizationLoading) return;
+    if (backofficeUser && isBackofficeAllowed && backofficeUser.role?.toLowerCase() !== "admin") {
+      navigate({ to: "/backoffice" });
+    }
+  }, [isSandboxPath, authLoading, authorizationLoading, backofficeUser, isBackofficeAllowed, navigate]);
+
   // =========================================================================
   // 🧭 AUDITORIA DE NAVEGAÇÃO: registra um evento "page_view" a cada troca de
   // rota dentro do backoffice (além dos eventos de login/refresh/logout que o
@@ -165,7 +178,11 @@ function BackofficeLayout() {
   const isAdmin = backofficeUser?.role?.toLowerCase() === "admin";
   const hasInitialized = typeof window !== "undefined" && sessionStorage.getItem("sb_backoffice_initialized") === "true";
 
-  if (!isMounted || authLoading || authorizationLoading || (!hasInitialized && !backofficeUser && !pathname.includes("/backoffice/login"))) {
+  // Rodinha só na primeira validação (ainda sem usuário). Nas revalidações (ex.: volta à aba),
+  // a tela atual continua montada — sem recarregar dados (no Sandbox, as ofertas da Superbid).
+  // Revalidação que falhar continua indo para /backoffice/login (efeito acima).
+  const isFirstValidation = (authLoading || authorizationLoading) && !backofficeUser;
+  if (!isMounted || isFirstValidation || (!hasInitialized && !backofficeUser && !pathname.includes("/backoffice/login"))) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background font-['Plus_Jakarta_Sans']">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mb-4"></div>
@@ -182,6 +199,11 @@ function BackofficeLayout() {
 
   if (!authLoading && !authorizationLoading && (!backofficeUser || !isBackofficeAllowed)) {
     return null; 
+  }
+
+  // Sandbox em tela cheia (sem menu lateral), só depois das checagens de login e de admin
+  if (isSandboxPath) {
+    return isAdmin ? <Outlet /> : null;
   }
 
   const nameParts = (backofficeUser?.name || "??").trim().split(" ").filter(Boolean);
@@ -242,6 +264,17 @@ function BackofficeLayout() {
               Configuração
             </p>
             {CONFIG_NAV.map(renderNavItem)}
+            {/* Sandbox: nova aba (sessão da Superbid de teste fica só naquela aba) */}
+            <a
+              href="/backoffice/sandbox"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMobileMenuOpen(false)}
+              className="group flex items-center gap-2.5 rounded-none px-3 py-0.5 text-[13px] transition-colors text-muted-foreground font-normal hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              <FlaskConical className="h-3.5 w-3.5 text-[#a7b5db]" />
+              Sandbox
+            </a>
           </div>
         )}
       </nav>

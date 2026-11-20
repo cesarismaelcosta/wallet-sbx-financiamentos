@@ -111,6 +111,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Trava para evitar disparos duplicados de log na mesma sessão de navegação
   const hasLoggedThisSession = useRef(false);
+  // Usuário atual para o listener do Supabase (criado uma vez na montagem): sem o ref, o
+  // listener lia sempre o valor inicial (null) e revalidava a cada volta à aba.
+  const backofficeUserRef = useRef<BackofficeUser | null>(null);
+  useEffect(() => { backofficeUserRef.current = backofficeUser; }, [backofficeUser]);
 
   // =========================================================================
   // 🔄 CICLO DE VIDA E SINCRONIZAÇÃO DE SESSÃO
@@ -155,7 +159,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const alreadyValidated = sessionStorage.getItem('auth_validated_once') === 'true';
     
     // 🛑 CACHE MEMORY: Impede refetches desnecessários ativados pelo Router (Lazy Loading)
-    if (backofficeUser && backofficeUser.email === email && alreadyValidated) return;
+    const current = backofficeUserRef.current;
+    if (current && current.email?.toLowerCase() === email && alreadyValidated) {
+      setSession(session); // mantém o token renovado (TOKEN_REFRESHED) sem revalidar no banco
+      return;
+    }
 
     setAuthorizationLoading(true);
     setDomainError(null);

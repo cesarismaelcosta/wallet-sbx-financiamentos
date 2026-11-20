@@ -12,6 +12,9 @@
  * 2. Verificação de Privilégios: Consulta cruzada na tabela `backoffice_users`.
  * 3. Gestão de Ciclo de Vida: Registro, alteração de papéis, permissões granulares e desativação 
  *    com encerramento forçado de sessão (Kill Switch).
+ * 4. Login Superbid (`sbx_login`): login do usuário interno na Superbid; mostra o link "Backoffice"
+ *    no menu do avatar do hub (ver `_shared/backoffice-access.ts`). Opcional, sem espaços,
+ *    2 a 100 caracteres, único sem diferenciar maiúsculas (índice backoffice_users_sbx_login_key).
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -38,6 +41,7 @@ interface RegisterPayload {
   role: Role; 
   allowed_partners?: string[]; 
   allowed_products?: string[]; 
+  sbx_login?: string | null;
 }
 interface SetActivePayload { 
   action: "set_active"; 
@@ -58,9 +62,30 @@ interface UpdatePermissionsPayload {
   allowed_partners: string[];
   allowed_products: string[];
 }
+interface SetSbxLoginPayload {
+  action: "set_sbx_login";
+  id: string;
+  sbx_login: string | null;
+}
 interface ListPayload { action: "list"; }
 
-type Payload = RegisterPayload | SetActivePayload | SetRolePayload | UpdatePermissionsPayload | ListPayload;
+type Payload = RegisterPayload | SetActivePayload | SetRolePayload | UpdatePermissionsPayload | SetSbxLoginPayload | ListPayload;
+
+/** Login Superbid normalizado: vazio = null; inválido (espaço, tamanho) = undefined. */
+function normalizeSbxLogin(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) return null;
+  const login = String(value).trim();
+  if (!login) return null;
+  return /^\S{2,100}$/.test(login) ? login : undefined;
+}
+
+/** Erro de gravação → resposta: login já usado por outro usuário = 409 sbx_login_in_use. */
+function writeError(error: { code?: string; message: string }) {
+  if (error.code === "23505" && /sbx_login/.test(error.message)) {
+    return { status: 409, data: { error: "sbx_login_in_use" } };
+  }
+  return { status: 500, data: { error: error.message } };
+}
 
 /**
  * Valida se o solicitante possui privilégios administrativos ativos.
@@ -143,12 +168,15 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
       if (!["admin", "manager", "viewer"].includes(payload.role)) {
           return { status: 400, data: { error: "invalid_role" } };
       }
+      const sbxLogin = normalizeSbxLogin(payload.sbx_login);
+      if (sbxLogin === undefined) return { status: 400, data: { error: "invalid_sbx_login" } };
       
       const { data, error } = await adminClient
         .from("backoffice_users")
         .insert({ 
           email, 
           name: payload.name, 
+          sbx_login: sbxLogin,
           role: payload.role, 
           is_active: true,
           updated_by: adminCheck.email,
@@ -158,7 +186,22 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
         })
         .select().single();
         
-      if (error) return { status: 500, data: { error: error.message } };
+      if (error) return writeError(error);
+      return { status: 200, data: { user: data } };
+    }
+
+    // Login Superbid do usuário interno (null remove). Auditoria: SBX_LOGIN_CHANGE (trigger).
+    case "set_sbx_login": {
+      const sbxLogin = normalizeSbxLogin(payload.sbx_login);
+      if (sbxLogin === undefined) return { status: 400, data: { error: "invalid_sbx_login" } };
+
+      const { data, error } = await adminClient
+        .from("backoffice_users")
+        .update({ sbx_login: sbxLogin, updated_by: adminCheck.email })
+        .eq("id", payload.id)
+        .select().single();
+
+      if (error) return writeError(error);
       return { status: 200, data: { user: data } };
     }
 

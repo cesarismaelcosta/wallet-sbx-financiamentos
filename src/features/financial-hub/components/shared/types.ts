@@ -261,6 +261,8 @@ export interface IntegrationDetails {
   urlRedirect?: string;
   email?: string;
   cnpjLoja?: string;
+  /** Ambiente da API do parceiro ("staging" | "production"; ausente = produção). */
+  partner_environment?: "staging" | "production";
   [key: string]: unknown;
 }
 
@@ -300,6 +302,8 @@ export interface ProductRules {
   max_vehicle_age_years?: number; // ano de fabricação mínimo = ano atual - N
   allowed_licensing_states?: string[]; // UFs de licenciamento aceitas
   min_vehicle_value?: number; // valor mínimo do veículo (R$)
+  /** Banco fixo da simulação (ex.: linha SELLER de um vendedor específico). */
+  fixed_bank?: string;
 }
 
 // =========================================================================
@@ -623,6 +627,9 @@ export interface BFFUserProfile {
   gender: string;
   login: string;            // Login sistêmico
   mothers_name: string;
+  /** Login cadastrado em usuário ativo do backoffice (claim do token de sessão): só mostra o
+   *  link "Backoffice" no menu do avatar. Não autoriza nada. */
+  backofficeAccess?: boolean;
 
   // Objeto de Endereço (nullable caso o usuário não tenha completado onboarding)
   address: {

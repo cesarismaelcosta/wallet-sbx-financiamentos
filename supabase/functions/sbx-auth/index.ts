@@ -22,6 +22,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { generateSessionToken } from "../_shared/jwt.ts";
+import { hasBackofficeAccess } from "../_shared/backoffice-access.ts";
 import { getEdgeClientIp, signedClientIpHeaders } from "../_shared/client-ip.ts";
 import { HOME_ROUTE, SIGNIN_ROUTE } from "../_shared/app-routes.ts";
 import { withSecurity } from "../_shared/server.ts";
@@ -237,11 +238,14 @@ serve(
       // =======================================================================
       // ✨ FAT JWT: Repassa nome e login obrigatórios para a assinatura do token.
       // O tempo de expiração é omitido e assumirá o default definido no jwt.ts.
+      // backofficeAccess: login cadastrado em usuário ativo do backoffice (só mostra o link no avatar).
       const tokenData = await generateSessionToken(
         environment, 
         userId, 
         userProfile.name, 
-        userProfile.login
+        userProfile.login,
+        undefined,
+        { backofficeAccess: await hasBackofficeAccess(userProfile.login) },
       );
 
       // =======================================================================

@@ -23,6 +23,10 @@
  *    os demais elementos estruturais (links de navegação, menu Popover e Sheet mobile).
  * 5. {Stateless Fat-JWT Awareness}: Derivação prioritária de identidade em memória
  *    via `FinancialAuthContext`, com fallback seguro para login alfanumérico e initials limpas.
+ * 6. {Menu do avatar}: Início, Backoffice (só com `backofficeAccess` no token de sessão:
+ *    login da Superbid cadastrado em usuário ativo do backoffice) e Sair. Itens escritos uma
+ *    vez (`renderMenuItems`) e usados no Popover (desktop) e no Sheet (celular). O Sandbox
+ *    fica dentro do backoffice (/backoffice/sandbox, só admin).
  * 
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro (Architectural Mechanics)
@@ -33,7 +37,7 @@ import React, { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { WalletLogo } from "@/components/brand/WalletLogo";
 import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
-import { LogOut, AppWindow, Settings, Home, Sun, Moon } from "lucide-react";
+import { LogOut, AppWindow, Home, Sun, Moon } from "lucide-react";
 import { callOrchestrator } from "@/features/financial-hub/core/services/gateway";
 import { HOME_ROUTE } from "@/config/routes";
 import type { BFFUserProfile } from "@/features/financial-hub/components/shared/types";
@@ -76,7 +80,6 @@ interface PanelHeaderProps {
   userData?: Partial<BFFUserProfile> | null;
   onLogout?: () => void;
   onNavigate?: (path: string) => void;
-  showEnvironmentLinks?: boolean;
   /** Estado do modo noturno escopado à página (opt-in). Quando ausente,
    * o header nunca muda de aparência -- comportamento padrão preservado
    * para todas as rotas que não passam essa prop. */
@@ -101,7 +104,6 @@ export function PanelHeader({
   userData,
   onLogout, 
   onNavigate,
-  showEnvironmentLinks = true,
   nightMode = false,
   onToggleNightMode,
   authPlaceholder = false,
@@ -117,6 +119,9 @@ export function PanelHeader({
   const hubName = userData?.name || userProfile?.name;
   const hubLogin = userData?.login || userProfile?.login;
   
+  // Link "Backoffice" no menu do avatar: só para login cadastrado em usuário ativo do backoffice
+  const showBackofficeLink = (userData?.backofficeAccess ?? userProfile?.backofficeAccess) === true;
+
   let identityString = "??";
   if (hubName && hubName !== "N/A" && hubName !== "Visitante Logado") {
     identityString = hubName;
@@ -206,6 +211,48 @@ export function PanelHeader({
       setIsNavigating(false);
     }
   };
+
+  // Menu do avatar: os mesmos itens no desktop (Popover) e no celular (Sheet).
+  const menuItemClass =
+    "flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-left text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors cursor-pointer";
+  const menuDivider = <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-1 mx-1" />;
+
+  /** Itens do menu do avatar. `close` fecha o Sheet do celular antes da ação. */
+  const renderMenuItems = (close?: () => void) => (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          close?.();
+          handleLogoClick();
+        }}
+        className={menuItemClass}
+      >
+        <GradientIcon icon={Home} size={16} /> Início
+      </button>
+
+      {showBackofficeLink && (
+        <>
+          {menuDivider}
+          <a href="/backoffice" target="_blank" rel="noopener noreferrer" onClick={() => close?.()} className={menuItemClass}>
+            <GradientIcon icon={AppWindow} size={16} /> Backoffice
+          </a>
+        </>
+      )}
+
+      {menuDivider}
+      <button
+        type="button"
+        onClick={() => {
+          close?.();
+          onLogout?.();
+        }}
+        className={menuItemClass}
+      >
+        <GradientIcon icon={LogOut} size={16} /> Sair
+      </button>
+    </>
+  );
 
   return (
     <>
@@ -321,43 +368,7 @@ export function PanelHeader({
 
                           <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-1 mx-1" />
 
-                          <button
-                            onClick={() => handleLogoClick()}
-                            className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors cursor-pointer"
-                          >
-                            <GradientIcon icon={Home} size={16} /> Início
-                          </button>
-
-                          <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-1 mx-1" />
-
-                          {showEnvironmentLinks && (
-                            <>
-                              <a 
-                                href="/backoffice" 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors"
-                              >
-                                <GradientIcon icon={AppWindow} size={16} /> Backoffice
-                              </a>
-                              <a 
-                                href="/sandbox" 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors"
-                              >
-                                <GradientIcon icon={Settings} size={16} /> Sandbox
-                              </a>
-                              <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-1 mx-1" />
-                            </>
-                          )}
-
-                          <button 
-                            onClick={onLogout} 
-                            className="flex w-full items-center gap-2.5 rounded-none px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors cursor-pointer"
-                          >
-                            <GradientIcon icon={LogOut} size={16} /> Sair
-                          </button>
+                          {renderMenuItems()}
                         </PopoverContent>
                       </Popover>
                     </div>
@@ -398,54 +409,7 @@ export function PanelHeader({
                           </SheetHeader>
 
                           <div className="flex flex-col gap-1 pt-4">
-                            <button
-                              onClick={() => {
-                                setIsMobileMenuOpen(false);
-                                handleLogoClick();
-                              }}
-                              className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 hover:bg-neutral-100 hover:text-neutral-950 transition-colors text-left w-full cursor-pointer"
-                            >
-                              <GradientIcon icon={Home} size={16} /> Início
-                            </button>
-                            
-                            <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-1 mx-1" />
-
-                            {showEnvironmentLinks && (
-                              <>
-                                <a
-                                  href="/backoffice"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={() => setIsMobileMenuOpen(false)}
-                                  className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors"
-                                >
-                                  <GradientIcon icon={AppWindow} size={16} /> Backoffice
-                                </a>
-                                <a
-                                  href="/sandbox"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={() => setIsMobileMenuOpen(false)}
-                                  className="flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-950 dark:hover:text-neutral-50 transition-colors"
-                                >
-                                  <GradientIcon icon={Settings} size={16} /> Sandbox
-                                </a>
-                                <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-1 mx-1" />
-                              </>
-                            )}
-                            
-                            <div className="pt-2">
-                              <button
-                                onClick={() => {
-                                  setIsMobileMenuOpen(false);
-                                  onLogout?.();
-                                }}
-                                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium text-neutral-800 dark:text-neutral-200 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
-                              >
-                                <GradientIcon icon={LogOut} size={16} /> 
-                                <span>Sair da Conta</span>
-                              </button>
-                            </div>
+                            {renderMenuItems(() => setIsMobileMenuOpen(false))}
                           </div>
                         </SheetContent>
                       </Sheet>

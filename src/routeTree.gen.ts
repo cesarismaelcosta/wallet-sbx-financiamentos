@@ -39,6 +39,9 @@ const BackofficeReportsLazyRouteImport = createFileRoute(
   '/backoffice/reports',
 )()
 const BackofficeRoutesLazyRouteImport = createFileRoute('/backoffice/routes')()
+const BackofficeSandboxLazyRouteImport = createFileRoute(
+  '/backoffice/sandbox',
+)()
 const BackofficeSimulationsLazyRouteImport = createFileRoute(
   '/backoffice/simulations',
 )()
@@ -65,6 +68,9 @@ const ProdutosIndexLazyRouteImport = createFileRoute('/produtos/')()
 const ProdutosOfferLazyRouteImport = createFileRoute('/produtos/offer')()
 const SandboxHelpLazyRouteImport = createFileRoute('/sandbox_/help')()
 const SegurosAutoLazyRouteImport = createFileRoute('/seguros/auto')()
+const BackofficeSandboxHelpLazyRouteImport = createFileRoute(
+  '/backoffice/sandbox_/help',
+)()
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -183,6 +189,13 @@ const BackofficeRoutesLazyRoute = BackofficeRoutesLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/backoffice.routes.lazy').then((d) => d.Route),
 )
+const BackofficeSandboxLazyRoute = BackofficeSandboxLazyRouteImport.update({
+  id: '/sandbox',
+  path: '/sandbox',
+  getParentRoute: () => BackofficeLazyRoute,
+} as any).lazy(() =>
+  import('./routes/backoffice.sandbox.lazy').then((d) => d.Route),
+)
 const BackofficeSimulationsLazyRoute =
   BackofficeSimulationsLazyRouteImport.update({
     id: '/simulations',
@@ -270,6 +283,14 @@ const SegurosAutoLazyRoute = SegurosAutoLazyRouteImport.update({
   path: '/auto',
   getParentRoute: () => SegurosRoute,
 } as any).lazy(() => import('./routes/seguros.auto.lazy').then((d) => d.Route))
+const BackofficeSandboxHelpLazyRoute =
+  BackofficeSandboxHelpLazyRouteImport.update({
+    id: '/sandbox_/help',
+    path: '/sandbox/help',
+    getParentRoute: () => BackofficeLazyRoute,
+  } as any).lazy(() =>
+    import('./routes/backoffice.sandbox_.help.lazy').then((d) => d.Route),
+  )
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -290,6 +311,7 @@ export interface FileRoutesByFullPath {
   '/backoffice/login': typeof BackofficeLoginLazyRoute
   '/backoffice/reports': typeof BackofficeReportsLazyRoute
   '/backoffice/routes': typeof BackofficeRoutesLazyRoute
+  '/backoffice/sandbox': typeof BackofficeSandboxLazyRoute
   '/backoffice/simulations': typeof BackofficeSimulationsLazyRoute
   '/backoffice/users': typeof BackofficeUsersLazyRoute
   '/emprestimos/auto-equity': typeof EmprestimosAutoEquityLazyRoute
@@ -303,6 +325,7 @@ export interface FileRoutesByFullPath {
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
   '/produtos/': typeof ProdutosIndexLazyRoute
+  '/backoffice/sandbox/help': typeof BackofficeSandboxHelpLazyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -321,6 +344,7 @@ export interface FileRoutesByTo {
   '/backoffice/login': typeof BackofficeLoginLazyRoute
   '/backoffice/reports': typeof BackofficeReportsLazyRoute
   '/backoffice/routes': typeof BackofficeRoutesLazyRoute
+  '/backoffice/sandbox': typeof BackofficeSandboxLazyRoute
   '/backoffice/simulations': typeof BackofficeSimulationsLazyRoute
   '/backoffice/users': typeof BackofficeUsersLazyRoute
   '/emprestimos/auto-equity': typeof EmprestimosAutoEquityLazyRoute
@@ -334,6 +358,7 @@ export interface FileRoutesByTo {
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice': typeof BackofficeIndexLazyRoute
   '/produtos': typeof ProdutosIndexLazyRoute
+  '/backoffice/sandbox/help': typeof BackofficeSandboxHelpLazyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -355,6 +380,7 @@ export interface FileRoutesById {
   '/backoffice/login': typeof BackofficeLoginLazyRoute
   '/backoffice/reports': typeof BackofficeReportsLazyRoute
   '/backoffice/routes': typeof BackofficeRoutesLazyRoute
+  '/backoffice/sandbox': typeof BackofficeSandboxLazyRoute
   '/backoffice/simulations': typeof BackofficeSimulationsLazyRoute
   '/backoffice/users': typeof BackofficeUsersLazyRoute
   '/emprestimos/auto-equity': typeof EmprestimosAutoEquityLazyRoute
@@ -368,6 +394,7 @@ export interface FileRoutesById {
   '/seguros/auto': typeof SegurosAutoLazyRoute
   '/backoffice/': typeof BackofficeIndexLazyRoute
   '/produtos/': typeof ProdutosIndexLazyRoute
+  '/backoffice/sandbox_/help': typeof BackofficeSandboxHelpLazyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -390,6 +417,7 @@ export interface FileRouteTypes {
     | '/backoffice/login'
     | '/backoffice/reports'
     | '/backoffice/routes'
+    | '/backoffice/sandbox'
     | '/backoffice/simulations'
     | '/backoffice/users'
     | '/emprestimos/auto-equity'
@@ -403,6 +431,7 @@ export interface FileRouteTypes {
     | '/seguros/auto'
     | '/backoffice/'
     | '/produtos/'
+    | '/backoffice/sandbox/help'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -421,6 +450,7 @@ export interface FileRouteTypes {
     | '/backoffice/login'
     | '/backoffice/reports'
     | '/backoffice/routes'
+    | '/backoffice/sandbox'
     | '/backoffice/simulations'
     | '/backoffice/users'
     | '/emprestimos/auto-equity'
@@ -434,6 +464,7 @@ export interface FileRouteTypes {
     | '/seguros/auto'
     | '/backoffice'
     | '/produtos'
+    | '/backoffice/sandbox/help'
   id:
     | '__root__'
     | '/'
@@ -454,6 +485,7 @@ export interface FileRouteTypes {
     | '/backoffice/login'
     | '/backoffice/reports'
     | '/backoffice/routes'
+    | '/backoffice/sandbox'
     | '/backoffice/simulations'
     | '/backoffice/users'
     | '/emprestimos/auto-equity'
@@ -467,6 +499,7 @@ export interface FileRouteTypes {
     | '/seguros/auto'
     | '/backoffice/'
     | '/produtos/'
+    | '/backoffice/sandbox_/help'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -618,6 +651,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackofficeRoutesLazyRouteImport
       parentRoute: typeof BackofficeLazyRoute
     }
+    '/backoffice/sandbox': {
+      id: '/backoffice/sandbox'
+      path: '/sandbox'
+      fullPath: '/backoffice/sandbox'
+      preLoaderRoute: typeof BackofficeSandboxLazyRouteImport
+      parentRoute: typeof BackofficeLazyRoute
+    }
     '/backoffice/simulations': {
       id: '/backoffice/simulations'
       path: '/simulations'
@@ -702,6 +742,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SegurosAutoLazyRouteImport
       parentRoute: typeof SegurosRoute
     }
+    '/backoffice/sandbox_/help': {
+      id: '/backoffice/sandbox_/help'
+      path: '/sandbox/help'
+      fullPath: '/backoffice/sandbox/help'
+      preLoaderRoute: typeof BackofficeSandboxHelpLazyRouteImport
+      parentRoute: typeof BackofficeLazyRoute
+    }
   }
 }
 
@@ -771,9 +818,11 @@ interface BackofficeLazyRouteChildren {
   BackofficeLoginLazyRoute: typeof BackofficeLoginLazyRoute
   BackofficeReportsLazyRoute: typeof BackofficeReportsLazyRoute
   BackofficeRoutesLazyRoute: typeof BackofficeRoutesLazyRoute
+  BackofficeSandboxLazyRoute: typeof BackofficeSandboxLazyRoute
   BackofficeSimulationsLazyRoute: typeof BackofficeSimulationsLazyRoute
   BackofficeUsersLazyRoute: typeof BackofficeUsersLazyRoute
   BackofficeIndexLazyRoute: typeof BackofficeIndexLazyRoute
+  BackofficeSandboxHelpLazyRoute: typeof BackofficeSandboxHelpLazyRoute
 }
 
 const BackofficeLazyRouteChildren: BackofficeLazyRouteChildren = {
@@ -785,9 +834,11 @@ const BackofficeLazyRouteChildren: BackofficeLazyRouteChildren = {
   BackofficeLoginLazyRoute: BackofficeLoginLazyRoute,
   BackofficeReportsLazyRoute: BackofficeReportsLazyRoute,
   BackofficeRoutesLazyRoute: BackofficeRoutesLazyRoute,
+  BackofficeSandboxLazyRoute: BackofficeSandboxLazyRoute,
   BackofficeSimulationsLazyRoute: BackofficeSimulationsLazyRoute,
   BackofficeUsersLazyRoute: BackofficeUsersLazyRoute,
   BackofficeIndexLazyRoute: BackofficeIndexLazyRoute,
+  BackofficeSandboxHelpLazyRoute: BackofficeSandboxHelpLazyRoute,
 }
 
 const BackofficeLazyRouteWithChildren = BackofficeLazyRoute._addFileChildren(

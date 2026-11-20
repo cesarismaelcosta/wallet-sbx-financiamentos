@@ -17,6 +17,21 @@
  * - (ESCRITA): Inserções e Atualizações (Upserts) são roteadas para a RPC 
  *   `save_backoffice_orchestrator_config`, blindando as regras de parsing.
  *
+ * [REGRAS & INTEGRAÇÃO] (aba "Regras & Integração"): todas as chaves de `rules` e
+ * `integration_details` usadas pelas rotas são editáveis (campo vazio = sem regra):
+ * 1. Credenciais & Canais: cnpjLoja, urlWhatsApp, urlRedirect, email (EMAIL) e
+ *    partner_environment (Produção | Staging; ausente = produção).
+ * 2. Regras — Parcelamento: installment_options, payment_factors, default_installments,
+ *    max_financed_amount, min/max_down_payment_percentage, max_offer_cap_percent,
+ *    allow_custom_value.
+ * 3. Regras — Valores, prazos e elegibilidade (LimitsRulesBuilder): min/max_property_value,
+ *    min_vehicle_value, min_financed_amount, min_loan_amount, min_monthly_income,
+ *    max_financing_percentage, max_loan_percentage, loan_percentage_by_type,
+ *    min/max/default_term_months, term_step_months, min_loan_term_months,
+ *    blocked_property_types, allowed_licensing_states, max_vehicle_age_years, fixed_bank,
+ *    subcategory_limits.
+ * Chave nova em rules/integration_details: incluir aqui e em ProductRules/IntegrationDetails.
+ *
  * [EXIBIÇÃO NA HOME] (aba Geral > "Exibição na Home"):
  * - home_key: botão da home (chave do flowsConfig em produtos.index.lazy.tsx).
  * - home_status: visible | coming_soon (Em breve, desabilitado) | hidden.
@@ -264,6 +279,154 @@ function PaymentFactorsBuilder({ factors = {}, onChange }: { factors: Record<str
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// =========================================================================
+// [REGRAS] Valores, prazos e elegibilidade (rules) — campos genéricos, sem nome de parceiro.
+// Campo vazio = sem regra (a chave sai do JSON). Cobre todas as chaves de `rules` usadas
+// pelas rotas além do parcelamento (ver ProductRules em shared/types.ts).
+// =========================================================================
+const fieldClass = "h-8 text-xs font-mono rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground";
+const fieldLabel = "text-[10px] font-medium text-muted-foreground uppercase";
+
+/** Lista separada por vírgula, gravada ao sair do campo (permite digitar a vírgula). */
+function ListInput({ value, onCommit, upper = false }: { value?: string[]; onCommit: (v: string[] | undefined) => void; upper?: boolean }) {
+  const joined = (value || []).join(", ");
+  const [text, setText] = useState(joined);
+  useEffect(() => { setText(joined); }, [joined]);
+  return (
+    <Input
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        const list = text.split(",").map((t) => (upper ? t.trim().toUpperCase() : t.trim())).filter(Boolean);
+        onCommit(list.length ? Array.from(new Set(list)) : undefined);
+      }}
+      className={fieldClass}
+    />
+  );
+}
+
+/** Linhas chave → valores (ex.: tipo de imóvel → %, subcategoria → limites). */
+function RowsBuilder<T extends Record<string, number | undefined>>({
+  title, keyLabel, columns, value, onChange, addLabel,
+}: {
+  title: string; keyLabel: string; addLabel: string;
+  columns: { field: keyof T & string; label: string }[];
+  value?: Record<string, T>; onChange: (v: Record<string, T> | undefined) => void;
+}) {
+  const toRows = (v?: Record<string, T>) => Object.entries(v || {}).map(([k, vals]) => ({ key: k, vals: { ...vals } as Record<string, number | undefined> }));
+  const [rows, setRows] = useState(() => toRows(value));
+  useEffect(() => {
+    if (Object.keys(value || {}).length !== rows.length) setRows(toRows(value));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- sincroniza só quando o valor recebido muda
+  }, [value]);
+  const commit = (next: typeof rows) => {
+    setRows(next);
+    const obj: Record<string, T> = {};
+    next.forEach((r) => {
+      if (!r.key.trim()) return;
+      const vals: Record<string, number> = {};
+      columns.forEach((c) => { const n = r.vals[c.field]; if (n !== undefined && !Number.isNaN(n)) vals[c.field] = n; });
+      obj[r.key.trim()] = vals as T;
+    });
+    onChange(Object.keys(obj).length ? obj : undefined);
+  };
+  return (
+    <div className="space-y-2 pt-2 border-t border-border">
+      <div className="flex justify-between items-center">
+        <label className={fieldLabel}>{title}</label>
+        <button type="button" onClick={() => setRows([...rows, { key: "", vals: {} }])} className="text-[10px] font-medium text-foreground hover:underline flex items-center">
+          <Plus size={12} className="mr-0.5" /> {addLabel}
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-[10px] text-muted-foreground italic">Sem regra.</p>
+      ) : (
+        <div className="space-y-2 bg-muted p-2.5 rounded-none border border-border">
+          {rows.map((r, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <div className="flex-1"><Input placeholder={keyLabel} value={r.key} onChange={(e) => { const n = [...rows]; n[idx] = { ...r, key: e.target.value }; commit(n); }} className={`${fieldClass} bg-card`} /></div>
+              {columns.map((c) => (
+                <div key={c.field} className="w-24"><Input type="number" placeholder={c.label} value={r.vals[c.field] ?? ""} onChange={(e) => { const n = [...rows]; n[idx] = { ...r, vals: { ...r.vals, [c.field]: e.target.value === "" ? undefined : Number(e.target.value) } }; commit(n); }} className={`${fieldClass} bg-card`} /></div>
+              ))}
+              <button type="button" onClick={() => commit(rows.filter((_, i) => i !== idx))} className="text-muted-foreground hover:text-destructive transition-colors p-1" title="Remover"><X size={14} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Bloco "Regras — Valores, prazos e elegibilidade". */
+function LimitsRulesBuilder({ rules, onChange }: { rules: ProductRules; onChange: (r: ProductRules) => void }) {
+  const set = (key: keyof ProductRules, v: unknown) => {
+    const next = { ...rules } as Record<string, unknown>;
+    if (v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) delete next[key];
+    else next[key] = v;
+    onChange(next as ProductRules);
+  };
+  const num = (key: keyof ProductRules, label: string) => (
+    <div className="space-y-1">
+      <label className={fieldLabel}>{label}</label>
+      <Input type="number" value={(rules[key] as number | undefined) ?? ""} onChange={(e) => set(key, e.target.value === "" ? undefined : Number(e.target.value))} className={fieldClass} />
+    </div>
+  );
+  const pctByType = Object.fromEntries(Object.entries(rules.loan_percentage_by_type || {}).map(([k, v]) => [k, { pct: v }]));
+  return (
+    <div className="space-y-3">
+      <p className={fieldLabel}>Valores (R$)</p>
+      <div className="grid grid-cols-3 gap-2">
+        {num("min_property_value", "Imóvel mínimo")}
+        {num("max_property_value", "Imóvel máximo")}
+        {num("min_vehicle_value", "Veículo mínimo")}
+        {num("min_financed_amount", "Financiado mínimo")}
+        {num("min_loan_amount", "Crédito mínimo")}
+        {num("min_monthly_income", "Renda mínima")}
+      </div>
+      <p className={`${fieldLabel} pt-2 border-t border-border`}>Percentuais (%)</p>
+      <div className="grid grid-cols-2 gap-2">
+        {num("max_financing_percentage", "Máx. financiável do bem")}
+        {num("max_loan_percentage", "Máx. do crédito sobre o bem")}
+      </div>
+      <RowsBuilder<{ pct?: number }>
+        title="Percentual máximo por tipo de imóvel"
+        keyLabel="Tipo (ex.: Terreno)"
+        addLabel="Adicionar tipo"
+        columns={[{ field: "pct", label: "%" }]}
+        value={pctByType}
+        onChange={(v) => set("loan_percentage_by_type", v ? Object.fromEntries(Object.entries(v).filter(([, x]) => x.pct !== undefined).map(([k, x]) => [k, x.pct as number])) : undefined)}
+      />
+      <p className={`${fieldLabel} pt-2 border-t border-border`}>Prazos (meses)</p>
+      <div className="grid grid-cols-3 gap-2">
+        {num("min_term_months", "Mínimo")}
+        {num("max_term_months", "Máximo")}
+        {num("default_term_months", "Padrão")}
+        {num("term_step_months", "Passo")}
+        {num("min_loan_term_months", "Mínimo do crédito")}
+      </div>
+      <p className={`${fieldLabel} pt-2 border-t border-border`}>Elegibilidade</p>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1"><label className={fieldLabel}>Tipos de imóvel bloqueados</label><ListInput value={rules.blocked_property_types} onCommit={(v) => set("blocked_property_types", v)} /></div>
+        <div className="space-y-1"><label className={fieldLabel}>UFs de licenciamento aceitas</label><ListInput upper value={rules.allowed_licensing_states} onCommit={(v) => set("allowed_licensing_states", v?.filter((u) => /^[A-Z]{2}$/.test(u)))} /></div>
+        {num("max_vehicle_age_years", "Idade máx. do veículo (anos)")}
+        <div className="space-y-1"><label className={fieldLabel}>Banco fixo</label><Input value={rules.fixed_bank ?? ""} onChange={(e) => set("fixed_bank", e.target.value.trim() ? e.target.value : undefined)} className={fieldClass} /></div>
+      </div>
+      <RowsBuilder<{ max_financing_percentage?: number; max_term_months?: number; min_term_months?: number }>
+        title="Limites por subcategoria (* = demais)"
+        keyLabel="Subcategoria (id ou *)"
+        addLabel="Adicionar subcategoria"
+        columns={[
+          { field: "max_financing_percentage", label: "% máx" },
+          { field: "max_term_months", label: "Prazo máx" },
+          { field: "min_term_months", label: "Prazo mín" },
+        ]}
+        value={rules.subcategory_limits}
+        onChange={(v) => set("subcategory_limits", v)}
+      />
     </div>
   );
 }
@@ -760,12 +923,26 @@ function OrchestratorConfigEditor({
                           <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">CNPJ da Loja</label><Input value={integration.cnpjLoja || ""} onChange={(e) => updateIntegration({ ...integration, cnpjLoja: e.target.value })} className="h-8 text-xs font-mono rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
                           <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">URL do WhatsApp</label><Input value={integration.urlWhatsApp || ""} onChange={(e) => updateIntegration({ ...integration, urlWhatsApp: e.target.value })} className="h-8 text-xs font-mono rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
                         </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase">Ambiente do parceiro</label>
+                            <Select value={integration.partner_environment === "staging" ? "staging" : "production"} onValueChange={(v) => updateIntegration({ ...integration, partner_environment: v as "staging" | "production" })}>
+                              <SelectTrigger className="h-8 text-xs rounded-none border-border focus:ring-1 focus:ring-foreground"><SelectValue /></SelectTrigger>
+                              <SelectContent className="rounded-none border-border">
+                                <SelectItem value="production" className="rounded-none cursor-pointer text-xs">Produção</SelectItem>
+                                <SelectItem value="staging" className="rounded-none cursor-pointer text-xs">Staging (testes)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">URL de redirecionamento</label><Input value={integration.urlRedirect || ""} onChange={(e) => updateIntegration({ ...integration, urlRedirect: e.target.value || undefined })} className="h-8 text-xs font-mono rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
+                        </div>
                         {formData.integration_method === "EMAIL" && (
                           <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase flex items-center gap-1.5">E-mail de Destino <span className="text-destructive">*</span></label><Input type="email" value={integration.email || ""} onChange={(e) => updateIntegration({ ...integration, email: e.target.value })} className="h-8 text-xs font-mono border-border bg-muted rounded-none focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
                         )}
                       </div>
                       <div className="bg-card p-4 rounded-none border border-border shadow-sm space-y-3">
-                        <h4 className="text-[10px] font-medium uppercase text-muted-foreground border-b border-border pb-2">2. Regras de Parcelamento</h4>
+                        <h4 className="text-[10px] font-medium uppercase text-muted-foreground border-b border-border pb-2">2. Regras — Parcelamento</h4>
+                        <div className="flex items-center justify-between bg-muted p-2.5 rounded-none border border-border"><label className="text-[10px] font-medium text-muted-foreground uppercase">Permite valor livre</label><Switch checked={rules.allow_custom_value === true} onCheckedChange={(c) => updateRules({ ...rules, allow_custom_value: c })} /></div>
                         <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">Opções de Parcelas</label><Input value={Array.isArray(rules.installment_options) ? rules.installment_options.join(", ") : ""} onChange={(e) => { const parsedArray = e.target.value.split(",").map((n) => Number(n.trim())).filter((n) => !isNaN(n) && n > 0); updateRules({ ...rules, installment_options: parsedArray }); }} className="h-8 text-xs font-mono rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
                         <PaymentFactorsBuilder factors={rules.payment_factors || {}} onChange={(newFactors) => updateRules({ ...rules, payment_factors: newFactors })} />
                         <div className="grid grid-cols-2 gap-3">
@@ -777,6 +954,10 @@ function OrchestratorConfigEditor({
                           <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">Max Entrada (%)</label><Input type="number" value={rules.max_down_payment_percentage ?? 80} onChange={(e) => updateRules({ ...rules, max_down_payment_percentage: Number(e.target.value) })} className="h-8 text-xs rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
                           <div className="space-y-1"><label className="text-[10px] font-medium text-muted-foreground uppercase">Cap Máximo (%)</label><Input type="number" value={rules.max_offer_cap_percent ?? 50} onChange={(e) => updateRules({ ...rules, max_offer_cap_percent: Number(e.target.value) })} className="h-8 text-xs rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground" /></div>
                         </div>
+                      </div>
+                      <div className="bg-card p-4 rounded-none border border-border shadow-sm space-y-3">
+                        <h4 className="text-[10px] font-medium uppercase text-muted-foreground border-b border-border pb-2">3. Regras — Valores, prazos e elegibilidade</h4>
+                        <LimitsRulesBuilder rules={rules} onChange={updateRules} />
                       </div>
                     </div>
                   );

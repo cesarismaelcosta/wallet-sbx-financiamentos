@@ -76,6 +76,9 @@ const getJwtSecret = (): Uint8Array => {
  * @param {string} userName - Nome do usuário embutido para hidratação stateless.
  * @param {string} login - Credencial do usuário embutida para hidratação stateless.
  * @param {number} [expiresInSeconds=7200] - Tempo de vida do token (Padrão: 6 horas).
+ * @param {{ backofficeAccess?: boolean }} [options] - `backofficeAccess`: login cadastrado em
+ *   usuário ativo do backoffice (ver `backoffice-access.ts`). Só entra no token quando true;
+ *   serve apenas para o hub mostrar o link "Backoffice" no menu do avatar (não autoriza nada).
  * @returns {Promise<SessionData>} Objeto limpo restrito aos campos públicos.
  */
 export async function generateSessionToken(
@@ -84,6 +87,7 @@ export async function generateSessionToken(
   userName: string,
   login: string,
   expiresInSeconds: number = 7200,
+  options: { backofficeAccess?: boolean } = {},
 ): Promise<SessionData> {
   // [PLANO 1a]: O payload interno sela a identidade, o ambiente, tipagem e dados do usuário.
   // Qualquer tentativa de mudar o environment no Client invalidará a assinatura.
@@ -93,6 +97,7 @@ export async function generateSessionToken(
     userId,
     userName,
     login,
+    ...(options.backofficeAccess === true ? { backofficeAccess: true } : {}),
   };
 
   const session_token = await new SignJWT(internalPayload)

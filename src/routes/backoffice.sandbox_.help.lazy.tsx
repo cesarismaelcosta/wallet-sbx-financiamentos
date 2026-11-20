@@ -2,7 +2,7 @@
  * ============================================================================
  * @fileoverview Central de Ajuda e Documentação do Sistema (Sandbox)
  * @module Sandbox/Help
- * @route /sandbox/help
+ * @route /backoffice/sandbox/help (dentro do backoffice, só admin — ver backoffice.lazy.tsx)
  * 
  * @description
  * Documentação técnica aprofundada gerada a partir da inspeção exaustiva 
@@ -33,10 +33,11 @@ import {
 } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ThemeToggle } from "@/design-system/sbx-design-system-9f1c03/components/ThemeToggle";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-export const Route = createLazyFileRoute("/sandbox_/help")({
+export const Route = createLazyFileRoute("/backoffice/sandbox_/help")({
   component: SandboxHelpPage,
 });
 
@@ -52,19 +53,19 @@ function HelpAccordion({ items }: { items: { q: string; a: React.ReactNode; bull
         <AccordionItem 
           key={i} 
           value={`help-item-${i}`} 
-          className="border border-neutral-200 rounded-none px-4 bg-white shadow-sm transition-all focus-within:border-neutral-900"
+          className="border border-neutral-200 dark:border-neutral-800 rounded-none px-4 bg-white dark:bg-neutral-950 shadow-sm transition-all focus-within:border-neutral-900"
         >
-          <AccordionTrigger className="text-left font-bold text-sm text-neutral-800 hover:text-neutral-900 transition-colors py-4 leading-snug">
+          <AccordionTrigger className="text-left font-bold text-sm text-neutral-800 dark:text-neutral-200 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors py-4 leading-snug">
             {item.q}
           </AccordionTrigger>
-          <AccordionContent className="text-neutral-500 text-xs leading-relaxed pb-4 border-t border-neutral-200 pt-3">
-            <div className="mb-2 text-neutral-600">{item.a}</div>
+          <AccordionContent className="text-neutral-500 dark:text-neutral-400 text-xs leading-relaxed pb-4 border-t border-neutral-200 dark:border-neutral-800 pt-3">
+            <div className="mb-2 text-neutral-600 dark:text-neutral-400">{item.a}</div>
             {item.bullets && item.bullets.length > 0 && (
               <div className="space-y-2 mt-3">
                 {item.bullets.map((bullet, idx) => (
                   <div key={idx} className="flex gap-2 items-start">
-                    <span className="text-neutral-900 font-bold mt-0.5">•</span>
-                    <span className="text-neutral-600 flex-1">{bullet}</span>
+                    <span className="text-neutral-900 dark:text-neutral-100 font-bold mt-0.5">•</span>
+                    <span className="text-neutral-600 dark:text-neutral-400 flex-1">{bullet}</span>
                   </div>
                 ))}
               </div>
@@ -77,19 +78,20 @@ function HelpAccordion({ items }: { items: { q: string; a: React.ReactNode; bull
 }
 
 function SandboxHelpPage() {
-  const codeBadge = "bg-neutral-100 border border-neutral-200 text-neutral-900 px-1 py-0.5 rounded-none font-mono text-[10px]";
+  const codeBadge = "bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 text-neutral-900 dark:text-neutral-100 px-1 py-0.5 rounded-none font-mono text-[10px]";
 
   return (
-    <div className="bg-neutral-50 min-h-screen pt-12 pb-24 px-6 md:px-12">
+    <div className="bg-neutral-50 dark:bg-neutral-900 min-h-screen pt-12 pb-24 px-6 md:px-12">
       <div className="max-w-6xl mx-auto space-y-6 font-sans">
         
         {/* HEADER DA PÁGINA */}
-        <div className="flex flex-col gap-2 border-b border-neutral-200 pb-6">
-          <h1 className="text-3xl font-black tracking-tight text-neutral-900 flex items-center gap-3">
-            <LifeBuoy className="h-8 w-8 text-neutral-900" />
+        <div className="flex justify-end"><ThemeToggle /></div>
+        <div className="flex flex-col gap-2 border-b border-neutral-200 dark:border-neutral-800 pb-6">
+          <h1 className="text-3xl font-black tracking-tight text-neutral-900 dark:text-neutral-100 flex items-center gap-3">
+            <LifeBuoy className="h-8 w-8 text-[#2246A7]" />
             Manual Técnico & Arquitetura Stateless do Ecossistema
           </h1>
-          <p className="text-sm text-neutral-500 max-w-4xl leading-relaxed">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-4xl leading-relaxed">
             Documentação estruturada com base na auditoria dos arquivos-fonte do projeto. 
             Abrange o roteamento lazy do TanStack, o ecossistema de serviços, a segurança de borda em Deno (_shared), o modelo de autenticação Stateless em memória e o tratamento automatizado de sessões expiradas.
           </p>
@@ -100,7 +102,7 @@ function SandboxHelpPage() {
           
           {/* Menu de Abas */}
           <div className="overflow-x-auto pb-2">
-            <TabsList className="w-auto inline-flex justify-start h-12 bg-white p-1 rounded-none border border-neutral-200 shadow-sm">
+            <TabsList className="w-auto inline-flex justify-start h-12 bg-white dark:bg-neutral-950 p-1 rounded-none border border-neutral-200 dark:border-neutral-800 shadow-sm">
               <TabsTrigger value="frontend" className="rounded-none data-[state=active]:bg-neutral-100 data-[state=active]:text-neutral-900 px-4 font-semibold text-xs">
                 <Layers className="w-4 h-4 mr-2" /> Front-end & Rotas
               </TabsTrigger>
@@ -132,19 +134,19 @@ function SandboxHelpPage() {
             
             {/* ABA: FRONT-END & ROTAS */}
             <TabsContent value="frontend" className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">TanStack Router e Componentização (Features)</CardTitle>
-                  <CardDescription className="text-neutral-500">Análise do mapeamento de rotas lazy-loaded e da arquitetura modular do hub financeiro.</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">TanStack Router e Componentização (Features)</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">Análise do mapeamento de rotas lazy-loaded e da arquitetura modular do hub financeiro.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion 
                     items={[
                       {
                         q: "Como o TanStack Router gerencia as telas e o carregamento da aplicação?",
                         a: "Mapeado através do diretório 'routes/', o sistema emprega roteamento baseado em arquivos com carregamento assíncrono (.lazy.tsx):",
                         bullets: [
-                          <><b>Sandbox & Ajuda:</b> Os arquivos <code className={codeBadge}>sandbox.tsx</code> e <code className={codeBadge}>sandbox_.help.lazy.tsx</code> gerenciam o painel de debug e o manual técnico com redirecionamento automático de sessões expiradas.</>,
+                          <><b>Sandbox & Ajuda:</b> Os arquivos <code className={codeBadge}>backoffice.sandbox.lazy.tsx</code> e <code className={codeBadge}>backoffice.sandbox_.help.lazy.tsx</code> gerenciam o painel de debug e o manual técnico com redirecionamento automático de sessões expiradas.</>,
                           <><b>Portal do Cliente (SBX Pay):</b> Gerenciado por <code className={codeBadge}>sbxpay.lazy.tsx</code> e suas extensões para a página inicial, visualização de ofertas e histórico de consultas.</>,
                           <><b>Backoffice Administrativo:</b> Módulos isolados em <code className={codeBadge}>backoffice.*.lazy.tsx</code> cobrindo alertas, auditorias, configurações, domínios, relatórios, rotas, simulações e controle de usuários.</>,
                           <><b>Jornadas Verticais:</b> Telas específicas para produtos como Auto Equity, Cartão, Financiamento de Veículos e Seguros localizadas em <code className={codeBadge}>financiamentos.*</code> e <code className={codeBadge}>seguros.*</code>.</>
@@ -167,12 +169,12 @@ function SandboxHelpPage() {
 
             {/* ABA: SERVIÇOS & AUTH STATELESS */}
             <TabsContent value="services" className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">Autenticação Stateless e Tratamento de Sessão Expirada</CardTitle>
-                  <CardDescription className="text-neutral-500">Como o sistema unificou a validação em memória e o redirecionamento automático por resiliência.</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Autenticação Stateless e Tratamento de Sessão Expirada</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">Como o sistema unificou a validação em memória e o redirecionamento automático por resiliência.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion 
                     items={[
                       {
@@ -212,12 +214,12 @@ function SandboxHelpPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">Autenticação do Backoffice (Google Workspace + Auditoria)</CardTitle>
-                  <CardDescription className="text-neutral-500">Um mecanismo TOTALMENTE separado do stateless acima — usado só pelo painel administrativo interno, nunca pelo cliente final.</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Autenticação do Backoffice (Google Workspace + Auditoria)</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">Um mecanismo TOTALMENTE separado do stateless acima — usado só pelo painel administrativo interno, nunca pelo cliente final.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion
                     items={[
                       {
@@ -277,12 +279,12 @@ function SandboxHelpPage() {
 
             {/* ABA: EDGE FUNCTIONS & _SHARED */}
             <TabsContent value="edge" className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">Edge Functions em Deno, Borda Híbrida e _shared</CardTitle>
-                  <CardDescription className="text-neutral-500">Segurança de borda com suporte flexível a cabeçalhos e payloads protegidos.</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Edge Functions em Deno, Borda Híbrida e _shared</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">Segurança de borda com suporte flexível a cabeçalhos e payloads protegidos.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion 
                     items={[
                       {
@@ -319,12 +321,12 @@ function SandboxHelpPage() {
 
             {/* ABA: SEGURANÇA DE DADOS & FAST PATH */}
             <TabsContent value="dataflow" className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">"Thin Payload" e Hidratação Server-Side</CardTitle>
-                  <CardDescription className="text-neutral-500">A premissa da arquitetura: o front-end é cego e inconfiável. Nada que ele manda é aceito como verdade.</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">"Thin Payload" e Hidratação Server-Side</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">A premissa da arquitetura: o front-end é cego e inconfiável. Nada que ele manda é aceito como verdade.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion
                     items={[
                       {
@@ -349,12 +351,12 @@ function SandboxHelpPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">Gatekeepers — Escudo Anti-Fraude (Cross-Tampering Defense)</CardTitle>
-                  <CardDescription className="text-neutral-500">_shared/gatekeeper.ts — o portão que toda escrita precisa atravessar antes do motor de crédito ou da persistência serem acionados.</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Gatekeepers — Escudo Anti-Fraude (Cross-Tampering Defense)</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">_shared/gatekeeper.ts — o portão que toda escrita precisa atravessar antes do motor de crédito ou da persistência serem acionados.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion
                     items={[
                       {
@@ -378,12 +380,12 @@ function SandboxHelpPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">Motor Transacional (Fast Path TCP) — e por que ele não usa RLS</CardTitle>
-                  <CardDescription className="text-neutral-500">persist-data.ts — o executor atômico de escrita, e a justificativa técnica de por que o tráfego de cliente final não passa por Row Level Security.</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Motor Transacional (Fast Path TCP) — e por que ele não usa RLS</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">persist-data.ts — o executor atômico de escrita, e a justificativa técnica de por que o tráfego de cliente final não passa por Row Level Security.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion
                     items={[
                       {
@@ -422,12 +424,12 @@ function SandboxHelpPage() {
 
             {/* ABA: SEGREDOS & BLINDAGEM */}
             <TabsContent value="secrets" className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">Blindagem de Borda — registry.ts + server.ts</CardTitle>
-                  <CardDescription className="text-neutral-500">Como cada Edge Function declara seu próprio contrato de autenticação, e como isso é aplicado de forma centralizada antes do handler rodar.</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Blindagem de Borda — registry.ts + server.ts</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">Como cada Edge Function declara seu próprio contrato de autenticação, e como isso é aplicado de forma centralizada antes do handler rodar.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion
                     items={[
                       {
@@ -483,12 +485,12 @@ function SandboxHelpPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">Inventário de Segredos</CardTitle>
-                  <CardDescription className="text-neutral-500">O que cada segredo é, onde é usado e como recriar/rotacionar. Passo a passo completo (comandos prontos) em <code className={codeBadge}>supabase/functions/_shared/SECRETS.md</code>.</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Inventário de Segredos</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">O que cada segredo é, onde é usado e como recriar/rotacionar. Passo a passo completo (comandos prontos) em <code className={codeBadge}>supabase/functions/_shared/SECRETS.md</code>.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion
                     items={[
                       {
@@ -544,12 +546,12 @@ function SandboxHelpPage() {
 
             {/* ABA: BFF & ORCHESTRATOR */}
             <TabsContent value="orchestrator" className="space-y-6 animate-in fade-in duration-300">
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">Backend-for-Frontend (BFF) e Orchestrator</CardTitle>
-                  <CardDescription className="text-neutral-500">Como o motor de orquestração distribui regras e fluxos dinâmicos.</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Backend-for-Frontend (BFF) e Orchestrator</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">Como o motor de orquestração distribui regras e fluxos dinâmicos.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion 
                     items={[
                       {
@@ -580,12 +582,12 @@ function SandboxHelpPage() {
 
             {/* ABA: POSTGRESQL & RLS */}
             <TabsContent value="database" className="space-y-6 animate-in duration-300">
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">Modelo Relacional, RLS e Triggers (PostgreSQL)</CardTitle>
-                  <CardDescription className="text-neutral-500">Segurança de dados e estruturação de tabelas baseada nos scripts SQL de migração.</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">Modelo Relacional, RLS e Triggers (PostgreSQL)</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">Segurança de dados e estruturação de tabelas baseada nos scripts SQL de migração.</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion 
                     items={[
                       {
@@ -612,12 +614,12 @@ function SandboxHelpPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-neutral-200 shadow-sm rounded-none">
-                <CardHeader className="bg-white rounded-none border-b border-neutral-200 pb-5">
-                  <CardTitle className="text-lg text-neutral-800">RPC (Stored Procedures) & CRON Jobs</CardTitle>
-                  <CardDescription className="text-neutral-500">As duas peças que rodam DENTRO do Postgres — chamadas pelo front-end (RPC) ou pelo próprio banco, sozinho, num horário (pg_cron).</CardDescription>
+              <Card className="border-neutral-200 dark:border-neutral-800 shadow-sm rounded-none">
+                <CardHeader className="bg-white dark:bg-neutral-950 rounded-none border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                  <CardTitle className="text-lg text-neutral-800 dark:text-neutral-200">RPC (Stored Procedures) & CRON Jobs</CardTitle>
+                  <CardDescription className="text-neutral-500 dark:text-neutral-400">As duas peças que rodam DENTRO do Postgres — chamadas pelo front-end (RPC) ou pelo próprio banco, sozinho, num horário (pg_cron).</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-6 bg-neutral-50">
+                <CardContent className="pt-6 bg-neutral-50 dark:bg-neutral-900">
                   <HelpAccordion
                     items={[
                       {
