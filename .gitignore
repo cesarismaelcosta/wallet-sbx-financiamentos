@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Locais (não versionar)
+Claude outputs/
+test-db.mjs
