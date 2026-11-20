@@ -131,6 +131,14 @@ Regras:
   visualização de dado completo registrada (`log_pii_view`).
 - Auditoria: mudanças em `backoffice_users` registradas por trigger em `backoffice_user_details`.
 - Nenhum dado de cliente é lido pelo navegador direto das tabelas.
+- **IP do cliente**: sempre de `cf-connecting-ip` (definido pela Cloudflare) ou do IP assinado entre
+  funções (`_shared/client-ip.ts`); nunca de `x-client-ip` sem assinatura nem do 1º item do
+  `x-forwarded-for` como fonte principal (o cliente pode enviá-los). Vale para Edge Functions e
+  funções do banco (regra SBXW-17).
+- **Funções do banco documentadas no código**: várias RPCs/triggers têm o SQL ou o contrato descrito
+  em comentários (ex.: `backoffice.users.lazy.tsx`, `backoffice.consults.lazy.tsx`, `AuthContext.tsx`,
+  `_shared/registry.ts`). Toda migration que muda uma função atualiza também esses comentários,
+  com o nome do arquivo de migration.
 
 ## 8. Telas (padrão visual e de texto)
 

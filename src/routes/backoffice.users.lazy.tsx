@@ -54,9 +54,12 @@
  * -------------------------------------------------------------------------
  * Tabela backoffice_user_details (RLS ligada, policy só admin, sem grant para
  * anon/authenticated): 1 linha por ação sobre um usuário do backoffice.
- *   action: CREATE | ACTIVATE | DEACTIVATE | ROLE_CHANGE | PERMISSIONS_CHANGE
- *   old_values / new_values: retrato {role, is_active, allowed_partners,
+ *   action: CREATE | ACTIVATE | DEACTIVATE | ROLE_CHANGE | PERMISSIONS_CHANGE | SBX_LOGIN_CHANGE
+ *   old_values / new_values: retrato {role, is_active, sbx_login, allowed_partners,
  *   allowed_products} ANTES e DEPOIS da ação (CREATE: old_values = null).
+ *   [20261120210000]: backoffice_users recriada com sbx_login (login da Superbid,
+ *   único sem diferenciar maiúsculas) logo depois de email; CHECK de action inclui
+ *   SBX_LOGIN_CHANGE; mesma RLS (Leitura_Staff), permissões, triggers e FK.
  *   actor_email: quem fez — vem de backoffice_users.updated_by, que a edge
  *   function manage-backoffice-users preenche com o e-mail do admin logado.
  * Gravação: trigger trg_backoffice_user_details (AFTER INSERT/UPDATE em

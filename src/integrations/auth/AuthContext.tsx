@@ -15,6 +15,10 @@
  *    (País, Estado, Cidade, IP e Dispositivo) para a RPC `log_access_event`
  *    [2026-09-17: migrado da Edge Function `log-access`, que foi reaproveitada
  *    para outro papel — ver `supabase/functions/log-access/index.ts`].
+ *    [20261120220000]: a RPC pega o IP de `cf-connecting-ip` (Cloudflare) antes de
+ *    qualquer cabeçalho enviado pelo cliente — mesma regra SBXW-17 das Edge
+ *    Functions; `x-client-ip` não é mais lido. User-agent limitado a 500 caracteres.
+ *    Execução só para `authenticated`.
  * 3. {Memory Cache}: O `sessionStorage` atua como sentinela para impedir 
  *    remounts do React (Lazy Loading) de bombardearem o banco de dados.
  * 
