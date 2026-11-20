@@ -86,6 +86,19 @@ Edge Functions principais:
   - a tela mostra o erro padrão (`app-error`) com a mensagem do servidor.
 - Sem migration (tabela/coluna nova) sem aprovação explícita.
 
+### Migrations
+
+- Toda tabela nova ou recriada declara: RLS ligado, políticas, permissões
+  (`revoke all … from anon, authenticated` e depois só o necessário — o Supabase dá permissões
+  amplas a tabelas novas por padrão), triggers, chaves estrangeiras e índices.
+- Recriar tabela (ex.: posicionar coluna): copiar os dados antes de criar os triggers (não gera
+  auditoria falsa), recriar tudo com os mesmos nomes, rodar em uma transação (`begin`/`commit`).
+- Restrições de valores (ex.: `CHECK` de ações de auditoria) acompanham os valores novos.
+- Depois de rodar, conferir: contagem e dados, colunas, políticas, triggers, índices e permissões.
+- Funções `security definer` sempre com `search_path` fixo.
+- O SQL vai para `Claude outputs/` com nome datado (`AAAAMMDDHHMMSS_<tema>.sql`); o dono do projeto
+  roda em cada ambiente.
+
 ## 7. Segurança
 
 - **Nenhuma secret em arquivo** (código, `.md`, zip, SQL). Secrets só no Supabase (`Deno.env.get`).
@@ -96,6 +109,28 @@ Edge Functions principais:
 - Valores do cliente (preço, regra, limite) são sempre revalidados no servidor com o `rules` do banco,
   nunca com o que veio do navegador.
 - Nunca navegue para `/produtos` sem `visit_id`.
+
+### Modelo de segurança do banco
+
+Três tipos de acesso, sempre com RLS ligado em **todas** as tabelas de `public`:
+
+| Quem | Como acessa | O que pode |
+|---|---|---|
+| Cliente do hub (Superbid) | Nunca usa Supabase Auth. O navegador só chama Edge Functions (chave `anon`) com o token de sessão sbX. | `anon`: só leitura das tabelas de domínio (`category_types`, `financial_institutions`, `partners`, `product_types`, `result_partner_types`, `result_types`, `stage_types`, `status_types`). Nada de dados de clientes. |
+| Edge Functions | Validam sessão/assinatura (`withSecurity`, rate limit em `edge_rate_limits`) e acessam o banco no servidor (service role / conexão direta). | Leitura e gravação das jornadas, simulações, visitas e notificações. É o **único** caminho de escrita dos dados do hub. |
+| Usuário do backoffice | Supabase Auth (`authenticated`) + cadastro ativo em `backoffice_users`. | Acesso direto só de leitura a `backoffice_users` e às tabelas de domínio. Todo o resto por RPCs `get_backoffice_*` / `save_*` / `create_*` / `toggle_*` (`security definer`, `search_path` fixo) que checam o usuário (`is_current_user_backoffice`, `is_current_user_backoffice_admin`, `check_user_role`) e o escopo (`allowed_partners` / `allowed_products`). Gestão de usuários pela Edge Function `manage-backoffice-users` (só admin). |
+
+Regras:
+- Políticas: `Leitura_Staff` (leitura para admin/manager/viewer via `check_user_role`) e
+  `Acesso_Admin_Total` (só admin: domínios, auditoria de usuários, histórico de login).
+  Tabela sem política (ex.: `edge_rate_limits`) = só servidor.
+- Tabela nova de dados: **sem** permissão para `anon`/`authenticated`; leitura do backoffice por
+  RPC com checagem de usuário e escopo, nunca por `select` direto.
+- Perfis do backoffice: `admin`, `manager`, `viewer`. Telas e RPCs administrativas exigem `admin`.
+- Dados pessoais: mascarar com `mask_document` / `mask_email` / `mask_phone` nas RPCs de listagem;
+  visualização de dado completo registrada (`log_pii_view`).
+- Auditoria: mudanças em `backoffice_users` registradas por trigger em `backoffice_user_details`.
+- Nenhum dado de cliente é lido pelo navegador direto das tabelas.
 
 ## 8. Telas (padrão visual e de texto)
 
