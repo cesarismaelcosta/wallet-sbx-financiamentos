@@ -15,6 +15,9 @@
  *   dinâmica. Agora permite explicitamente enviar `["*"]` caso precise dar acesso total.
  * 
  * [MUTAÇÕES & DELEGAÇÃO SERVERLESS]:
+ * - Pedidos de acesso (quem entrou com Google e não é usuário): lista no topo, só admin.
+ *   "Liberar" abre o cadastro preenchido com o pedido (e-mail fixo) e chama `approve_request`;
+ *   "Recusar" pede o motivo (`reject_request`). A pessoa recebe e-mail nos dois casos.
  * - Operações críticas (Cadastrar, Mudar Cargo, Inativar e Editar Permissões) NUNCA 
  *   são realizadas via queries diretas no cliente (`.insert()` ou `.update()`).
  * - O frontend atua como um mensageiro (Dumb Client) e delega toda a intenção 
@@ -82,8 +85,9 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { 
   Loader2, Plus, RefreshCw, ShieldCheck, UserCheck, 
-  UserX, Info, Filter, ChevronDown, Settings2, History, KeyRound 
+  UserX, Info, Filter, ChevronDown, Settings2, History, KeyRound, Inbox 
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 import { Button } from "@/components/ui/button";
 import { GradientIcon } from "@/design-system/sbx-design-system-9f1c03/components/ui/gradient-icon";
@@ -134,6 +138,17 @@ type SelectOption = {
   name: string;
 };
 
+/** Pedido de acesso pendente (tabela backoffice_access_requests, via manage-backoffice-users). */
+type AccessRequestRow = {
+  id: string;
+  email: string;
+  name: string | null;
+  partners: string[];
+  products: string[];
+  reason: string;
+  requested_at: string;
+};
+
 const ROLE_BADGE: Record<Role, string> = {
   admin: "bg-accent text-foreground font-medium",
   manager: "bg-accent text-foreground font-medium",
@@ -144,6 +159,11 @@ const ROLE_BADGE: Record<Role, string> = {
 const MANAGE_ERRORS: Record<string, string> = {
   sbx_login_in_use: "Este login da Superbid já está cadastrado em outro usuário.",
   invalid_sbx_login: "Login da Superbid inválido: sem espaços, de 2 a 100 caracteres.",
+  email_in_use: "Este e-mail já está cadastrado.",
+  request_not_found: "Este pedido já foi analisado.",
+  invalid_reason: "Informe o motivo (até 500 caracteres).",
+  invalid_role: "Cargo inválido.",
+  database_error: "Erro ao gravar. Tente novamente.",
 };
 
 async function callManage(payload: Record<string, unknown>) {
@@ -203,6 +223,12 @@ function UsuariosPage() {
   const [sbxUser, setSbxUser] = useState<BackofficeUserRow | null>(null);
   const [sbxValue, setSbxValue] = useState("");
   const [isSavingSbx, setIsSavingSbx] = useState(false);
+  // Pedidos de acesso: lista pendente, pedido sendo liberado (usa o cadastro) e recusa
+  const [requests, setRequests] = useState<AccessRequestRow[]>([]);
+  const [approvingRequest, setApprovingRequest] = useState<AccessRequestRow | null>(null);
+  const [rejectingRequest, setRejectingRequest] = useState<AccessRequestRow | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
 
   const isAdmin = backofficeUser?.role === "admin";
 
@@ -228,9 +254,64 @@ function UsuariosPage() {
       setPartnersList(data.partners || []);
       setProductsList(data.products || []);
     }
+
+    try {
+      const result = (await callManage({ action: "list_requests" })) as { requests?: AccessRequestRow[] };
+      setRequests(result?.requests || []);
+    } catch {
+      setRequests([]);
+    }
     
     setLoading(false);
   }
+
+  /** Liberar: abre o cadastro preenchido com o pedido (e-mail fixo). */
+  function openApprove(r: AccessRequestRow) {
+    const [prefix, domain] = r.email.split("@");
+    setApprovingRequest(r);
+    setregisterData({
+      name: r.name || "",
+      emailPrefix: prefix || "",
+      domain: domain || "",
+      role: "viewer",
+      sbxLogin: "",
+      partners: r.partners || [],
+      products: r.products || [],
+    });
+    setregisterOpen(true);
+  }
+
+  function closeRegister(open: boolean) {
+    setregisterOpen(open);
+    if (!open) {
+      setApprovingRequest(null);
+      setregisterData({ name: "", emailPrefix: "", domain: "", role: "viewer", sbxLogin: "", partners: [], products: [] });
+    }
+  }
+
+  async function handleReject() {
+    if (!rejectingRequest) return;
+    const reason = rejectReason.trim();
+    if (!reason) {
+      toast.error("Informe o motivo da recusa.");
+      return;
+    }
+    setIsRejecting(true);
+    try {
+      await callManage({ action: "reject_request", id: rejectingRequest.id, reason });
+      toast.success("Pedido recusado. A pessoa foi avisada por e-mail.");
+      setRejectingRequest(null);
+      setRejectReason("");
+      load();
+    } catch (caught: unknown) {
+      toast.error((caught as Error).message || "Erro ao recusar pedido");
+    } finally {
+      setIsRejecting(false);
+    }
+  }
+
+  const optionNames = (options: SelectOption[], ids: string[]) =>
+    ids.map((id) => options.find((o) => String(o.id) === String(id))?.name || id).join(", ");
 
   const togglePartner = (id: string) => {
     setregisterData((prev) => {
@@ -286,6 +367,22 @@ function UsuariosPage() {
     try {
       const allowed_partners = (registerData.role === "admin" || registerData.role === "manager") ? ["*"] : registerData.partners;
       const allowed_products = (registerData.role === "admin" || registerData.role === "manager") ? ["*"] : registerData.products;
+
+      if (approvingRequest) {
+        await callManage({
+          action: "approve_request",
+          id: approvingRequest.id,
+          name: registerData.name,
+          role: registerData.role,
+          sbx_login: registerData.sbxLogin.trim() || null,
+          allowed_partners,
+          allowed_products,
+        });
+        toast.success("Acesso liberado. A pessoa foi avisada por e-mail.");
+        closeRegister(false);
+        load();
+        return;
+      }
 
       await callManage({
         action: "register",
@@ -407,6 +504,7 @@ function UsuariosPage() {
           <div className="space-y-2">
             <Label className="text-foreground text-xs">E-mail (Prefixo)</Label>
             <Input
+              disabled={!!approvingRequest}
               value={registerData.emailPrefix}
               onChange={(e) => setregisterData({ ...registerData, emailPrefix: e.target.value })}
               className="rounded-none border-border focus-visible:ring-1 focus-visible:ring-foreground focus-visible:border-foreground text-xs"
@@ -415,6 +513,7 @@ function UsuariosPage() {
           <div className="space-y-2">
             <Label className="text-foreground text-xs">Domínio</Label>
             <Select
+              disabled={!!approvingRequest}
               value={registerData.domain}
               onValueChange={(v) => setregisterData({ ...registerData, domain: v })}
             >
@@ -588,10 +687,10 @@ function UsuariosPage() {
       </div>
 
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
-        <Button variant="outline" onClick={() => setregisterOpen(false)} className="w-full sm:w-auto h-10 rounded-none border-border text-foreground text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
+        <Button variant="outline" onClick={() => closeRegister(false)} className="w-full sm:w-auto h-10 rounded-none border-border text-foreground text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
         <Button onClick={handleRegister} disabled={isSaving} className="cta-gradient border-0 w-full sm:w-auto text-white h-10 rounded-none font-medium text-xs">
-          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-          Cadastrar
+          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : approvingRequest ? <UserCheck className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
+          {approvingRequest ? "Liberar acesso" : "Cadastrar"}
         </Button>
       </div>
     </>
@@ -775,21 +874,21 @@ function UsuariosPage() {
       </div>
 
       {isMobile ? (
-        <Sheet open={registerOpen} onOpenChange={setregisterOpen}>
+        <Sheet open={registerOpen} onOpenChange={closeRegister}>
           <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-card border-t border-border">
             <SheetHeader className="text-left mb-4">
-              <SheetTitle className="text-foreground text-base">Cadastrar novo usuário</SheetTitle>
-              <SheetDescription className="text-muted-foreground text-xs">Preencha os dados abaixo para criar o acesso.</SheetDescription>
+              <SheetTitle className="text-foreground text-base">{approvingRequest ? "Liberar acesso" : "Cadastrar novo usuário"}</SheetTitle>
+              <SheetDescription className="text-muted-foreground text-xs">{approvingRequest ? "Confira o pedido e ajuste cargo, parceiros e produtos." : "Preencha os dados abaixo para criar o acesso."}</SheetDescription>
             </SheetHeader>
             {renderRegisterContent()}
           </SheetContent>
         </Sheet>
       ) : (
-        <Dialog open={registerOpen} onOpenChange={setregisterOpen}>
+        <Dialog open={registerOpen} onOpenChange={closeRegister}>
           <DialogContent className="max-w-xl rounded-none sm:rounded-none bg-card border-border">
             <DialogHeader>
-              <DialogTitle className="text-foreground text-base">Cadastrar novo usuário</DialogTitle>
-              <DialogDescription className="text-muted-foreground text-xs">Preencha os dados abaixo para criar o acesso.</DialogDescription>
+              <DialogTitle className="text-foreground text-base">{approvingRequest ? "Liberar acesso" : "Cadastrar novo usuário"}</DialogTitle>
+              <DialogDescription className="text-muted-foreground text-xs">{approvingRequest ? "Confira o pedido e ajuste cargo, parceiros e produtos." : "Preencha os dados abaixo para criar o acesso."}</DialogDescription>
             </DialogHeader>
             {renderRegisterContent()}
           </DialogContent>
@@ -847,6 +946,62 @@ function UsuariosPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {isAdmin && requests.length > 0 && (
+        <div className="rounded-none border border-border bg-card shadow-xs">
+          <div className="flex items-center gap-2 border-b border-border bg-accent px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <Inbox className="h-3.5 w-3.5" /> Pedidos de acesso ({requests.length})
+          </div>
+          <ul className="divide-y divide-border">
+            {requests.map((r) => (
+              <li key={r.id} className="flex flex-col gap-3 px-3 py-3 text-xs sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <div className="font-medium text-foreground">{r.name || r.email}</div>
+                  <div className="text-[11px] text-muted-foreground">{r.email} · {new Date(r.requested_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</div>
+                  <div><span className="text-muted-foreground">Parceiros: </span>{optionNames(partnersList, r.partners)}</div>
+                  <div><span className="text-muted-foreground">Produtos: </span>{optionNames(productsList, r.products)}</div>
+                  <div className="break-words"><span className="text-muted-foreground">Motivo: </span>{r.reason}</div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button variant="outline" size="sm" onClick={() => { setRejectingRequest(r); setRejectReason(""); }} className="h-8 rounded-none border-border text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
+                    <UserX className="mr-1.5 h-3.5 w-3.5" /> Recusar
+                  </Button>
+                  <Button size="sm" onClick={() => openApprove(r)} className="cta-gradient h-8 rounded-none border-0 text-xs text-white">
+                    <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Liberar
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <Dialog open={!!rejectingRequest} onOpenChange={(open) => !open && setRejectingRequest(null)}>
+        <DialogContent className="max-w-md rounded-none sm:rounded-none bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground text-base">Recusar pedido</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs">
+              Pedido de <strong className="font-medium text-foreground">{rejectingRequest?.name || rejectingRequest?.email}</strong>. O motivo vai no e-mail para a pessoa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label className="text-foreground text-xs">Motivo</Label>
+            <Textarea
+              value={rejectReason}
+              maxLength={500}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="rounded-none border-border text-xs"
+            />
+          </div>
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-2">
+            <Button variant="outline" onClick={() => setRejectingRequest(null)} className="w-full sm:w-auto h-10 rounded-none border-border text-foreground text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">Cancelar</Button>
+            <Button onClick={handleReject} disabled={isRejecting} className="cta-gradient border-0 w-full sm:w-auto text-white font-medium h-10 rounded-none text-xs">
+              {isRejecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Recusar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="overflow-hidden rounded-none border border-border bg-card shadow-xs">
         <div className="overflow-x-auto w-full pb-2">

@@ -15,12 +15,20 @@
  * 4. Login Superbid (`sbx_login`): login do usuário interno na Superbid; mostra o link "Backoffice"
  *    no menu do avatar do hub (ver `_shared/backoffice-access.ts`). Opcional, sem espaços,
  *    2 a 100 caracteres, único sem diferenciar maiúsculas (índice backoffice_users_sbx_login_key).
+ * 5. Pedido de acesso (tabela `backoffice_access_requests`, migração 20261123100000):
+ *    - `my_access_request` / `request_access`: qualquer pessoa logada com GOOGLE, e-mail num domínio
+ *      ativo de `allowed_email_domains` e fora de `backoffice_users`. Pede parceiros, produtos e motivo;
+ *      um pedido pendente por vez; e-mail aos admins ativos.
+ *    - `list_requests` / `approve_request` / `reject_request`: só admin. Liberar cria o usuário
+ *      (mesma regra do `register`, e-mail do pedido) e avisa a pessoa; recusar exige motivo e avisa.
+ *    E-mails: `_shared/backoffice-access-email.ts` (notification_outbox, context_type BACKOFFICE_ACCESS).
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
+import { queueAccessEmail } from "../_shared/backoffice-access-email.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -68,8 +76,88 @@ interface SetSbxLoginPayload {
   sbx_login: string | null;
 }
 interface ListPayload { action: "list"; }
+interface MyAccessRequestPayload { action: "my_access_request"; }
+interface RequestAccessPayload {
+  action: "request_access";
+  partners: string[];
+  products: string[];
+  reason: string;
+}
+interface ListRequestsPayload { action: "list_requests"; }
+interface ApproveRequestPayload {
+  action: "approve_request";
+  id: string;
+  name: string;
+  role: Role;
+  allowed_partners?: string[];
+  allowed_products?: string[];
+  sbx_login?: string | null;
+}
+interface RejectRequestPayload { action: "reject_request"; id: string; reason: string; }
 
-type Payload = RegisterPayload | SetActivePayload | SetRolePayload | UpdatePermissionsPayload | SetSbxLoginPayload | ListPayload;
+type Payload = RegisterPayload | SetActivePayload | SetRolePayload | UpdatePermissionsPayload | SetSbxLoginPayload | ListPayload
+  | MyAccessRequestPayload | RequestAccessPayload | ListRequestsPayload | ApproveRequestPayload | RejectRequestPayload;
+
+/** Ações de quem ainda não é usuário do backoffice (pedido de acesso). */
+const REQUESTER_ACTIONS = new Set(["my_access_request", "request_access"]);
+
+/** Lista de ids (texto), só os que existem em `valid`, sem repetir. */
+function pickIds(value: unknown, valid: Set<string>): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((v) => String(v)).filter((v) => valid.has(v)))];
+}
+
+/** Parceiros e produtos (id + nome) para a tela do pedido e para os e-mails. */
+async function loadCatalog() {
+  const [{ data: partners }, { data: products }] = await Promise.all([
+    adminClient.from("partners").select("id, name").order("name"),
+    adminClient.from("product_types").select("id, name").order("name"),
+  ]);
+  const toOptions = (rows: { id: number | string; name: string }[] | null) =>
+    (rows || []).map((r) => ({ id: String(r.id), name: r.name }));
+  return { partners: toOptions(partners), products: toOptions(products) };
+}
+
+/** Nomes dos ids (para o e-mail); id sem nome fica como está. */
+function namesOf(ids: string[], options: { id: string; name: string }[]) {
+  return ids.map((id) => options.find((o) => o.id === id)?.name || id);
+}
+
+/** E-mail para `ilike` exato (sem curingas % e _). */
+const likeExact = (value: string) => value.replace(/[\\%_]/g, "\\$&");
+
+/** E-mails dos admins ativos (destinatários do pedido). */
+async function adminEmails(): Promise<string[]> {
+  const { data } = await adminClient.from("backoffice_users").select("email").eq("role", "admin").eq("is_active", true);
+  return (data || []).map((r: { email: string }) => r.email);
+}
+
+/**
+ * Quem pede acesso: sessão válida, login pelo GOOGLE, e-mail de domínio ativo em
+ * `allowed_email_domains` e ainda fora de `backoffice_users`.
+ */
+async function ensureRequester(authHeader: string | null) {
+  if (!authHeader) return { ok: false as const, status: 401, error: "missing_authorization" };
+  const token = authHeader.replace(/bearer\s+/i, "").trim();
+  const userClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: { user }, error } = await userClient.auth.getUser(token);
+  if (error || !user?.email) return { ok: false as const, status: 401, error: "unauthenticated" };
+  if (user.app_metadata?.provider !== "google") return { ok: false as const, status: 403, error: "google_only" };
+
+  const email = user.email.toLowerCase();
+  const domain = email.split("@")[1] || "";
+  const { data: domainRow } = await adminClient
+    .from("allowed_email_domains").select("domain").eq("domain", domain).eq("is_active", true).maybeSingle();
+  if (!domainRow) return { ok: false as const, status: 403, error: "domain_not_allowed" };
+
+  const { data: existing } = await adminClient
+    .from("backoffice_users").select("id").ilike("email", likeExact(email)).maybeSingle();
+  if (existing) return { ok: false as const, status: 409, error: "already_registered" };
+
+  const meta = (user.user_metadata || {}) as Record<string, unknown>;
+  const name = String(meta.full_name || meta.name || "").trim().slice(0, 200) || null;
+  return { ok: true as const, email, name };
+}
 
 /** Login Superbid normalizado: vazio = null; inválido (espaço, tamanho) = undefined. */
 function normalizeSbxLogin(value: unknown): string | null | undefined {
@@ -79,12 +167,19 @@ function normalizeSbxLogin(value: unknown): string | null | undefined {
   return /^\S{2,100}$/.test(login) ? login : undefined;
 }
 
-/** Erro de gravação → resposta: login já usado por outro usuário = 409 sbx_login_in_use. */
+/**
+ * Erro de gravação → resposta. Login já usado = 409 sbx_login_in_use; e-mail já cadastrado =
+ * 409 email_in_use. Demais: 500 genérico (a mensagem do banco fica só no log, não vai ao navegador).
+ */
 function writeError(error: { code?: string; message: string }) {
   if (error.code === "23505" && /sbx_login/.test(error.message)) {
     return { status: 409, data: { error: "sbx_login_in_use" } };
   }
-  return { status: 500, data: { error: error.message } };
+  if (error.code === "23505" && /email/.test(error.message)) {
+    return { status: 409, data: { error: "email_in_use" } };
+  }
+  debugLog("[manage-backoffice-users] Erro de banco:", error.message);
+  return { status: 500, data: { error: "database_error" } };
 }
 
 /**
@@ -145,6 +240,55 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
     return { status: 400, data: { error: "invalid_json" } };
   }
 
+  // Pedido de acesso: quem ainda não é usuário do backoffice
+  if (REQUESTER_ACTIONS.has(payload.action)) {
+    const requester = await ensureRequester(req.headers.get("Authorization"));
+    if (!requester.ok) return { status: requester.status, data: { error: requester.error } };
+
+    const catalog = await loadCatalog();
+    const { data: last } = await adminClient
+      .from("backoffice_access_requests")
+      .select("id, status, partners, products, reason, rejected_reason, requested_at, decided_at")
+      .ilike("email", likeExact(requester.email))
+      .order("requested_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (payload.action === "my_access_request") {
+      return { status: 200, data: { email: requester.email, name: requester.name, request: last || null, ...catalog } };
+    }
+
+    // request_access
+    if (last?.status === "pending") return { status: 409, data: { error: "request_pending" } };
+    const p = payload as RequestAccessPayload;
+    const partners = pickIds(p.partners, new Set(catalog.partners.map((o) => o.id)));
+    const products = pickIds(p.products, new Set(catalog.products.map((o) => o.id)));
+    const reason = String(p.reason ?? "").trim();
+    if (!partners.length || !products.length) return { status: 400, data: { error: "invalid_scope" } };
+    if (reason.length < 1 || reason.length > 500) return { status: 400, data: { error: "invalid_reason" } };
+
+    const { data: created, error } = await adminClient
+      .from("backoffice_access_requests")
+      .insert({ email: requester.email, name: requester.name, partners, products, reason })
+      .select("id, status, partners, products, reason, rejected_reason, requested_at, decided_at")
+      .single();
+    if (error) {
+      if (error.code === "23505") return { status: 409, data: { error: "request_pending" } };
+      return { status: 500, data: { error: "request_failed" } };
+    }
+
+    await queueAccessEmail(adminClient, {
+      kind: "pedido",
+      to: await adminEmails(),
+      name: requester.name,
+      email: requester.email,
+      partners: namesOf(partners, catalog.partners),
+      products: namesOf(products, catalog.products),
+      reason,
+    });
+    return { status: 200, data: { request: created } };
+  }
+
   // Barreira de segurança global para todas as ações administrativas
   const adminCheck = await ensureAdmin(req.headers.get("Authorization"));
   if (!adminCheck.ok) {
@@ -159,7 +303,7 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
         .select("*")
         .order("created_at", { ascending: false });
         
-      if (error) return { status: 500, data: { error: error.message } };
+      if (error) return writeError(error);
       return { status: 200, data: { users: data } };
     }
 
@@ -187,6 +331,14 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
         .select().single();
         
       if (error) return writeError(error);
+
+      // Cadastro direto de quem tinha pedido pendente: o pedido fica como liberado
+      await adminClient
+        .from("backoffice_access_requests")
+        .update({ status: "approved", decided_at: new Date().toISOString(), decided_by: adminCheck.email })
+        .ilike("email", likeExact(email))
+        .eq("status", "pending");
+
       return { status: 200, data: { user: data } };
     }
 
@@ -212,7 +364,7 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
         .eq("id", payload.id)
         .single();
 
-      if (fetchErr) return { status: 500, data: { error: fetchErr.message } };
+      if (fetchErr) return writeError(fetchErr);
 
       const { data, error } = await adminClient
         .from("backoffice_users")
@@ -220,7 +372,7 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
         .eq("id", payload.id)
         .select().single();
         
-      if (error) return { status: 500, data: { error: error.message } };
+      if (error) return writeError(error);
 
       // [KILL SWITCH]: Se o admin desativou o usuário, revoga a sessão imediatamente
       if (payload.is_active === false) {
@@ -257,7 +409,7 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
         .eq("id", payload.id)
         .select().single();
         
-      if (error) return { status: 500, data: { error: error.message } };
+      if (error) return writeError(error);
       return { status: 200, data: { user: data } };
     }
 
@@ -273,11 +425,100 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
         .eq("id", payload.id)
         .select().single();
         
-      if (error) return { status: 500, data: { error: error.message } };
+      if (error) return writeError(error);
       return { status: 200, data: { user: data } };
+    }
+
+    // Pedidos de acesso pendentes (mais antigos primeiro)
+    case "list_requests": {
+      const { data, error } = await adminClient
+        .from("backoffice_access_requests")
+        .select("id, email, name, partners, products, reason, requested_at")
+        .eq("status", "pending")
+        .order("requested_at", { ascending: true });
+      if (error) return { status: 500, data: { error: "list_requests_failed" } };
+      return { status: 200, data: { requests: data } };
+    }
+
+    // Libera: cria o usuário com o e-mail do pedido (mesma regra do register) e avisa a pessoa
+    case "approve_request": {
+      if (!["admin", "manager", "viewer"].includes(payload.role)) {
+        return { status: 400, data: { error: "invalid_role" } };
+      }
+      const sbxLogin = normalizeSbxLogin(payload.sbx_login);
+      if (sbxLogin === undefined) return { status: 400, data: { error: "invalid_sbx_login" } };
+
+      const { data: request } = await adminClient
+        .from("backoffice_access_requests").select("*").eq("id", payload.id).eq("status", "pending").maybeSingle();
+      if (!request) return { status: 404, data: { error: "request_not_found" } };
+
+      const fullScope = payload.role === "admin" || payload.role === "manager";
+      const allowed_partners = fullScope ? ["*"] : (payload.allowed_partners || []);
+      const allowed_products = fullScope ? ["*"] : (payload.allowed_products || []);
+
+      const { data: user, error } = await adminClient
+        .from("backoffice_users")
+        .insert({
+          email: String(request.email).toLowerCase(),
+          name: String(payload.name || request.name || "").trim() || null,
+          sbx_login: sbxLogin,
+          role: payload.role,
+          is_active: true,
+          updated_by: adminCheck.email,
+          allowed_partners,
+          allowed_products,
+        })
+        .select().single();
+      if (error) {
+        return writeError(error);
+      }
+
+      await adminClient
+        .from("backoffice_access_requests")
+        .update({ status: "approved", decided_at: new Date().toISOString(), decided_by: adminCheck.email })
+        .eq("id", request.id);
+
+      const catalog = await loadCatalog();
+      await queueAccessEmail(adminClient, {
+        kind: "liberado",
+        to: [request.email],
+        name: user.name,
+        email: request.email,
+        role: payload.role,
+        partners: namesOf(allowed_partners, catalog.partners),
+        products: namesOf(allowed_products, catalog.products),
+      });
+      return { status: 200, data: { user } };
+    }
+
+    // Recusa com motivo e avisa a pessoa (ela pode pedir de novo)
+    case "reject_request": {
+      const reason = String(payload.reason ?? "").trim();
+      if (reason.length < 1 || reason.length > 500) return { status: 400, data: { error: "invalid_reason" } };
+
+      const { data: request, error } = await adminClient
+        .from("backoffice_access_requests")
+        .update({ status: "rejected", rejected_reason: reason, decided_at: new Date().toISOString(), decided_by: adminCheck.email })
+        .eq("id", payload.id)
+        .eq("status", "pending")
+        .select("*")
+        .maybeSingle();
+      if (error) return { status: 500, data: { error: "reject_failed" } };
+      if (!request) return { status: 404, data: { error: "request_not_found" } };
+
+      await queueAccessEmail(adminClient, {
+        kind: "recusado",
+        to: [request.email],
+        name: request.name,
+        email: request.email,
+        partners: [],
+        products: [],
+        reason,
+      });
+      return { status: 200, data: { ok: true } };
     }
 
     default:
       return { status: 400, data: { error: "unknown_action" } };
   }
-}));
+}));

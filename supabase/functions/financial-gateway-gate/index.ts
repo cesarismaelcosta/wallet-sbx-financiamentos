@@ -22,6 +22,11 @@
  * 4. Roteamento Rápido: Repassa o ID da oferta para o Orquestrador (que fará a busca condicional).
  * 5. Emissão Stateless: Handoff seguro via fragmento da URL (Zero-Trust).
  *
+ * [ALERTAS]: todo erro do gate (inclusive SESSION_EXPIRED) dispara o alerta de sistema
+ * aqui, no servidor (`sendSystemAlert`, `_shared/alert.ts`), antes de responder. A tela
+ * `/financialGatewayGate` não envia mais alerta: sem sessão ainda criada, a chamada dela
+ * ao `notification-system-message` voltava 401 e o alerta se perdia.
+ *
  * @author César Ismael Pereira da Costa
  * @author Gemini Pro
  */
@@ -32,6 +37,8 @@ import { hasBackofficeAccess } from "../_shared/backoffice-access.ts";
 import { getEdgeClientIp, signedClientIpHeaders } from "../_shared/client-ip.ts";
 import { withSecurity } from "../_shared/server.ts";
 import { debugLog } from "../_shared/logger.ts";
+import { sendSystemAlert } from "../_shared/alert.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getSafeRedirectUrl, getSafeCorsOrigin } from "../_shared/security.ts";
 import type { BFFUserProfile, UpstreamDocument, UpstreamPhone } from "../_shared/types.ts";
 
@@ -115,7 +122,7 @@ serve(
         });
       }
     } catch (e) {
-      return respondWithError(
+      return await respondWithError(
         isAjax,
         400,
         "BAD_REQUEST",
@@ -153,7 +160,7 @@ serve(
     }
 
     if (!inputToken) {
-      return respondWithError(
+      return await respondWithError(
         isAjax,
         400,
         "BAD_REQUEST",
@@ -446,12 +453,53 @@ serve(
       }
 
       payload.entity_id = userId || null;
-      return respondWithError(isAjax, statusCode, errorCode, err.message, safeReturnUri, req, payload);
+      return await respondWithError(isAjax, statusCode, errorCode, err.message, safeReturnUri, req, payload);
     }
   }),
 );
 
-function respondWithError(
+/**
+ * Alerta de sistema de um erro do gate (todos os códigos). Só campos não sensíveis do
+ * payload (lista permitida): nunca auth_token. Não lança: falha no alerta não muda a resposta.
+ */
+async function alertGateError(
+  statusCode: number,
+  code: string,
+  message: string,
+  req: Request,
+  originalPayload: Record<string, unknown>,
+): Promise<void> {
+  const details: Record<string, unknown> = {};
+  for (const key of [
+    "environment", "offer_id", "product_id", "entity_id", "return_uri",
+    "utm_source", "utm_medium", "utm_campaign", "target_url",
+  ]) {
+    const value = originalPayload?.[key];
+    if (value !== undefined && value !== null && value !== "") details[key] = value;
+  }
+  try {
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      auth: { persistSession: false },
+    });
+    await sendSystemAlert(supabase, {
+      context: "financial-gateway-gate",
+      subject: `Erro de Jornada no Gate: ${code}`,
+      message: message || `Erro de jornada no gate (código ${code}).`,
+      rawPayload: {
+        error_code: code,
+        http_status: statusCode,
+        client_ip: getEdgeClientIp(req),
+        user_agent: (req.headers.get("user-agent") || "").slice(0, 500),
+        ...details,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (caught: unknown) {
+    debugLog("[financial-gateway-gate] Falha ao disparar alerta:", (caught as Error)?.message);
+  }
+}
+
+async function respondWithError(
   isAjax: boolean,
   statusCode: number,
   code: string,
@@ -459,7 +507,8 @@ function respondWithError(
   safeReturnUri: string,
   req: Request,
   originalPayload: Record<string, unknown> = {},
-): Response {
+): Promise<Response> {
+  await alertGateError(statusCode, code, message, req, originalPayload);
   const headers = new Headers();
   headers.set(
     "Access-Control-Allow-Origin",

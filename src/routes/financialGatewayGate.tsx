@@ -21,7 +21,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
-import { logSystemError } from "@/services/systemNotification";
 
 interface SearchSchema {
   status?: string;
@@ -87,34 +86,14 @@ export const Route = createFileRoute("/financialGatewayGate")({
   }),
 
   component: function FinancialGatewayErrorScreen() {
-    const { status, code, message, return_uri, offer_id, product_id, entity_id } = Route.useSearch();
+    const { code, return_uri } = Route.useSearch();
     const [countdown, setCountdown] = useState(5);
 
     // return_uri já chega sanitizado (relativo ou undefined) via sanitizeReturnUri em validateSearch.
     const targetReturnUrl = return_uri && return_uri !== "/" ? return_uri : "/";
 
-    // =====================================================================
-    // [AUDITORIA E TELEMETRIA]: Registro centralizado de falhas de jornada
-    // =====================================================================
-    useEffect(() => {
-      if (status === "error") {
-        logSystemError({
-          context: "Gateway Redirect (financialGatewayGate)",
-          subject: `Erro de Jornada: ${code || "UNKNOWN"}`,
-          // [F20]: detalhe técnico fica nos logs do gate; a URL traz só o código.
-          message: message || `Erro de jornada no gate (código ${code || "UNKNOWN"}). Detalhes nos logs da function financial-gateway-gate.`,
-          raw_payload: {
-            error_code: code || null,
-            entity_id: entity_id || null,
-            offer_id: offer_id || null,
-            product_id: product_id || null,
-            metadata: {
-              origin_url: targetReturnUrl,
-            },
-          },
-        });
-      }
-    }, [status, code, message, targetReturnUrl, offer_id, product_id, entity_id]);
+    // [ALERTAS]: o alerta do erro sai no servidor, pelo próprio financial-gateway-gate
+    // (sendSystemAlert). Esta tela não envia: sem sessão ainda, a chamada voltava 401.
 
     // =====================================================================
     // [CONTROLE DE FLUXO]: Temporizador regressivo para redirecionamento automático

@@ -18,6 +18,10 @@
  *    [20261120220000]: a RPC pega o IP de `cf-connecting-ip` (Cloudflare) antes de
  *    qualquer cabeçalho enviado pelo cliente — mesma regra SBXW-17 das Edge
  *    Functions; `x-client-ip` não é mais lido. User-agent limitado a 500 caracteres.
+ * 3. {Pedido de acesso}: quem entra com Google e NÃO está em `backoffice_users`
+ *    (`user_does_not_exist`) mantém a sessão do Supabase só para pedir acesso
+ *    (`accessRequestEmail`); não vê nada do backoffice (as RPCs e o RLS exigem
+ *    usuário ativo). Usuário inativo continua sendo desconectado.
  *    Execução só para `authenticated`.
  * 3. {Memory Cache}: O `sessionStorage` atua como sentinela para impedir 
  *    remounts do React (Lazy Loading) de bombardearem o banco de dados.
@@ -97,6 +101,8 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   validateUserAccess: (session: Session) => Promise<void>;
   clearDomainError: () => void;
+  /** E-mail logado com Google que ainda não é usuário do backoffice (pode pedir acesso). */
+  accessRequestEmail: string | null;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -108,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [backofficeUser, setBackofficeUser] = useState<BackofficeUser | null>(null);
   const [isBackofficeAllowed, setIsBackofficeAllowed] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
+  const [accessRequestEmail, setAccessRequestEmail] = useState<string | null>(null);
 
   // Trava para evitar disparos duplicados de log na mesma sessão de navegação
   const hasLoggedThisSession = useRef(false);
@@ -137,6 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(null);
           setBackofficeUser(null);
           setIsBackofficeAllowed(false);
+          setAccessRequestEmail(null);
           setAuthLoading(false);
           sessionStorage.removeItem('auth_validated_once');
           hasLoggedThisSession.current = false;
@@ -179,7 +187,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (rpcError || jsonError) {
       console.error("🚨 [AuthGuard] - Acesso Recusado:", errorMsg);
-      setDomainError(errorMsg?.includes('user_inactive') ? "Usuário inativo." : "Acesso corporativo negado.");
+      const canRequest = jsonError === 'user_does_not_exist';
+      setDomainError(canRequest ? null : errorMsg?.includes('user_inactive') ? "Usuário inativo." : "Acesso corporativo negado.");
       
       // 2. Auditoria de Falha via RPC (Captura Geolocalização Completa na Borda)
       if (!hasLoggedThisSession.current) {
@@ -200,10 +209,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         hasLoggedThisSession.current = true;
       }
 
-      await supabase.auth.signOut();
       setBackofficeUser(null);
       setIsBackofficeAllowed(false);
       sessionStorage.removeItem('auth_validated_once');
+      if (canRequest) {
+        // Mantém a sessão só para o pedido de acesso (tela de login)
+        setSession(session);
+        setAccessRequestEmail(email || null);
+      } else {
+        setAccessRequestEmail(null);
+        await supabase.auth.signOut();
+      }
     } else if (userData) {  
       // 2. Auditoria de Sucesso via RPC (Captura Geolocalização Completa na Borda)
       if (!hasLoggedThisSession.current) {
@@ -220,6 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       setBackofficeUser(userData as unknown as BackofficeUser);
+      setAccessRequestEmail(null);
       setIsBackofficeAllowed(true); 
       setSession(session);
       sessionStorage.setItem('auth_validated_once', 'true');
@@ -257,6 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setBackofficeUser(null);
     setIsBackofficeAllowed(false);
+    setAccessRequestEmail(null);
     sessionStorage.removeItem('auth_validated_once');
   }, []);
 
@@ -271,7 +289,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithGoogle, 
       signOut, 
       validateUserAccess, 
-      clearDomainError: () => setDomainError(null) 
+      clearDomainError: () => setDomainError(null),
+      accessRequestEmail,
     }}>
       {children}
     </AuthContext.Provider>
