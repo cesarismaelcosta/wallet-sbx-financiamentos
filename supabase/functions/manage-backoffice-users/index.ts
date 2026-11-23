@@ -24,6 +24,36 @@
  *      category_types.product_id) para os produtos pedidos; a tela de liberação já os marca. Liberar cria o usuário
  *      (mesma regra do `register`, e-mail do pedido) e avisa a pessoa; recusar exige motivo e avisa.
  *    E-mails: `_shared/backoffice-access-email.ts` (notification_outbox, context_type BACKOFFICE_ACCESS).
+ *
+ * -------------------------------------------------------------------------
+ * [BANCO] backoffice_access_requests — migração 20261123100000
+ * -------------------------------------------------------------------------
+ * CREATE TABLE public.backoffice_access_requests (
+ *   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   email text NOT NULL,
+ *   name text,
+ *   partners jsonb NOT NULL DEFAULT '[]',   -- não usado no pedido (só produtos); fica []
+ *   products jsonb NOT NULL DEFAULT '[]',   -- ids de product_types pedidos
+ *   reason text NOT NULL CHECK (length(btrim(reason)) BETWEEN 1 AND 500),
+ *   status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+ *   rejected_reason text,
+ *   requested_at timestamptz NOT NULL DEFAULT now(),
+ *   decided_at timestamptz,
+ *   decided_by text                         -- e-mail do admin que liberou/recusou
+ * );
+ * CREATE UNIQUE INDEX backoffice_access_requests_pending_key ON ... (lower(email)) WHERE status = 'pending';
+ * CREATE INDEX idx_backoffice_access_requests_email ON ... (lower(email), requested_at DESC);
+ * ALTER TABLE ... ENABLE ROW LEVEL SECURITY;   -- navegador não lê nem grava
+ * CREATE POLICY "Sem_Acesso_Direto" ON ... AS RESTRICTIVE FOR ALL TO anon, authenticated
+ *   USING (false) WITH CHECK (false);         -- migração 20261123110000
+ * REVOKE ALL ON ... FROM public, anon, authenticated;
+ * GRANT ALL ON ... TO service_role;            -- só esta Edge Function (service_role)
+ *
+ * Na mesma migração: os admins de backoffice_users viram manager, menos cesar.costa e
+ * joao.freitas (auditoria ROLE_CHANGE pela trigger); e o CHECK de context_type de
+ * notification_outbox e notifications passa a aceitar 'BACKOFFICE_ACCESS'.
+ * Lê também (service_role): orchestrator_configs (partner_id, config_type, lookup_id, is_active),
+ * category_types (id, product_id), partners, product_types, allowed_email_domains.
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";

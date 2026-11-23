@@ -118,12 +118,15 @@ Três tipos de acesso, sempre com RLS ligado em **todas** as tabelas de `public`
 |---|---|---|
 | Cliente do hub (Superbid) | Nunca usa Supabase Auth. O navegador só chama Edge Functions (chave `anon`) com o token de sessão sbX. | `anon`: só leitura das tabelas de domínio (`category_types`, `financial_institutions`, `partners`, `product_types`, `result_partner_types`, `result_types`, `stage_types`, `status_types`). Nada de dados de clientes. |
 | Edge Functions | Validam sessão/assinatura (`withSecurity`, rate limit em `edge_rate_limits`) e acessam o banco no servidor: conexão direta (`_shared/db.ts`) com o papel **`db_edge_worker`** (privilégio mínimo) ou cliente com service role onde já é assim (ex.: `manage-backoffice-users`). | `db_edge_worker`: só as tabelas das jornadas (visitas, simulações, consentimentos, notificações, domínio). **Não** lê tabelas do backoffice: quando precisar de algo de lá, uma função `security definer` que devolve só o necessário, com `execute` só para `db_edge_worker` (ex.: `has_backoffice_access`). É o **único** caminho de escrita dos dados do hub. |
-| Usuário do backoffice | Supabase Auth (`authenticated`) + cadastro ativo em `backoffice_users`. | Acesso direto só de leitura a `backoffice_users` e às tabelas de domínio. Todo o resto por RPCs `get_backoffice_*` / `save_*` / `create_*` / `toggle_*` (`security definer`, `search_path` fixo) que checam o usuário (`is_current_user_backoffice`, `is_current_user_backoffice_admin`, `check_user_role`) e o escopo (`allowed_partners` / `allowed_products`). Gestão de usuários pela Edge Function `manage-backoffice-users` (só admin). |
+| Usuário do backoffice | Supabase Auth (`authenticated`) + cadastro ativo em `backoffice_users`. | Acesso direto só de leitura a `backoffice_users` e às tabelas de domínio. Todo o resto por RPCs `get_backoffice_*` / `save_*` / `create_*` / `toggle_*` (`security definer`, `search_path` fixo) que checam o usuário (`is_current_user_backoffice`, `is_current_user_backoffice_admin`, `check_user_role`) e o escopo (`allowed_partners` / `allowed_products`). Gestão de usuários pela Edge Function `manage-backoffice-users` (só admin). Quem entra com Google, tem e-mail de domínio ativo em `allowed_email_domains` e não está em `backoffice_users` pode **pedir acesso** (só produtos + motivo) pela mesma função; o admin libera (parceiros marcados pelos produtos) ou recusa com motivo. |
 
 Regras:
 - Políticas: `Leitura_Staff` (leitura para admin/manager/viewer via `check_user_role`) e
   `Acesso_Admin_Total` (só admin: domínios, auditoria de usuários, histórico de login).
-  Tabela sem política (ex.: `edge_rate_limits`) = só servidor.
+  Tabela **só servidor** (ex.: `edge_rate_limits`, `edge_rate_limit_blocks`,
+  `backoffice_access_requests`): RLS ligado **e** a política restritiva que nega o navegador, para
+  não deixar tabela sem política (o Supabase avisa "RLS Enabled No Policy"):
+  `create policy "Sem_Acesso_Direto" on public.<tabela> as restrictive for all to anon, authenticated using (false) with check (false);`
 - Tabela nova de dados: **sem** permissão para `anon`/`authenticated`; leitura do backoffice por
   RPC com checagem de usuário e escopo, nunca por `select` direto.
 - **Padrão de acesso ao banco pelas Edge Functions** (`_shared/db.ts`, papel `db_edge_worker`):
@@ -138,6 +141,12 @@ Regras:
   4. Falha na consulta não derruba o fluxo do cliente quando o dado é só de exibição (devolve o
      padrão seguro, ex.: `false`) e fica registrada no log, sem dados pessoais.
 - Perfis do backoffice: `admin`, `manager`, `viewer`. Telas e RPCs administrativas exigem `admin`.
+  Admins: só `cesar.costa@superbid.net` e `joao.freitas@superbid.net` (os demais são `manager`).
+- **Pedido de acesso** (`backoffice_access_requests`, migração 20261123100000): tabela só servidor
+  (política `Sem_Acesso_Direto`, migração 20261123110000); só a Edge Function `manage-backoffice-users` (service role) lê e grava. Só login **Google**, domínio
+  ativo e um pedido pendente por vez. E-mails do pedido/liberação/recusa pela `notification_outbox`.
+- **Erros de Edge Function**: nunca devolver ao navegador a mensagem do banco (`error.message`);
+  devolver um código (`email_in_use`, `database_error`…) e registrar o detalhe só no log.
 - Dados pessoais: mascarar com `mask_document` / `mask_email` / `mask_phone` nas RPCs de listagem;
   visualização de dado completo registrada (`log_pii_view`).
 - Auditoria: mudanças em `backoffice_users` registradas por trigger em `backoffice_user_details`.
@@ -174,6 +183,24 @@ Regras:
     descrevem.
   - Tabela/coluna nova ou alterada: descrever colunas, índices, RLS/políticas e permissões no mesmo
     formato, com a migration.
+
+- **Extensões** ficam no esquema `extensions`, nunca em `public` (migração 20261123130000:
+  `pg_trgm`, `pg_net`). Funções usam `search_path` fixo (`public, pg_temp`).
+- **pg_cron + pg_net**: `processar-notificacoes-pendentes` (a cada minuto → `notification-dispatcher`)
+  e `resolver-geo-login-history` (a cada 5 min → `log-access`) chamam as funções por
+  `net.http_post`. Mexer na `pg_net` para os e-mails e a geolocalização até voltar.
+
+### Alertas e e-mails
+
+- Alerta de sistema: `_shared/alert.ts` (`dispatchSystemAlert` / `sendSystemAlert`), que escapa o
+  HTML e grava na `notification_outbox`. Erro que acontece **antes de existir sessão sbX** (ex.:
+  `financial-gateway-gate`) dispara o alerta no servidor; a tela não envia, porque
+  `notification-system-message` exige sessão sbX e recusaria (401).
+- Todo erro do gate gera alerta (inclusive `SESSION_EXPIRED`), sem token e sem dados pessoais além
+  do necessário (código, IP, oferta, produto, UTMs).
+- Tipo novo de e-mail: incluir o `context_type` no CHECK de `notification_outbox` **e** de
+  `notifications` (hoje: `SIMULATION`, `VISIT`, `SYSTEM_ERROR`, `BACKOFFICE_ACCESS`); todo texto
+  vindo do usuário passa por escape de HTML.
 
 ## 8. Telas (padrão visual e de texto)
 

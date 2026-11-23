@@ -42,6 +42,11 @@
  *   Só admin. Lê login_history_details (record_type/record_id) e devolve o resumo MASCARADO
  *   do registro acessado (mask_document/mask_phone/mask_email), usado pelo AccessDetailPanel.
  *   Tabela login_history_details: migração 20260930190000 (FK login_history_id, RLS admin).
+ *
+ * [BANCO] Busca (p_search, ILIKE) usa os índices GIN de trigramas de login_history:
+ *   CREATE INDEX idx_login_history_email_trgm ON public.login_history USING gin (email gin_trgm_ops);
+ *   CREATE INDEX idx_login_history_ip_trgm ON public.login_history USING gin (ip_address gin_trgm_ops);
+ *   Extensão pg_trgm no esquema extensions (migração 20261123130000).
  * $$;
  * ============================================================================
  */

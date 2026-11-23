@@ -40,11 +40,17 @@
  * Para proteger o esquema, as queries de leitura em lote dependem desta Procedure:
  * 
  * -------------------------------------------------------------------------
- * PROCEDURE: Busca Consolidada de Usuários e Metadados
+ * [BANCO] get_backoffice_users_data — SQL atual do banco (conferido em 2026-11-23)
  * -------------------------------------------------------------------------
- * CREATE OR REPLACE FUNCTION get_backoffice_users_data() RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
- * DECLARE v_result JSONB;
+ * CREATE OR REPLACE FUNCTION public.get_backoffice_users_data() RETURNS jsonb
+ *   LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_temp'
+ * AS $$
+ * DECLARE v_result JSONB; v_actor RECORD;
  * BEGIN
+ *   SELECT * INTO v_actor FROM public.current_backoffice_actor();
+ *   IF v_actor.role IS NULL OR v_actor.role != 'admin' THEN
+ *     RETURN jsonb_build_object('error', 'forbidden');
+ *   END IF;
  *   SELECT jsonb_build_object(
  *     'users', (SELECT COALESCE(jsonb_agg(row_to_json(bu)), '[]'::jsonb) FROM (SELECT * FROM backoffice_users ORDER BY created_at DESC) bu),
  *     'domains', (SELECT COALESCE(jsonb_agg(d.domain), '[]'::jsonb) FROM allowed_email_domains d WHERE d.is_active = true),
@@ -54,6 +60,37 @@
  *   RETURN v_result;
  * END;
  * $$;
+ * -- EXECUTE: authenticated (postgres dono)
+ *
+ * -------------------------------------------------------------------------
+ * [BANCO] backoffice_access_requests — migração 20261123100000
+ * -------------------------------------------------------------------------
+ * CREATE TABLE public.backoffice_access_requests (
+ *   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   email text NOT NULL,
+ *   name text,
+ *   partners jsonb NOT NULL DEFAULT '[]',   -- não usado no pedido (só produtos); fica []
+ *   products jsonb NOT NULL DEFAULT '[]',   -- ids de product_types pedidos
+ *   reason text NOT NULL CHECK (length(btrim(reason)) BETWEEN 1 AND 500),
+ *   status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+ *   rejected_reason text,
+ *   requested_at timestamptz NOT NULL DEFAULT now(),
+ *   decided_at timestamptz,
+ *   decided_by text                         -- e-mail do admin que liberou/recusou
+ * );
+ * CREATE UNIQUE INDEX backoffice_access_requests_pending_key ON ... (lower(email)) WHERE status = 'pending';
+ * CREATE INDEX idx_backoffice_access_requests_email ON ... (lower(email), requested_at DESC);
+ * ALTER TABLE ... ENABLE ROW LEVEL SECURITY;   -- navegador não lê nem grava
+ * CREATE POLICY "Sem_Acesso_Direto" ON ... AS RESTRICTIVE FOR ALL TO anon, authenticated
+ *   USING (false) WITH CHECK (false);         -- migração 20261123110000
+ * REVOKE ALL ON ... FROM public, anon, authenticated;
+ * GRANT ALL ON ... TO service_role;            -- só esta Edge Function (service_role)
+ *
+ * Na mesma migração: os admins de backoffice_users viram manager, menos cesar.costa e
+ * joao.freitas (auditoria ROLE_CHANGE pela trigger); e o CHECK de context_type de
+ * notification_outbox e notifications passa a aceitar 'BACKOFFICE_ACCESS'.
+ * Pedidos lidos e decididos só pela Edge Function manage-backoffice-users (list_requests,
+ * approve_request, reject_request); esta tela não acessa a tabela.
  *
  * -------------------------------------------------------------------------
  * [AUDITORIA] HISTÓRICO DE USUÁRIOS — migração 20260930190400

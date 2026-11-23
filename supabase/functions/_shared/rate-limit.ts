@@ -28,6 +28,10 @@
  * -- engano no futuro. A service_role (quem chama a RPC) tem BYPASSRLS,
  * -- então não é afetada por isso.
  * alter table public.edge_rate_limits enable row level security;
+ * -- [20261123110000]: política explícita negando o navegador (tira o aviso
+ * -- "RLS Enabled No Policy"; o efeito é o mesmo de antes):
+ * create policy "Sem_Acesso_Direto" on public.edge_rate_limits
+ *   as restrictive for all to anon, authenticated using (false) with check (false);
  *
  * -- =============================================================================
  * -- Log de bloqueios (auditoria) -- NÃO manda alerta, só registra pra não
@@ -48,6 +52,10 @@
  * );
  *
  * alter table public.edge_rate_limit_blocks enable row level security;
+ * -- [20261123110000]: política explícita negando o navegador (tira o aviso
+ * -- "RLS Enabled No Policy"; o efeito é o mesmo de antes):
+ * create policy "Sem_Acesso_Direto" on public.edge_rate_limit_blocks
+ *   as restrictive for all to anon, authenticated using (false) with check (false);
  *
  * create or replace function public.check_rate_limit(
  *   p_bucket_key text,
@@ -55,6 +63,7 @@
  *   p_window_seconds integer
  * ) returns boolean
  * language plpgsql
+ * set search_path to 'public', 'pg_temp'   -- [20261123120000]: caminho de busca fixo
  * as $$
  * declare
  *   v_count integer;
@@ -170,7 +179,7 @@
 //
 // Segurança: chamada com a SERVICE_ROLE_KEY (secret do servidor, nunca vai ao
 // navegador). A function SQL roda como quem chama (não é SECURITY DEFINER) e
-// as tabelas têm RLS sem política -- `anon`/`authenticated` não gravam nelas
+// as tabelas têm RLS e só a política restritiva "Sem_Acesso_Direto" -- `anon`/`authenticated` não gravam nelas
 // nem via RPC. Mesmo assim, a execução da function é restrita à service_role:
 //
 //   revoke execute on function public.check_rate_limit(text, integer, integer) from public, anon, authenticated;

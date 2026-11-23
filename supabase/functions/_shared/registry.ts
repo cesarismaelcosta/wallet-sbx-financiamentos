@@ -434,7 +434,7 @@ export const FUNCTION_CONFIGS: Record<string, FunctionConfig> = {
     authMode: {
       type: 'staff-google-auth',
       enforcement: 'manual',
-      reason: 'Identidade de funcionário do backoffice via JWT do Google Auth (ensureAdmin) — mecanismo distinto de sessão sbX de cliente final, segredo estático ou HMAC.',
+      reason: 'Identidade de funcionário do backoffice via JWT do Google Auth: ações de gestão exigem admin ativo (ensureAdmin); pedido de acesso (my_access_request/request_access) exige login Google, domínio ativo em allowed_email_domains e pessoa fora de backoffice_users (ensureRequester) — mecanismo distinto de sessão sbX de cliente final, segredo estático ou HMAC.',
     },
   },
   // 🛡️ [REPURPOSED - 2026-09-17]: Este slug parou de ser o endpoint de

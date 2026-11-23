@@ -9,6 +9,16 @@
  *  - liberado → a pessoa, com papel, parceiros e produtos liberados
  *  - recusado → a pessoa, com o motivo
  * Link do botão: FRONTEND_URL (sem ela, o e-mail sai sem botão).
+ *
+ * -------------------------------------------------------------------------
+ * [BANCO] notification_outbox / notifications (context_type) — migração 20261123100000
+ * -------------------------------------------------------------------------
+ * ALTER TABLE public.notification_outbox DROP CONSTRAINT notification_outbox_context_type_check;
+ * ALTER TABLE public.notification_outbox ADD CONSTRAINT notification_outbox_context_type_check
+ *   CHECK (context_type = ANY (ARRAY['SIMULATION','VISIT','SYSTEM_ERROR','BACKOFFICE_ACCESS']));
+ * ALTER TABLE public.notifications DROP CONSTRAINT notifications_context_type_check;
+ * ALTER TABLE public.notifications ADD CONSTRAINT notifications_context_type_check
+ *   CHECK (context_type = ANY (ARRAY['SIMULATION','VISIT','SYSTEM_ERROR','BACKOFFICE_ACCESS']));
  */
 
 import { debugLog } from "./logger.ts";

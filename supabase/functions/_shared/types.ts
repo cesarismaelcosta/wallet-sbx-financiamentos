@@ -217,6 +217,7 @@ export interface SimulationResponse {
  * ETAPAS E STATUS DO FUNIL (ids de stage_types / status_types)
  * @description Cada status pertence a uma etapa (status_types.stage_id); Pendente envio,
  * Cancelada e Falha valem em qualquer etapa. Ver migration 20261025120000_stage_status_types.sql.
+ * [BANCO] índice idx_status_types_stage_id em status_types(stage_id) — migração 20261123120000.
  */
 export const STAGE = {
   PRE_ANALISE: 1,
