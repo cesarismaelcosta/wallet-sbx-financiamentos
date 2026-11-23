@@ -147,6 +147,8 @@ type AccessRequestRow = {
   products: string[];
   /** Parceiros com rota ativa para os produtos pedidos (calculado pela edge). */
   suggested_partners?: string[];
+  /** Por produto pedido: parceiros com rota ativa (liberados juntos). */
+  product_partners?: Record<string, string[]>;
   reason: string;
   requested_at: string;
 };
@@ -231,6 +233,8 @@ function UsuariosPage() {
   const [rejectingRequest, setRejectingRequest] = useState<AccessRequestRow | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
+  // Produtos desmarcados por pedido (padrão: todos os pedidos marcados)
+  const [unselected, setUnselected] = useState<Record<string, string[]>>({});
 
   const isAdmin = backofficeUser?.role === "admin";
 
@@ -267,8 +271,27 @@ function UsuariosPage() {
     setLoading(false);
   }
 
-  /** Liberar: abre o cadastro preenchido com o pedido (e-mail fixo). */
+  /** Produtos do pedido ainda marcados para liberar. */
+  const selectedProducts = (r: AccessRequestRow) => (r.products || []).filter((id) => !(unselected[r.id] || []).includes(String(id)));
+
+  /** Parceiros necessários para os produtos marcados. */
+  const partnersFor = (r: AccessRequestRow, products: string[]) =>
+    [...new Set(products.flatMap((id) => r.product_partners?.[String(id)] || []))];
+
+  function toggleRequestProduct(r: AccessRequestRow, id: string) {
+    setUnselected((prev) => {
+      const list = prev[r.id] || [];
+      return { ...prev, [r.id]: list.includes(id) ? list.filter((v) => v !== id) : [...list, id] };
+    });
+  }
+
+  /** Liberar: abre o cadastro preenchido com o pedido (e-mail fixo), produtos marcados e seus parceiros. */
   function openApprove(r: AccessRequestRow) {
+    const products = selectedProducts(r);
+    if (!products.length) {
+      toast.error("Marque ao menos um produto para liberar.");
+      return;
+    }
     const [prefix, domain] = r.email.split("@");
     setApprovingRequest(r);
     setregisterData({
@@ -277,8 +300,8 @@ function UsuariosPage() {
       domain: domain || "",
       role: "viewer",
       sbxLogin: "",
-      partners: r.suggested_partners || [],
-      products: r.products || [],
+      partners: partnersFor(r, products),
+      products,
     });
     setregisterOpen(true);
   }
@@ -880,7 +903,7 @@ function UsuariosPage() {
           <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-card border-t border-border">
             <SheetHeader className="text-left mb-4">
               <SheetTitle className="text-foreground text-base">{approvingRequest ? "Liberar acesso" : "Cadastrar novo usuário"}</SheetTitle>
-              <SheetDescription className="text-muted-foreground text-xs">{approvingRequest ? "Os parceiros já vêm marcados pelos produtos pedidos. Confira e ajuste cargo, parceiros e produtos." : "Preencha os dados abaixo para criar o acesso."}</SheetDescription>
+              <SheetDescription className="text-muted-foreground text-xs">{approvingRequest ? "Produtos marcados no pedido e os parceiros deles já vêm preenchidos. Escolha o cargo e confira." : "Preencha os dados abaixo para criar o acesso."}</SheetDescription>
             </SheetHeader>
             {renderRegisterContent()}
           </SheetContent>
@@ -890,7 +913,7 @@ function UsuariosPage() {
           <DialogContent className="max-w-xl rounded-none sm:rounded-none bg-card border-border">
             <DialogHeader>
               <DialogTitle className="text-foreground text-base">{approvingRequest ? "Liberar acesso" : "Cadastrar novo usuário"}</DialogTitle>
-              <DialogDescription className="text-muted-foreground text-xs">{approvingRequest ? "Os parceiros já vêm marcados pelos produtos pedidos. Confira e ajuste cargo, parceiros e produtos." : "Preencha os dados abaixo para criar o acesso."}</DialogDescription>
+              <DialogDescription className="text-muted-foreground text-xs">{approvingRequest ? "Produtos marcados no pedido e os parceiros deles já vêm preenchidos. Escolha o cargo e confira." : "Preencha os dados abaixo para criar o acesso."}</DialogDescription>
             </DialogHeader>
             {renderRegisterContent()}
           </DialogContent>
@@ -956,21 +979,62 @@ function UsuariosPage() {
           </div>
           <ul className="divide-y divide-border">
             {requests.map((r) => (
-              <li key={r.id} className="flex flex-col gap-3 px-3 py-3 text-xs sm:flex-row sm:items-start sm:justify-between">
+              <li key={r.id} className="space-y-3 px-3 py-3 text-xs">
                 <div className="min-w-0 space-y-1">
                   <div className="font-medium text-foreground">{r.name || r.email}</div>
                   <div className="text-[11px] text-muted-foreground">{r.email} · {new Date(r.requested_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</div>
-                  <div><span className="text-muted-foreground">Produtos: </span>{optionNames(productsList, r.products)}</div>
-                  <div><span className="text-muted-foreground">Parceiros (sugeridos): </span>{optionNames(partnersList, r.suggested_partners || []) || "—"}</div>
                   <div className="break-words"><span className="text-muted-foreground">Motivo: </span>{r.reason}</div>
                 </div>
-                <div className="flex shrink-0 gap-2">
+
+                {/* Produto pedido → parceiros liberados junto; desmarque o que não vai liberar */}
+                <div className="overflow-x-auto border border-border">
+                  <table className="w-full text-xs">
+                    <thead className="bg-accent text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <tr>
+                        <th className="w-8 px-3 py-2" />
+                        <th className="px-3 py-2 font-semibold">Produto</th>
+                        <th className="px-3 py-2 font-semibold">Parceiros liberados junto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(r.products || []).map((id) => {
+                        const pid = String(id);
+                        const checked = !(unselected[r.id] || []).includes(pid);
+                        const partners = r.product_partners?.[pid] || [];
+                        return (
+                          <tr key={pid} className={`border-t border-border ${checked ? "" : "opacity-50"}`}>
+                            <td className="px-3 py-2">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleRequestProduct(r, pid)}
+                                className="h-3.5 w-3.5 cursor-pointer accent-foreground"
+                                aria-label={`Liberar ${optionNames(productsList, [pid])}`}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-foreground">{optionNames(productsList, [pid])}</td>
+                            <td className="px-3 py-2 text-foreground">
+                              {partners.length ? optionNames(partnersList, partners) : <span className="text-muted-foreground">Sem rota ativa</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-[11px] text-muted-foreground">
+                    Vai liberar: {selectedProducts(r).length} produto(s) · parceiros {optionNames(partnersList, partnersFor(r, selectedProducts(r))) || "—"}
+                  </div>
+                  <div className="flex shrink-0 gap-2">
                   <Button variant="outline" size="sm" onClick={() => { setRejectingRequest(r); setRejectReason(""); }} className="h-8 rounded-none border-border text-xs hover:bg-primary hover:text-primary-foreground hover:border-primary">
                     <UserX className="mr-1.5 h-3.5 w-3.5" /> Recusar
                   </Button>
                   <Button size="sm" onClick={() => openApprove(r)} className="cta-gradient h-8 rounded-none border-0 text-xs text-white">
                     <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Liberar
                   </Button>
+                  </div>
                 </div>
               </li>
             ))}

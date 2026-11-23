@@ -20,7 +20,7 @@
  *      ativo de `allowed_email_domains` e fora de `backoffice_users`. Pede só PRODUTOS e o motivo
  *      (quem pede não conhece os parceiros); um pedido pendente por vez; e-mail aos admins ativos.
  *    - `list_requests` / `approve_request` / `reject_request`: só admin. A lista traz
- *      `suggested_partners`: parceiros com rota ativa (orchestrator_configs, PRODUCT ou CATEGORY via
+ *      `product_partners` (produto → parceiros) e `suggested_partners`: parceiros com rota ativa (orchestrator_configs, PRODUCT ou CATEGORY via
  *      category_types.product_id) para os produtos pedidos; a tela de liberação já os marca. Liberar cria o usuário
  *      (mesma regra do `register`, e-mail do pedido) e avisa a pessoa; recusar exige motivo e avisa.
  *    E-mails: `_shared/backoffice-access-email.ts` (notification_outbox, context_type BACKOFFICE_ACCESS).
@@ -457,10 +457,16 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
         .order("requested_at", { ascending: true });
       if (error) return { status: 500, data: { error: "list_requests_failed" } };
       const byProduct = await partnersByProduct();
-      const requests = (data || []).map((r: { products: string[] }) => ({
-        ...r,
-        suggested_partners: [...new Set((r.products || []).flatMap((id) => [...(byProduct.get(String(id)) || [])]))],
-      }));
+      const requests = (data || []).map((r: { products: string[] }) => {
+        // Por produto pedido: parceiros com rota ativa (a tela de liberação marca juntos)
+        const product_partners: Record<string, string[]> = {};
+        for (const id of r.products || []) product_partners[String(id)] = [...(byProduct.get(String(id)) || [])];
+        return {
+          ...r,
+          product_partners,
+          suggested_partners: [...new Set(Object.values(product_partners).flat())],
+        };
+      });
       return { status: 200, data: { requests } };
     }
 

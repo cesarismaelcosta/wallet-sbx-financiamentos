@@ -32,7 +32,7 @@ export type AccessEmailData = {
   role?: string | null;
 };
 
-const ROLE_LABEL: Record<string, string> = { admin: "Administrador", manager: "Gestor", viewer: "Visualizador" };
+const ROLE_LABEL: Record<string, string> = { admin: "Administrador", manager: "Gerente", viewer: "Visualizador" };
 
 const esc = (value: unknown): string =>
   String(value ?? "")
