@@ -140,6 +140,15 @@ Regras:
   3. A Edge Function chama a função (`select public.<função>(${valor}) as ok`), nunca a tabela.
   4. Falha na consulta não derruba o fluxo do cliente quando o dado é só de exibição (devolve o
      padrão seguro, ex.: `false`) e fica registrada no log, sem dados pessoais.
+- **Backoffice só com sessão de login Google** (migração 20261123140000): toda função que libera
+  acesso (`current_backoffice_actor`, `check_user_role`, `is_current_user_backoffice*`,
+  `get_backoffice_session`) exige no token `amr @> [{"method":"oauth"}]` e
+  `app_metadata.providers ? 'google'`; função que lê `backoffice_users` pelo e-mail do token usa
+  `case when public.is_current_user_backoffice() then auth.jwt() ->> 'email' end`. A Edge Function
+  `manage-backoffice-users` aplica a mesma regra (`isGoogleSession`). Função nova do backoffice:
+  use `current_backoffice_actor()` em vez de ler o e-mail do token direto.
+- RPC que pode dar erro de banco previsível (ex.: registro repetido) devolve um código
+  (`email_in_use`, `domain_in_use`), nunca a mensagem do Postgres; a tela traduz o código.
 - Perfis do backoffice: `admin`, `manager`, `viewer`. Telas e RPCs administrativas exigem `admin`.
   Admins: só `cesar.costa@superbid.net` e `joao.freitas@superbid.net` (os demais são `manager`).
 - **Pedido de acesso** (`backoffice_access_requests`, migração 20261123100000): tabela só servidor
@@ -196,6 +205,8 @@ Regras:
   HTML e grava na `notification_outbox`. Erro que acontece **antes de existir sessão sbX** (ex.:
   `financial-gateway-gate`) dispara o alerta no servidor; a tela não envia, porque
   `notification-system-message` exige sessão sbX e recusaria (401).
+- `dispatchSystemAlert` escapa **todo** campo (inclusive ids) e limita tamanho; alerta vindo do
+  navegador (`notification-system-message`) sai marcado como texto não confiável.
 - Todo erro do gate gera alerta (inclusive `SESSION_EXPIRED`), sem token e sem dados pessoais além
   do necessário (código, IP, oferta, produto, UTMs).
 - Tipo novo de e-mail: incluir o `context_type` no CHECK de `notification_outbox` **e** de

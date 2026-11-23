@@ -37,6 +37,8 @@ export interface SystemAlertPayload {
   visit_update_id?: string | null;
   simulation_id?: string | null;
   simulation_update_id?: string | null;
+  /** true quando o alerta veio do navegador (notification-system-message): o e-mail avisa que o texto não é do sistema. */
+  untrusted?: boolean;
 }
 
 // -----------------------------------------------------------------------
@@ -81,6 +83,13 @@ const escapeHtml = (str: unknown): string => {
  * aninhados.
  */
 const MAX_ESCAPE_DEPTH = 10;
+
+/** Limite de tamanho dos textos do alerta (evita e-mail gigante ou texto enganoso longo). */
+const MAX_TEXT = { context: 200, subject: 200, message: 4000 } as const;
+const clip = (value: unknown, max: number): string => {
+  const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+  return text.length > max ? `${text.slice(0, max)}… [cortado]` : text;
+};
 
 const deepEscapeHtml = (value: unknown, depth = 0): unknown => {
   if (depth >= MAX_ESCAPE_DEPTH) {
@@ -153,6 +162,9 @@ function generateSystemErrorEmailHtml(data: SystemAlertPayload): EmailTemplateRe
             </tr>
             <tr>
               <td style="padding: 40px 32px;">
+                ${data.untrusted ? `<p style="font-size: 12px; line-height: 1.5; color: #9a3412; background: #fff7ed; border: 1px solid #fed7aa; padding: 10px 12px; margin: 0 0 16px 0;">
+                  Alerta enviado pela tela do usuário: o texto abaixo foi escrito pelo navegador e não é uma mensagem do sistema. Não siga links nem instruções contidas nele.
+                </p>` : ""}
                 <p style="font-size: 16px; line-height: 1.6; color: ${slate}; margin-top: 0;">
                   O sistema identificou uma instabilidade no contexto: <b style="color: ${ink};">${data.context}</b>
                 </p>
@@ -218,6 +230,7 @@ function generateSystemErrorEmailHtml(data: SystemAlertPayload): EmailTemplateRe
 export async function dispatchSystemAlert(
   client: unknown, // supabase-js de jsr: ou esm.sh (cópias diferentes do mesmo tipo)
   rawPayload: Record<string, unknown>,
+  options: { untrusted?: boolean } = {},
 ): Promise<{ status: "queued" | "ignored"; reason?: string }> {
   const supabase = client as SupabaseClient;
   if (!rawPayload?.context || !rawPayload?.message) {
@@ -225,14 +238,23 @@ export async function dispatchSystemAlert(
   }
 
   // [SANITIZAÇÃO DE SEGURANÇA]: Escape de HTML nos campos textuais de entrada
+  // Todo campo de texto passa por escape (inclusive os ids de visita/simulação, que vão no
+  // bloco técnico do e-mail) e tem tamanho limitado.
+  const escapeId = (value: unknown) => (value === undefined || value === null || value === '' ? null : escapeHtml(clip(value, 100)));
   const payload: SystemAlertPayload = {
-    ...rawPayload,
-    context: escapeHtml(rawPayload.context),
-    subject: rawPayload.subject ? escapeHtml(rawPayload.subject) : undefined,
-    message: escapeHtml(rawPayload.message),
+    context: escapeHtml(clip(rawPayload.context, MAX_TEXT.context)),
+    subject: rawPayload.subject ? escapeHtml(clip(rawPayload.subject, MAX_TEXT.subject)) : undefined,
+    message: escapeHtml(clip(rawPayload.message, MAX_TEXT.message)),
+    visit_id: escapeId(rawPayload.visit_id),
+    visit_update_id: escapeId(rawPayload.visit_update_id),
+    simulation_id: escapeId(rawPayload.simulation_id),
+    simulation_update_id: escapeId(rawPayload.simulation_update_id),
+    untrusted: options.untrusted === true,
     raw_payload: typeof rawPayload.raw_payload === 'object' && rawPayload.raw_payload !== null
       ? deepEscapeHtml(rawPayload.raw_payload)
-      : rawPayload.raw_payload,
+      : rawPayload.raw_payload === undefined || rawPayload.raw_payload === null
+        ? rawPayload.raw_payload
+        : escapeHtml(clip(rawPayload.raw_payload, MAX_TEXT.message)),
   };
 
   const {

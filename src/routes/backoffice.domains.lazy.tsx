@@ -42,6 +42,10 @@
  * -------------------------------------------------------------------------
  * PROCEDURE 2: Criação
  * -------------------------------------------------------------------------
+ * [20261123140000]: create_backoffice_domain passou a: exigir admin (current_backoffice_actor, só
+ *   sessão Google), SET search_path TO 'public','pg_temp' e devolver só 'domain_in_use' para domínio
+ *   repetido (antes vazava o nome da constraint):
+ *     BEGIN INSERT ... ; EXCEPTION WHEN unique_violation THEN RAISE EXCEPTION 'domain_in_use'; END;
  * CREATE OR REPLACE FUNCTION create_backoffice_domain(p_domain TEXT) 
  * RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$ 
  * BEGIN 
@@ -112,7 +116,8 @@ function DominiosPage() {
     });
 
     if (error) {
-      toast.error("Erro ao adicionar: " + error.message);
+      // Só mensagem amigável (nunca o texto do banco)
+      toast.error(error.message === "domain_in_use" ? "Este domínio já está cadastrado." : "Erro ao adicionar domínio.");
     } else {
       toast.success("Domínio adicionado!");
       setNewDomain("");

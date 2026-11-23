@@ -55,7 +55,8 @@ serve(withSecurity('notification-system-message', async (req: Request, ctx?: Req
     // handoff token em caso de sessão expirada) e repassado em `ctx.rawBody`
     // — não podemos ler `req.json()` de novo aqui (stream já consumido).
     const rawBody = JSON.parse(ctx?.rawBody || "");
-    const result = await dispatchSystemAlert(supabase, rawBody);
+    // Alerta vindo do navegador: texto não confiável (o e-mail avisa a equipe)
+    const result = await dispatchSystemAlert(supabase, rawBody, { untrusted: true });
     return { status: 200, data: result };
   } catch (caught: unknown) {
     const err = caught as Error;

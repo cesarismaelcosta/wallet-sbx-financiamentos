@@ -168,6 +168,8 @@ const SECRET_KEYS = new Set([
   "handoff_token",
 ]);
 
+const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 const sanitizePayload = <T,>(obj: T): T => {
   if (obj === null || obj === undefined) return null as T;
   if (typeof obj !== "object") return obj;
@@ -177,6 +179,9 @@ const sanitizePayload = <T,>(obj: T): T => {
   const sanitized: Record<string, unknown> = {};
   for (const key of Object.keys(source)) {
     if (SECRET_KEYS.has(key.toLowerCase())) continue;
+    // Chaves que mexem no protótipo do objeto (JSON.parse aceita "__proto__" como chave comum,
+    // mas a atribuição abaixo trocaria a base do objeto): descartadas.
+    if (FORBIDDEN_KEYS.has(key)) continue;
     const val = source[key];
     sanitized[key] = val === undefined ? null : sanitizePayload(val);
   }

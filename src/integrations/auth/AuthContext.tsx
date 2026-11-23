@@ -37,14 +37,19 @@
  * Para que este contexto funcione, a seguinte Stored Procedure DEVE existir 
  * no Supabase SQL Editor:
  * 
- * CREATE OR REPLACE FUNCTION get_backoffice_session() 
- * RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+ * [BANCO] get_backoffice_session — migração 20261123140000 (só sessão de login Google)
+ * CREATE OR REPLACE FUNCTION public.get_backoffice_session()
+ * RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_temp' AS $$
  * DECLARE
  *   v_caller_email TEXT := auth.jwt() ->> 'email';
  *   v_user_record RECORD;
  * BEGIN
  *   IF v_caller_email IS NULL THEN 
  *     RETURN jsonb_build_object('error', 'token_ausente_ou_invalido'); 
+ *   END IF;
+ *   IF NOT coalesce((auth.jwt() -> 'amr') @> '[{"method":"oauth"}]'::jsonb, false)
+ *      OR NOT coalesce((auth.jwt() -> 'app_metadata' -> 'providers') ? 'google', false) THEN
+ *     RETURN jsonb_build_object('error', 'login_google_obrigatorio');
  *   END IF;
  *   
  *   SELECT * INTO v_user_record FROM backoffice_users WHERE LOWER(email) = LOWER(v_caller_email);
@@ -196,7 +201,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (rpcError || jsonError) {
       console.error("🚨 [AuthGuard] - Acesso Recusado:", errorMsg);
       const canRequest = jsonError === 'user_does_not_exist';
-      setDomainError(canRequest ? null : errorMsg?.includes('user_inactive') ? "Usuário inativo." : "Acesso corporativo negado.");
+      setDomainError(
+        canRequest ? null
+        : errorMsg?.includes('user_inactive') ? "Usuário inativo."
+        : errorMsg?.includes('login_google_obrigatorio') ? "Entre com a conta Google corporativa."
+        : "Acesso corporativo negado."
+      );
       
       // 2. Auditoria de Falha via RPC (Captura Geolocalização Completa na Borda)
       if (!hasLoggedThisSession.current) {

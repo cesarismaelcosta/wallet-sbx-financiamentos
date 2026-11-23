@@ -15,6 +15,8 @@
  * 4. Login Superbid (`sbx_login`): login do usuário interno na Superbid; mostra o link "Backoffice"
  *    no menu do avatar do hub (ver `_shared/backoffice-access.ts`). Opcional, sem espaços,
  *    2 a 100 caracteres, único sem diferenciar maiúsculas (índice backoffice_users_sbx_login_key).
+ * 4b. Só sessão de login GOOGLE (isGoogleSession: amr "oauth" + provider "google") em todas as
+ *    ações, como nas funções do banco (migração 20261123140000).
  * 5. Pedido de acesso (tabela `backoffice_access_requests`, migração 20261123100000):
  *    - `my_access_request` / `request_access`: qualquer pessoa logada com GOOGLE, e-mail num domínio
  *      ativo de `allowed_email_domains` e fora de `backoffice_users`. Pede só PRODUTOS e o motivo
@@ -192,7 +194,7 @@ async function ensureRequester(authHeader: string | null) {
   const userClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: { user }, error } = await userClient.auth.getUser(token);
   if (error || !user?.email) return { ok: false as const, status: 401, error: "unauthenticated" };
-  if (user.app_metadata?.provider !== "google") return { ok: false as const, status: 403, error: "google_only" };
+  if (!isGoogleSession(token)) return { ok: false as const, status: 403, error: "google_only" };
 
   const email = user.email.toLowerCase();
   const domain = email.split("@")[1] || "";
@@ -233,6 +235,22 @@ function writeError(error: { code?: string; message: string }) {
 }
 
 /**
+ * Sessão de login GOOGLE: o token (já validado por auth.getUser) tem amr com método "oauth" e
+ * app_metadata.providers com "google". Mesma regra das funções do banco (migração 20261123140000).
+ */
+function isGoogleSession(token: string): boolean {
+  try {
+    const part = token.split(".")[1] || "";
+    const json = JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(part.length / 4) * 4, "=")));
+    const amr = Array.isArray(json?.amr) ? json.amr : [];
+    const providers = Array.isArray(json?.app_metadata?.providers) ? json.app_metadata.providers : [];
+    return amr.some((m: { method?: string }) => m?.method === "oauth") && providers.includes("google");
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
  * Valida se o solicitante possui privilégios administrativos ativos.
  * @param {string | null} authHeader - Token JWT enviado no header Authorization.
  * @returns {Promise<{ ok: true } | { ok: false; error: string }>}
@@ -256,6 +274,11 @@ async function ensureAdmin(authHeader: string | null) {
   if (authError || !user) {
     debugLog("DEBUG [ensureAdmin]: Erro Auth ->", authError);
     return { ok: false as const, error: "unauthenticated" };
+  }
+
+  if (!isGoogleSession(token)) {
+    debugLog("DEBUG [ensureAdmin]: Sessão não é de login Google.");
+    return { ok: false as const, error: "forbidden" };
   }
 
   debugLog("DEBUG [ensureAdmin]: Usuário autenticado ->", user.email);

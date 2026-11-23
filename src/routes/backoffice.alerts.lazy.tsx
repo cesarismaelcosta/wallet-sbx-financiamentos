@@ -42,6 +42,10 @@
  * -------------------------------------------------------------------------
  * PROCEDURE 2: Criação
  * -------------------------------------------------------------------------
+ * [20261123140000]: create_backoffice_alert passou a: exigir admin (current_backoffice_actor, só
+ *   sessão Google), SET search_path TO 'public','pg_temp' e devolver só 'email_in_use' para e-mail
+ *   repetido (antes vazava o nome da constraint):
+ *     BEGIN INSERT ... ; EXCEPTION WHEN unique_violation THEN RAISE EXCEPTION 'email_in_use'; END;
  * CREATE OR REPLACE FUNCTION create_backoffice_alert(p_name TEXT, p_email TEXT) 
  * RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$ 
  * BEGIN 
@@ -168,10 +172,10 @@ function AlertsPage() {
       load();
     } catch (caught: unknown) {
       const e = caught as Error & { code?: string }; // erro do Postgres traz code (23505 = duplicado)
-      if (e.message?.includes('duplicate key') || e.code === '23505') {
+      if (e.message === 'email_in_use' || e.message?.includes('duplicate key') || e.code === '23505') {
         toast.error("Este e-mail já está cadastrado.");
       } else {
-        toast.error(e.message || "Erro ao cadastrar destinatário.");
+        toast.error("Erro ao cadastrar destinatário.");
       }
     } finally {
       setIsSaving(false);

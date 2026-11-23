@@ -166,6 +166,13 @@
  * ============================================================================
  *
  * @author César Ismael Pereira da Costa
+ *
+ * [BANCO] migração 20261123140000 — só sessão de login Google libera dados do backoffice:
+ *   current_backoffice_actor(), check_user_role(), is_current_user_backoffice(),
+ *   is_current_user_backoffice_admin() e get_backoffice_session() exigem no token
+ *   amr @> [{"method":"oauth"}] e app_metadata.providers ? 'google'.
+ *   get_backoffice_simulations e simulation_stats: o e-mail do token só vale com
+ *   public.is_current_user_backoffice() (case when ... then auth.jwt() ->> 'email' end).
  */
 
 import { createLazyFileRoute } from "@tanstack/react-router";
