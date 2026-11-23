@@ -18,7 +18,7 @@
  *
  * [PEDIDO DE ACESSO]: quem entra com Google e não está em `backoffice_users`
  * (`accessRequestEmail` do AuthContext) vê o pedido de acesso no lugar do botão:
- * escolhe parceiros, produtos e o motivo; depois acompanha (pendente / recusado com
+ * escolhe os produtos e o motivo (os parceiros são definidos por quem libera); depois acompanha (pendente / recusado com
  * motivo, podendo pedir de novo). Tudo pela Edge Function `manage-backoffice-users`
  * (ações `my_access_request` e `request_access`), que confere login Google, domínio
  * ativo em `allowed_email_domains` e avisa os admins por e-mail.
@@ -66,7 +66,8 @@ function BackofficeLogin() {
     const handleInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       // Se houver token mas a memória local do contexto estiver vazia, revalida no backend.
-      if (session && !backofficeUser) {
+      // Pedido de acesso: já validado (sem cadastro); não revalida a cada montagem
+      if (session && !backofficeUser && !accessRequestEmail) {
         await validateUserAccess(session);
       }
     };
@@ -115,10 +116,10 @@ function BackofficeLogin() {
   // [OUTPUT]: RENDERIZAÇÃO ESTÉTICA (UI)
   // =========================================================================
   return (
-    <div className="flex min-h-screen items-center justify-center bg-accent px-4">
-      <div className="w-full max-w-md">
-        <div className="rounded-none border border-border bg-card p-8 shadow-md">
-          <div className="mb-6 flex justify-center">
+    <div className="flex min-h-screen items-center justify-center bg-accent px-4 py-8">
+      <div className={`w-full ${accessRequestEmail ? "max-w-2xl" : "max-w-md"}`}>
+        <div className={`rounded-none border border-border bg-card shadow-md ${accessRequestEmail ? "p-6 sm:p-8" : "p-8"}`}>
+          <div className={`${accessRequestEmail ? "mb-4" : "mb-6"} flex justify-center`}>
             <WalletLogo size="lg" withTagline centered asLink followTheme />
           </div>
 
@@ -126,13 +127,19 @@ function BackofficeLogin() {
             <ShieldCheck className="h-3.5 w-3.5" /> Backoffice
           </div>
           <h1 className="mt-3 page-header-title">
-            Acesso restrito
+            {accessRequestEmail ? "Solicitar acesso" : "Acesso restrito"}
           </h1>
+          {accessRequestEmail ? (
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+              Conectado como <span className="font-bold text-foreground">{accessRequestEmail}</span>.
+            </p>
+          ) : (
           <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
             Entre com sua conta corporativa{" "}
             <span className="font-bold text-foreground">@superbid.net</span>{" "}
             para acessar o painel de operações.
           </p>
+          )}
 
           {accessRequestEmail ? (
             <AccessRequestPanel email={accessRequestEmail} onSignOut={() => void signOut()} />
@@ -221,14 +228,14 @@ type AccessRequest = {
   requested_at: string;
   decided_at: string | null;
 };
-type MyAccessRequest = { email: string; name: string | null; request: AccessRequest | null; partners: Option[]; products: Option[] };
+type MyAccessRequest = { email: string; name: string | null; request: AccessRequest | null; products: Option[] };
 
 /** Erros da edge `manage-backoffice-users` no pedido → mensagem. */
 const REQUEST_ERRORS: Record<string, string> = {
   google_only: "Entre com a conta Google corporativa para pedir acesso.",
   domain_not_allowed: "Este e-mail não pode pedir acesso ao backoffice.",
   request_pending: "Você já tem um pedido aguardando liberação.",
-  invalid_scope: "Escolha ao menos um parceiro e um produto.",
+  invalid_scope: "Escolha ao menos um produto.",
   invalid_reason: "Informe o motivo (até 500 caracteres).",
 };
 
@@ -249,7 +256,6 @@ function AccessRequestPanel({ email, onSignOut }: { email: string; onSignOut: ()
   const [data, setData] = useState<MyAccessRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [partners, setPartners] = useState<string[]>([]);
   const [products, setProducts] = useState<string[]>([]);
   const [reason, setReason] = useState("");
   const [sending, setSending] = useState(false);
@@ -270,11 +276,11 @@ function AccessRequestPanel({ email, onSignOut }: { email: string; onSignOut: ()
 
   const handleSend = async () => {
     setSendError(null);
-    if (!partners.length || !products.length) return setSendError(REQUEST_ERRORS.invalid_scope);
+    if (!products.length) return setSendError(REQUEST_ERRORS.invalid_scope);
     if (!reason.trim()) return setSendError(REQUEST_ERRORS.invalid_reason);
     setSending(true);
     try {
-      const result = (await callRequest({ action: "request_access", partners, products, reason: reason.trim() })) as { request: AccessRequest };
+      const result = (await callRequest({ action: "request_access", products, reason: reason.trim() })) as { request: AccessRequest };
       setData((prev) => (prev ? { ...prev, request: result.request } : prev));
     } catch (err) {
       setSendError((err as Error).message);
@@ -288,10 +294,7 @@ function AccessRequestPanel({ email, onSignOut }: { email: string; onSignOut: ()
   const rejected = request?.status === "rejected";
 
   return (
-    <div className="mt-5">
-      <p className="text-xs text-muted-foreground">
-        Conectado como <span className="font-bold text-foreground">{email}</span>
-      </p>
+    <div className="mt-4">
 
       {loading ? (
         <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
@@ -309,7 +312,6 @@ function AccessRequestPanel({ email, onSignOut }: { email: string; onSignOut: ()
           </div>
           <p className="mt-2 text-xs text-muted-foreground">Enviado em {formatDate(request.requested_at)}.</p>
           <dl className="mt-3 space-y-1 text-xs">
-            <div><dt className="inline text-muted-foreground">Parceiros: </dt><dd className="inline text-foreground">{nameOf(data?.partners, request.partners)}</dd></div>
             <div><dt className="inline text-muted-foreground">Produtos: </dt><dd className="inline text-foreground">{nameOf(data?.products, request.products)}</dd></div>
           </dl>
           <p className="mt-3 text-xs text-muted-foreground">Você recebe um e-mail quando o pedido for analisado.</p>
@@ -326,26 +328,11 @@ function AccessRequestPanel({ email, onSignOut }: { email: string; onSignOut: ()
             </div>
           )}
 
-          <h2 className="text-sm font-bold text-foreground">Solicitar acesso</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Escolha os parceiros e produtos que você precisa acessar.</p>
-
-          <fieldset className="mt-4">
-            <legend className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Parceiros *</legend>
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {data?.partners.map((o) => (
-                <Label key={o.id} className="flex cursor-pointer items-center gap-2 text-sm font-normal">
-                  <Checkbox checked={partners.includes(o.id)} onCheckedChange={() => setPartners((l) => toggle(l, o.id))} />
-                  {o.name}
-                </Label>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset className="mt-4">
+          <fieldset>
             <legend className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Produtos *</legend>
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
               {data?.products.map((o) => (
-                <Label key={o.id} className="flex cursor-pointer items-center gap-2 text-sm font-normal">
+                <Label key={o.id} className="flex cursor-pointer items-center gap-2 text-xs font-normal leading-tight">
                   <Checkbox checked={products.includes(o.id)} onCheckedChange={() => setProducts((l) => toggle(l, o.id))} />
                   {o.name}
                 </Label>
@@ -353,7 +340,7 @@ function AccessRequestPanel({ email, onSignOut }: { email: string; onSignOut: ()
             </div>
           </fieldset>
 
-          <div className="mt-4">
+          <div className="mt-3">
             <Label htmlFor="access-reason" className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Motivo *</Label>
             <Textarea
               id="access-reason"
@@ -361,7 +348,8 @@ function AccessRequestPanel({ email, onSignOut }: { email: string; onSignOut: ()
               maxLength={500}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Para que você precisa do acesso?"
-              className="mt-2 rounded-none"
+              rows={2}
+              className="mt-2 min-h-[64px] rounded-none text-sm"
             />
             <p className="mt-1 text-right text-[11px] text-muted-foreground">{reason.length}/500</p>
           </div>
@@ -373,22 +361,29 @@ function AccessRequestPanel({ email, onSignOut }: { email: string; onSignOut: ()
             </div>
           )}
 
-          <Button type="button" onClick={handleSend} disabled={sending} className="mt-4 h-11 w-full gap-2 rounded-none font-bold">
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            Enviar pedido
-          </Button>
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={onSignOut} className="h-10 rounded-none text-xs">
+              Sair desta conta
+            </Button>
+            <Button type="button" onClick={handleSend} disabled={sending} className="h-10 gap-2 rounded-none text-xs font-bold sm:min-w-[180px]">
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Enviar pedido
+            </Button>
+          </div>
         </div>
       )}
 
-      <Button
-        type="button"
-        onClick={onSignOut}
-        variant="ghost"
-        size="sm"
-        className="mt-3 w-full rounded-none text-xs text-muted-foreground hover:text-foreground hover:bg-accent"
-      >
-        Sair desta conta
-      </Button>
+      {(loading || loadError || pending) && (
+        <Button
+          type="button"
+          onClick={onSignOut}
+          variant="ghost"
+          size="sm"
+          className="mt-3 w-full rounded-none text-xs text-muted-foreground hover:text-foreground hover:bg-accent"
+        >
+          Sair desta conta
+        </Button>
+      )}
     </div>
   );
 }

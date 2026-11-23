@@ -712,7 +712,8 @@ function SandboxPage() {
     setIsErrorDrawerOpen(true);
   };
 
-  const executeErrorSimulation = async (method: "form" | "fetch", errorTarget: "offer" | "token" | "product") => {
+  // method "ponte": mesmo payload do Form, postado na rota /gate do app (caminho do botão da Superbid)
+  const executeErrorSimulation = async (method: "form" | "fetch" | "ponte", errorTarget: "offer" | "token" | "product") => {
     if (!validateSessionBeforeAction()) return;
 
     setSimulating(true);
@@ -772,7 +773,7 @@ function SandboxPage() {
     } else {
       const form = document.createElement("form");
       form.method = "POST";
-      form.action = gatewayUrl;
+      form.action = method === "ponte" ? `${window.location.origin}/gate` : gatewayUrl;
 
       Object.entries(payload).forEach(([key, value]) => {
         if (value !== undefined) {
@@ -2312,8 +2313,9 @@ function SandboxPage() {
                   Este painel simula cenários de falha na borda (
                   <code className="bg-neutral-200 px-1 py-0.5 rounded-none text-neutral-900 dark:text-neutral-100">financial-gateway-gate</code>).
                   Você pode testar a resiliência disparando via <b>Fetch (AJAX)</b> para inspecionar o contrato de erro
-                  JSON diretamente aqui na aba, ou via <b>Form POST (Nativo)</b> para validar o redirecionamento com
-                  spinner de erro do front-end.
+                  JSON diretamente aqui na aba, via <b>Form POST (Nativo)</b> para validar o redirecionamento com
+                  spinner de erro do front-end, ou via <b>Ponte /gate</b>, o mesmo caminho do botão da Superbid.
+                  Todo erro do gate dispara o alerta de sistema por e-mail.
                 </p>
               </div>
 
@@ -2327,25 +2329,35 @@ function SandboxPage() {
                       Envia um ID inexistente para a API upstream da Superbid. A borda deve interceptar o erro e
                       disparar <code className="bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 px-1 py-0.5 rounded-none">OFFER_NOT_FOUND</code>.
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                       <Button
                         onClick={() => executeErrorSimulation("fetch", "offer")}
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 flex items-center justify-center"
+                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 w-full h-9 whitespace-nowrap flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
-                        Testar via Fetch (JSON)
+                        Fetch (JSON)
                       </Button>
                       <Button
                         onClick={() => executeErrorSimulation("form", "offer")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white flex items-center justify-center"
+                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white w-full h-9 whitespace-nowrap flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
-                        Testar via Form (Redirecionar)
+                        Form (redireciona)
+                      </Button>
+                      <Button
+                        onClick={() => executeErrorSimulation("ponte", "offer")}
+                        disabled={simulating}
+                        size="sm"
+                        variant="outline"
+                        className="rounded-none text-xs bg-white dark:bg-neutral-950 text-[#2246A7] border-[#2246A7] hover:bg-neutral-100 dark:hover:bg-neutral-800 w-full h-9 whitespace-nowrap flex items-center justify-center"
+                      >
+                        {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
+                        Ponte /gate
                       </Button>
                     </div>
                   </div>
@@ -2358,24 +2370,34 @@ function SandboxPage() {
                       Substitui o token ativo por uma credencial corrompida. A borda disparará o erro de sessão expirada
                       ou não autorizada (<code className="bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 px-1 py-0.5 rounded-none">SESSION_EXPIRED</code>).
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                       <Button
                         onClick={() => executeErrorSimulation("fetch", "token")}
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 flex items-center justify-center"
+                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 w-full h-9 whitespace-nowrap flex items-center justify-center"
                       >
-                        {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
+                        {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Fetch (JSON)
                       </Button>
                       <Button
                         onClick={() => executeErrorSimulation("form", "token")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white flex items-center justify-center"
+                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white w-full h-9 whitespace-nowrap flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
-                        Testar via Form (Redirecionar)
+                        Form (redireciona)
+                      </Button>
+                      <Button
+                        onClick={() => executeErrorSimulation("ponte", "token")}
+                        disabled={simulating}
+                        size="sm"
+                        variant="outline"
+                        className="rounded-none text-xs bg-white dark:bg-neutral-950 text-[#2246A7] border-[#2246A7] hover:bg-neutral-100 dark:hover:bg-neutral-800 w-full h-9 whitespace-nowrap flex items-center justify-center"
+                      >
+                        {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
+                        Ponte /gate
                       </Button>
                     </div>
                   </div>
@@ -2390,25 +2412,35 @@ function SandboxPage() {
                       Envia um ID de produto sem correspondência no orquestrador de rotas para testar a validação de
                       destino.
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                       <Button
                         onClick={() => executeErrorSimulation("fetch", "product")}
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 flex items-center justify-center"
+                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 w-full h-9 whitespace-nowrap flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
-                        Testar via Fetch (JSON)
+                        Fetch (JSON)
                       </Button>
                       <Button
                         onClick={() => executeErrorSimulation("form", "product")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white flex items-center justify-center"
+                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white w-full h-9 whitespace-nowrap flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
-                        Testar via Form (Redirecionar)
+                        Form (redireciona)
+                      </Button>
+                      <Button
+                        onClick={() => executeErrorSimulation("ponte", "product")}
+                        disabled={simulating}
+                        size="sm"
+                        variant="outline"
+                        className="rounded-none text-xs bg-white dark:bg-neutral-950 text-[#2246A7] border-[#2246A7] hover:bg-neutral-100 dark:hover:bg-neutral-800 w-full h-9 whitespace-nowrap flex items-center justify-center"
+                      >
+                        {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
+                        Ponte /gate
                       </Button>
                     </div>
                   </div>
@@ -2421,24 +2453,34 @@ function SandboxPage() {
                       Valida o comportamento de segurança da borda ao receber requisições estruturais sem autenticação
                       válida.
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                       <Button
                         onClick={() => executeErrorSimulation("fetch", "token")}
                         disabled={simulating}
                         size="sm"
                         variant="outline"
-                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 flex items-center justify-center"
+                        className="rounded-none bg-white dark:bg-neutral-950 text-xs border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:ring-neutral-900 w-full h-9 whitespace-nowrap flex items-center justify-center"
                       >
-                        {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Testar via Fetch (JSON)
+                        {simulating ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" /> : null} Fetch (JSON)
                       </Button>
                       <Button
                         onClick={() => executeErrorSimulation("form", "token")}
                         disabled={simulating}
                         size="sm"
-                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white flex items-center justify-center"
+                        className="rounded-none text-xs bg-[#2246A7] hover:bg-[#1b3a8c] text-white w-full h-9 whitespace-nowrap flex items-center justify-center"
                       >
                         {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
-                        Testar via Form (Redirecionar)
+                        Form (redireciona)
+                      </Button>
+                      <Button
+                        onClick={() => executeErrorSimulation("ponte", "token")}
+                        disabled={simulating}
+                        size="sm"
+                        variant="outline"
+                        className="rounded-none text-xs bg-white dark:bg-neutral-950 text-[#2246A7] border-[#2246A7] hover:bg-neutral-100 dark:hover:bg-neutral-800 w-full h-9 whitespace-nowrap flex items-center justify-center"
+                      >
+                        {simulating && <Loader2 className="animate-spin h-3.5 w-3.5 mr-1" />}
+                        Ponte /gate
                       </Button>
                     </div>
                   </div>

@@ -145,6 +145,8 @@ type AccessRequestRow = {
   name: string | null;
   partners: string[];
   products: string[];
+  /** Parceiros com rota ativa para os produtos pedidos (calculado pela edge). */
+  suggested_partners?: string[];
   reason: string;
   requested_at: string;
 };
@@ -275,7 +277,7 @@ function UsuariosPage() {
       domain: domain || "",
       role: "viewer",
       sbxLogin: "",
-      partners: r.partners || [],
+      partners: r.suggested_partners || [],
       products: r.products || [],
     });
     setregisterOpen(true);
@@ -878,7 +880,7 @@ function UsuariosPage() {
           <SheetContent side="bottom" className="rounded-none max-h-[85vh] overflow-y-auto p-6 bg-card border-t border-border">
             <SheetHeader className="text-left mb-4">
               <SheetTitle className="text-foreground text-base">{approvingRequest ? "Liberar acesso" : "Cadastrar novo usuário"}</SheetTitle>
-              <SheetDescription className="text-muted-foreground text-xs">{approvingRequest ? "Confira o pedido e ajuste cargo, parceiros e produtos." : "Preencha os dados abaixo para criar o acesso."}</SheetDescription>
+              <SheetDescription className="text-muted-foreground text-xs">{approvingRequest ? "Os parceiros já vêm marcados pelos produtos pedidos. Confira e ajuste cargo, parceiros e produtos." : "Preencha os dados abaixo para criar o acesso."}</SheetDescription>
             </SheetHeader>
             {renderRegisterContent()}
           </SheetContent>
@@ -888,7 +890,7 @@ function UsuariosPage() {
           <DialogContent className="max-w-xl rounded-none sm:rounded-none bg-card border-border">
             <DialogHeader>
               <DialogTitle className="text-foreground text-base">{approvingRequest ? "Liberar acesso" : "Cadastrar novo usuário"}</DialogTitle>
-              <DialogDescription className="text-muted-foreground text-xs">{approvingRequest ? "Confira o pedido e ajuste cargo, parceiros e produtos." : "Preencha os dados abaixo para criar o acesso."}</DialogDescription>
+              <DialogDescription className="text-muted-foreground text-xs">{approvingRequest ? "Os parceiros já vêm marcados pelos produtos pedidos. Confira e ajuste cargo, parceiros e produtos." : "Preencha os dados abaixo para criar o acesso."}</DialogDescription>
             </DialogHeader>
             {renderRegisterContent()}
           </DialogContent>
@@ -958,8 +960,8 @@ function UsuariosPage() {
                 <div className="min-w-0 space-y-1">
                   <div className="font-medium text-foreground">{r.name || r.email}</div>
                   <div className="text-[11px] text-muted-foreground">{r.email} · {new Date(r.requested_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</div>
-                  <div><span className="text-muted-foreground">Parceiros: </span>{optionNames(partnersList, r.partners)}</div>
                   <div><span className="text-muted-foreground">Produtos: </span>{optionNames(productsList, r.products)}</div>
+                  <div><span className="text-muted-foreground">Parceiros (sugeridos): </span>{optionNames(partnersList, r.suggested_partners || []) || "—"}</div>
                   <div className="break-words"><span className="text-muted-foreground">Motivo: </span>{r.reason}</div>
                 </div>
                 <div className="flex shrink-0 gap-2">

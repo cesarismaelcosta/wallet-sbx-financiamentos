@@ -115,6 +115,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isBackofficeAllowed, setIsBackofficeAllowed] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [accessRequestEmail, setAccessRequestEmail] = useState<string | null>(null);
+  // E-mail já validado como "sem cadastro": não revalida de novo (cada validação troca a tela
+  // de login pela rodinha do layout e a remonta, o que validava outra vez em loop).
+  const accessRequestRef = useRef<string | null>(null);
+  useEffect(() => { accessRequestRef.current = accessRequestEmail; }, [accessRequestEmail]);
 
   // Trava para evitar disparos duplicados de log na mesma sessão de navegação
   const hasLoggedThisSession = useRef(false);
@@ -170,6 +174,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const current = backofficeUserRef.current;
     if (current && current.email?.toLowerCase() === email && alreadyValidated) {
       setSession(session); // mantém o token renovado (TOKEN_REFRESHED) sem revalidar no banco
+      return;
+    }
+    if (email && accessRequestRef.current === email) {
+      setSession(session); // pedido de acesso: já validado como sem cadastro
       return;
     }
 

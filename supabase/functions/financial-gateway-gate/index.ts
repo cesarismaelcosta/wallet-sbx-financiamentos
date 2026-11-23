@@ -427,7 +427,8 @@ serve(
       } else if (msg.includes("SESSION_UPSTREAM_EXPIRED") || msg.includes("SESSION_EXPIRED")) {
         errorCode = "SESSION_EXPIRED";
         statusCode = 401;
-      } else if (msg.includes("OFFER_NOT_FOUND")) {
+      } else if (msg.includes("OFFER_NOT_FOUND") || msg.includes("OFFER_NOT_AVAILABLE")) {
+        // OFFER_NOT_AVAILABLE: oferta inexistente/suprimida na API da Superbid (hydrate-data.ts)
         errorCode = "OFFER_NOT_FOUND";
         statusCode = 404;
       } else if (msg.includes("UPSTREAM_OFFER_ERROR")) {

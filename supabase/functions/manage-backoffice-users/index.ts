@@ -17,9 +17,11 @@
  *    2 a 100 caracteres, único sem diferenciar maiúsculas (índice backoffice_users_sbx_login_key).
  * 5. Pedido de acesso (tabela `backoffice_access_requests`, migração 20261123100000):
  *    - `my_access_request` / `request_access`: qualquer pessoa logada com GOOGLE, e-mail num domínio
- *      ativo de `allowed_email_domains` e fora de `backoffice_users`. Pede parceiros, produtos e motivo;
- *      um pedido pendente por vez; e-mail aos admins ativos.
- *    - `list_requests` / `approve_request` / `reject_request`: só admin. Liberar cria o usuário
+ *      ativo de `allowed_email_domains` e fora de `backoffice_users`. Pede só PRODUTOS e o motivo
+ *      (quem pede não conhece os parceiros); um pedido pendente por vez; e-mail aos admins ativos.
+ *    - `list_requests` / `approve_request` / `reject_request`: só admin. A lista traz
+ *      `suggested_partners`: parceiros com rota ativa (orchestrator_configs, PRODUCT ou CATEGORY via
+ *      category_types.product_id) para os produtos pedidos; a tela de liberação já os marca. Liberar cria o usuário
  *      (mesma regra do `register`, e-mail do pedido) e avisa a pessoa; recusar exige motivo e avisa.
  *    E-mails: `_shared/backoffice-access-email.ts` (notification_outbox, context_type BACKOFFICE_ACCESS).
  */
@@ -79,7 +81,6 @@ interface ListPayload { action: "list"; }
 interface MyAccessRequestPayload { action: "my_access_request"; }
 interface RequestAccessPayload {
   action: "request_access";
-  partners: string[];
   products: string[];
   reason: string;
 }
@@ -121,6 +122,25 @@ async function loadCatalog() {
 /** Nomes dos ids (para o e-mail); id sem nome fica como está. */
 function namesOf(ids: string[], options: { id: string; name: string }[]) {
   return ids.map((id) => options.find((o) => o.id === id)?.name || id);
+}
+
+/** Produto → parceiros com rota ativa (orchestrator_configs PRODUCT, ou CATEGORY pela categoria do produto). */
+async function partnersByProduct(): Promise<Map<string, Set<string>>> {
+  const [{ data: configs }, { data: categories }] = await Promise.all([
+    adminClient.from("orchestrator_configs").select("partner_id, config_type, lookup_id").eq("is_active", true),
+    adminClient.from("category_types").select("id, product_id"),
+  ]);
+  const categoryProduct = new Map((categories || []).map((c: { id: number; product_id: number | null }) => [String(c.id), String(c.product_id ?? "")]));
+  const map = new Map<string, Set<string>>();
+  for (const c of (configs || []) as { partner_id: number | null; config_type: string; lookup_id: number | null }[]) {
+    if (c.partner_id == null || c.lookup_id == null) continue;
+    const product = c.config_type === "PRODUCT" ? String(c.lookup_id)
+      : c.config_type === "CATEGORY" ? categoryProduct.get(String(c.lookup_id)) || "" : "";
+    if (!product) continue;
+    if (!map.has(product)) map.set(product, new Set());
+    map.get(product)!.add(String(c.partner_id));
+  }
+  return map;
 }
 
 /** E-mail para `ilike` exato (sem curingas % e _). */
@@ -255,21 +275,20 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
       .maybeSingle();
 
     if (payload.action === "my_access_request") {
-      return { status: 200, data: { email: requester.email, name: requester.name, request: last || null, ...catalog } };
+      return { status: 200, data: { email: requester.email, name: requester.name, request: last || null, products: catalog.products } };
     }
 
     // request_access
     if (last?.status === "pending") return { status: 409, data: { error: "request_pending" } };
     const p = payload as RequestAccessPayload;
-    const partners = pickIds(p.partners, new Set(catalog.partners.map((o) => o.id)));
     const products = pickIds(p.products, new Set(catalog.products.map((o) => o.id)));
     const reason = String(p.reason ?? "").trim();
-    if (!partners.length || !products.length) return { status: 400, data: { error: "invalid_scope" } };
+    if (!products.length) return { status: 400, data: { error: "invalid_scope" } };
     if (reason.length < 1 || reason.length > 500) return { status: 400, data: { error: "invalid_reason" } };
 
     const { data: created, error } = await adminClient
       .from("backoffice_access_requests")
-      .insert({ email: requester.email, name: requester.name, partners, products, reason })
+      .insert({ email: requester.email, name: requester.name, partners: [], products, reason })
       .select("id, status, partners, products, reason, rejected_reason, requested_at, decided_at")
       .single();
     if (error) {
@@ -282,7 +301,7 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
       to: await adminEmails(),
       name: requester.name,
       email: requester.email,
-      partners: namesOf(partners, catalog.partners),
+      partners: [],
       products: namesOf(products, catalog.products),
       reason,
     });
@@ -437,7 +456,12 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
         .eq("status", "pending")
         .order("requested_at", { ascending: true });
       if (error) return { status: 500, data: { error: "list_requests_failed" } };
-      return { status: 200, data: { requests: data } };
+      const byProduct = await partnersByProduct();
+      const requests = (data || []).map((r: { products: string[] }) => ({
+        ...r,
+        suggested_partners: [...new Set((r.products || []).flatMap((id) => [...(byProduct.get(String(id)) || [])]))],
+      }));
+      return { status: 200, data: { requests } };
     }
 
     // Libera: cria o usuário com o e-mail do pedido (mesma regra do register) e avisa a pessoa

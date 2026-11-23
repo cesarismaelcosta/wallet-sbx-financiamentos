@@ -56,8 +56,7 @@ function build(data: AccessEmailData): { subject: string; title: string; intro: 
       subject: `Pedido de acesso ao backoffice: ${data.name || data.email}`,
       title: "Novo pedido de acesso",
       intro: `<b>${who}</b> pediu acesso ao backoffice.`,
-      rows: row("E-mail", esc(data.email)) + row("Parceiros", list(data.partners)) +
-        row("Produtos", list(data.products)) + row("Motivo", esc(data.reason)),
+      rows: row("E-mail", esc(data.email)) + row("Produtos", list(data.products)) + row("Motivo", esc(data.reason)),
       path: "/backoffice/users",
       button: "Abrir usuários",
     };
