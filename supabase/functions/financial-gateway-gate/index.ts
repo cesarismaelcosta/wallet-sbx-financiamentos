@@ -36,7 +36,7 @@ import { generateSessionToken, generateExchangeToken, hashUserAgent } from "../_
 import { hasBackofficeAccess } from "../_shared/backoffice-access.ts";
 import { getEdgeClientIp, signedClientIpHeaders } from "../_shared/client-ip.ts";
 import { withSecurity } from "../_shared/server.ts";
-import { debugLog } from "../_shared/logger.ts";
+import { debugLog, logError } from "../_shared/logger.ts";
 import { sendSystemAlert } from "../_shared/alert.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getSafeRedirectUrl, getSafeCorsOrigin } from "../_shared/security.ts";
@@ -103,6 +103,24 @@ serve(
     const contentType = req.headers.get("content-type") || "";
     const accept = req.headers.get("accept") || "";
     const isAjax = contentType.includes("application/json") || accept.includes("application/json");
+
+    // [ORIGEM]: só aceita pedido vindo de um domínio de ALLOWED_DOMAIN_SUFFIXES (_shared/security.ts),
+    // a mesma lista do CORS. Checado ANTES de ler o corpo (o token não é lido). Sem isso, um site
+    // qualquer postava um formulário direto aqui (POST de formulário não passa por CORS) e fazia o
+    // navegador da vítima entrar com o token de outra pessoa (login CSRF). Mesmo código de erro da
+    // ponte /gate (src/routes/gate.ts). A lista será fechada nas URLs exatas quando forem definidas.
+    const requestOrigin = req.headers.get("origin");
+    if (!getSafeCorsOrigin(requestOrigin)) {
+      return await respondWithError(
+        isAjax,
+        403,
+        "GATE_ORIGIN_NOT_ALLOWED",
+        `Origem não permitida: ${requestOrigin || "(sem Origin)"}`,
+        getSafeRedirectUrl("/"),
+        req,
+        {},
+      );
+    }
 
     let payload: GatePayload = {};
     let userId = "";
@@ -557,7 +575,7 @@ async function respondWithError(
   // técnica e o payload original (entity_id, utm_*, etc.) NÃO vão na query
   // string (histórico do navegador, logs de CDN, Referer) -- ficam nos logs
   // da function. A tela traduz `code` em mensagem amigável.
-  console.error(`[financial-gateway-gate] Erro de jornada ${code}: ${message}`);
+  logError(`financial-gateway-gate: erro de jornada ${code}`, { message });
 
   const urlParams = new URLSearchParams({
     status: "error",

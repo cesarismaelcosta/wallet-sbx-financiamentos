@@ -458,3 +458,20 @@ entrypoint = "./functions/sbx-auth-exchange/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/sbx-auth-exchange/*.html" ]
 
+# Sem verificação de JWT do Supabase: botão da Superbid (POST sem login do Supabase; valida o token Superbid). Igual ao projeto publicado.
+[functions.financial-gateway-gate]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/financial-gateway-gate/index.ts"
+
+# Sem verificação de JWT do Supabase: retornos da FlowCredi (valida assinatura HMAC). Igual ao projeto publicado.
+[functions.financial-gateway-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/financial-gateway-webhook/index.ts"
+
+# Sem verificação de JWT do Supabase: backoffice (valida o JWT do Google Auth no próprio código). Igual ao projeto publicado.
+[functions.manage-backoffice-users]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/manage-backoffice-users/index.ts"

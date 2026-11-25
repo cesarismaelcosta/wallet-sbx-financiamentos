@@ -16,7 +16,16 @@ import { withSecurity } from "../_shared/server.ts";
  * FUNÇÃO DE LOG PADRONIZADA
  * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
-import { debugLog } from "../_shared/logger.ts";
+import { debugLog, logError } from "../_shared/logger.ts";
+
+/**
+ * Anexo só do bucket `logos`, com nome simples (letras, números, ponto, hífen, sublinhado).
+ * A função baixa com service role: sem essa trava, um caminho na fila poderia apontar para
+ * qualquer arquivo do storage e mandá-lo por e-mail. Hoje todos os anexos são logos/<arquivo>.png.
+ */
+const SAFE_ATTACHMENT_PATH = /^logos\/[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/;
+const isSafeAttachmentPath = (path: unknown): path is string =>
+  typeof path === "string" && SAFE_ATTACHMENT_PATH.test(path) && !path.includes("..");
 import { sendSystemAlert } from "../_shared/alert.ts";
 
 serve(withSecurity('notification-gateway', async (req: Request) => {
@@ -66,7 +75,12 @@ serve(withSecurity('notification-gateway', async (req: Request) => {
     // Gateway busca o binário no bucket e converte para base64 em tempo real.
     let mailAttachments = [];
     if (notif.attachments && Array.isArray(notif.attachments)) {
-      mailAttachments = await Promise.all(notif.attachments.map(async (att: { content_id: string; storage_path: string }) => {
+      const safeAttachments = notif.attachments.filter((att: { content_id: string; storage_path: string }) => {
+        if (isSafeAttachmentPath(att?.storage_path)) return true;
+        logError("notification-gateway: anexo recusado (fora do bucket logos)", { message: "storage_path inválido" }, { notification_id: notif.id });
+        return false;
+      });
+      mailAttachments = await Promise.all(safeAttachments.map(async (att: { content_id: string; storage_path: string }) => {
         // Divide a string storage_path na primeira barra
         const [bucket, ...pathParts] = att.storage_path.split('/');
         const path = pathParts.join('/'); // Reconstrói o caminho caso tenha subpastas

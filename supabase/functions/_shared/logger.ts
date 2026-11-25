@@ -2,9 +2,17 @@
  * @file logger.ts
  * @description Utilitário de log centralizado para padronização de saídas em produção e desenvolvimento.
  * Implementa mascaramento de dados sensíveis (PII) e rastreamento automático de chamadas de forma case-insensitive.
+ *
+ * - `debugLog`: só com DEBUG_MODE = "true" (desligado por padrão). Mascara PII (SENSITIVE_REGISTRY)
+ *   e segredos (mesma lista de `_shared/strip-secrets.ts`: chaves, tokens, URL de callback assinada).
+ * - `logError`: SEMPRE loga (erro precisa de rastro), mas só contexto, código e mensagem curta do
+ *   erro, nunca o objeto inteiro (erro do Postgres pode trazer o valor que causou o problema, ex. CPF).
  */
 
-const IS_DEBUG = Deno.env.get("DEBUG_MODE") !== "false";
+import { isSecretKey } from "./strip-secrets.ts";
+
+// Debug só quando explicitamente ligado (DEBUG_MODE = "true"). Em dev, configure a variável.
+const IS_DEBUG = Deno.env.get("DEBUG_MODE") === "true";
 
 // Registro Central de dados sensíveis para controle granular de mascaramento.
 // As chaves devem estar em minúsculo (lowercase) para garantir o funcionamento do filtro case-insensitive.
@@ -67,7 +75,7 @@ const SENSITIVE_REGISTRY: Record<string, RedactConfig> = {
   // ==========================================
   // Integração e Payloads Brutos
   // ==========================================
-  "urlcallback": { mask: false },
+  "urlcallback": { mask: true },
   "cnpjloja": { mask: false },
   "vendedroid": { mask: false },
   "pontovendaid": { mask: false },
@@ -107,6 +115,8 @@ const redact = (key: string, value: unknown): unknown => {
   
   // Normaliza a chave para minúsculo para evitar falhas por variação de case (ex: PascalCase de APIs externas)
   const normalizedKey = key.toLowerCase();
+  // Segredos (chaves, tokens, URL assinada): sempre ocultos, mesma lista do strip-secrets
+  if (isSecretKey(key)) return "[MASKED]";
   const config = SENSITIVE_REGISTRY[normalizedKey];
 
   // Se não está no registro, retorna o valor original (seguro)
@@ -176,5 +186,26 @@ export const debugLog = (message: string, data?: unknown) => {
   } catch (e) {
     // Falha interna de formatação ou log nunca deve derrubar o fluxo principal da aplicação
     console.error(`[${callerName}] ERRO INTERNO DO LOGGER:`, e);
+  }
+};
+
+/** Tamanho máximo da mensagem de erro no log. */
+const MAX_ERROR_MESSAGE = 300;
+
+/**
+ * Loga um erro SEM o objeto inteiro: contexto + código (ex.: 23505 do Postgres) + mensagem curta.
+ * Não passa o `detail` do Postgres (que pode conter o valor, ex. CPF/e-mail repetido) nem stack.
+ * Sempre loga (independe de DEBUG_MODE). `extra`: ids de rastreio (passa pelo mesmo mascaramento).
+ */
+export const logError = (context: string, err: unknown, extra?: Record<string, unknown>) => {
+  try {
+    const e = (err ?? {}) as { code?: unknown; message?: unknown; name?: unknown };
+    const code = typeof e.code === "string" || typeof e.code === "number" ? String(e.code) : undefined;
+    const raw = typeof e.message === "string" ? e.message : typeof err === "string" ? err : String(e.name ?? "erro");
+    const message = raw.length > MAX_ERROR_MESSAGE ? `${raw.slice(0, MAX_ERROR_MESSAGE)}…` : raw;
+    const safeExtra = extra ? deepRedact(JSON.parse(JSON.stringify(extra))) : undefined;
+    console.error(`[${context}]`, { code, message, ...(safeExtra ? { extra: safeExtra } : {}) });
+  } catch (_) {
+    console.error(`[${context}] erro (falha ao formatar)`);
   }
 };

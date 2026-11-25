@@ -103,7 +103,8 @@ const deepEscapeHtml = (value: unknown, depth = 0): unknown => {
   }
   if (value !== null && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [k, deepEscapeHtml(v, depth + 1)]),
+      // Nomes dos campos também vão para o HTML (bloco técnico): escapa chave e valor
+      Object.entries(value).map(([k, v]) => [escapeHtml(k), deepEscapeHtml(v, depth + 1)]),
     );
   }
   return value; // números, booleanos, null, undefined passam direto
@@ -284,7 +285,7 @@ export async function dispatchSystemAlert(
   }
 
   const finalRecipients = recipients.map((r: { email: string }) => r.email).join(';');
-  debugLog(`[DISPARO ALERTA]: Destinatários definidos -> ${finalRecipients}`);
+  debugLog(`[DISPARO ALERTA]: ${recipients.length} destinatário(s) ativo(s).`); // sem e-mails no log
 
   const templateResult = generateSystemErrorEmailHtml(payload);
 

@@ -276,7 +276,9 @@ export async function hydrateVisitContext(args: {
         v.origin_url,
         v.target_url,
         e.entity_id, e.entity_type, e.name, e.document, e.phone,
-        e.email, e.birth_date, e.gender, e.entity_details
+        e.email, e.birth_date, e.gender, e.entity_details,
+        /* Visita dona do visit_update_id recebido (null = id ainda não existe) */
+        (SELECT vu.visit_id FROM visit_updates vu WHERE vu.id = ${visitUpdateId}) AS update_owner_visit_id
       FROM visits v
       LEFT JOIN visit_updates u ON u.visit_id = v.id AND u.id = ${visitUpdateId} 
       LEFT JOIN visit_offers o ON o.visit_update_id = u.id 
@@ -288,6 +290,13 @@ export async function hydrateVisitContext(args: {
 
     if (String(row.entity_id) !== String(userId)) {
       debugLog(`🚨 [Hydrate][Security] Spoofing. Token(${userId}) tentou ler DB(${row.entity_id})`);
+      throw new Error("FORBIDDEN_ACCESS");
+    }
+
+    // visit_update_id de OUTRA visita: a visita é do cliente, mas a atualização não (antes passava,
+    // porque o LEFT JOIN só voltava vazio, e o UPDATE em persist-data alterava o registro alheio).
+    if (row.update_owner_visit_id && String(row.update_owner_visit_id) !== String(visitId)) {
+      debugLog("🚨 [Hydrate][Security] visit_update_id não pertence à visita informada.");
       throw new Error("FORBIDDEN_ACCESS");
     }
 

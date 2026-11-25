@@ -50,14 +50,14 @@ export function WizardEngine({ manifest }: WizardEngineProps) {
 
   const topRef = useRef<HTMLDivElement>(null);
   const stepRef = useRef<HTMLDivElement>(null);
-  const firstRender = useRef(true);
+  // Último passo já tratado. Só rola/foca quando o passo MUDA de fato: na abertura da página
+  // não faz nada (antes um "primeira renderização" falhava no StrictMode do React, que roda o
+  // efeito duas vezes ao montar, e a página rolava sozinha ao abrir).
+  const lastStep = useRef(currentStep);
 
   useEffect(() => {
-    // Na abertura da página não rola nem puxa o foco
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
+    if (lastStep.current === currentStep) return;
+    lastStep.current = currentStep;
     const id = requestAnimationFrame(() => {
       topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       const first = Array.from(stepRef.current?.querySelectorAll<HTMLElement>(FIELD_SELECTOR) ?? []).find(

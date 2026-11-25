@@ -72,7 +72,7 @@ import { getSafeCorsOrigin, getSafeRedirectUrl } from "./security.ts";
 import { type AuthContext } from "./auth.ts";
 import { verifyHmacSignature } from "./hmac.ts";
 import { resolveSessionPerimeter } from "./session-guard.ts";
-import { debugLog } from "./logger.ts";
+import { debugLog, logError } from "./logger.ts";
 import { checkRateLimit } from "./rate-limit.ts";
 import { verifySignedClientIp } from "./client-ip.ts";
 
@@ -380,7 +380,7 @@ export const withSecurity = (
       // + ID de correlação para o cliente; detalhe completo só no log do
       // servidor, correlacionável pelo mesmo ID.
       const correlationId = crypto.randomUUID();
-      console.error(`[withSecurity FATAL ERROR em ${functionName}] (correlationId=${correlationId}):`, err);
+      logError(`withSecurity FATAL ERROR em ${functionName}`, err, { correlationId });
       return new Response(
         JSON.stringify({
           success: false,

@@ -47,6 +47,9 @@
  *   CREATE INDEX idx_login_history_email_trgm ON public.login_history USING gin (email gin_trgm_ops);
  *   CREATE INDEX idx_login_history_ip_trgm ON public.login_history USING gin (ip_address gin_trgm_ops);
  *   Extensão pg_trgm no esquema extensions (migração 20261123130000).
+ * [BANCO] migração 20261125100000: em audit_login_stats e get_backoffice_audit, p_search tem
+ *   % e _ escapados (deixam de ser curinga): '%' || replace(replace(replace(p_search, '\', '\\'),
+ *   '%', '\%'), '_', '\_') || '%'.
  * $$;
  * ============================================================================
  */

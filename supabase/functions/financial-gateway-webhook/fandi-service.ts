@@ -18,7 +18,7 @@ import { generateSignature } from "../_shared/crypto.ts";
  * FUNÇÃO DE LOG PADRONIZADA
  * Centraliza o rastreio do pipeline respeitando a flag DEBUG_MODE.
  */
-import { debugLog } from "../_shared/logger.ts";
+import { debugLog, logError } from "../_shared/logger.ts";
 import type { OriginDetails } from "../_shared/types.ts";
 
 /** Simulação devolvida pela Fandi no webhook (PascalCase ou camelCase). */
@@ -133,7 +133,7 @@ async function updateSimulationData(
       return update.id;
     });
   } catch (error) {
-    console.error("[FATAL] Erro na transação do banco. Rollback executado:", error);
+    logError("FATAL: erro na transação do banco (rollback executado)", error);
     throw error;
   }
 }
@@ -211,7 +211,7 @@ export async function tratarWebhookFandi(req: Request, params: string[]) {
 
   // 1. Tratamento de Erro Real do Banco
   if (dbError) {
-    console.error(`[DEBUG-ERRO-DB] Erro ao buscar no banco:`, dbError);
+    logError("ERRO-DB: erro ao buscar no banco", dbError);
     throw new Error("Falha interna de banco de dados na validação de integridade.");
   }
 

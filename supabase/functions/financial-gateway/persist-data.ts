@@ -59,7 +59,8 @@ import {
 } from "../_shared/types.ts";
 import { STAGE, STAGE_OF_STATUS } from "../_shared/types.ts";
 
-import { debugLog } from "../_shared/logger.ts";
+import { debugLog, logError } from "../_shared/logger.ts";
+import { stripSecrets } from "../_shared/strip-secrets.ts";
 
 /**
  * BUILD AUDIT PAYLOAD
@@ -247,7 +248,7 @@ export async function resolvePartnerResult(
     return result?.id || null;
 
   } catch (error) {
-    console.error(`[RESOLVE-PARTNER-CRITICAL] Falha fatal ao gerar ID atômico:`, error);
+    logError("RESOLVE-PARTNER-CRITICAL: falha ao gerar ID atômico", error);
     throw error; // Propaga para abortar a transação principal de forma limpa
   }
 }
@@ -307,7 +308,7 @@ function buildConsentRows(t: any, simulationId: string | number, payload: Simula
           branding: payload.page_configs || {}, rules: payload.rules || {}, faq: payload.page_faqs || [], 
           consents_rendered: payload.consent_configs || [], legal_text: c.legal_text_snapshot || {} 
       }), 
-      raw_payload: t.json(payload)
+      raw_payload: t.json(stripSecrets(payload))
     };
   });
 }
@@ -337,7 +338,8 @@ export async function insertSimulationData(
     const simulation = (payload.simulation_details as SimulationFinancials) ?? {};
     const consents = payload.consents ?? [];
 
-    const auditPayload = buildAuditPayload(payload);
+    // Segredos (chaves, tokens, URL assinada) nunca vão para raw_payload: _shared/strip-secrets.ts
+    const auditPayload = stripSecrets(buildAuditPayload(payload));
 
 
     let bestConsult: Consultation = {
@@ -390,7 +392,7 @@ export async function insertSimulationData(
           ${bestConsult.financial_institution_id}, ${bestConsult.amortization_type ?? null}, ${bestConsult.installment_value}, ${bestConsult.last_installment_value ?? null},
           ${bestConsult.requested_value}, ${bestConsult.down_payment_amount}, ${bestConsult.down_payment_percentage},
           ${bestConsult.financed_amount}, ${bestConsult.installments}, ${bestConsult.cet_rate}, ${bestConsult}::jsonb,
-          ${stageId}, ${bestConsult.status_id}, ${mainResultPartnerId}, ${bestConsult.external_operation_id}, ${ { ...auditPayload, gateway_response: gatewayResult } }::jsonb
+          ${stageId}, ${bestConsult.status_id}, ${mainResultPartnerId}, ${bestConsult.external_operation_id}, ${ stripSecrets({ ...auditPayload, gateway_response: gatewayResult }) }::jsonb
         )
         RETURNING id
       `;
@@ -489,7 +491,7 @@ export async function insertSimulationData(
           simulation_id: simulationId, simulation_update_id: simulationUpdateId || null, channel: n.channel,
           template_slug: n.template_slug, recipient_type: n.recipient_type, recipient: n.recipient,
           subject: n.subject || null, rendered_content: n.email_body, attachments: n.attachments ? t.json(n.attachments) : null,
-          raw_payload: t.json(n.raw_payload || payload)
+          raw_payload: t.json(stripSecrets(n.raw_payload || payload))
         }));
         parallelTasks.push(t`INSERT INTO public.notification_outbox ${t(notifRows)}`);
       }
@@ -516,7 +518,7 @@ export async function insertSimulationData(
                   country = ${infra.country ?? null}, state = ${infra.state ?? null}, city = ${infra.city ?? null},
                   user_agent = ${infra.user_agent ?? null}, device_type = ${infra.device_type ?? null},
                   operating_system = ${infra.operating_system ?? null}, origin_details = ${infra}::jsonb, raw_payload = ${auditPayload}::jsonb
-              WHERE id = ${payload.visit_update_id} AND action = 'CONSULT'
+              WHERE id = ${payload.visit_update_id} AND visit_id = ${payload.visit_id} AND action = 'CONSULT'
               RETURNING id
             `;
 
@@ -608,7 +610,7 @@ export async function insertSimulationData(
 
     });
   } catch (error) {
-    console.error("[FATAL] Erro na inserção de dados da simulação:", error);
+    logError("FATAL: erro na inserção de dados da simulação", error);
     throw error;
   }
 }
@@ -627,7 +629,8 @@ export async function updateSimulationData(
   step: 'EXECUTE_SIMULATION' | 'SUBMIT_LEAD' = 'EXECUTE_SIMULATION'
 ): Promise<string | number> {
   try {
-    const auditPayload = buildAuditPayload(payload);
+    // Segredos (chaves, tokens, URL assinada) nunca vão para raw_payload: _shared/strip-secrets.ts
+    const auditPayload = stripSecrets(buildAuditPayload(payload));
 
     let bestConsult = gatewayResult.consults.find(c => c.is_selected === true) || gatewayResult.consults[0];
     if (!bestConsult.is_selected) bestConsult.is_selected = true;
@@ -667,7 +670,7 @@ export async function updateSimulationData(
           result_partner_id = ${mainResultPartnerId},
           external_operation_id = ${bestConsult.external_operation_id},
           simulation_details = ${gatewayResult}::jsonb,
-          raw_payload = ${ { ...auditPayload, gateway_response: gatewayResult } }::jsonb,
+          raw_payload = ${ stripSecrets({ ...auditPayload, gateway_response: gatewayResult }) }::jsonb,
           updated_at = NOW()
         WHERE id = ${simulationId}
       `);
@@ -701,7 +704,7 @@ export async function updateSimulationData(
           simulation_id: simulationId, simulation_update_id: simulationUpdateId || null, channel: n.channel,
           template_slug: n.template_slug, recipient_type: n.recipient_type, recipient: n.recipient,
           subject: n.subject || null, rendered_content: n.email_body, attachments: n.attachments ? t.json(n.attachments) : null,
-          raw_payload: t.json(n.raw_payload || payload)
+          raw_payload: t.json(stripSecrets(n.raw_payload || payload))
         }));
         parallelTasks.push(t`INSERT INTO public.notification_outbox ${t(notifRows)}`);
       }
@@ -720,7 +723,7 @@ export async function updateSimulationData(
       return simulationUpdateId;
     });
   } catch (error) {
-    console.error("[FATAL] Erro na atualização de dados da simulação:", error);
+    logError("FATAL: erro na atualização de dados da simulação", error);
     throw error;
   }
 }

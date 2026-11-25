@@ -217,7 +217,7 @@ export async function processSimulationFandi(
     debugLog("[Fandi GUID] Resposta bruta recebida.", guidResult);
   } catch (error: unknown) {
     debugLog("Erro de comunicação com Fandi (GUID).", bodyGuid);
-    return buildErrorResponse(8, "Erro de comunicação com Fandi (GUID).", simulation, error);
+    return buildErrorResponse(8, "Erro de comunicação com Fandi (GUID).", simulation, { etapa: "guid", enviado: bodyGuid, erro: error });
   }
 
   // Tratamento específico de Regras de Negócio na geração do GUID
@@ -227,7 +227,7 @@ export async function processSimulationFandi(
     // completa que o Fandi devolveu, pra próxima falha vir com o motivo real.
     debugLog("[Fandi GUID] Rejeitado pelo Fandi (retorno falsy).", { bodyGuid, guidResult });
     await alertarErroCadastroFandi(apiMessage, "GUID");
-    return buildErrorResponse(8, apiMessage, simulation, bodyGuid);
+    return buildErrorResponse(8, apiMessage, simulation, { etapa: "guid", enviado: bodyGuid, resposta: guidResult });
   }
 
   const guid = guidResult.retorno;
@@ -246,11 +246,11 @@ export async function processSimulationFandi(
     if (!contextResponse.ok) throw new Error(`FANDI_HTTP_${contextResponse.status}: ${responseText}`);
     contextData = JSON.parse(responseText);
   } catch (error: unknown) {
-    return buildErrorResponse(8, "Erro de conexão ao recuperar contexto Fandi.", simulation, error);
+    return buildErrorResponse(8, "Erro de conexão ao recuperar contexto Fandi.", simulation, { etapa: "contexto", erro: error });
   }
   
   if (!contextData || !contextData.retorno) {
-    return buildErrorResponse(8, "Falha na estrutura de contexto da Fandi.", simulation, bodyGuid);
+    return buildErrorResponse(8, "Falha na estrutura de contexto da Fandi.", simulation, { etapa: "contexto", resposta: contextData });
   }
 
   const dr = contextData.retorno;
@@ -306,11 +306,11 @@ export async function processSimulationFandi(
       });
       simResult = await simResponse.json();
   } catch (error: unknown) {
-      return buildErrorResponse(8, "Erro de rede na simulação", simulation, error);
+      return buildErrorResponse(8, "Erro de rede na simulação", simulation, { etapa: "simulacao", enviado: bodySimulacao, erro: error });
   }
 
   if (!simResult) {
-    return buildErrorResponse(8, "Resposta da Fandi vazia.", simulation, bodySimulacao);
+    return buildErrorResponse(8, "Resposta da Fandi vazia.", simulation, { etapa: "simulacao", enviado: bodySimulacao, resposta: simResult });
   }
 
   // 4.1 Máquina de Estados da Simulação
@@ -494,6 +494,9 @@ export async function processSimulationFandi(
 
 /**
  * [DRY PATTERN]: Construtor padronizado de respostas de erro da Fandi.
+ * `rawData` = { etapa, enviado?, resposta?, erro? }: o pedido enviado e a resposta da Fandi, para
+ * investigar o erro. Vai para simulations.raw_payload (gateway_response) SEMPRE por stripSecrets
+ * (persist-data.ts), que oculta chaveAcesso, urlCallback e tokens; o resto fica.
  * Centraliza o envelopamento de falhas de rede, parse JSON ou recusas não mapeadas,
  * garantindo compatibilidade estrita com a interface `SimulationResponse`.
  */

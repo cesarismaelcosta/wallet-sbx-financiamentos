@@ -61,7 +61,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { withSecurity } from "../_shared/server.ts";
-import { debugLog } from "../_shared/logger.ts";
+import { debugLog, logError } from "../_shared/logger.ts";
 import { queueAccessEmail } from "../_shared/backoffice-access-email.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -177,6 +177,19 @@ async function partnersByProduct(): Promise<Map<string, Set<string>>> {
 
 /** E-mail para `ilike` exato (sem curingas % e _). */
 const likeExact = (value: string) => value.replace(/[\\%_]/g, "\\$&");
+
+/** Conta de login (auth.users) pelo e-mail, percorrendo as páginas da listagem de usuários. */
+async function findAuthUserByEmail(email: string): Promise<{ id: string } | null> {
+  const target = String(email || "").toLowerCase();
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw error;
+    const found = data.users.find((u: { id: string; email?: string }) => (u.email || "").toLowerCase() === target);
+    if (found) return { id: found.id };
+    if (data.users.length < 200) return null;
+  }
+  return null;
+}
 
 /** E-mails dos admins ativos (destinatários do pedido). */
 async function adminEmails(): Promise<string[]> {
@@ -446,18 +459,20 @@ serve(withSecurity('manage-backoffice-users', async (req: Request) => {
         
       if (error) return writeError(error);
 
-      // [KILL SWITCH]: Se o admin desativou o usuário, revoga a sessão imediatamente
-      if (payload.is_active === false) {
-        try {
-          const { data: usersData } = await adminClient.auth.admin.listUsers();
-          const targetUser = usersData.users.find((u: { id: string; email?: string }) => u.email === userRecord.email);
-          
-          if (targetUser) {
-            await adminClient.auth.admin.signOut(targetUser.id);
-          }
-        } catch (e) {
-          debugLog("Erro ao forçar logout do usuário desativado:", e);
+      // [KILL SWITCH]: desativar bloqueia a conta de login (ban) -> o Supabase recusa renovar a
+      // sessão e entrar de novo; reativar tira o bloqueio. Antes chamava auth.admin.signOut(id),
+      // que espera o TOKEN da sessão (não o id) e falhava calado. O token já emitido vale até expirar
+      // (~1 h), mas sem efeito: as funções do backoffice conferem is_active a cada chamada.
+      try {
+        const targetUser = await findAuthUserByEmail(userRecord.email);
+        if (targetUser) {
+          const { error: banError } = await adminClient.auth.admin.updateUserById(targetUser.id, {
+            ban_duration: payload.is_active === false ? "876000h" : "none",
+          });
+          if (banError) logError("manage-backoffice-users: falha ao (des)bloquear login", banError);
         }
+      } catch (e) {
+        logError("manage-backoffice-users: falha ao (des)bloquear login", e);
       }
 
       return { status: 200, data: { user: data } };

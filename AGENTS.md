@@ -147,6 +147,22 @@ Regras:
   `case when public.is_current_user_backoffice() then auth.jwt() ->> 'email' end`. A Edge Function
   `manage-backoffice-users` aplica a mesma regra (`isGoogleSession`). Função nova do backoffice:
   use `current_backoffice_actor()` em vez de ler o e-mail do token direto.
+- **Segredos fora do banco e do log**: todo `raw_payload` gravado passa por `stripSecrets`
+  (`_shared/strip-secrets.ts`), que troca por "[OCULTO]" só os campos de segredo (`chaveAcesso`,
+  `urlCallback`, tokens, `authorization`, `signature`, senhas) e mantém o resto (pedido e resposta
+  do parceiro, para investigar erro). O `debugLog` usa a mesma lista. Campo de segredo novo: incluir
+  em `SECRET_KEYS`.
+- **Log de erro**: só com `logError(contexto, erro, extra?)` (`_shared/logger.ts`): código e mensagem
+  curta, nunca o objeto inteiro (erro do Postgres pode trazer CPF/e-mail no detalhe). `debugLog` só
+  com `DEBUG_MODE = "true"` (desligado por padrão; em dev configure a variável).
+- **Origem do `financial-gateway-gate`**: só aceita pedido com `Origin` em `ALLOWED_DOMAIN_SUFFIXES`
+  (`_shared/security.ts`), checado antes de ler o corpo (`GATE_ORIGIN_NOT_ALLOWED`). A lista é ampla
+  (`lovable.app`, `localhost`…) até as URLs definitivas de homologação e produção serem definidas;
+  aí deve ser trocada pelos endereços exatos.
+- **Anexos de e-mail**: o `notification-gateway` só baixa `logos/<arquivo>` (bucket `logos`).
+- **Permissões de tabela** (migração 20261125100000, registro do banco real): `anon`/`authenticated`
+  sem acesso às tabelas de dados; as 8 de domínio só leitura; `backoffice_users` só leitura para
+  `authenticated`. Tabela nova de dados: `revoke all … from anon, authenticated` na própria migration.
 - RPC que pode dar erro de banco previsível (ex.: registro repetido) devolve um código
   (`email_in_use`, `domain_in_use`), nunca a mensagem do Postgres; a tela traduz o código.
 - Perfis do backoffice: `admin`, `manager`, `viewer`. Telas e RPCs administrativas exigem `admin`.
@@ -198,6 +214,11 @@ Regras:
 - **pg_cron + pg_net**: `processar-notificacoes-pendentes` (a cada minuto → `notification-dispatcher`)
   e `resolver-geo-login-history` (a cada 5 min → `log-access`) chamam as funções por
   `net.http_post`. Mexer na `pg_net` para os e-mails e a geolocalização até voltar.
+
+- **`supabase/config.toml`**: nunca enviar o arquivo inteiro em zip; só a mudança pedida. As
+  seções `[functions.financial-gateway-gate]`, `[functions.financial-gateway-webhook]` e
+  `[functions.manage-backoffice-users]` têm `verify_jwt = false` (botão da Superbid, retornos da
+  FlowCredi, backoffice); tirar isso quebra esses fluxos.
 
 ### Alertas e e-mails
 

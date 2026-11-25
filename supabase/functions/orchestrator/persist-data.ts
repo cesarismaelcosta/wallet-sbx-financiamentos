@@ -24,6 +24,7 @@
  */
 
 import { debugLog } from "../_shared/logger.ts";
+import { stripSecrets } from "../_shared/strip-secrets.ts";
 import type { OrchestratorPayload, OriginDetails } from "../_shared/types.ts";
 import type { HydratedContext } from "../_shared/hydrate-data.ts";
 
@@ -61,7 +62,7 @@ export async function persistVisitData(
             id, action, action_description, origin_url, target_url, raw_payload, utm_source, utm_medium, utm_campaign,
             ip_address, country, state, city, user_agent, device_type, operating_system, origin_details
           ) VALUES (
-            ${visitId}, ${action}, ${payload.action_description ?? null}, ${originUrl ?? null}, ${(targetUrl || "").split('?')[0]}, ${payload}::jsonb,
+            ${visitId}, ${action}, ${payload.action_description ?? null}, ${originUrl ?? null}, ${(targetUrl || "").split('?')[0]}, ${stripSecrets(payload)}::jsonb,
             ${payload.interaction_context?.utm_source ?? null}, ${payload.interaction_context?.utm_medium ?? null}, ${payload.interaction_context?.utm_campaign ?? null},
             ${origin.ip_address ?? null}, ${origin.country ?? null}, ${origin.state ?? null}, ${origin.city ?? null}, 
             ${origin.user_agent ?? null}, ${origin.device_type ?? null}, ${origin.operating_system ?? null}, ${origin ?? null}::jsonb
@@ -74,7 +75,7 @@ export async function persistVisitData(
             action = ${action},
             action_description = ${payload.action_description ?? null},
             target_url = ${(targetUrl || "").split('?')[0]}
-            ${action === 'SIMULATE' ? t`, raw_payload = ${payload}::jsonb` : t``}
+            ${action === 'SIMULATE' ? t`, raw_payload = ${stripSecrets(payload)}::jsonb` : t``}
           WHERE id = ${visitId}
           RETURNING id
         `;
@@ -98,7 +99,7 @@ export async function persistVisitData(
             partner_id, product_id, utm_source, utm_medium, utm_campaign,
             ip_address, country, state, city, user_agent, device_type, operating_system, origin_details
           ) VALUES (
-            ${visitUpdateId}, ${visitId}, ${action}, ${payload.action_description ?? null}, ${originUrl ?? null}, ${(targetUrl || "").split('?')[0]}, ${payload}::jsonb,
+            ${visitUpdateId}, ${visitId}, ${action}, ${payload.action_description ?? null}, ${originUrl ?? null}, ${(targetUrl || "").split('?')[0]}, ${stripSecrets(payload)}::jsonb,
             ${payload.partner_id ?? null}, ${payload.product_id ?? null}, ${payload.interaction_context?.utm_source || 'direct'}, ${payload.interaction_context?.utm_medium ?? null}, ${payload.interaction_context?.utm_campaign ?? null},
             ${origin.ip_address ?? null}, ${origin.country ?? null}, ${origin.state ?? null}, ${origin.city ?? null}, 
             ${origin.user_agent ?? null}, ${origin.device_type ?? null}, ${origin.operating_system ?? null}, ${origin ?? null}::jsonb
@@ -110,7 +111,7 @@ export async function persistVisitData(
           UPDATE visit_updates SET 
             action = ${action}, 
             action_description = ${payload.action_description ?? null},
-            raw_payload = ${payload}::jsonb
+            raw_payload = ${stripSecrets(payload)}::jsonb
           WHERE id = ${visitUpdateId} 
             AND visit_id = ${visitId}
           RETURNING id
@@ -200,7 +201,7 @@ export async function persistVisitData(
               ${origin?.state || null}, ${origin?.city || null}, ${origin?.user_agent || null}, ${origin?.device_type || null}, 
               ${origin?.operating_system || null}, ${origin ?? null}::jsonb, 
               ${{ branding: payload.page_configs, consents_rendered: payload.consent_configs, legal_text: c.legal_text_snapshot }}::jsonb, 
-              ${payload}::jsonb
+              ${stripSecrets(payload)}::jsonb
             )
             ON CONFLICT ON CONSTRAINT visit_consents_update_consent_unique DO UPDATE SET
               accepted = EXCLUDED.accepted,
